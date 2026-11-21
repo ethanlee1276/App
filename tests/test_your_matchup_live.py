@@ -215,7 +215,10 @@ def test_the_game_page_adds_up_the_site_s_own_ppr_in_node():
     drawn = set(re.findall(r"\b(pbp-ff-[a-z-]+)", DETAIL))
     styled = set(re.findall(r"\.(pbp-ff-[a-z-]+)", DCSS))
     assert drawn and drawn <= styled, sorted(drawn - styled)
-    assert "${pbpFantasyHTML(d, league)}${block(d.away)}${block(d.home)}" in DETAIL
+    # A card on the one game page's Stats tab, under the box scores (step AAN, 21 November).
+    assert ("${gpBoxHTML(d, league, faces, \"away\")}${gpBoxHTML(d, league, faces, \"home\")}`}${\n"
+            "    pbpFantasyHTML(d, league)}") in DETAIL
+    assert '<div class="card gp-card pbp-ff"><div class="gp-card-head"><b>Fantasy points${' in DETAIL
 
 
 if __name__ == "__main__":

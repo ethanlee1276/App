@@ -8803,9 +8803,6 @@ body.walled.on-wall .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)
   margin: 10px 0 2px; }
 .pbp-picks-head .mini { color: var(--text-mute); font-weight: 600; }
 .pbp-pick-board { color: var(--text-mute); white-space: nowrap; }
-.pbp-box { margin-bottom: 18px; }
-.pbp-box-head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin: 10px 0 6px;
-  font-size: var(--fs-md); }
 /* THE BOX SCORE, AS A BOX SCORE.
    ---------------------------------------------------------------------
    It was one wrapped line of `Label 19 · Label 4 · Label 5` per player,
@@ -8842,7 +8839,6 @@ body.walled.on-wall .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)
 .pbp-bx .pbp-bx-who { text-align: left; padding-left: 0; width: 100%;
   font-weight: 600; color: var(--text); }
 .pbp-bx thead .pbp-bx-who { font-weight: 800; color: var(--text); letter-spacing: .04em; }
-.pbp-bx .pbp-bx-who .mini { color: var(--text-mute); margin-left: 6px; font-weight: 500; }
 /* Team totals is the same table with two team columns; the labels are
    sentences rather than three-letter heads, so they keep their case. */
 .pbp-tot thead th { text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); }

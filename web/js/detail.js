@@ -3157,113 +3157,18 @@ function pbpInjuryRows(rows, league, d) {
    middle, the swings of fifteen points or more dotted. Nothing here is our
    model's: it is the game's own win chance, free like the score. Absent
    until the feed has given a handful of plays a number. */
-/* THE BOX SCORE AND THE TEAM TOTALS (moved here from app.js 2026-10-25:
-   only this page and the gamecast it loads draw them). */
-//: What leads a player's line, by league; the rest follow in the order the parser gave them.
-const PBP_LEAD_STAT = { nfl: ["pass_yds", "rush_yds", "rec_yds", "receptions"], cfb: ["pass_yds", "rush_yds", "rec_yds", "receptions"],
-                        mlb: ["total_bases", "hits", "home_runs", "strikeouts"], nba: ["points", "rebounds", "assists"], wnba: ["points", "rebounds", "assists"],
-                        cbb: ["points", "rebounds", "assists"] };
+/* THE TEAM TOTALS (moved here from app.js 2026-10-25: only this page and the gamecast
+   it loads draw them). The box score's own tables that sat here (pbpPlayersHTML and
+   football's three groups), drawn only by baseball's old Player stats room, went on
+   21 November (step AAN): every league's box score is the one game page's own
+   (gpBoxCardHTML), and the fantasy points that led them are a card under it. */
 
-/* A BOX SCORE IS A TABLE, and this room was drawing it as prose.
-
-   Ethan, 2026-09-10, looking at the Player stats room during Patriots
-   at Seahawks: "make this look better and more organized and just more
-   visually appealing."
-
-   It read `Rec Yds 19 · Receptions 4 · Targets 5` — every stat carrying
-   its own label, on one wrapped line, in a different order for every
-   player depending on which fields the parser happened to fill. Nothing
-   was wrong with the numbers and nothing could be compared: finding who
-   had the most targets meant reading eleven lines of prose and holding
-   the figures in your head. That is what columns are for.
-
-   FOOTBALL SPLITS INTO THREE, the way every box score has since box
-   scores existed: who threw it, who ran it, who caught it. A passer and
-   a slot receiver share almost no statistics, so one table with every
-   column is mostly dashes; three tables are each four columns wide and
-   each sorted by the number that matters in it.
-
-   The groups are keyed on the market names the parsers already write
-   (`engine/sources/nflpreseason.parse_boxscore`, `cfbdata`), so this
-   invents no field and no number. */
-const PBP_BOX_FOOTBALL = [
-  ["Passing", ["pass_cmp", "pass_att", "pass_yds", "pass_td", "pass_int"], "pass_yds"],
-  ["Rushing", ["carries", "rush_yds", "rush_td"], "rush_yds"],
-  ["Receiving", ["receptions", "targets", "rec_yds", "rec_td"], "rec_yds"],
-];
-
-//: The short heads a box score uses. Anything not here falls back to
-//: `marketWord`, which is the long form and is what the other leagues
-//: get — their stat keys have not been read, and a column head invented
-//: for a key nobody has looked at is the fabricated number this site
-//: exists not to print.
-const PBP_BOX_HEAD = {
-  pass_cmp: "CMP", pass_att: "ATT", pass_yds: "YDS", pass_td: "TD", pass_int: "INT",
-  carries: "CAR", rush_yds: "YDS", rush_td: "TD",
-  receptions: "REC", targets: "TGT", rec_yds: "YDS", rec_td: "TD",
-};
-
+//: A player's number off the box score (`d.players`), or NaN.
 const pbpStat = (r, k) => Number(((r || {}).stats || {})[k]);
 
-/* One table: the players who did this thing, and only the columns
-   somebody filled.
-
-   A COLUMN NOBODY FILLED IS NOT DRAWN. A rushing table on a night when
-   nobody scored on the ground should not carry an all-zero TD column —
-   the reader cannot tell an empty column from a column of real zeroes,
-   and the second is a fact while the first is furniture. Same rule the
-   scoreboard follows for `yard_line`: absent, never null. */
-function pbpBoxGroupHTML(rows, group) {
-  const [title, keys, sortKey] = group;
-  const mine = rows.filter((r) => keys.some((k) => Number.isFinite(pbpStat(r, k))));
-  if (!mine.length) return "";
-  const cols = keys.filter((k) => mine.some((r) => Number.isFinite(pbpStat(r, k))));
-  if (!cols.length) return "";
-  const sorted = mine.slice().sort((a, b) =>
-    (pbpStat(b, sortKey) || 0) - (pbpStat(a, sortKey) || 0));
-  const head = (k) => PBP_BOX_HEAD[k] || marketWord(k);
-  return `<div class="pbp-bx-wrap"><table class="pbp-bx">
-    <thead><tr><th scope="col" class="pbp-bx-who">${escapeHtml(title)}</th>${
-      cols.map((k) => `<th scope="col">${escapeHtml(head(k))}</th>`).join("")}</tr></thead>
-    <tbody>${sorted.map((r) => `<tr>
-      <th scope="row" class="pbp-bx-who">${escapeHtml(r.player || "")}${
-        r.position ? ` <span class="mini">${escapeHtml(r.position)}</span>` : ""}</th>${
-      cols.map((k) => {
-        const v = pbpStat(r, k);
-        return `<td>${Number.isFinite(v) ? escapeHtml(String(v)) : "—"}</td>`;
-      }).join("")}</tr>`).join("")}</tbody></table></div>`;
-}
-
-/* THE OTHER LEAGUES GET A TABLE TOO, built from whatever keys their own
-   parser filled rather than from a grouping I have not verified. The
-   columns are the six most-filled stats for that club, in that order,
-   headed by `marketWord` — so hoops reads as a table without this file
-   claiming to know what a hoops box score is shaped like. */
-function pbpBoxGenericHTML(rows, league) {
-  if (!rows.length) return "";
-  const filled = {};
-  rows.forEach((r) => Object.keys((r || {}).stats || {}).forEach((k) => {
-    if (Number.isFinite(pbpStat(r, k))) filled[k] = (filled[k] || 0) + 1;
-  }));
-  const cols = Object.keys(filled).sort((a, b) => filled[b] - filled[a]).slice(0, 6);
-  if (!cols.length) return "";
-  const lead = (PBP_LEAD_STAT[league] || [])[0] || cols[0];
-  const sorted = rows.slice().sort((a, b) => (pbpStat(b, lead) || 0) - (pbpStat(a, lead) || 0))
-    .slice(0, 14);
-  return `<div class="pbp-bx-wrap"><table class="pbp-bx">
-    <thead><tr><th scope="col" class="pbp-bx-who">Player</th>${
-      cols.map((k) => `<th scope="col">${escapeHtml(marketWord(k))}</th>`).join("")}</tr></thead>
-    <tbody>${sorted.map((r) => `<tr>
-      <th scope="row" class="pbp-bx-who">${escapeHtml(r.player || "")}${
-        r.position ? ` <span class="mini">${escapeHtml(r.position)}</span>` : ""}</th>${
-      cols.map((k) => {
-        const v = pbpStat(r, k);
-        return `<td>${Number.isFinite(v) ? escapeHtml(String(v)) : "—"}</td>`;
-      }).join("")}</tr>`).join("")}</tbody></table></div>`;
-}
-
 /* FANTASY POINTS, OFF THE SAME BOX (2026-10-27; the Fantasy room's "next":
-   fantasy points on the live game pages). Each player's points from the
+   fantasy points on the live game pages; on the one game page's Stats tab,
+   under the box scores, since 21 November, step AAN). Each player's points from the
    passing, rushing and receiving lines below: a point per 10 rushing or
    receiving yards and per 25 passing, 6 a rushing or receiving touchdown,
    4 a passing one, −2 an interception, and a catch a point in PPR, half in
@@ -3287,32 +3192,16 @@ function pbpFantasyHTML(d, league) {
     n(r, "receptions") ? `${n(r, "receptions")}-${n(r, "rec_yds")}${n(r, "rec_td") ? `, ${n(r, "rec_td")} TD` : ""}` : "",
   ].filter(Boolean).join(" · ");
   const live = String(((d || {}).live || {}).state || "").toLowerCase();
-  return `<div class="pbp-box pbp-ff"><div class="pbp-box-head">Fantasy points${
-    live === "final" || live === "post" ? "" : " so far"}<span class="pbp-ff-k">PPR · half</span></div>
+  return `<div class="card gp-card pbp-ff"><div class="gp-card-head"><b>Fantasy points${
+    live === "final" || live === "post" ? "" : " so far"}</b><span class="pbp-ff-k">PPR · half</span></div>
     <ol class="pbp-ff-list">${top.map(({ r, pts }, i) => `<li>
       <span class="pbp-ff-rank">${i + 1}</span>${teamMarkIn(league, r.team, 18)}
       <span class="pbp-ff-who"><b>${escapeHtml(r.player || "")}${r.position ? ` <span class="mini">${
         escapeHtml(r.position)}</span>` : ""}</b><span>${escapeHtml(words(r))}</span></span>
       <span class="pbp-ff-pts"><b>${pts.toFixed(1)}</b><span>${pbpFantasyPts(r, 0.5).toFixed(1)}</span></span>
     </li>`).join("")}</ol>
-    <p class="pbp-ff-note">From the box score below. Fumbles, two-point tries and returns are not in it, so
+    <p class="pbp-ff-note">From the box score above. Fumbles, two-point tries and returns are not in it, so
       they are not counted; your league’s own scoring may differ.</p></div>`;
-}
-
-function pbpPlayersHTML(d, league) {
-  const rows = d.players || [];
-  if (!rows.length) return `<p class="rail-quiet">No box score on file yet — the fast loop writes one each cycle for a game in progress.</p>`;
-  const block = (abbr) => {
-    const mine = rows.filter((r) => r.team === abbr);
-    const body = PBP_FOOTBALL.has(league)
-      ? PBP_BOX_FOOTBALL.map((g) => pbpBoxGroupHTML(mine, g)).join("")
-      : pbpBoxGenericHTML(mine, league);
-    return `<div class="pbp-box"><div class="pbp-box-head">${teamMarkIn(league, abbr, 18)} ${
-      escapeHtml(teamNameIn(league, abbr))}</div>${
-      body || `<p class="rail-quiet">Nothing logged for this club yet.</p>`}</div>`;
-  };
-  return `${pbpFantasyHTML(d, league)}${block(d.away)}${block(d.home)}<p class="mini" style="opacity:.6">Box score ${
-    escapeHtml(pbpAgo(d.generated_at))} — the fields the open-bet tracker reads, nothing more.</p>`;
 }
 
 /* Seconds from a "2:44" clock, or 0. The drive's `elapsed` is ESPN's
@@ -6233,7 +6122,8 @@ function gpStatsHTML(d, league, boardGame, faces, GC, kit) {
   // off the league's events: `teamStats`, `boxes`), and what only it has
   // follows the box scores (`statsExtra`: a shot chart's zones, the trends).
   return `${scoring}${gpOddsHTML(d, league, boardGame)}${win}${k.teamStats != null ? k.teamStats : gpTeamStatsHTML(d, league)}${
-    k.boxes != null ? k.boxes : `${gpBoxHTML(d, league, faces, "away")}${gpBoxHTML(d, league, faces, "home")}`}${k.statsExtra || ""}${
+    k.boxes != null ? k.boxes : `${gpBoxHTML(d, league, faces, "away")}${gpBoxHTML(d, league, faces, "home")}`}${
+    pbpFantasyHTML(d, league)}${k.statsExtra || ""}${
     pbpPressureHTML(d, league, boardGame)}${gpInfoHTML(d, league, boardGame)}${
     pbpCrewHTML(d, league, boardGame)}${gpInjuriesHTML(d, league)}`;
 }

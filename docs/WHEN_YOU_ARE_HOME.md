@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAN. The two cleanups, and fantasy points back on football's game page** (step 828; 21 November). Nothing to run.
+The game page's code still carried two things nothing drew any more. The box score's old tables (football split into
+passing, rushing and receiving, every other league one table), drawn only by baseball's old Player stats tab, went:
+since step AAK every league's box score is the one game page's own card. And football's drive tracker card (the
+drive drawn on a field play by play, with its Replay button) went from the shared live-game code: since the one game
+page the drive in progress is its drive view, and the whole game's drive chart and the drive on the photograph,
+which draw the same field, stay. In all 337 lines of code and styles went and 26 came in. One thing came back: the
+fantasy points you asked for on 27 October (the game's top fantasy scorers so far, PPR and half-PPR, off its box
+score) were drawn only inside those old tables, so they quietly left the NFL and college game pages when the page
+was redesigned. They are a card again, on the Stats tab under the box scores ("Fantasy points so far"). Checked on a
+made-up live NFL game at phone width.
+
 **AAM. A parlay leg needs the book to agree** (step 827; 21 November). Nothing to run. You asked to dial in the
 three-leg parlays and to look at all the data. I read every settled Most Likely pick the site's public record holds,
 the pool the parlay legs come from: 2,639 NFL picks since 10 September, 3,240 NBA since 20 October, 2,871 hockey

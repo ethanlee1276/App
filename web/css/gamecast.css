@@ -18,11 +18,6 @@
   background: var(--bg-2); color: var(--text-mute); }
 .gc-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
 
-/* the drive in progress */
-.gc-drive-head { display: flex; align-items: center; gap: 12px; }
-.gc-drive-head b { font-size: var(--fs-md); }
-.gc-q { margin-left: auto; font-family: var(--font-mono); color: var(--text-mute); }
-
 /* the last play */
 .gc-last-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .gc-last-title { font-size: var(--fs-lg); }
@@ -93,11 +88,11 @@
    broadcast draws them (the photograph above draws them the same); the
    plays are bars in the offence's colour, a
    loss red, a flag amber and dashed, a score gold. Two drawings ride in
-   the card and it shows the one that fits it. */
+   the card and it shows the one that fits it. The drive card's own field
+   and its play marks went on 21 November (step AAN): the field stays for
+   the whole game's chart, a drive a row. */
 :root { --gc-los: oklch(0.72 0.15 248); }
 :root[data-theme="light"] { --gc-los: oklch(0.55 0.17 255); }
-.gc-drive-end { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
-.gc-drive-end .gc-q { margin-left: 0; }
 .gc-rz { padding: 2px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--bad); background: color-mix(in srgb, var(--bad) 16%, transparent); }
 .gc-replay { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-sm);
@@ -125,39 +120,6 @@
 .gc-fd-goal { stroke: color-mix(in oklab, var(--text) 55%, transparent); stroke-width: 2; }
 .gc-fd-num { fill: var(--text-mute); font: 600 12px var(--font-mono); text-anchor: middle; }
 .narrow .gc-fd-num { font-size: 10px; }
-.gc-fd-rz { fill: var(--bad); fill-opacity: .13; }
-.gc-fd-los { stroke: var(--gc-los); stroke-width: 2.2; }
-.gc-fd-gain { stroke: var(--brand); stroke-width: 2.2; }
-.gc-fd-lh { stroke-width: 9; opacity: .14; }
-.gc-fd-lh.los { stroke: var(--gc-los); }
-.gc-fd-lh.gain { stroke: var(--brand); }
-.gc-fd-snap { fill: var(--text); fill-opacity: .55; }
-.gc-fd-halo { stroke: var(--bg); stroke-opacity: .6; stroke-width: 11; stroke-linecap: round; }
-.narrow .gc-fd-halo { stroke-width: 9; }
-.gc-fd-bar { stroke: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); stroke-width: 6; stroke-linecap: round; }
-.narrow .gc-fd-bar { stroke-width: 5; }
-.gc-fd-bar.loss { stroke: var(--bad); }
-.gc-fd-bar.td { stroke: var(--brand); }
-.gc-fd-bar.flag { stroke: var(--warn); stroke-dasharray: 6 5; stroke-linecap: butt; }
-.gc-fd-head { fill: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); stroke: var(--bg); stroke-width: 1.2; }
-.gc-fd-head.loss { fill: var(--bad); }
-.gc-fd-head.td { fill: var(--brand); }
-.gc-fd-head.flag { fill: var(--warn); }
-.gc-fd-ext { stroke: var(--warn); stroke-width: 3; stroke-dasharray: 5 4; }
-.gc-fd-flag { fill: var(--warn); stroke: var(--bg); stroke-width: 1.2; }
-.gc-fd-kick { fill: none; stroke: color-mix(in oklab, var(--text) 70%, transparent); stroke-width: 2; stroke-dasharray: 4 4; }
-.gc-fd-x { fill: none; stroke: var(--text-mute); stroke-width: 2.4; stroke-linecap: round; }
-.gc-fd-x.to { stroke: var(--bad); }
-.gc-fd-lbl { fill: var(--text); font: 700 13px var(--font-mono); paint-order: stroke; stroke: var(--bg); stroke-width: 3px;
-  stroke-linejoin: round; }
-.narrow .gc-fd-lbl { font-size: 11px; }
-.gc-fd-lbl.loss, .gc-fd-lbl.to { fill: var(--bad); }
-.gc-fd-lbl.td, .gc-fd-lbl.fg { fill: var(--brand); }
-.gc-fd-lbl.flag { fill: var(--warn); }
-.gc-fd-lbl.inc, .gc-fd-lbl.kick { fill: var(--text-mute); }
-.gc-fd-dn { fill: var(--brand); font: 800 13px var(--font-mono); paint-order: stroke; stroke: var(--bg); stroke-width: 3px;
-  stroke-linejoin: round; }
-.narrow .gc-fd-dn { font-size: 11px; }
 .gc-fd-ball .skin { fill: color-mix(in oklab, var(--warn) 52%, var(--ink-warm)); stroke: var(--bg); stroke-width: 1.4; }
 .gc-fd-ball .lace { fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linecap: round; }
 .gc-fd-ball .glow { fill: var(--brand); opacity: .22; }

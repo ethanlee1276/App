@@ -183,18 +183,6 @@
     return [`${n} play${n === 1 ? "" : "s"}`, `${Number(dr.yards || 0)} yard${Number(dr.yards) === 1 ? "" : "s"}`,
             dr.elapsed || ""].filter(Boolean).join(", ");
   }
-  function currentDriveHTML(d, league, lastPlay) {
-    const lv = d.live || {};
-    const dr = currentDrive(d);
-    if (!dr || lv.state !== "live") return "";
-    // The drive on the field (below), between the head and the tiles.
-    const fd = driveFieldHTML(d, league, dr);
-    return `<div class="card gc-drive">
-      <div class="gc-drive-head">${teamMarkIn(league, dr.team, 28)}
-        <div><div class="gc-k">Current drive</div><b>${esc(driveWords(dr))}</b></div>
-        <span class="gc-drive-end">${fd.rz ? `<span class="gc-rz">Red zone</span>` : ""}${dr.period ? `<span class="gc-q">Q${esc(dr.period)}</span>` : ""}${fd.html ? fd.replay : ""}</span></div>
-      ${fd.html}</div>`;
-  }
 
   /* ---------------- the drive on the field ----------------
      Ethan, 2026-10-15, with the hockey page open: "Are we able too do like
@@ -338,28 +326,12 @@
     return `<g class="gc-fd-ball" transform="translate(${f1(x)} ${f1(y)})"><ellipse class="glow" rx="${f1(rx * 1.9)}" ry="${f1(rx * 1.5)}"/>`
       + `<ellipse class="skin" rx="${rx}" ry="${ry}"/><path class="lace" d="M${f1(-rx * 0.45)} 0H${f1(rx * 0.45)}M${f1(-rx * 0.22)} ${f1(-ry * 0.38)}v${f1(ry * 0.76)}M0 ${f1(-ry * 0.38)}v${f1(ry * 0.76)}M${f1(rx * 0.22)} ${f1(-ry * 0.38)}v${f1(ry * 0.76)}"/>${motion || ""}</g>`;
   };
-  /* Where a row's words go: past the far end of what it drew in the
-     direction of the drive, or before its start when that runs off the
-     field. */
-  function labelAt(g, r, text) {
-    const X = (y) => g.gut + (y + 10) * g.U;
-    const ys = [r.from, r.to, r.ext, r.fly].filter((v) => v != null);
-    // The cross an incompletion or a turnover draws just past the snap.
-    if (r.kind === "inc" || r.kind === "to") ys.push(r.from + r.dir * (g.row * 0.7) / g.U);
-    const lo = Math.min(...ys), hi = Math.max(...ys), w = text.length * g.fs * 0.62, pad = g.fs * 0.7;
-    const ahead = r.dir > 0 ? X(hi) + pad : X(lo) - pad;
-    // In front when it fits before the goal line; behind the start when not.
-    const fits = r.dir > 0 ? ahead + w <= X(100) - 2 : ahead - w >= X(0) + 2;
-    if (r.fly != null) return { x: X(r.from) - r.dir * pad, anchor: r.dir > 0 ? "end" : "start" };
-    if (fits) return { x: ahead, anchor: r.dir > 0 ? "start" : "end" };
-    return { x: r.dir > 0 ? X(lo) - pad : X(hi) + pad, anchor: r.dir > 0 ? "end" : "start" };
-  }
   /* The run's bookkeeping, as on the hockey and basketball pages: a first
      look runs the newest plays, a new play runs from the last one seen,
      Replay runs them all again, and the redraw every few seconds carries
      on from where the run is rather than starting over. */
   const DRIVE_RUN = 6, DRIVE_ROWS = 12;
-  let _run = null, _replay = false, _last = null;
+  let _run = null, _replay = false;
   function driveRun(d, end, ids) {
     const now = Date.now(), r = _run, game = String(d.event_id || "");
     if (_replay || !r || r.game !== game) _run = { game, upto: end, from: null, start: now };
@@ -370,115 +342,11 @@
     _replay = false;
     return { from: _run.from, elapsed: (now - _run.start) / 1000 };
   }
-  function trackerBody(g, m, run) {
-    const { rows, nx, startAt } = m;
-    const X = (y) => g.gut + (y + 10) * g.U, Y = (i) => g.top + i * g.row + g.row / 2;
-    const n = rows.length, H = g.top + (n + (nx ? 1 : 0)) * g.row + 6;
-    // The run: the ball from the first new snap through every play after
-    // it, down to the line of scrimmage.
-    const pts = [];
-    rows.forEach((r, i) => {
-      if (i < startAt) return;
-      const y = Y(i), x0 = X(r.from), bt = beat(r);
-      pts.push({ x: x0, y, leg: SNAP.leg, hold: SNAP.hold, i, at: "snap" });
-      if (bt.how === "fly") {
-        const x1 = X(r.fly);
-        pts.push({ x: x1, y, leg: bt.leg, hold: bt.hold, via: [(x0 + x1) / 2, y - g.row * 1.6], i, at: "end" });
-      } else if (bt.how === "hop") {
-        pts.push({ x: x0, y, leg: bt.leg, hold: bt.hold, via: [x0 + r.dir * 4 * g.U, y - g.row * 0.9], i, at: "end" });
-      } else if (bt.how === "move") {
-        const x1 = X(r.to);
-        pts.push({ x: x1, y, leg: bt.leg, hold: bt.hold, via: r.air ? [(x0 + x1) / 2, y - g.row * 1.15] : null, i, at: "end" });
-      } else {
-        pts.push({ x: x0, y, leg: bt.leg, hold: bt.hold, i, at: "end" });
-      }
-      if (r.ext != null) pts.push({ x: X(r.ext), y, leg: EXT.leg, hold: EXT.hold, i, at: "ext" });
-    });
-    if (nx) pts.push({ x: X(nx.los), y: Y(n), leg: SNAP.leg, hold: SNAP.hold, i: n, at: "now" });
-    const T = track(pts, { elapsed: run.elapsed });
-    const moving = !T.still;
-    const ix = (i, at) => pts.findIndex((p) => p.i === i && p.at === at);
-    const arrive = (i, at) => { const k = ix(i, at); return moving && k > 0 ? T.at[k] : null; };
-    const leave = (i, at) => { const k = ix(i, at); return moving && k > 0 ? T.go[k] : null; };
-    const pop = (t, inner) => (t == null || T.past(t) ? inner
-      : `<g opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.2s" begin="${T.begin(t)}" fill="freeze"/>${inner}</g>`);
-    // A line drawn whole once the ball is past it, and drawing itself
-    // behind the ball while it is on it (from where it is now, after a redraw).
-    const reveal = (x1, x2, y, t0, t1, cls) => {
-      const len = Math.abs(x2 - x1);
-      const on = t0 != null && t1 != null && !T.past(t1);
-      const left = on ? len * Math.min(1, (t1 - Math.max(t0, T.elapsed)) / Math.max(0.01, t1 - t0)) : 0;
-      // The gap a little longer than the line, so the next dash's round cap
-      // never dots the far end before the ball gets there.
-      const draw = on ? ` stroke-dasharray="${f1(len)} ${f1(len + 2)}" stroke-dashoffset="${f1(left)}"` : "";
-      const anim = on ? `<animate attributeName="stroke-dashoffset" from="${f1(left)}" to="0" begin="${T.begin(t0)}" dur="${Math.max(0.05, t1 - Math.max(t0, T.elapsed)).toFixed(2)}s" fill="freeze"/>` : "";
-      return pop(on ? t0 : null, `<line class="gc-fd-halo" x1="${f1(x1)}" y1="${f1(y)}" x2="${f1(x2)}" y2="${f1(y)}"${draw}>${anim}</line>`
-        + `<line class="${cls}" x1="${f1(x1)}" y1="${f1(y)}" x2="${f1(x2)}" y2="${f1(y)}"${draw}>${anim}</line>`);
-    };
-    const head = (x, y, s, kind) => {
-      const h = g.row * 0.26;
-      return `<path class="gc-fd-head ${kind}" d="M${f1(x + s * h * 0.9)} ${f1(y)}L${f1(x - s * h * 0.5)} ${f1(y - h)}V${f1(y + h)}Z"/>`;
-    };
-    const cross = (x, y, cls) => { const r = g.row * 0.2; return `<path class="gc-fd-x ${cls}" d="M${f1(x - r)} ${f1(y - r)}l${f1(2 * r)} ${f1(2 * r)}m0 ${f1(-2 * r)}l${f1(-2 * r)} ${f1(2 * r)}"/>`; };
-    let marks = "";
-    rows.forEach((r, i) => {
-      const y = Y(i), x0 = X(r.from), x1 = X(r.to);
-      const t0 = leave(i, "end"), t1 = arrive(i, "end");
-      const lastAt = r.ext != null ? arrive(i, "ext") : t1;
-      let out = pop(arrive(i, "snap"), `<circle class="gc-fd-snap" cx="${f1(x0)}" cy="${f1(y)}" r="${f1(g.row * 0.14)}"/>`);
-      if (r.fly != null) {
-        const x2 = X(r.fly), up = y - g.row * 1.6;
-        out += pop(t1, `<path class="gc-fd-kick" d="M${f1(x0)} ${f1(y)}Q${f1((x0 + x2) / 2)} ${f1(up)} ${f1(x2)} ${f1(y)}"/>`);
-      } else if (r.kind === "inc" || r.kind === "to") {
-        out += pop(t1, cross(x0 + r.dir * g.row * 0.45, y, r.kind));
-      } else if (x1 !== x0) {
-        const s = x1 > x0 ? 1 : -1;
-        out += r.kind === "flag" ? pop(t0, `<line class="gc-fd-bar flag" x1="${f1(x0)}" y1="${f1(y)}" x2="${f1(x1)}" y2="${f1(y)}"/>`)
-          : reveal(x0, x1, y, t0, t1, `gc-fd-bar ${r.kind}`);
-        out += pop(t1, head(x1, y, s, r.kind));
-      }
-      if (r.ext != null) {
-        const tx = arrive(i, "ext");
-        out += pop(leave(i, "ext"), `<line class="gc-fd-ext" x1="${f1(x1)}" y1="${f1(y)}" x2="${f1(X(r.ext))}" y2="${f1(y)}"/>`);
-        out += pop(tx, `<circle class="gc-fd-flag" cx="${f1(X(r.ext))}" cy="${f1(y)}" r="${f1(g.row * 0.16)}"/>`);
-      }
-      const at = labelAt(g, r, r.label);
-      out += pop(lastAt, `<text class="gc-fd-lbl ${r.kind}" x="${f1(at.x)}" y="${f1(y + g.fs * 0.36)}" text-anchor="${at.anchor}">${esc(r.label)}</text>`);
-      marks += out;
-    });
-    // The next snap: the line of scrimmage, the line to gain, the red zone
-    // once the offence is inside the twenty, and the down beside the ball.
-    let lines = "", words = "";
-    const last = rows[n - 1];
-    const dir = last.dir;
-    if (nx) {
-      const top = g.top - 3, xl = X(nx.los);
-      const rz = dir > 0 ? nx.los >= 80 : nx.los <= 20;
-      if (rz) lines += `<rect class="gc-fd-rz" x="${f1(dir > 0 ? X(80) : X(0))}" y="${top}" width="${f1(20 * g.U)}" height="${H - top}"/>`;
-      lines += `<line class="gc-fd-lh los" x1="${f1(xl)}" y1="${top}" x2="${f1(xl)}" y2="${H}"/><line class="gc-fd-los" x1="${f1(xl)}" y1="${top}" x2="${f1(xl)}" y2="${H}"/>`;
-      if (nx.gain != null && nx.gain > 0 && nx.gain < 100) {
-        const xg = X(nx.gain);
-        lines += `<line class="gc-fd-lh gain" x1="${f1(xg)}" y1="${top}" x2="${f1(xg)}" y2="${H}"/><line class="gc-fd-gain" x1="${f1(xg)}" y1="${top}" x2="${f1(xg)}" y2="${H}"/>`;
-      }
-      if (nx.words) {
-        const w = nx.words.length * g.fs * 0.62, back = xl - dir * (g.ball[0] + g.fs * 0.8);
-        const fits = dir > 0 ? back - w >= X(-10) + 2 : back + w <= X(110) - 2;
-        const x = fits ? back : xl + dir * (g.ball[0] + g.fs * 0.8);
-        const anchor = (dir > 0) === fits ? "end" : "start";
-        words = pop(arrive(n, "now"), `<text class="gc-fd-dn" x="${f1(x)}" y="${f1(Y(n) + g.fs * 0.36)}" text-anchor="${anchor}">${esc(nx.words)}</text>`);
-      }
-    }
-    // The ball, on top: at rest on the line of scrimmage while the drive is
-    // on, or where the last play left it.
-    const rest = nx ? [X(nx.los), Y(n)] : (() => {
-      const r = last; return [X(r.fly != null ? r.fly : r.ext != null ? r.ext : r.to), Y(n - 1)];
-    })();
-    const ring = nx ? pop(moving ? T.dur : null, `<circle class="gc-fd-ring" cx="${f1(rest[0])}" cy="${f1(rest[1])}" r="${f1(g.ball[0] * 1.6)}"/>`) : "";
-    return { body: `${lines}${marks}${words}${ring}${ballSVG(g, rest[0], rest[1], moving ? T.motion : "")}`, moving };
-  }
-  /* The drive both drawings run: the last drive on file, its last
+  /* The drive the photograph runs: the last drive on file, its last
      DRIVE_ROWS snaps, the next snap while the scoreboard is still on it,
-     and where the run is. One clock for the card and the photograph. */
+     and where the run is. (The drive card's field, which ran the same
+     clock, went on 21 November, step AAN: the one game page's drive view
+     is the drive in progress.) */
   function driveModel(d) {
     const drives = d.drives || [];
     const last = drives[drives.length - 1];
@@ -495,37 +363,10 @@
     const startAt = seen >= 0 ? seen + 1 : Math.max(0, rows.length - DRIVE_RUN);
     return { last, all, rows, nx, dir, run, startAt };
   }
-  /* The tracker for the Gamecast tab's drive card: the drive on file that
-     the scoreboard's drive belongs to, its last DRIVE_ROWS snaps. Empty
-     when no snap of it has a spot. */
-  function driveFieldHTML(d, league, dr) {
-    const md = driveModel(d);
-    if (!md || !dr || md.last.team !== dr.team) return { html: "", rz: false, replay: "" };
-    const { all, rows, nx, dir, run, startAt } = md;
-    _last = { d, league, dr };
-    const cols = fieldColours(d, league);
-    const m = { rows, nx, startAt };
-    const label = `${dr.team} drive: ${rows.map((r) => r.label).join(", ")}${nx && nx.words ? `; ${nx.words} next` : ""}`;
-    let moving = false;
-    const svgs = Object.entries(FIELD).map(([cls, g]) => {
-      const t = trackerBody(g, m, run);
-      moving = moving || t.moving;
-      return fieldSVG(g, cls, d, cols, rows.length + (nx ? 1 : 0), t.body, label, { tm: cols[dir > 0 ? "home" : "away"] });
-    }).join("");
-    const rz = !!nx && (dir > 0 ? nx.los >= 80 : nx.los <= 20);
-    const replay = `<button type="button" class="gc-replay" data-gc-replay aria-label="Replay the drive">${REPLAY}</button>`;
-    const more = all.length > rows.length ? `<span>${all.length - rows.length} earlier play${all.length - rows.length === 1 ? "" : "s"} not drawn</span>` : "";
-    return {
-      html: `<div class="gc-fd" data-gc-fd>${svgs}</div>
-        <div class="gc-fd-key"><span class="los">Line of scrimmage</span>${nx && nx.gain != null ? `<span class="gain">Line to gain</span>` : ""}${more}</div>`,
-      rz, replay,
-    };
-  }
   const REPLAY = `<svg class="ic" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.2 8a4.8 4.8 0 1 0 1.4-3.4"/><path d="M3 2.6v3h3"/></svg>`;
   /* Replay redraws in place everything that runs the same clock — the
-     card's field and the photograph's drawing, or the zone and the
-     photograph's pitches — so the two start together again. The page's own
+     photograph's drawing, or the zone and the photograph's pitches — so the two start together again. The page's own
      redraw would come round in a few seconds anyway, and the click is the
      module's to take (no inline handler under the page's CSP). */
   const swap = (sel, html) => {
@@ -550,7 +391,6 @@
       const b = e.target && e.target.closest ? e.target.closest("[data-gc-replay]") : null;
       if (!b) return;
       _replay = true;
-      if (_last) swap(".gc-drive [data-gc-fd]", driveFieldHTML(_last.d, _last.league, _last.dr).html);
       reArt();
       _replay = false;
     });
@@ -1812,7 +1652,7 @@
     // The football page's own rooms (detail.js, GP1): a final's record on
     // its Stats tab (the scoring, the leaders); the live tracking on its
     // Play-By-Play tab (the drive card, the last play, the whole game's chart).
-    scoring: scoringHTML, leaders: leadersHTML, driveCard: currentDriveHTML, lastPlay: lastPlayHTML, driveView: driveViewHTML, gameChart: gameChartHTML,
+    scoring: scoringHTML, leaders: leadersHTML, lastPlay: lastPlayHTML, driveView: driveViewHTML, gameChart: gameChartHTML,
     // The same card for the other sports' newest play (detail.js gpKit), and
     // the one any game file can make.
     playNow: playNowHTML, plainNow: plainNowHTML,

@@ -16,14 +16,17 @@ Game info was three weather chips over half a screen of nothing, and one
 of them read `Roof: outdoors` over `fieldturf`: a label and a value that
 are not a pair, and a proper noun with no capital letter.
 
-WHAT THIS FILE GUARDS is not the styling — it is the two honesty rules
-the new tables live under, because both are the kind of thing that gets
-"tidied" later by someone who cannot see why they are there:
+WHAT THIS FILE GUARDS is not the styling — it is the honesty rules the
+tables live under, because they are the kind of thing that gets "tidied"
+later by someone who cannot see why they are there: every key the fantasy
+points read is a market the parsers actually write, every drive field is
+one `football_drives` actually emits, and every table is one a screen reader
+can read.
 
-  · a column nobody filled is NOT DRAWN, so an all-dash column never
-    stands in for real zeroes;
-  · every key the tables read is a market the parsers actually write,
-    and every drive field is one `football_drives` actually emits.
+The player tables this file first guarded (pbpPlayersHTML, football split
+into three; "a column nobody filled is not drawn") went on 21 November, step
+AAN: since step AAK every league's box score is the one game page's own card
+(gpBoxCardHTML), and their fantasy points are a card under it.
 """
 
 import json
@@ -63,13 +66,13 @@ def _line(start):
 
 
 # --- the keys are real ------------------------------------------------------
-def test_every_box_column_is_a_market_a_parser_writes():
-    """The tables invent no field. Each key must appear in the parser
-    that names markets for that league, or the column is a heading over
-    numbers nobody produces."""
-    src = _block("const PBP_BOX_FOOTBALL = [", "\n];")
-    keys = set(re.findall(r'"([a-z_]+)"', src)) - {"Passing", "Rushing", "Receiving"}
-    assert len(keys) >= 10, keys
+def test_every_fantasy_point_reads_a_market_a_parser_writes():
+    """The fantasy points invent no field. Each key must appear in the parser
+    that names markets for that league, or the points count numbers nobody
+    produces."""
+    src = _fn("pbpFantasyPts")
+    keys = set(re.findall(r'n\("([a-z_]+)"\)', src))
+    assert len(keys) >= 8, keys
     parsers = "\n".join((ROOT / "engine" / "sources" / f).read_text()
                         for f in ("nflpreseason.py", "cfbdata.py"))
     for k in sorted(keys):
@@ -99,15 +102,10 @@ def _node(tail):
     prog = "\n".join([
         'const escapeHtml = (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");',
         'const marketWord = (k) => String(k).replace(/_/g," ");',
-        'const PBP_LEAD_STAT = { nba: ["points"] };',
         'const PBP_FOOTBALL = new Set(["nfl", "cfb"]);',
         'const teamMarkIn = () => ""; const teamNameIn = (l, a) => a;',
-        'const pbpAgo = () => "updated 1s ago";',
-        _block("const PBP_BOX_FOOTBALL = [", "\n];"),
-        _block("const PBP_BOX_HEAD = {", "\n};"),
         _line("const pbpStat = "),
-        _fn("pbpBoxGroupHTML"), _fn("pbpBoxGenericHTML"), _fn("pbpFantasyPts"), _fn("pbpFantasyHTML"),
-        _fn("pbpPlayersHTML"),
+        _fn("pbpFantasyPts"), _fn("pbpFantasyHTML"),
         _fn("pbpClockSecs"), _line("const pbpSecsClock = "),
         _fn("pbpTeamTotals"), _fn("pbpTotalsHTML"),
         tail,
@@ -120,57 +118,6 @@ def _node(tail):
         os.unlink(path)
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout.strip())
-
-
-def test_a_column_nobody_filled_is_not_drawn():
-    """An all-dash TD column reads as "nobody scored" and is really
-    "this feed did not send the field". The reader cannot tell those
-    apart, and only one of them is a fact."""
-    got = _node("""
-      const noTD = { away: "NE", home: "SEA", players: [
-        {player: "A", team: "NE", stats: {carries: 9, rush_yds: 48}},
-        {player: "B", team: "NE", stats: {carries: 3, rush_yds: 10}}]};
-      const withTD = { away: "NE", home: "SEA", players: [
-        {player: "A", team: "NE", stats: {carries: 9, rush_yds: 48, rush_td: 1}},
-        {player: "B", team: "NE", stats: {carries: 3, rush_yds: 10}}]};
-      console.log(JSON.stringify({
-        without: pbpPlayersHTML(noTD, "nfl"),
-        with:    pbpPlayersHTML(withTD, "nfl"),
-      }));""")
-    if got is None:
-        print("  SKIP node not installed"); return
-    assert ">TD<" not in got["without"], "an empty TD column was drawn anyway"
-    assert ">CAR<" in got["without"] and ">YDS<" in got["without"], got["without"][:400]
-    # One player with the field is enough to earn the column, and the
-    # player without it gets a dash rather than an invented zero.
-    assert ">TD<" in got["with"], got["with"][:400]
-    assert "—" in got["with"], got["with"][:400]
-
-
-def test_football_splits_into_three_tables_and_nothing_else_does():
-    """A passer and a slot receiver share almost no statistics. One
-    table with every column is mostly dashes."""
-    got = _node("""
-      const d = { away: "NE", home: "SEA", players: [
-        {player: "QB", team: "NE", stats: {pass_cmp: 17, pass_att: 23, pass_yds: 174, rush_yds: 36, carries: 5}},
-        {player: "WR", team: "NE", stats: {rec_yds: 26, receptions: 3, targets: 4}}]};
-      const hoops = { away: "NE", home: "SEA", players: [
-        {player: "G", team: "NE", stats: {points: 22, rebounds: 4, assists: 7}}]};
-      console.log(JSON.stringify({
-        nfl: pbpPlayersHTML(d, "nfl"), nba: pbpPlayersHTML(hoops, "nba"),
-      }));""")
-    if got is None:
-        print("  SKIP node not installed"); return
-    for head in ("Passing", "Rushing", "Receiving"):
-        assert f">{head}<" in got["nfl"], (head, got["nfl"][:600])
-    # The QB appears in passing AND rushing — the same player, twice,
-    # which is what a box score does.
-    # (The fantasy leaders above the tables name him once more, 2026-10-27.)
-    assert got["nfl"].count('class="pbp-bx-who">QB') == 2, got["nfl"]
-    # A league whose stat keys have not been read gets ONE table built
-    # from its own keys, not football's headings over foreign numbers.
-    assert "Passing" not in got["nba"], got["nba"]
-    assert "points" in got["nba"] and "rebounds" in got["nba"], got["nba"]
 
 
 def test_team_totals_are_arithmetic_over_the_drives_on_the_page():
@@ -225,7 +172,8 @@ def test_the_old_game_info_room_is_gone_with_its_tiles():
 def test_the_table_is_a_table_for_a_screen_reader_too():
     """`scope` is the whole difference between a table and a layout: it
     is what makes a reader announce "A.J. Brown, targets, 4"."""
-    for body in (_fn("pbpBoxGroupHTML"), _fn("pbpBoxGenericHTML"), _fn("pbpTotalsHTML")):
+    # The one game page's box score card (every league's since step AAK) and the team totals.
+    for body in (_fn("gpBoxCardHTML"), _fn("pbpTotalsHTML")):
         heads = re.findall(r"<th\b[^>]*>", body)
         assert heads, body[:200]
         # EVERY head, not one of them: a table with scope on some cells

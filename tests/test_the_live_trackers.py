@@ -236,66 +236,9 @@ def test_the_scoreboard_says_where_the_next_snap_is_and_what_it_needs():
     assert got[3]["gain"] == 100, "never past the goal line"
 
 
-def test_the_drive_card_draws_the_field_the_lines_and_the_ball_running_the_drive():
-    d = _fb_doc()
-    got = _node(f"""const d = {json.dumps(d)};
-      const ctx = {{ d, league: "nfl", faces: {{}}, boardGame: null }};
-      const first = Q.driveCard(ctx.d, "nfl", Q.newestPlay(ctx.d, "nfl"));
-      NOW += 60000;                                        // the page's redraw, a minute on
-      const later = Q.driveCard(ctx.d, "nfl", Q.newestPlay(ctx.d, "nfl"));
-      return {{ first, later }};""")
-    if got is None:
-        return
-    g = got["first"]
-    assert "Current drive" in g and g.count('data-gc-fd') == 1 and 'data-gc-replay' in g
-    assert g.count('class="gc-fd-svg wide"') == 1 and g.count('class="gc-fd-svg narrow"') == 1, "one field for a desktop, one for a phone"
-    for svg in re.findall(r'<svg class="gc-fd-svg.*?</svg>', g, re.S):
-        assert svg.count('class="gc-fd-lbl') == 4, "a word for every snap"
-        assert 'class="gc-fd-los"' in svg and 'class="gc-fd-gain"' in svg and ">3rd &amp; 8<" in svg
-        assert 'class="gc-fd-ext"' in svg, "the flag's walk"
-        assert '<g class="gc-fd-ball"' in svg and '<animateTransform attributeName="transform" type="translate"' in svg
-        assert 'style="--tm:#002244"' in svg, "the field wears the offence's colour"
-    assert ">DAL<" in g and ">TB<" in g, "the end zones are named"
-    assert "Line of scrimmage" in g and "Line to gain" in g and "Red zone" not in g
-    assert "<animate" not in got["later"].split("gc-fd")[1], "a redraw after the run draws it at rest"
-    assert got["later"].count('class="gc-fd-lbl') == 8
-    # The Down and Ball on tiles went (2026-10-25): the header says the
-    # next snap's down and spot, and the strip under the photograph says
-    # where the ball is — three places was the repetition Ethan asked
-    # to lose.
-    assert ">Down<" not in g and ">Ball on<" not in g and "gc-tiles" not in g
-
-
-def test_a_new_play_runs_from_the_last_one_seen_and_the_red_zone_lights():
-    d = _fb_doc()
-    more = _fb_doc(yard_line=88, detail="4th & 1 at TB 12")
-    snap = {"kind": "football", "id": "q99", "period": 3, "clock": "9:00", "team": "DAL", "event": "Rush", "down": 3,
-            "distance": 8, "yards": 12, "scoring": False, "turnover": False, "penalty": False, "spot": 76}
-    more["drives"][-1]["plays"].append(snap)
-    got = _node(f"""const card = (d) => Q.driveCard(d, "nfl", Q.newestPlay(d, "nfl"));
-      card({json.dumps(d)});
-      NOW += 60000;
-      card({json.dumps(d)});
-      NOW += 1000;
-      return card({json.dumps(more)});""")
-    if got is None:
-        return
-    wide = re.search(r'<svg class="gc-fd-svg wide".*?</svg>', got, re.S).group(0)
-    assert '<animateTransform attributeName="transform" type="translate"' in wide, "the new play runs"
-    assert wide.count("stroke-dasharray") == 2, "only the new play's bar draws itself (its line and its halo)"
-    assert "+12 RUN" in wide and 'class="gc-fd-rz"' in wide and 'class="gc-rz">Red zone<' in got
-    assert ">4th &amp; 1<" in wide
-
-
-def test_no_spot_no_field_and_a_final_has_no_drive():
-    bare = _node(f"""const d = {json.dumps(_fb_doc(spots=False))};
-      return Q.driveCard(d, "nfl", Q.newestPlay(d, "nfl"));""")
-    if bare is None:
-        return
-    assert "Current drive" in bare and "data-gc-fd" not in bare and "data-gc-replay" not in bare
-    final = _node(f"""const d = {json.dumps(_fb_doc(state="final"))};
-      return Q.driveCard(d, "nfl", Q.newestPlay(d, "nfl"));""")
-    assert "Current drive" not in final and "data-gc-fd" not in final
+# The drive card's own field (its tests: the field, the lines and the ball running the drive; a new
+# play running from the last one seen and the red zone lit; no spot, no field) went on 21 November,
+# step AAN: nothing drew the card after the one game page (its drive view is the drive in progress).
 
 
 def test_the_plays_tab_leads_with_the_whole_game_a_drive_a_row():
@@ -428,25 +371,26 @@ def test_the_timeline_scales_the_mark_with_its_size():
     assert got["none"] is False, "a mark with no size is not scaled"
 
 
-def test_the_drive_on_the_photograph_runs_on_the_cards_clock():
+def test_the_drive_on_the_photograph_runs_then_rests():
+    """The photograph runs the drive play by play on its own clock (driveModel), and a redraw
+    after the run draws it at rest. (It shared that clock with the drive card's field until
+    the card went, 21 November, step AAN.)"""
     d = _fb_doc()
     hit = [p for p in d["plays"] if p.get("kind") == "football"][-1]
     got = _node(f"""const d = {json.dumps(d)}, hit = {json.dumps(hit)};
-      const card = Q.driveCard(d, "nfl", Q.newestPlay(d, "nfl"));
       const photo = Q.art(d, "nfl", hit, null);
       NOW += 60000;
-      return {{ card, photo, rest: Q.art(d, "nfl", hit, null) }};""")
+      return {{ photo, rest: Q.art(d, "nfl", hit, null) }};""")
     if got is None:
         return
     photo = got["photo"]
-    wide = re.search(r'<svg class="gc-fd-svg wide".*?</svg>', got["card"], re.S).group(0)
     assert photo.count("data-gc-art") == 1 and 'data-gc-replay' in photo, "Replay on the photograph too"
     assert 'class="gc-art-los" x1="0.0" y1="115.4" x2="240.0"' in photo, "the line of scrimmage under the ball, side to side"
     # Each snap's own line to gain: 1st & 10 on the painted 40 (95.4), 2nd & 5 after the flag.
     assert '<line class="gc-art-gain" x1="0.0" y1="95.7"' in photo
     assert 'type="scale" additive="sum"' in photo, "the ball is smaller down the field"
     for label in ("+4 RUN", "INC", "+5 FLAG", "−3 SACK"):
-        assert _pop_at(photo, label) == _pop_at(wide, label), f"{label}: the photograph and the card land it together"
+        assert _pop_at(photo, label) is not None, f"{label}: the photograph lands each play of the drive"
     assert ">3rd &amp; 8<" in photo and ">TB 24<" in photo, "the run ends on the next snap"
     rest = got["rest"]
     assert "<animate" not in rest, "a redraw after the run draws it at rest"
@@ -561,7 +505,8 @@ def test_the_stylesheet_is_the_sites_tokens_and_motion_stops_for_a_reader_who_as
         assert rule in GC_CSS, rule
     assert "@container (max-width: 480px)" in GC_CSS and ".gc-fd { margin-top: 12px; container-type: inline-size; }" in GC_CSS
     # A line that draws itself must take its dashes from the drawing, not a rule.
-    for cls in ("gc-fd-bar", "gc-fd-halo", "gc-art-bar", "gc-art-halo", "gc-art-trail", "gc-art-arc"):
+    # (The drive card's own bars, gc-fd-bar and gc-fd-halo, went with the card: step AAN.)
+    for cls in ("gc-art-bar", "gc-art-halo", "gc-art-trail", "gc-art-arc"):
         rules = re.findall(r"\." + cls + r"(?:\.(?!flag)\w+)?\s*\{[^}]*\}", GC_CSS)
         assert rules and not any("stroke-dasharray" in r for r in rules), cls
     assert "onclick" not in GC and "onerror" not in GC
@@ -570,7 +515,7 @@ def test_the_stylesheet_is_the_sites_tokens_and_motion_stops_for_a_reader_who_as
     art = re.search(r"\.gc-art \{([^}]*)\}", GC_CSS).group(1)
     for name in ("--art-ink", "--art-gold", "--art-blue", "--art-red", "--art-shade"):
         assert name + ":" in art, name
-    assert ".gc-fd-los { stroke: var(--gc-los);" in GC_CSS and ':root[data-theme="light"] { --gc-los:' in GC_CSS
+    assert ':root[data-theme="light"] { --gc-los:' in GC_CSS and "var(--gc-los)" in GC_CSS
     assert "@media (prefers-reduced-motion: reduce) { .gc-art-ring { animation: none; opacity: 0; } }" in GC_CSS
     assert ".pbp-park > .gc-art-replay { position: absolute; top: 8px; right: 8px; z-index: 1; }" in GC_CSS
 

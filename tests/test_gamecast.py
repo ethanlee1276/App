@@ -264,8 +264,10 @@ def test_the_module_draws_numbers_and_never_a_sentence():
     assert "https://a.espncdn.com/i/headshots/${dir}/players/full/" in GC
     assert 'const FACE_DIR = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl", cbb: "mens-college-basketball" };' in GC
     assert "onerror" not in GC and "onclick" not in GC, "no inline handlers under the page's CSP"
-    for cls in (".gc-drive", ".gc-last", ".gc-chip", ".gc-win", ".gc-leaders", ".gc-lead-row", ".gc-tag.turnover", ".gc-face"):
+    for cls in (".gc-last", ".gc-chip", ".gc-win", ".gc-leaders", ".gc-lead-row", ".gc-tag.turnover", ".gc-face"):
         assert cls in GC_CSS, cls
+    # The drive card and its field went on 21 November (step AAN): nothing drew it after the one game page.
+    assert "function currentDriveHTML(" not in GC and "driveCard" not in GC and ".gc-drive-head" not in GC_CSS
     # The tabs' own box score, team stats and drive list went with them (2026-11-21), and their styles too.
     for gone in (".gc-toggle", ".gc-tog", ".gc-ts-row", ".gc-bar", ".gc-dr "):
         assert gone not in GC_CSS, gone
@@ -323,7 +325,7 @@ def _node(js):
     return json.loads(out.stdout.strip())
 
 
-def test_the_cards_draw_the_drive_the_last_play_and_the_leaders():
+def test_the_cards_draw_the_last_play_and_the_leaders():
     doc = B.pbp_doc("nfl", _game(), _summary())
     doc["plays"][-1]["text"] = TEXT                      # if a sentence ever got in, the page would still not draw it
     got = _node(f"""
@@ -337,7 +339,9 @@ def test_the_cards_draw_the_drive_the_last_play_and_the_leaders():
         unknown: QBGamecast.playerLine(d, "Nobody", "any").line,
         face: QBGamecast.faceURL("nfl", {{ name: "Dak Prescott", id: "3042" }}, faces),
         own: QBGamecast.faceURL("nfl", {{ name: "Javonte Williams", id: "4361" }}, faces),
-        cards: QBGamecast.driveCard(d, "nfl", QBGamecast.newestPlay(d, "nfl")) + QBGamecast.lastPlay(d, "nfl", faces)
+        // (The drive card went on 21 November, step AAN: the one game page's drive view is the drive
+        // in progress, its own tests' — tests/test_a_play_says_who_did_what.py.)
+        cards: QBGamecast.lastPlay(d, "nfl", faces)
           + QBGamecast.leaders(d, "nfl", faces) + QBGamecast.scoring(d, "nfl"),
       }};""")
     if got is None:
@@ -348,7 +352,7 @@ def test_the_cards_draw_the_drive_the_last_play_and_the_leaders():
     assert got["face"] == "https://a.espncdn.com/i/headshots/nfl/players/full/3042.png"
     assert got["own"] == "img/jw.png", "the board's own face first"
     g = got["cards"]
-    for want in ("Current drive", "7 plays, 66 yards, 3:23", "TB 4",
+    for want in ("TB 4",
                  "Last play · Q1 10:51", "Touchdown run, 1 yd", "Win % (our model)", "<b>92.0</b>",
                  "Game leaders", ">Passing<", ">Rushing<", ">Receiving<", ">Tackles<", "Dak Prescott",
                  "George Pickens", "Jalen Trotter", "2 TOT, 1 SOLO", "img/jw.png", ">Touchdown<", "on offense"):
@@ -369,12 +373,11 @@ def test_a_final_has_no_drive_and_keeps_its_leaders():
     doc = B.pbp_doc("nfl", _game(state="final"), _summary())
     got = _node(f"""
       const d = {json.dumps(doc)};
-      return {{ drive: QBGamecast.driveCard(d, "nfl", QBGamecast.newestPlay(d, "nfl")),
-               view: QBGamecast.driveView(d, "nfl", {{}}, {{ top: true }}),
+      return {{ view: QBGamecast.driveView(d, "nfl", {{}}, {{ top: true }}),
                leaders: QBGamecast.leaders(d, "nfl", {{}}), scoring: QBGamecast.scoring(d, "nfl") }};""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got["drive"] == "" and got["view"] == "", "a final has no drive in progress and no play right now"
+    assert got["view"] == "", "a final has no drive in progress and no play right now"
     assert "Game leaders" in got["leaders"] and "Scoring plays" in got["scoring"], "its Stats tab opens on both (detail.js gpStatsHTML)"
 
 

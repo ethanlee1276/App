@@ -852,8 +852,9 @@ button.tr-opt { cursor: pointer; }
 .pbp-tv-b.on { border-color: transparent; color: var(--brand-2); background: color-mix(in oklab, var(--brand) 10%, transparent); }
 .pbp-tv-note { flex-basis: 100%; font-size: var(--fs-2xs); color: var(--text-mute); }
 
-/* FANTASY POINTS ON THE GAME PAGE (2026-10-27): the game's top fantasy scorers, off its box. */
-.pbp-ff .pbp-box-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+/* FANTASY POINTS ON THE GAME PAGE (2026-10-27): the game's top fantasy scorers, off its box; a card
+   on the one game page's Stats tab since 21 November (step AAN). */
+.pbp-ff .gp-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
 .pbp-ff-k { font-size: var(--fs-xs); font-weight: 600; color: var(--text-mute); }
 .pbp-ff-list { list-style: none; margin: 0; padding: 0; }
 .pbp-ff-list li { display: grid; grid-template-columns: 18px 18px minmax(0, 1fr) auto; align-items: center; gap: 8px;
