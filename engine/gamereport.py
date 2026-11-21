@@ -3668,15 +3668,17 @@ def _card_doubted(sport: str, r: dict) -> bool:
     if not isinstance(r, dict) or _os.environ.get("QB_CARD_DOUBT", "on").strip().lower() in ("off", "0", "no", "false"):
         return False
     from . import gameparlays as _gp
-    from .twoleg import _fair_of
-    # Each reader below never raises (one_play_leg, qb_volume_leg, book_fair, _fair_of, _f).
+    from .twoleg import _fair_line_of
+    # Each reader below never raises (one_play_leg, qb_volume_leg, book_fair, _fair_line_of, _f).
     # A quarterback's pass-attempt over goes behind too (gameparlays.QB_VOLUME_LEGS, step AAQ).
     if _gp.one_play_leg(sport, r) or _gp.qb_volume_leg(sport, r):
         return True
     if str(sport or "").lower() not in CARD_DOUBT_SPORTS:
         return False
     p = _f(r.get("model_prob"))
-    fair = _gp.book_fair({"fair": _fair_of(r), "odds": r.get("odds")})
+    # The book's chance at the pick's OWN line (twoleg._fair_line_of, step AAT): a ladder rung's
+    # `fair_prob` is its main line's, which read every -250 rung as far over a -110 book.
+    fair = _gp.book_fair({"fair_line": _fair_line_of(r), "odds": r.get("odds")})
     return p is not None and fair is not None and p - fair > CARD_BOOK_GAP
 
 

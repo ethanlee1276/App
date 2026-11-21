@@ -194,6 +194,25 @@ def _fair_of(r: dict):
     return None
 
 
+def _fair_line_of(r: dict):
+    """The book's de-vigged chance at this row's OWN line and side, or None.
+
+    A Most Likely row (one that carries `rung`, engine/likely._row_from) keeps
+    two: `implied_prob`, its own rung's two-way price, and `fair_prob`, its MAIN
+    line's, carried for the engine's credibility bar. `_fair_of` reads
+    `fair_prob` first, so on a ladder rung it gave the main line's number:
+    Nabers 5+ receptions at -250 read about 50%, the main line's -110 (step
+    AAT, 21 November 2026). Any other row's two are one line's, and `_fair_of`
+    stands."""
+    if "rung" not in r:
+        return _fair_of(r)
+    try:
+        v = float(r.get("implied_prob"))
+    except (TypeError, ValueError):
+        return None
+    return round(v, 4) if 0.0 < v < 1.0 else None
+
+
 def _leg(r: dict, p, pool: str) -> dict | None:
     from .parlays import parlay_market
     # No tackle, sack or kicking leg on any ticket (parlays.NO_PARLAY_MARKETS;
@@ -218,6 +237,9 @@ def _leg(r: dict, p, pool: str) -> dict | None:
             # journal keeps it beside ours, so the record can say how far our
             # legs sat from the market and whether that distance paid.
             "fair": _fair_of(r),
+            # …and the book's chance at the leg's OWN line and side (`_fair_line_of`): the one
+            # gameparlays.book_capped holds a football or NBA leg to (step AAT).
+            "fair_line": _fair_line_of(r),
             "game_date": r.get("game_date") or r.get("date") or "", "kickoff": r.get("kickoff") or "",
             "headline": r.get("headline") or "", "position": r.get("position") or "",
             # Behind a new starting quarterback with too few passes to rate

@@ -48,6 +48,18 @@ def test_an_nfl_pick_far_over_the_books_chance_goes_behind_the_others():
         os.environ.pop("QB_CARD_DOUBT", None)
 
 
+def test_a_ladder_rung_is_read_against_its_own_line_not_its_main_line():
+    """Step AAT: a rung's `fair_prob` is its main line's. Read against that, every -250 rung looked twenty
+    points over a -110 book and went behind; the NFL's cards of 21 November filled with touchdown picks."""
+    rung = _row("Ladder Rung", 0.72, -250, rung="alt", implied_prob=0.674, fair_prob=0.50)
+    rows = [rung, _row("Backed A", 0.66, -220), _row("Backed B", 0.64, -200), _row("Backed C", 0.62, -180),
+            _row("Backed D", 0.61, -170)]
+    assert _card(rows, "nfl")[0] == "Ladder Rung", "72% against its own rung's 67%: no doubt"
+    far = dict(rung, model_prob=0.86)
+    assert _card([far] + rows[1:], "nfl")[-1] == "Backed D" and "Ladder Rung" not in _card([far] + rows[1:], "nfl"), \
+        "86% against its own rung's 67% is still far over, and still goes behind"
+
+
 def test_an_nba_one_play_prop_goes_behind_the_others():
     rows = [_row("Bench Big", 0.70, -230, market="reb", line=1.5), _row("Rim Guard", 0.69, -230, market="blk", side="UNDER", line=0.5),
             _row("Wing", 0.66, -200, market="reb", line=4.5), _row("Guard", 0.65, -200, market="ast", line=1.5)]

@@ -433,11 +433,21 @@ def book_tied(sport) -> bool:
 
 
 def book_fair(leg: dict) -> float | None:
-    """The book's own fair chance for a leg: its de-vigged ``fair`` (the row's
-    fair or implied chance, twoleg._fair_of), else its price's implied chance with
-    BOOK_DEVIG taken out; None when it has neither. Never raises."""
+    """The book's own fair chance for a leg: its de-vigged chance at its own line
+    (``fair_line``, twoleg._fair_line_of) where the leg carries that, else its
+    ``fair``; else its price's implied chance with BOOK_DEVIG taken out; None
+    when it has none of them. Never raises.
+
+    ITS OWN LINE'S (step AAT, 21 November 2026). A Most Likely pick on a ladder
+    rung carries its MAIN line's fair chance as ``fair``, so until this step a
+    -250 rung was held to the main line's -110, about 50%: the NFL's board that
+    afternoon kept 3 of its reports' 48 picks as legs (19 that morning) and
+    posted 5 two-leg and 1 three-leg ticket (34 and 26), and the report cards
+    read those picks as far over the book (gamereport._card_doubted). The rule
+    was measured on each pick's own price."""
+    key = "fair_line" if "fair_line" in leg else "fair"
     try:
-        f = float(leg.get("fair")) if leg.get("fair") not in (None, "") else None
+        f = float(leg.get(key)) if leg.get(key) not in (None, "") else None
     except (TypeError, ValueError):
         f = None
     if f is not None and 0.0 < f < 1.0:

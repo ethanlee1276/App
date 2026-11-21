@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAT. Each leg and card pick is held to its own line's chance, not its main line's** (step 834; 21 November).
+Nothing to run. A fix to steps AAM and AAO, found on the heartbeat. The NFL's board built at 2:25 PM ET kept 3 of
+its reports' 48 picks as parlay legs, where that morning's had kept 19, and posted 5 two-leg and 1 three-leg ticket,
+where it had posted 34 and 26: ten of its twelve games had fewer than three legs to build from. The cause: a Most
+Likely pick on an alternate line carries two fair chances, its own line's (`implied_prob`) and its main line's
+(`fair_prob`, kept for the board's credibility bar), and both new rules read the main line's. So Nabers 5+
+receptions at -250 was held to the -110 main line's 50% and was no leg, and the report cards read every such pick as
+twenty points over the book and moved it behind, so touchdown picks took their places (touchdown picks ride only the
+touchdown pairs). The evidence for both rules was measured on each pick's own price, so the code was wrong, not the
+rules. Each leg now carries its own line's chance (`fair_line`) and both rules read it; a rung with no two-way price
+of its own is read at its price less the book's cut. The parlay journal's own `fair` field, which the learned
+correction reads, is left as it was; that it carries the main line's on a rung is a separate question, written down
+for later.
+
 **AAS. The Live tab follows the game reports' own picks** (step 833; 21 November). Nothing to run. You asked to see
 the game report bets and parlays on the Live page the way the Most Likely and Edge bets are, live. The reports'
 parlays already were: "Our report parlays, live" near the top of the tab follows every posted ticket leg by leg (at

@@ -63,6 +63,32 @@ def test_a_football_or_nba_leg_counts_at_the_lower_of_ours_and_the_books():
         os.environ.pop("QB_BOOK_AGREES", None)
 
 
+def test_a_ladder_rung_is_held_to_its_own_lines_chance_never_its_main_lines():
+    """Step AAT. A Most Likely pick on a ladder rung, as engine/likely._row_from writes it, carries its own
+    rung's two-way fair chance as `implied_prob` and its MAIN line's as `fair_prob`. The cap read the main
+    line's: Nabers 5+ receptions at -250 was held to the -110 main line's 50% and was no leg, and the NFL's
+    board of 21 November posted 5 two-leg and 1 three-leg ticket where it had posted 34 and 26."""
+    T = __import__("engine.twoleg", fromlist=["x"])
+    row = EG._ml("Malik Nabers", "NYG", "WR", "receptions", "Over", 4.5, 0.72, -250, "Receptions")
+    row.update(rung="alt", implied_prob=0.674, fair_prob=0.50, main_line=5.5, main_odds=-110)
+    board = {"date": "2099-W10", "games": [EG.GAME], "most_likely": [row], "recommendations": []}
+    legs = [l for l in GP.legs_for(board, "nfl") if l["player"] == "Malik Nabers"]
+    assert len(legs) == 1 and legs[0]["p"] == 0.674 and legs[0]["p_own"] == 0.72, legs
+    assert legs[0]["fair_line"] == 0.674 and legs[0]["fair"] == 0.5, "the journal's own field is left as it was"
+    # A rung with no two-way price of its own: its price's chance less the book's cut, never the main line's.
+    alone = dict(row, implied_prob=None)
+    legs = [l for l in GP.legs_for(dict(board, most_likely=[alone]), "nfl") if l["player"] == "Malik Nabers"]
+    assert len(legs) == 1 and legs[0]["p"] == round((250 / 350) / GP.BOOK_DEVIG, 4), legs
+    # A row with no rung keeps its fair as before (fair_prob, then implied_prob); a main-line row its own.
+    assert T._fair_line_of({"fair_prob": 0.55, "implied_prob": 0.6}) == 0.55
+    assert T._fair_line_of({"implied_prob": 0.6}) == 0.6
+    assert T._fair_line_of({"rung": "main", "fair_prob": 0.55, "implied_prob": 0.55}) == 0.55
+    assert T._fair_line_of({"rung": "alt", "fair_prob": 0.5, "implied_prob": "x"}) is None
+    # A leg that carries no fair_line at all (a priced row's) reads its `fair`, as before.
+    assert GP.book_fair({"fair": 0.61, "odds": -110}) == 0.61
+    assert abs(GP.book_fair({"fair_line": None, "fair": 0.5, "odds": -250}) - (250 / 350) / GP.BOOK_DEVIG) < 1e-9
+
+
 def test_a_claim_far_above_a_near_even_price_is_no_leg_in_football_and_still_one_in_hockey():
     row = EG._ml("Hot Claim", "NYG", "WR", "receptions", "Over", 3.5, 0.72, -110, "Receptions")
     row.pop("implied_prob")
