@@ -3799,9 +3799,34 @@ if (typeof window !== "undefined" && !window._ciBound) {
 }
 
 const WP_W = 320, WP_H = 110;
+/* OURS WHERE THE FEED GIVES NONE (step AAZ, 21 November 2026; Ethan: "make sure everything is matching ...
+   everything's laid out the same visually"). The line through the game is the feed's chance after each
+   play, in football and basketball; ESPN gives none in hockey, so a hockey game had only our number now, as
+   two bars, where every other sport had this line. The live build gives each hockey play our own chance
+   after it (engine/livewp play_chances, `our_wp`: the score and the clock against the league's scoring
+   rate, the bars' own number), and the line is drawn from it, saying it is ours; the bars then stand down,
+   as they would say the same number twice (`pbpWinIsOurs`). */
+function pbpWinRows(d, league) {
+  const all = league === "mlb" ? (d.events || []).filter((e) => e && e.kind === "atbat") : (d.plays || []);
+  const fed = all.filter((r) => r && typeof r.wp === "number");
+  if (fed.length >= 4 || league === "mlb") return { rows: fed, ours: false };
+  const mine = all.filter((r) => r && typeof r.our_wp === "number").map((r) => ({ ...r, wp: r.our_wp }));
+  if (mine.length < 4) return { rows: fed, ours: false };
+  // The feed's plays can trail the scoreboard by a play or two (a goal on the board before it is in the
+  // list): while the game is on, the line ends on the scoreboard's own reading, the bars' number, so "now"
+  // is never older than the score above it.
+  const lv = d.live || {}, wp = lv.win_prob || {};
+  if (lv.state === "live" && typeof wp.home_win_prob === "number") {
+    const now = Math.round(1000 * wp.home_win_prob) / 10;
+    mine.push({ wp: now, at: d.generated_at || (mine[mine.length - 1] || {}).at, live_now: true });
+  }
+  return { rows: mine, ours: true };
+}
+function pbpWinIsOurs(d, league) {
+  return pbpWinRows(d, league).ours;
+}
 function pbpWinChartHTML(d, league, boardGame) {
-  const rows = (league === "mlb" ? (d.events || []).filter((e) => e && e.kind === "atbat") : (d.plays || []))
-    .filter((r) => r && typeof r.wp === "number");
+  const { rows, ours } = pbpWinRows(d, league);
   if (rows.length < 4) return "";
   const W = WP_W, H = WP_H, n = rows.length;
   // When each play happened (ESPN's own stamp), so the room's vote can be
@@ -3814,7 +3839,7 @@ function pbpWinChartHTML(d, league, boardGame) {
   const lead = last >= 50 ? d.home : d.away;
   const swings = rows.map((r, i) => [r, i]).filter(([r]) => Math.abs(Number(r.wpa) || 0) >= 15).slice(-8);
   const mkt = typeof pbpMarketHome === "function" ? pbpMarketHome(boardGame) : null;
-  return `<div class="card pbp-wpcard">
+  return `<div class="card pbp-wpcard"${ours ? " data-wp-ours" : ""}>
     <div class="pbp-rail-head">Win chance <span class="mini">${escapeHtml(lead || "")} ${Math.round(last >= 50 ? last : 100 - last)}% now</span></div>
     <svg class="pbp-wp" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
       aria-label="${escapeAttr(`${d.home || "Home"} win chance across the game, ${Math.round(last)}% now`)}"${timed
@@ -3831,6 +3856,8 @@ function pbpWinChartHTML(d, league, boardGame) {
     ${mkt != null ? `<p class="mini pbp-wp-mktkey">Dotted: the market at the start, ${escapeHtml(d.home_abbr || d.home || "home")} ${Math.round(mkt * 100)}%
       (the two moneylines, margin out).</p>` : ""}
     ${timed ? `<p class="mini pbp-wp-says" hidden></p>` : ""}
+    ${ours ? `<p class="mini" style="opacity:.6">Ours, from the score and the clock — not a price, and nothing is
+      staked on it.</p>` : ""}
   </div>`;
 }
 
@@ -6120,7 +6147,8 @@ function gpStatsHTML(d, league, boardGame, faces, GC, kit) {
     ? `${GC.scoring(d, league)}${GC.leaders ? GC.leaders(d, league, faces) : ""}` : "";
   // The win chance through the game: with the plays while the ball is live
   // (gpPlaysHTML), here once it is over, as the record of how it swung.
-  const win = lv.state === "live" ? "" : `${pbpWinChartHTML(d, league, boardGame)}${pbpModelWinProbHTML(d)}`;
+  const win = lv.state === "live" ? "" : `${pbpWinChartHTML(d, league, boardGame)}${
+    pbpWinIsOurs(d, league) ? "" : pbpModelWinProbHTML(d)}`;
   // A sport's own count of the game stands in for the summary's (hockey's,
   // off the league's events: `teamStats`, `boxes`), and what only it has
   // follows the box scores (`statsExtra`: a shot chart's zones, the trends).
@@ -6513,7 +6541,8 @@ function gpPeriodsHTML(d, league, o) {
 function gpNowHTML(d, league, faces, boardGame, GC, top, kit) {
   if ((d.live || {}).state !== "live") return "";
   const g = GC || {};
-  const ours = pbpModelWinProbHTML(d);
+  // Our number now, unless the line through the game is ours already and says it (`pbpWinIsOurs`).
+  const ours = pbpWinIsOurs(d, league) ? "" : pbpModelWinProbHTML(d);
   // Football's card is its drive's (gamecast driveView); another sport's is
   // the same card with its own words in it (gpKit `now`).
   const card = kit && kit.now != null ? kit.now : g.driveView ? g.driveView(d, league, faces, { top, win: !!ours }) : "";

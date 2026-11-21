@@ -9338,6 +9338,26 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAZ. Hockey's live game page draws the win chance line, as every sport's does** (step 840; 21 November). Nothing
+to run. You asked for every page to match. Read side by side on today's live games (college football, college
+basketball, hockey) and the Record page for each league, the Record pages already match: the same sections in the
+same order and the same cards, and what differs is what each league has (hockey and college basketball fold the
+sections that have too few settled bets). One card on the live game pages differed. The line of each side's win
+chance through the game is drawn from the chance the feed gives after each play, which ESPN gives in football and
+basketball and not in hockey, so a hockey game showed only our number now, as two bars titled "Win probability",
+where the others showed the line titled "Win chance". The live build now gives each hockey play our own chance after
+it (the same score-and-clock reading the bars show; a hockey play's clock counts up through its period), and the
+page draws the same line from it, labeled as ours; the bars stand down, and while the game is on the line ends on
+the scoreboard's reading, since the feed's plays can trail the score by a play or two. It costs about 26 ms for a
+whole game's plays the first time and a lookup after. College football's page drew no field for a moment today only
+because the ball had no spot after a touchdown, which the NFL's does too. Also measured today, with nothing built:
+the football bet types that keep missing (college passing-yards overs, college rushing- and receiving-yards unders,
+NFL rushing attempts both ways) have nearly left the board since the NFL's 60% bar (15 November) and college's bar
+and price hold (20 and 21 November), 0 to 5 of each since 15 November, and college's passing overs slumped on two
+Saturdays (7 and 14 November) when every college passing over missed and the books' prices missed it too, so a rule
+would chase noise. And the NBA's report parlays with a prop one play decides (now off parlays, step AAM) went 4 of
+15 (two-leg) and 2 of 19 (three-leg), where the rest went 16 of 27 and 10 of 30.
+
 **AAY. Football kickoff times read in your own time zone** (step 839; 21 November). Nothing to run. Your answer to
 decision 13 ("yes"). The NFL's board carries a kickoff as the game's Eastern day and an Eastern clock ("2026-11-22",
 "13:00"), so every NFL time on the site read "1:00 PM ET", even for a member who picked another zone in Settings,

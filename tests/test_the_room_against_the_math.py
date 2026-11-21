@@ -103,9 +103,11 @@ def test_the_chart_carries_the_times_and_the_places_to_fill():
         print("      (skipped: no node)")
         return
     chart = _fn(DETAIL, "pbpWinChartHTML")
+    rows = _fn(DETAIL, "pbpWinRows")                 # which plays the line reads (step AAZ)
     prog = f"""
       const escapeHtml = (s) => String(s); const escapeAttr = (s) => String(s);
       const WP_W = 320, WP_H = 110;
+      {rows}
       {chart}
       const plays = (timed) => [0, 1, 2, 3, 4].map((i) => ({{ wp: 40 + i * 5, wpa: 0,
         at: timed ? new Date(Date.UTC(2026, 9, 25, 17, i)).toISOString() : "" }}));

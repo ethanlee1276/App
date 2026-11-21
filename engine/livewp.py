@@ -203,6 +203,67 @@ def hockey_win_prob(margin: float, seconds_left: float, regulation_s: float = 36
     return max(0.001, min(0.999, win + tie * NHL_OT_HOME))
 
 
+#: HOCKEY'S WIN CHANCE PLAY BY PLAY (step AAZ, 21 November 2026). The game page draws a game's win
+#: chance through the game as a line, from the chance the feed gives after each play; ESPN gives one in
+#: football and basketball and none in hockey, so a hockey game had only this module's number now, as two
+#: bars, where every other sport had the line. `play_chances` gives each hockey play this module's own
+#: chance after it, from the score and the clock at that play (the same `hockey_win_prob` the bars read),
+#: as `our_wp`, never as the feed's `wp`, so nothing takes it for the feed's and the play ratings
+#: (engine/playmoments) stay the feed's or the score's. A play's clock in hockey counts UP through its
+#: period ("0:00" at the drop), where the scoreboard's counts down; overtime has no reading (`seconds_left`).
+#: Each score and second is worked out once a process (`_hockey_cached`), so a whole game's plays,
+#: read again on every pass of the live clock, cost a lookup each.
+OUR_WP_LEAGUES = ("nhl",)
+
+
+def _clock_s(text) -> float | None:
+    t = str(text or "").strip()
+    if not t:
+        return None
+    try:
+        if ":" in t:
+            mins, _, secs = t.partition(":")
+            return int(mins or 0) * 60 + float(secs or 0)
+        return float(t)
+    except ValueError:
+        return None
+
+
+from functools import lru_cache as _lru_cache          # noqa: E402
+
+
+@_lru_cache(maxsize=16384)
+def _hockey_cached(margin: int, left: int) -> float:
+    return hockey_win_prob(margin, left, REGULATION_S["nhl"])
+
+
+def play_chances(plays: list, league: str) -> int:
+    """Each play's home win chance after it, 0 to 100, as ``our_wp`` (OUR_WP_LEAGUES; a league whose
+    feed gives its own `wp` is left alone). Returns the plays read. Never raises."""
+    lg = str(league or "").lower()
+    if lg not in OUR_WP_LEAGUES or not isinstance(plays, list):
+        return 0
+    if any(isinstance(p, dict) and isinstance(p.get("wp"), (int, float)) for p in plays):
+        return 0
+    per_len = REGULATION_S[lg] / PERIODS[lg]
+    n = 0
+    for p in plays:
+        if not isinstance(p, dict):
+            continue
+        try:
+            per = int(p.get("period"))
+            margin = int(round(float(p.get("home_score")) - float(p.get("away_score"))))
+        except (TypeError, ValueError):
+            continue
+        up = _clock_s(p.get("clock"))
+        if up is None or not 1 <= per <= PERIODS[lg] or not 0 <= up <= per_len:
+            continue
+        left = int(round((PERIODS[lg] - per) * per_len + (per_len - up)))
+        p["our_wp"] = round(100.0 * _hockey_cached(margin, left), 1)
+        n += 1
+    return n
+
+
 def possession_blind(sport: str, margin: float, seconds_left: float) -> bool:
     """Is the game inside the window this model demonstrably misreads?"""
     one_score = BLIND_MARGIN.get(str(sport or "").lower(), 8)

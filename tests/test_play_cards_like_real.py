@@ -282,8 +282,11 @@ def test_the_game_page_draws_the_win_chance_across_the_game():
     assert "${pbpWinChartHTML(d, league, boardGame)}" in detail
     fn = detail[detail.index("function pbpWinChartHTML("):]
     fn = fn[:fn.index("\n}\n")]
-    assert 'typeof r.wp === "number"' in fn and "if (rows.length < 4) return \"\";" in fn
-    assert 'e.kind === "atbat"' in fn, "baseball reads its at-bats"
+    # Which plays it reads is pbpWinRows' (step AAZ: hockey's, which the feed gives no chance, read ours).
+    rows = detail[detail.index("function pbpWinRows("):]
+    rows = rows[:rows.index("\n}\n")]
+    assert 'typeof r.wp === "number"' in rows and "if (rows.length < 4) return \"\";" in fn
+    assert 'e.kind === "atbat"' in rows, "baseball reads its at-bats"
     assert "Math.abs(Number(r.wpa) || 0) >= 15" in fn
     css = (ROOT / "web" / "css" / "detail.css").read_text()
     chart = css[css.index("svg.pbp-wp {"):]

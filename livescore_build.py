@@ -636,6 +636,13 @@ def pbp_doc(league: str, g: dict, payload: dict,
         doc["plays"] = [r for d in drives for r in d["plays"]]
     else:
         doc["plays"] = espnplays.hoops_plays(payload, league, 0, sides=sides)
+        # Hockey's win chance after each play, ours, for the page's line through the game (engine/livewp
+        # play_chances, step AAZ: ESPN gives none in hockey). Never stops the file.
+        try:
+            from engine import livewp
+            livewp.play_chances(doc["plays"], league)
+        except Exception:                                    # noqa: BLE001
+            pass
     # The box score, for the Player stats tab. A parser that cannot read
     # this payload leaves the key out; the page says so. The card's row
     # already carries it when `attach_plays` parsed it a moment ago, and
