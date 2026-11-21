@@ -266,7 +266,9 @@ def test_safe_balanced_pop_and_a_long_shot_by_their_bars():
 
 
 def test_where_prices_are_graded_safe_needs_green_legs():
-    with _Env(QB_PRICE_GRADE=None):
+    # The NBA's graded classes as they read with its book cap switched off (gameparlays.book_capped,
+    # step AAM): with it on, an NBA leg never sits over its price (the test below, step AAR).
+    with _Env(QB_PRICE_GRADE=None, QB_BOOK_AGREES="off"):
         # Both legs over their price: Safe, and it says so.
         both = GP.ticket_class("nba", _t(0.46, (0.70, -200), (0.66, -180)))
         assert both["class"] == "safe" and both["why"] == \
@@ -282,6 +284,27 @@ def test_where_prices_are_graded_safe_needs_green_legs():
         assert GP.ticket_class("nfl", _t(0.46, (0.70, -250), (0.66, -230)))["class"] == "safe"
     with _Env(QB_PRICE_GRADE="off"):
         assert GP.ticket_class("nba", _t(0.46, (0.70, -250), (0.66, -230)))["class"] == "safe", "the switch"
+
+
+def test_an_nba_ticket_whose_legs_count_at_the_books_chance_stands_on_its_chances():
+    """Step AAR: under the book cap an NBA leg's chance is at most the book's fair one, under its
+    price's break-even by the book's cut, so no leg is Green and no ticket was Safe or Balanced."""
+    with _Env(QB_PRICE_GRADE=None, QB_BOOK_AGREES=None):
+        capped = [GP.book_capped({"player": n, "market": "reb", "side": "OVER", "line": 6.5, "p": p, "odds": o}, "nba")
+                  for n, p, o in (("A", 0.74, -230), ("B", 0.70, -210))]
+        assert all(l.get("p_own") is not None for l in capped), "both legs at the book's chance"
+        assert not any(PG.grade_of(l["p"], l["odds"]) == "green" for l in capped), "never Green at the book's chance"
+        t = {"joint": round(capped[0]["p"] * capped[1]["p"], 4), "legs": capped}
+        got = GP.ticket_class("nba", t)
+        # -230 and -210 at the book's fair chance: 66.7% and 64.8%, 43% together.
+        assert got["class"] == "safe" and got["why"] == f"Safe: every leg 64% or better, {t['joint']:.0%} together", got
+        assert round(capped[0]["p"], 3) == 0.667 and round(capped[1]["p"], 3) == 0.648 and f"{t['joint']:.0%}" == "43%"
+        assert GP.ticket_class("nba", _t(0.46, (0.70, -250), (0.66, -230)))["class"] == "safe"
+        assert GP.book_tied("nba") and GP.book_tied("NFL") and not GP.book_tied("nhl")
+        # Hockey's legs are not capped: its classes still read the grade.
+        assert GP.ticket_class("nhl", _t(0.46, (0.70, -250), (0.66, -230)))["class"] == "pop"
+    for words in ("went 3 of 18 where we said 51%, its Balanced 11 of 14", "(step AAR)"):
+        assert words in (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8"), words
 
 
 def test_every_player_prop_ticket_is_classed_and_no_scorer_pair():

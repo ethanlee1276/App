@@ -3669,8 +3669,9 @@ def _card_doubted(sport: str, r: dict) -> bool:
         return False
     from . import gameparlays as _gp
     from .twoleg import _fair_of
-    # Each reader below never raises (one_play_leg, book_fair, _fair_of, _f).
-    if _gp.one_play_leg(sport, r):
+    # Each reader below never raises (one_play_leg, qb_volume_leg, book_fair, _fair_of, _f).
+    # A quarterback's pass-attempt over goes behind too (gameparlays.QB_VOLUME_LEGS, step AAQ).
+    if _gp.one_play_leg(sport, r) or _gp.qb_volume_leg(sport, r):
         return True
     if str(sport or "").lower() not in CARD_DOUBT_SPORTS:
         return False

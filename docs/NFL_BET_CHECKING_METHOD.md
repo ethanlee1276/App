@@ -89,9 +89,12 @@ settled. `QB_PRICE_GRADE=off` turns it off.
    ticket says its class by v3.1's own bars, whatever its size: Safe (every
    leg 64%+, 40%+ together), Balanced (every leg 60%+, 36%+ together), Pop
    (25%+ together), and under that a long shot. Each says why it is not the
-   class above. In the NBA and hockey Safe also needs every leg at a Green
-   price and Balanced one, as section 10 says; football's numbers are tied to
-   their prices, so its classes stand on the chances alone. A three-leg ticket
+   class above. In hockey Safe also needs every leg at a Green price and
+   Balanced one, as section 10 says; football's numbers are tied to their
+   prices, so its classes stand on the chances alone, and since step AAR (21
+   November) so do the NBA's: step AAM put an NBA leg at no more than the
+   book's own chance, which almost never clears its price, and the NBA's
+   two-leg Safe tickets, every leg Green on our own number, had gone 3 of 18. A three-leg ticket
    is nearly always a Pop, which is what three legs are by v3.1's own targets
    (25-30%). A touchdown pair is not classed. Each ticket names the one book
    that has every leg at its number, or says none in our pull does; it is not

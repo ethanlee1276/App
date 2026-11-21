@@ -9338,6 +9338,27 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAR. The NBA's tickets keep their classes under the book cap** (step 832; 21 November). Nothing to run. Step AAM
+put each NBA leg at the lower of our chance and the book's fair one, which sits under the price's own break-even by
+the book's cut, so an NBA leg could almost never grade Green, and a ticket's Safe and Balanced classes need Green
+legs: nearly every NBA ticket would have read Pop or Long shot, and on Best Parlays almost no NBA two-leg ticket
+could be a Top parlay. Its classes now stand on the chances alone, as football's always have (football's numbers
+were tied to their prices before AAM). The record agrees with dropping the Green half there: before AAM the NBA's
+two-leg Safe tickets, every leg Green on our own number, went 3 of 18 where we said 51%, its Balanced 11 of 14 (said
+48%), because Green on our number marked the legs we rated over the book, the ones AAM found overrated. A pick's own
+Green, Yellow or Red label is unchanged, and hockey's tickets, whose legs are not capped, still read it. Switching
+the cap off (`QB_BOOK_AGREES=off`) brings the NBA's Green half back with it.
+
+**AAQ. A quarterback's pass-attempt over rides no ticket** (step 831; 21 November). Nothing to run. On the record of
+every settled Most Likely pick, an NFL quarterback's pass-attempt over that we and the book both rated 60% or better
+hit 44% in the first 60% of days (9 legs) and 50% since (32), where we said 64%: 20 of 41, at prices that needed
+69%. Every other NFL leg rated as high hit 68% early and 65% since (1,038). The book cap of step AAM cannot catch
+it, because the book rated it as high as we did. Its sister market, completions, hit 55% of 56 and was benched on 18
+November. College's pass-attempt overs went the same way as picks (13 of 26, where its others hit 58%). So in
+football a pass-attempt over is now kept off every ticket and goes behind the other bets on a report's card; it
+stays a pick on the board, and the census counts it under our rules. This is no bench: its picks keep their stakes;
+whether to bench them as completions were is your call. Switch: `QB_VOLUME_LEGS=off`.
+
 **AAP. Football's touchdown pairs take two scorers at our touchdown rule first** (step 830; 21 November). Nothing to
 run. A game report's two-leg touchdown pairs (NFL and college) were ranked on their research, and our 40% rule (a
 scorer we rate 40% or better) was only the pair card's words. On the record of every settled Most Likely touchdown

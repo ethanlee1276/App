@@ -427,6 +427,11 @@ def book_agrees_on() -> bool:
     return os.environ.get("QB_BOOK_AGREES", "on").strip().lower() not in ("off", "0", "no", "false")
 
 
+def book_tied(sport) -> bool:
+    """True where a leg counts at no more than the book's own chance (`book_capped`)."""
+    return str(sport or "").lower() in BOOK_AGREE_SPORTS and book_agrees_on()
+
+
 def book_fair(leg: dict) -> float | None:
     """The book's own fair chance for a leg: its de-vigged ``fair`` (the row's
     fair or implied chance, twoleg._fair_of), else its price's implied chance with
@@ -488,6 +493,32 @@ def one_play_leg(sport: str, leg: dict) -> bool:
         return any(str(leg.get("market") or "") == m and side == s and line <= cap + 1e-9
                    for m, s, cap in ONE_PLAY_LEGS.get(str(sport or "").lower(), ()))
     except (TypeError, ValueError, AttributeError):
+        return False
+
+
+#: A QUARTERBACK'S PASS-ATTEMPT OVER RIDES NO TICKET (step AAQ, 21 November 2026; Ethan:
+#: "dial in the 3-leg parlays ... look at all the data"). On the record of every settled
+#: Most Likely pick, an NFL quarterback's pass-attempt over that we and the book both
+#: rated 60% or better hit 44% in the first 60% of days (9) and 50% since (32), where we
+#: said 64%: 20 of 41 at prices that needed 69%, while every other NFL leg as high hit 68%
+#: early and 65% since (1,038). The book cap (step AAM) cannot catch it: the book rated it
+#: as high as we did. Its sister market, completions, hit 55% of 56 and was benched on
+#: 18 November (stakeplan.MARKET_BENCH). College's pass-attempt overs went the same way
+#: (13 of 26 as picks, where its others hit 58%). Kept as single picks on the board; off
+#: every ticket, and behind the other bets on a report's card (gamereport._card_doubted).
+#: Switch: QB_VOLUME_LEGS=off.
+QB_VOLUME_LEGS = {"nfl": ("pass_att",), "cfb": ("pass_att",)}
+
+
+def qb_volume_leg(sport: str, leg: dict) -> bool:
+    """True for a quarterback's pass-attempt over (QB_VOLUME_LEGS). Never raises."""
+    try:
+        if os.environ.get("QB_VOLUME_LEGS", "on").strip().lower() in ("off", "0", "no", "false"):
+            return False
+        side = str(leg.get("side") or "").strip().upper()
+        return side in ("OVER",) + _YES and \
+            str(leg.get("market") or "").lower() in QB_VOLUME_LEGS.get(str(sport or "").lower(), ())
+    except AttributeError:
         return False
 
 
@@ -615,7 +646,8 @@ OFF_PARLAY_WORDS = {"qb_rush_over": "a quarterback's rushing over that leans on 
                     "qb_rush_att_under": "a quarterback's rush-attempt under",
                     "backup_back": "a backup running back's yardage",
                     "new_qb": "a pass catcher behind a new starting quarterback with too few passes to rate",
-                    "one_play": "a prop one play settles (over 1.5 rebounds, over 0.5 threes, under 0.5 blocks)"}
+                    "one_play": "a prop one play settles (over 1.5 rebounds, over 0.5 threes, under 0.5 blocks)",
+                    "qb_volume_over": "a quarterback's pass-attempt over"}
 
 
 def _lead_carry(reads: dict | None) -> dict:
@@ -667,6 +699,9 @@ def off_parlays(sport: str, leg: dict, reads: dict | None = None, lead: dict | N
         return "one_play"
     if sport not in OFF_PARLAY_SPORTS:
         return ""
+    # A quarterback's pass-attempt over (QB_VOLUME_LEGS, step AAQ).
+    if qb_volume_leg(sport, leg):
+        return "qb_volume_over"
     read = (reads or {}).get((_key(leg.get("player")), leg.get("team") or "")) or {}
     pos = str(leg.get("position") or read.get("pos") or read.get("position") or "").upper()
     mkt = str(leg.get("market") or "")
@@ -1885,6 +1920,18 @@ def backups(sport: str, t: dict, pool: list[dict], game: dict | None) -> list[di
 #:
 #: A label: no ticket is built, kept or dropped by it, and the record says how
 #: each class has done (parlayledger ``by_class``, from the legs it journaled).
+#:
+#: THE NBA'S TOO, SINCE ITS LEGS COUNT AT THE BOOK'S CHANCE (step AAR, 21 November
+#: 2026). Step AAM put the NBA's legs at the lower of our chance and the book's
+#: fair one, which sits under the price's own break-even by the book's cut:
+#: almost no NBA leg could grade Green after it, so almost no NBA ticket could
+#: be Safe or Balanced, nor an NBA two-leg ticket a Top parlay on Best Parlays.
+#: Its classes now stand on the chances alone, as football's do (`book_tied`).
+#: Before AAM the NBA's two-leg Safe tickets, every leg Green on our own number,
+#: went 3 of 18 where we said 51%, its Balanced 11 of 14 (said 48%): Green on our
+#: number marked legs we rated over the book, the ones AAM found overrated. The
+#: pick's own price grade (pricegrade.stamp) is untouched. Hockey's legs are not
+#: capped, and its classes still read the grade.
 CLASS_SAFE_LEG, CLASS_BALANCED_LEG = 0.64, 0.60
 CLASS_SAFE_JOINT, CLASS_BALANCED_JOINT, CLASS_POP_JOINT = 0.40, 0.36, 0.25
 CLASSES = ("safe", "balanced", "pop", "long")
@@ -1901,7 +1948,9 @@ def ticket_class(sport: str, t: dict) -> dict:
     legs = [l for l in (t or {}).get("legs") or [] if isinstance(l, dict)]
     ps = [float(l.get("p") or 0.0) for l in legs]
     joint = float((t or {}).get("joint") or 0.0)
-    graded = pricegrade.on(sport)
+    # Where a leg counts at the lower of our chance and the book's (`book_capped`, step AAM) it can
+    # never sit over its price, as in football: the classes stand on the chances alone (step AAR).
+    graded = pricegrade.on(sport) and not book_tied(sport)
     green = [pricegrade.grade_of(l.get("p"), l.get("odds")) == "green" for l in legs] if graded else []
     low = min(ps) if ps else 0.0
 
@@ -3322,7 +3371,8 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
       our_rule      a pick their rules keep off parlays (`off_parlays`, v3.1: a
                     quarterback's scramble-dependent rushing over or his
                     rush-attempt under, a backup back's yardage, a pass
-                    catcher behind an unrated new quarterback);
+                    catcher behind an unrated new quarterback; since
+                    step AAQ a quarterback's pass-attempt over);
       other_line    the board's legs carry the player's market and side at
                     another number only;
       matchup_only  a matchup pick's own row and no leg source's

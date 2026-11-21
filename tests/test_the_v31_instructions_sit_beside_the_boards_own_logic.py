@@ -149,8 +149,10 @@ def test_what_their_rules_keep_off_parlays():
     assert off(_leg("Amon-Ra St. Brown", "receptions", position="WR", _qb_unrated=True)) == "new_qb"
     assert off(_leg("Amon-Ra St. Brown", "receptions", position="WR")) == ""
     assert off(_leg("Jared Goff", "rush_yds", position="QB"), "nba") == "", "football's rules only"
-    # …and since step AAM, in the NBA, a prop one play settles (gameparlays.ONE_PLAY_LEGS).
-    assert set(G.OFF_PARLAY_WORDS) == {"qb_rush_over", "qb_rush_att_under", "backup_back", "new_qb", "one_play"}
+    # …and since step AAM, in the NBA, a prop one play settles (gameparlays.ONE_PLAY_LEGS); since
+    # step AAQ, in football, a quarterback's pass-attempt over (gameparlays.QB_VOLUME_LEGS).
+    assert set(G.OFF_PARLAY_WORDS) == {"qb_rush_over", "qb_rush_att_under", "backup_back", "new_qb", "one_play",
+                                       "qb_volume_over"}
 
 
 def _row(player, market, side, prob, position, team="DET", **kw):
