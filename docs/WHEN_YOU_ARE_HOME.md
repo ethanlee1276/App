@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABC. Report Picks opens Best Parlays from the top of the day** (step 843; 21 November). Nothing to run. You said,
+the same evening: "I want the game report parlays too have its own page like the most likely picks where it ranks
+and lays out the parlays best to worst". That page is Best Parlays (built this morning, step AAL): every parlay the
+reports posted, ranked across the league's games the way Most Likely ranks a pick (Top parlays, Strong, Worth a
+look, then our chance), with a Two-leg and a Three-leg switch, and the touchdown pairs on their own tab. Report
+Picks, where you read the reports' parlays game by game, never pointed to it. Now the first thing on its Today's
+picks tab is a button, Best Parlays: every report parlay, two-leg and three-leg, ranked best to worst. It is still
+in the menu too, right under Report Picks.
+
 **ABB. A posted parlay never changes, and the Record shows every parlay we posted** (step 842; 21 November). Nothing
 to run. You found it on the 76ers at Bucks report: the parlays you bet earlier in the day were gone, others stood in
 their place, and the Record counts only the set a report carried when its game started, so your losing tickets were

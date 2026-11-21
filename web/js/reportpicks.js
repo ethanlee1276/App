@@ -793,12 +793,19 @@ async function renderReportPicks() {
   const paper = locked ? "" : ["threes_paper", "twos_paper"].map((k) => ((d.game_parlays || {})[k] || {}).note || "")
     .filter(Boolean).map((n) => `<p class="set-note">${escapeHtml(n)}</p>`).join("");
   // The heading's own line says what the page is; each tab's line says the rest.
+  /* THE RANKED PAGE, ONE TAP AWAY (Ethan, 21 November 2026: "I want the game report parlays too have its own
+     page like the most likely picks where it ranks and lays out the parlays best to worst so people and go
+     through the 2 leg and 3 leg parlays and see what's best"). It is Best Parlays (js/bestparlays.js), and this
+     page, where he reads the reports' parlays game by game, never said so: its door is at the top of the day. */
+  const bpDoor = `<button type="button" class="rpk-bp-go" data-rpk-bp>
+      <span><b>Best Parlays</b> Every report parlay, two-leg and three-leg, ranked best to worst</span>${icon("chev", 14)}</button>`;
   host.innerHTML = `${paper}${subtabbedHTML("reportpicks", [
-      ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", `<div data-rpk-slate></div>${today}`],
+      ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", `${bpDoor}<div data-rpk-slate></div>${today}`],
       ["record", "Record", "Every report pick and parlay, won or lost", `<div class="rpk-book" data-rpk-book="1"></div>`],
       ["facts", "How our reports did", "Every finished game’s report, fact-checked", rpFactsHTML()]])}`;
   bindSubtabs(host);
   revealChildren(host);
+  host.querySelectorAll("[data-rpk-bp]").forEach((b) => b.addEventListener("click", () => switchView("bestparlays", true)));
   rpOnShow(host, "record", (p) => renderReportBook(p.querySelector("[data-rpk-book]"), state.sport));
   rpOnShow(host, "facts", () => rpFactsFill(host));
   rpSlateFill(host, state.sport);

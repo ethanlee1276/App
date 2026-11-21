@@ -163,7 +163,8 @@ def test_the_page_draws_it_above_today_s_picks():
     # Nothing finished, nothing drawn.
     assert _draw(None, "nba") == "" and _draw({"date": "2026-11-26", "games": 0}, "nba") == ""
     # The slot sits above today's picks, is filled from the record the facts tab reads, and has its styles.
-    assert '`<div data-rpk-slate></div>${today}`' in RP and "rpSlateFill(host, state.sport);" in RP
+    # Under the door to Best Parlays (21 November), above the day's picks.
+    assert '`${bpDoor}<div data-rpk-slate></div>${today}`' in RP and "rpSlateFill(host, state.sport);" in RP
     assert "draw(rpSlateSeen(sport, b.last_slate || null));" in RP
     assert ".rpk-slate {" in CSS and ".rpk-slate-go" in CSS
 
@@ -216,7 +217,9 @@ def test_the_card_draws_in_the_real_page_and_opens_each_game():
                     const card = document.querySelector('.rpk-slate');
                     const today = document.querySelector('.subgroup[data-subgroup="today"]');
                     return { text: card.innerText.replace(/\s+/g, ' ').trim(),
-                             first: today.firstElementChild.hasAttribute('data-rpk-slate'),
+                             // Under the door to Best Parlays (21 November), first of the day's own.
+                             first: today.firstElementChild.hasAttribute('data-rpk-bp')
+                               && today.firstElementChild.nextElementSibling.hasAttribute('data-rpk-slate'),
                              kept: !!(JSON.parse(localStorage.getItem('qb.rpkSlate') || '{}').nfl || {}).games,
                              wide: document.documentElement.scrollWidth - innerWidth };
                 }""")

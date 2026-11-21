@@ -50,6 +50,18 @@ def _gp(games):
     return {"sport": "nfl", "games": [dict(x, away=a, home=h) for (a, h), x in games]}
 
 
+def test_report_picks_opens_it_from_the_top_of_the_day():
+    """Ethan, 21 November: "I want the game report parlays too have its own page like the most likely picks where
+    it ranks and lays out the parlays best to worst". It is this page; Report Picks, where he reads the reports'
+    parlays game by game, now opens it from the top of its first tab."""
+    rp = (ROOT / "web" / "js" / "reportpicks.js").read_text(encoding="utf-8")
+    css = (ROOT / "web" / "css" / "reportpicks.css").read_text(encoding="utf-8")
+    assert "<b>Best Parlays</b> Every report parlay, two-leg and three-leg, ranked best to worst" in rp
+    assert "`${bpDoor}<div data-rpk-slate></div>${today}`" in rp, "first thing on the day's tab"
+    assert 'host.querySelectorAll("[data-rpk-bp]").forEach((b) => b.addEventListener("click", () => switchView("bestparlays", true)));' in rp
+    assert ".rpk-bp-go { display: flex;" in css and "border: 0;" in css[css.index(".rpk-bp-go {"):css.index("}", css.index(".rpk-bp-go {"))]
+
+
 def test_the_tiers_are_most_likelys_from_the_checks():
     assert GP.rank_tier({"class2": True, "book": True, "own": True, "price": True, "together": True}) == "top"
     assert GP.rank_tier({"class2": True, "book": None, "own": True, "price": None, "together": True}) == "top", \

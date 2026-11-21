@@ -122,6 +122,13 @@ button.rpk-rec:empty { display: none; }
 .rpk-fact-h + .rpk-fact-span { margin: 0 0 14px; }
 .rpk-fact-more[hidden] { display: none; }
 
+/* The door to Best Parlays, at the top of the day (Ethan, 21 November 2026): the ranked page, one tap away. */
+.rpk-bp-go { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 0 0 12px; padding: 12px 14px; border: 0; border-radius: var(--radius); cursor: pointer; text-align: left;
+  font: inherit; font-size: var(--fs-sm); color: var(--text-dim);
+  background: color-mix(in oklab, var(--gold) 12%, var(--panel)); }
+.rpk-bp-go b { display: block; margin-bottom: 2px; color: var(--gold); font-size: var(--fs-lg); }
+.rpk-bp-go:hover, .rpk-bp-go:focus-visible { background: color-mix(in oklab, var(--gold) 18%, var(--panel)); }
 /* The last slate at a glance (engine/reportrecord.last_slate, LASTNIGHT1): one card above today's picks. */
 .rpk-slate { margin: 0 0 14px; padding: 10px 12px; border-radius: var(--radius);
   background: color-mix(in oklab, var(--gold) 8%, transparent); }
