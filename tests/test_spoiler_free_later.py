@@ -85,8 +85,10 @@ def test_every_card_that_draws_a_score_asks_first():
 
 
 def test_the_game_page_offers_it_and_veils_a_saved_game():
-    assert "callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) +" in DETAIL, "the basketball and hockey layout"
-    assert "${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}" in DETAIL, "the other layout"
+    # Every sport's page but baseball's is the one page (gpPageHTML, 21 November 2026), and the offer is in its
+    # ⋯ menu by the score; baseball's own layout keeps it under the scoreboard.
+    assert "const inner = `${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${lockGameHTML(" in _fn(DETAIL, "gpMoreHTML")
+    assert "${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}" in DETAIL, "baseball's layout"
     page = _fn(DETAIL, "renderPbpPage")
     veil = page.index("if (d && spoiledG(league, { event_id: event, away: d.away, home: d.home })) {")
     assert veil < page.index("chatMount(league, event, d);"), "veiled before the chat mounts"

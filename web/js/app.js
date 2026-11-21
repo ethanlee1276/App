@@ -28138,19 +28138,18 @@ function armDashLive(seen) {
     if (now !== seen && document.getElementById("games")) renderGames();   // re-arms
     else armDashLive(seen);
   }, DASH_LIVE_EVERY_MS);
-}       // gamecast | box | plays | team | odds | injuries — baseball: info | props | injuries | players
+}
 
 // The two codes that share a play feed, a field and every renderer
 // below. Named once so a change cannot reach one league and miss the
 // other — which is the shape of most of this file's football bugs.
 const PBP_FOOTBALL = new Set(["nfl", "cfb"]);
-/* THE GAMECAST'S TABS (Ethan, 2026-10-08, with ESPN's app on a live game:
-   "Gamecast · Box Score · Play-by-Play · Team Stats · Odds"). Football,
-   the hoops leagues and hockey get them; their panels live in
-   js/gamecast.js, loaded on first use (loadGamecast). Baseball keeps the
-   four rooms above — its deep file is the MLB builder's own shape. */
-const GC_TABS = [["gamecast", "Gamecast"], ["box", "Box score"], ["plays", "Play-by-play"],
-                 ["team", "Team stats"], ["odds", "Odds & picks"], ["injuries", "Injuries"]];
+/* THE CARDS THE GAME PAGE SHARES (js/gamecast.js: the newest play, the
+   leaders, the scoring plays, the moving mark), loaded the first time a game
+   is opened. Its five tabs (Ethan, 2026-10-08, with ESPN's app on a live
+   game: "Gamecast · Box Score · Play-by-Play · Team Stats · Odds") were every
+   sport's page until football's own four replaced them, and every other
+   sport's on 2026-11-21 (detail.js GP_TABS). */
 let _gamecastLoading = null;
 function loadGamecast() {
   if (window.QBGamecast) return Promise.resolve(window.QBGamecast);
@@ -29615,16 +29614,36 @@ function playsHTML(g) {
     const q = ice ? hockeyPeriod(p.period) : halves ? halfPeriod(p.period)
       : p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "";
     const when = `${q}${p.clock ? ` ${p.clock}` : ""}`;
+    /* WHO DID WHAT, WHERE THE CALLER CAN SAY IT (2026-11-21; Ethan: "all sports
+       in all aspects should be trying to match nfl"). A football row reads as
+       a line of our own (footballLine); a basketball or hockey row read "TOR ·
+       Scottie Barnes — Driving Floating Jump Shot". The game's page knows more
+       than a row does (the box score says whose assist it was, the league's
+       feed who made the save), so it hands its words in as `g.say`
+       (js/hoopscast.js, js/rinkcast.js): `{html}` for the line, names in
+       bold, or `{moment}` for a quiet line of its own (a period's end, a
+       timeout), as football's. Anywhere else the row reads as it did. */
+    const said = typeof g.say === "function" ? g.say(p) : null;
+    if (said && said.moment) {
+      return `<div class="lb-play lb-moment"><span class="lb-inn">${escapeHtml(when)}</span>
+        <span class="lb-what">${escapeHtml(said.moment)}</span></div>`;
+    }
+    // A miss is in the page's own line ("misses a jump shot"); its chip is for the rows that cannot say it.
     const tag = ice ? (p.scoring ? ` <span class="lb-rbi">GOAL</span>` : "")
       : p.scoring && p.points ? ` <span class="lb-rbi">+${p.points}</span>`
-      : p.shot ? ` <span class="lb-miss">miss</span>` : "";
-    const who = [p.team === g.home ? g.home_abbr || p.team : p.team === g.away ? g.away_abbr || p.team : p.team,
-      p.player].filter(Boolean).map(escapeHtml).join(" · ");
+      : p.shot && !said ? ` <span class="lb-miss">miss</span>` : "";
+    // A school the feed gives no short name ("espn:2047") is not named by its number.
+    const code = p.team === g.home ? g.home_abbr || p.team : p.team === g.away ? g.away_abbr || p.team : p.team;
+    const side = code && !String(code).startsWith("espn:") ? code : "";
+    const who = [side, p.player].filter(Boolean).map(escapeHtml).join(" · ");
     const at = (p.away_score != null && p.home_score != null)
       ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
+    const what = said && said.html
+      ? `${side ? `<span class="lb-side">${escapeHtml(side)}</span> ` : ""}${said.html}`
+      : `${who}${who ? " — " : ""}${escapeHtml(p.event)}`;
     return `<div class="lb-play${p.scoring ? " scoring" : ""}">
       <span class="lb-inn">${escapeHtml(when)}</span>
-      <span class="lb-what">${who}${who ? " — " : ""}${escapeHtml(p.event)}${tag}</span>
+      <span class="lb-what">${what}${tag}</span>
       ${at}${bubble(p)}</div>`;
   };
   const d = g.drive;

@@ -58,7 +58,10 @@ def test_college_reads_its_halves_everywhere_a_play_is_timed():
     assert "halves ? halfPeriod(p.period)" in plays
     assert "playsHTML({ ...g, plays: (g.plays || []).slice().reverse(),\n      room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}`" in APP, \
         "the live card's room names the league, cbb_..."
-    assert DETAIL.count("away: d.away, league, room: pbpRoom(d, league) })") == 2
+    # The league rides along wherever the page lists plays: the rail, football's drives, every other sport's periods.
+    for fn, call in (("pbpRailHTML", "away_abbr: d.away_abbr, league,"), ("gpPeriodsHTML", "away_abbr: d.away_abbr, league,"),
+                     ("gpDrivesHTML", "away: d.away, league, room: pbpRoom(d, league) })")):
+        assert call in _fn(DETAIL, fn), fn
     assert 'sport === "cbb" ? halfPeriod(p.period)' in _fn(CHAT, "pfItemHTML")
     assert 'CH.league === "cbb" ? halfPeriod(p.period)' in _fn(CHAT, "chatPlayWhen")
     assert 'league === "cbb" ? halfPeriod(p.period)' in CAST
@@ -121,7 +124,10 @@ def test_a_school_below_division_one_is_named_by_its_abbreviation_not_its_key():
     assert DETAIL.count('d[`${ha}_abbr`] || d[ha] || ""') == 2
     CAST_H = (ROOT / "web" / "js" / "hoopscast.js").read_text()
     assert "esc(d.away)" not in CAST_H and "esc(d.home)" not in CAST_H
-    assert "row(d.away_abbr || d.away, A, lv.away_score)" in CAST_H
+    # The line score is the page's own for every sport now (detail.js gpLineHTML, above); what basketball's file
+    # still names a side in reads the scoreboard's letters, and a club's name never falls back to the key.
+    assert CAST_H.count("esc(d.away_abbr || d.away)") >= 3 and "|| d[ha])}" not in CAST_H
+    assert 'return name && !String(name).startsWith("espn:") ? name : (d[`${ha}_abbr`] || d[ha] || "");' in CAST_H
 
 
 # --- in a browser ---------------------------------------------------------------------

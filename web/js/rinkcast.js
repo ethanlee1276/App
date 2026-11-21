@@ -1,15 +1,25 @@
-/* Qellys Book — the hockey live page (js/rinkcast.js), in Ethan's render.
+/* Qellys Book — hockey's parts of the live game page (js/rinkcast.js).
    ==========================================================================
    Ethan, 2026-10-15, with two renders — the arena (ours, the crown at centre
    ice) and the page: "figure out what data we can use for the live play by
    play screen for nhl like live posetions and puck tracking". The old page
    drew a small vector rink in the corner of an empty card.
 
-   THE PAGE, as the render lays it out: the scoreboard (the clubs, records,
-   score, period, clock, the power play with its time, shots on goal), the
-   arena with five views (Live, Shot Chart, Ice Tracker, Player Tracker,
-   Game Flow), the play-by-play down the right, then the team stats, the
-   lineups and the odds.
+   ONE PAGE FOR EVERY SPORT (2026-11-21; Ethan: "all sports in all aspects
+   should be trying to match nfl and that should be automatic when we do any
+   visual changes"). This file drew a whole page of its own until then: its
+   own scoreboard, a play list down the right, and its own stats, lineup and
+   odds cards. The page is detail.js's now (gpPageHTML), the same one football
+   draws, and this file hands it hockey's parts (`parts`): the arena with its
+   five views (Live, Shots, Ice, Players, Flow) for the place football's
+   field has; the newest event, said in a sentence, for the last-play card;
+   the league's own events as the rows of the period cards; the power play
+   and shots on goal under the score; which side has the puck; the team
+   stats and both sides' box scores in the page's own cards; and the shot
+   chart and the trends for the Stats tab. It writes none of the page's own
+   markup: the cards are made by the page's builders (gpStageHTML,
+   gpCardHTML, gpTsCardHTML, gpBoxCardHTML, QBGamecast.playNow), so a change
+   to the page's look is a change here too.
 
    THE DATA is the league's own play-by-play (`d.rink`, written by
    livescore_build.nhl_rink_pass through engine/sources/nhlrink): every
@@ -37,22 +47,20 @@
    dot lands on the art's dot and a shot from the slot lands in the art's
    slot.
 
-   Loaded by js/gamecast.js (QBGamecast.hoops hands hockey to `rink`) the
-   first time a hockey game with the league's events opens; uses app.js's
-   helpers by name. No inline handlers. */
+   Loaded by detail.js (gpSportMod) the first time a hockey game with the
+   league's events opens (a game without them is drawn from the game file
+   alone, gpPlainKit); uses app.js's helpers by name. No inline handlers. */
 (function () {
   "use strict";
   const esc = (v) => escapeHtml(String(v == null ? "" : v));
-  const num = (v) => { const n = Number(v); return v === null || v === "" || !Number.isFinite(n) ? null : n; };
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const still = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const words = (code) => String(code || "").replace(/-/g, " ");
   const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
 
-  /* What the reader chose, kept across the twelve-second redraws. `q` null
-     follows the period being played; 0 is every play. */
-  const S = { view: "live", right: "plays", stats: "team", lineup: "lineup", team: "", odds: "odds", q: null,
-              shots: "both", ice: "all", run: null, replay: false, ctx: null, flowBy: "att" };
+  /* What the reader chose on the arena, kept across the page's redraws, and
+     the game it was chosen on (`game`: another game starts its run again). */
+  const S = { view: "live", shots: "both", ice: "all", run: null, replay: false, flowBy: "att", game: "" };
 
   /* ---------------- the clock ---------------- */
   const PERIOD_S = 1200;
@@ -372,8 +380,9 @@
                  "goalie-stopped-after-sog": "Goalie freezes it", "tv-timeout": "Media timeout", "home-timeout": "Timeout",
                  "visitor-timeout": "Timeout", "puck-in-benches": "Puck in the bench", "high-stick": "High stick",
                  "hand-pass": "Hand pass", "net-dislodged-defensive-skater": "Net off its moorings", "puck-in-crowd": "Puck in the crowd" };
+  const clockOf = (e) => String((e && e.clock) || "").replace(/^0(\d:)/, "$1");
   /* {title, sub} — the play in the feed's own codes and names, never a
-     sentence of anybody's. */
+     sentence of anybody's. The title is the play's name on its card. */
   function playWords(e, d, k) {
     const sit = sitOf(e.sc), own = sideOf(d, e.team);
     const strength = (s) => (!sit ? "" : sit.en && sit.en !== s ? " (EN)" : sit.pp === s ? " (PP)" : sit.pp && sit.pp !== s ? " (SH)" : "");
@@ -395,98 +404,77 @@
       default: return { title: "Play", sub: who };
     }
   }
-
-  /* ---------------- a goal, flashed ----------------
-     Football's touchdown flash (detail.js gpTouchdownSeen; Ethan, 16
-     November: "Yes"), on the hockey score (2026-11-17). When a side's score
-     rises while the game's page is open, live and on screen, that side's
-     score lights up with GOAL over it for a few seconds. Only a goal seen
-     happen: never on opening the page or coming back to it (a draw more than
-     two minutes after the last is a return), never one that came in while
-     the tab was hidden, and never a shootout's deciding goal, which settles
-     the game but is no goal in the run of play. It reads the score on the
-     screen, so a reader on a TV delay sees it when the TV does. Kept per
-     page visit only. */
-  const GOAL_MS = 4500;                                  // how long it shows
-  const GOAL_FRESH_MS = 120000;                          // a draw older than this: a return, not a moment
-  const GOAL = { key: "", away: null, home: null, at: 0, live: false, flash: null };
-  const goalKey = (d) => String(d.event_id || `${d.away}@${d.home}`);
-  function goalSeen(d, now) {
-    const lv = d.live || {}, t = now == null ? Date.now() : now, key = goalKey(d);
-    const a = num(lv.away_score), h = num(lv.home_score);
-    const per = Number(((d.rink || {}).clock || {}).period) || Number((/^P?(\d)/i.exec(String(lv.period || "")) || [])[1]) || 0;
-    const shootout = per >= 5 || /\bSO\b|shootout/i.test(`${lv.period || ""} ${lv.detail || ""}`);
-    const hidden = typeof document !== "undefined" && !!document.hidden;
-    if (GOAL.key !== key) {
-      GOAL.key = key; GOAL.flash = null;
-    } else if (GOAL.live && !hidden && !shootout && t - GOAL.at < GOAL_FRESH_MS && a != null && h != null
-               && GOAL.away != null && GOAL.home != null) {
-      const da = a - GOAL.away, dh = h - GOAL.home;
-      const rose = da >= 1 && da >= dh ? "away" : dh >= 1 ? "home" : null;
-      if (rose) GOAL.flash = { key, side: rose, start: t };
+  /* WHO DID WHAT, IN OUR OWN WORDS (2026-11-21, when the page became every
+     sport's; football's is app.js footballLine). A row read as a title and
+     its facts ("Blocked shot · shot by #28 Zach Whitecloud · blocked by #12
+     Matt Boldy"); it reads as a line now ("Zach Whitecloud's shot is blocked
+     by Matt Boldy"), from the same codes: the event's kind, who was in it,
+     the shot's type, the strength the situation code gives. Returned as the
+     line's pieces, a string or a name ({b}), so a row sets the names in bold
+     (`sayPlay`) and a card says them plain; null for a moment in the game
+     (a period's start or end, a whistle), which `momentOf` names. */
+  function said(e, d) {
+    const own = sideOf(d, e.team), sit = sitOf(e.sc);
+    const strength = !sit ? "" : sit.en && sit.en !== own ? " into the empty net" : sit.pp === own ? " on the power play"
+      : sit.pp && sit.pp !== own ? " shorthanded" : "";
+    const A = e.player ? { b: e.player } : (e.team || ""), B = e.player2 ? { b: e.player2 } : null;
+    const kind = (...xs) => { const w = xs.map(words).filter(Boolean).join(", "); return w ? ` (${w})` : ""; };
+    switch (e.kind) {
+      case "goal": {
+        const from = (e.assists || []).filter(Boolean).flatMap((n, i) => (i ? [" and ", { b: n }] : [{ b: n }]));
+        return [A, ` scores${strength}${kind(e.shot)}`, ...(from.length ? [", from ", ...from] : [", unassisted"])];
+      }
+      case "sog": return [A, ` shoots${kind(e.shot)}`, ...(B ? [", saved by ", B] : [])];
+      case "miss": return [A, ` misses${kind(e.shot, e.reason)}`];
+      case "block": return [A, "’s shot is blocked", ...(B ? [" by ", B] : [])];
+      case "hit": return B ? [A, " hits ", B] : [A, " with a hit"];
+      case "faceoff": return [A, " wins the faceoff", ...(B ? [" over ", B] : [])];
+      case "takeaway": return ["Takeaway by ", A];
+      case "giveaway": return ["Giveaway by ", A];
+      case "penalty": return [`${cap(words(e.penalty)) || "Penalty"}${e.minutes ? `, ${e.minutes} min` : ""}`,
+                              ...(A ? [" on ", A] : []), ...(B ? [", drawn by ", B] : [])];
+      default: return null;
     }
-    GOAL.away = a; GOAL.home = h; GOAL.at = t; GOAL.live = lv.state === "live";
-    return GOAL.flash;
   }
-  /* How long this side's flash has run (ms), or null: the markup starts its
-     animation that far in, so a redraw mid-flash carries on. */
-  function goalFor(d, ha, now) {
-    const f = GOAL.flash, t = now == null ? Date.now() : now;
-    if (!f || f.side !== ha || f.key !== goalKey(d)) return null;
-    return t - f.start < GOAL_MS ? Math.max(0, t - f.start) : null;
+  function momentOf(e, d) {
+    const per = () => { const n = typeof gpPeriodName === "function" ? gpPeriodName("nhl", e.period, d) : `${periodWord(e.period)} period`;
+      return /^\d/.test(n) ? `the ${n}` : n.toLowerCase(); };
+    switch (e.kind) {
+      case "start": return `Start of ${per()}`;
+      case "end": return `End of ${per()}`;
+      case "stoppage": return STOP[e.reason] || cap(words(e.reason)) || "Stoppage";
+      case "delayed": return `Delayed penalty${e.team ? ` on ${e.team}` : ""}`;
+      default: return "";
+    }
+  }
+  /* An event as a row of the page's play list (detail.js gpPeriodsHTML → app.js
+     playsHTML): its period and clock, its side, a goal with the score it
+     left, and the event itself for its words (`sayPlay`). */
+  const rowOf = (e) => ({ kind: "hockey", id: e.id, period: e.period, clock: clockOf(e), team: e.team || "", player: e.player || "",
+    event: e.kind || "play", scoring: e.kind === "goal", shot: false,
+    away_score: e.kind === "goal" && e.score ? e.score[0] : null, home_score: e.kind === "goal" && e.score ? e.score[1] : null, rink: e });
+  function sayPlay(e, d) {
+    const m = momentOf(e, d);
+    if (m) return { moment: m };
+    const bits = said(e, d);
+    return bits ? { html: bits.map((x) => (x && x.b ? `<b>${esc(x.b)}</b>` : esc(x))).join("") } : null;
   }
 
-  /* ---------------- the scoreboard ---------------- */
-  function scoreboardHTML(d, k) {
-    const lv = d.live || {}, r = d.rink || {}, c = r.clock || {};
-    const table = typeof teamsIn === "function" ? (teamsIn("nhl") || {}) : {};
-    const T = k.stats;
-    goalSeen(d);
-    const side = (ha) => {
-      const abbr = d[ha], t = table[abbr] || {};
-      const score = ha === "home" ? lv.home_score : lv.away_score;
-      const rec = (d.records || {})[abbr];
-      const puck = lv.state === "live" && k.puck === ha
-        ? `<span class="rc-puckmark" title="Puck — from the last play"></span>` : "";
-      const nick = t.nick || teamNameIn("nhl", abbr) || abbr;
-      const goal = goalFor(d, ha);
-      return `<div class="rc-side ${ha}${goal != null ? " rc-goal" : ""}"${goal != null ? ` style="--td-t:-${Math.round(goal)}ms"` : ""}>
-          <span class="rc-crest">${teamMarkIn("nhl", abbr, 56)}</span>
-          <div class="rc-team"><span class="rc-loc">${ha === "home" ? "Home" : "Away"} · ${esc(t.loc || "")}</span>
-            <b class="rc-nick">${esc(nick)}</b>
-            ${rec ? `<span class="rc-rec">${esc(rec)}</span>` : ""}${goal != null
-              ? `<span class="rc-goal-word" role="status" aria-label="${esc(`Goal, ${nick}`)}">Goal</span>` : ""}</div>
-          <b class="rc-pts">${puck}${score != null ? esc(score) : "–"}</b></div>`;
-    };
-    const per = Number(c.period) || (/^P?(\d)/i.exec(String(lv.period || "")) || [])[1] || 0;
-    let mid;
-    if (lv.state === "live") {
-      const pp = k.pp;
-      const ppHTML = pp ? `<span class="rc-pp" style="--pc:${pp.side === "home" ? "var(--ch)" : "var(--ca)"}">PP ${esc(d[pp.side])}${pp.left != null && pp.left > 0 ? ` ${mmss(pp.left)}` : ""}</span>` : "";
-      const clock = c.intermission ? "INT" : (c.left || lv.clock || "");
-      mid = `<span class="rc-per">${esc(c.intermission ? `${periodWord(Number(per))} intermission` : periodWord(Number(per)) || lv.period || "")}</span>
-        <b class="rc-clock">${esc(String(clock).replace(/^0(\d:)/, "$1"))}</b>${ppHTML}
-        <span class="rc-live">${icon("dot", 8)} Live</span>`;
-    } else if (lv.state === "final") {
-      mid = `<span class="rc-per">Final</span><b class="rc-clock">${Number(per) > 3 ? esc(periodShort(Number(per))) : ""}</b>`;
-    } else {
-      const tip = typeof pbpTime === "function" ? pbpTime(lv.start_time) : "";
-      mid = `<span class="rc-per">Puck drop</span><b class="rc-clock">${esc(tip || "—")}</b>`;
-    }
-    const sog = (T.away.sog || T.home.sog) ? `<span class="rc-sog">SOG ${T.away.sog} – ${T.home.sog}</span>` : "";
-    const ago = typeof pbpAgo === "function" ? pbpAgo(r.at || d.generated_at) : "";
-    // The watch buttons are the card's last row, as on the basketball page:
-    // inside the clock's column they set its width and squeezed each side
-    // past its crest and score on a phone.
-    const watch = lv.state === "live" && typeof watchHTML === "function" ? watchHTML(d, "nhl", "pbp-watch rc-watch") : "";
-    return `<div class="card rc-score" style="--ca:${k.colors.away};--ch:${k.colors.home}">
-      ${side("away")}
-      <div class="rc-mid">${mid}${sog}${ago ? `<span class="rc-ago">${esc(ago)}</span>` : ""}</div>
-      ${side("home")}${watch}</div>`;
+  /* ---------------- on the score ----------------
+     The score is the page's own (detail.js pbpBoardHTML), the same for every
+     sport, and a goal flashes on it as a touchdown does (detail.js
+     gpGoalSeen: it was this file's until the page became every sport's).
+     Hockey's part of it, under the clock: the side on the power play with
+     the time left where it can be told, and the shots on goal. */
+  function midHTML(d, k) {
+    const T = k.stats, pp = k.pp;
+    // The chip and the note are the page's own (detail.js gpChipHTML, gpNoteHTML).
+    return `${pp ? gpChipHTML(`PP ${d[pp.side]}${pp.left != null && pp.left > 0 ? ` ${mmss(pp.left)}` : ""}`, k.colors[pp.side]) : ""}${
+      (T.away.sog || T.home.sog) ? gpNoteHTML(`SOG ${T.away.sog} – ${T.home.sog}`) : ""}`;
   }
 
   /* ---------------- the arena ---------------- */
-  const PICTURE = `<picture>
+  const PICTURE = `<picture data-gp-hold="arena">
       <source type="image/webp" srcset="img/arena/nhl-arena@640.webp 640w, img/arena/nhl-arena.webp 1280w" sizes="(max-width: 720px) 190vw, 100vw">
       <img class="rc-photo" src="img/arena/nhl-arena.jpg" srcset="img/arena/nhl-arena@640.jpg 640w, img/arena/nhl-arena.jpg 1280w"
         sizes="(max-width: 720px) 190vw, 100vw" alt="" decoding="async"></picture>`;
@@ -668,19 +656,6 @@
     return events(d).filter((e) => e.x != null && (S.ice === "all" ? ICE_KINDS.some(([key]) => key === e.kind) : e.kind === S.ice))
       .map((e) => iceMark(d, e, k, 0.88)).join("");
   }
-  function captionHTML(d, k) {
-    const e = events(d).slice().reverse().find((r) => r.kind !== "start" && r.kind !== "end");
-    if (!e) return "";
-    const w = playWords(e, d, k);
-    const end = endOf(d, e);
-    const where = end === "neutral" ? "in the neutral zone" : end ? `in the ${esc(d[end])} end` : "";
-    const puck = k.puck && (d.live || {}).state === "live" ? `<span class="rc-cap-puck" style="--pc:${k.puck === "home" ? "var(--ch)" : "var(--ca)"}">Puck: ${esc(d[k.puck])}</span>` : "";
-    return `<div class="rc-caption">
-      ${e.player ? faceHTML(e.player, k, 36) : `<span class="rc-face">${svg(GLYPH[e.kind] || GLYPH.other, 16)}</span>`}
-      <div class="rc-cap-t"><span class="rc-cap-k">Last play · ${esc([periodShort(e.period), e.clock ? String(e.clock).replace(/^0(\d:)/, "$1") : ""].filter(Boolean).join(" "))}</span>
-        <b>${esc(w.title)}${e.team ? ` <span class="rc-tb" style="--tc:${colOf(d, e, k)}">${esc(e.team)}</span>` : ""}</b>
-        <span>${esc(w.sub)}${where ? ` · ${where}` : ""}</span></div>${puck}</div>`;
-  }
   function trackerHTML(d, k) {
     const box = (d.rink || {}).box || {};
     const col = (ha) => {
@@ -789,106 +764,87 @@
     const lit = typeof pbpArenaSVG === "function"
       ? pbpArenaSVG(d, "nhl", { pp: k.pp ? k.pp.side : "", ppLeft: k.pp && k.pp.left > 0 ? k.pp.left : null }) : "";
     const shout = typeof pbpMomentBannerHTML === "function" ? pbpMomentBannerHTML(d, "nhl") : "";
-    return `<div class="card rc-stage v-${view}" style="--ca:${k.colors.away};--ch:${k.colors.home}">
+    // The card is the page's own (detail.js gpStageHTML); what is in it is this file's.
+    return gpStageHTML(`rc-stage v-${view}`, `--ca:${k.colors.away};--ch:${k.colors.home}`, `
       <div class="rc-scene"><div class="rc-art" data-half="${half}">
         <div class="rc-frame">${PICTURE}
           <svg class="rc-svg" viewBox="0 0 ${ART.w} ${ART.h}" preserveAspectRatio="none" aria-hidden="true">${lit}${marks}</svg></div>
         ${shout}${where}${pp}</div>
-      ${chipsHTML(d, k)}${view === "live" ? captionHTML(d, k) : ""}
-      ${pane ? `<div class="rc-pane">${pane}</div>` : ""}</div>
+      ${chipsHTML(d, k)}
+      ${pane ? `<div class="rc-pane" data-gp-scroll="rc-${view}">${pane}</div>` : ""}</div>
       <div class="rc-views" role="toolbar" aria-label="What the arena shows">${tabs}
-        ${replay}<button type="button" class="rc-full" data-rc-full aria-label="Full screen">${EXPAND}</button></div></div>`;
+        ${replay}<button type="button" class="rc-full" data-rc-full aria-label="Full screen">${EXPAND}</button></div>`);
   }
 
-  /* ---------------- the right-hand column ---------------- */
-  function playsHTML(d, k) {
+  /* ---------------- the play right now ----------------
+     On the card every sport's is drawn on (js/gamecast.js playNow): the
+     newest event in words, where on the ice, the score a goal left, and the
+     people in it with the league's own faces and their game so far. A
+     whistle or a period's end since is said under it. The caption under the
+     arena said this, in a layout of its own. */
+  const ASIDE = new Set(["start", "end", "stoppage", "delayed"]);
+  function nowHTML(d, k) {
+    const G = window.QBGamecast;
     const ev = events(d);
-    const periods = [...new Set(ev.map((e) => Number(e.period)).filter(Boolean))].sort((a, b) => a - b);
-    const cur = periods[periods.length - 1] || 0;
-    const q = S.q == null ? cur : S.q;
-    const live = (d.live || {}).state === "live";
-    const shown = ev.filter((e) => q === 0 || Number(e.period) === q).slice().reverse();
-    const opts = [`<option value=""${S.q == null ? " selected" : ""}>${live ? "Now" : "Latest"}${cur ? ` — ${periodWord(cur)}${cur <= 3 ? " period" : ""}` : ""}</option>`]
-      .concat(periods.map((p) => `<option value="${p}"${S.q === p ? " selected" : ""}>${periodWord(p)}${p <= 3 ? " period" : ""}</option>`))
-      .concat([`<option value="0"${S.q === 0 ? " selected" : ""}>Every play</option>`]).join("");
-    const rows = shown.map((e) => {
-      const w = playWords(e, d, k), divider = e.kind === "start" || e.kind === "end";
-      return `<div class="rc-play k-${e.kind}${divider ? " divider" : ""}">
-          <span class="rc-pclock">${esc(divider ? "" : String(e.clock || "").replace(/^0(\d:)/, "$1"))}</span>
-          <span class="rc-pkind">${svg(GLYPH[e.kind] || GLYPH.other, 15)}</span>
-          <span class="rc-pwhat"><b>${esc(w.title)}</b>${w.sub ? `<span>${esc(w.sub)}</span>` : ""}</span>
-          ${e.team && !divider ? `<span class="rc-tb" style="--tc:${colOf(d, e, k)}">${esc(e.team)}</span>` : "<span></span>"}${
-          !divider && typeof chatPlayBadge === "function" && d.event_id && e.id != null ? chatPlayBadge(`nhl_${d.event_id}`, e) : ""}</div>`;
-    }).join("");
-    return `<div class="rc-plays-head"><select class="rc-q" data-rc-q aria-label="Which period">${opts}</select></div>
-      <div class="rc-play-list">${rows || `<p class="rail-quiet">No plays yet${cur ? " this period" : ""}.</p>`}</div>`;
-  }
-  function byPeriodHTML(d, k) {
-    const ev = events(d);
-    const periods = [...new Set(ev.map((e) => Number(e.period)).filter(Boolean))].sort((a, b) => a - b);
-    if (!periods.length) return `<p class="rail-quiet">The period-by-period table fills in from the opening faceoff.</p>`;
-    const count = (side, p, kinds) => ev.filter((e) => Number(e.period) === p && sideOf(d, e.team) === side && kinds.includes(e.kind)).length;
-    const lv = d.live || {};
-    const row = (label, side, kinds, total) => `<tr><th scope="row">${esc(d[side])}</th>${periods.map((p) => `<td>${count(side, p, kinds)}</td>`).join("")}<td class="t">${esc(total)}</td></tr>`;
-    const head = `<thead><tr><th></th>${periods.map((p) => `<th scope="col">${esc(periodShort(p))}</th>`).join("")}<th scope="col">T</th></tr></thead>`;
-    const T = k.stats;
-    const fo = (s) => (T.away.fo ? `${Math.round((100 * T[s].fow) / T.away.fo)}%` : "–");
-    return `<p class="rc-mini-k">Goals</p><table class="rc-ls">${head}<tbody>${row("Goals", "away", ["goal"], lv.away_score != null ? lv.away_score : T.away.goals)}${row("Goals", "home", ["goal"], lv.home_score != null ? lv.home_score : T.home.goals)}</tbody></table>
-      <p class="rc-mini-k">Shots on goal</p><table class="rc-ls">${head}<tbody>${row("SOG", "away", ["sog", "goal"], T.away.sog)}${row("SOG", "home", ["sog", "goal"], T.home.sog)}</tbody></table>
-      <div class="rc-facts">
-        <div class="rc-fact">${svg(GLYPH.faceoff)}<span>Faceoffs: ${esc(d.away)} <b>${fo("away")}</b>, ${esc(d.home)} <b>${fo("home")}</b> (${T.away.fo} taken)</span></div>
-        <div class="rc-fact">${svg(GLYPH.penalty)}<span>Power plays: ${esc(d.away)} <b>${T.away.ppg}/${T.away.ppo}</b>, ${esc(d.home)} <b>${T.home.ppg}/${T.home.ppo}</b> · penalty minutes ${T.away.pim} – ${T.home.pim}</span></div></div>`;
-  }
-  function trendsHTML(d, k) {
-    const out = [];
-    const lv = d.live || {}, T = k.stats;
-    if (lv.state === "live") {
-      const p = pressure(d, 300);
-      if (p.away || p.home) out.push([GLYPH.sog, `Last five minutes: ${esc(d.away)} <b>${p.away}</b> attempts, ${esc(d.home)} <b>${p.home}</b>.`]);
-      if (k.pp) out.push([GLYPH.penalty, `${esc(d[k.pp.side])} on the power play${k.pp.left != null && k.pp.left > 0 ? `, <b>${mmss(k.pp.left)}</b> left` : ""}.`]);
-      const q = quiet(d);
-      ["away", "home"].forEach((s) => { if (q[s] >= 300) out.push([GLYPH.stoppage, `${esc(d[s])}: no shot on goal in <b>${mmss(q[s])}</b>.`]); });
-      const ev = events(d), sit = ev.length ? sitOf(ev[ev.length - 1].sc) : null;
-      if (sit && sit.en) out.push([GLYPH.goal, `${esc(d[sit.en])} have pulled their goalie.`]);
-    }
-    if ((d.rink || {}).xg && (T.away.xgn || T.home.xgn)) out.push([GLYPH.goal, `Expected goals (our model): ${esc(d.away)} <b>${T.away.xg.toFixed(2)}</b>, ${esc(d.home)} <b>${T.home.xg.toFixed(2)}</b>.`]);
+    const e = ev.slice().reverse().find((r) => !ASIDE.has(r.kind));
+    const bits = e ? said(e, d) : null;
+    if (!bits || !G || !G.playNow) return "";
+    const end = endOf(d, e);
+    const where = end === "neutral" ? " in the neutral zone" : end ? ` in the ${d[end]} end` : "";
+    const score = e.kind === "goal" && e.score ? ` ${d.away} ${e.score[0]}, ${d.home} ${e.score[1]}.` : "";
     const box = (d.rink || {}).box || {};
-    ["away", "home"].forEach((s) => {
-      const g = ((box[d[s]] || {}).goalies || [])[0];
-      if (g && g.sa) out.push([GLYPH.block, `${esc(g.name)}: <b>${g.sv}</b> saves on ${g.sa}.`]);
+    const lines = {};
+    Object.values(box).forEach((b) => {
+      ((b || {}).skaters || []).forEach((p) => { lines[p.name] = `${p.g} G, ${p.a} A, ${p.sog} SOG`; });
+      ((b || {}).goalies || []).forEach((g) => { lines[g.name] = `${g.sv} saves on ${g.sa}`; });
     });
-    if (T.away.att + T.home.att) out.push([GLYPH.hit, `Hits ${esc(d.away)} <b>${T.away.hits}</b>, ${esc(d.home)} <b>${T.home.hits}</b>; takeaways ${T.away.take} – ${T.home.take}, giveaways ${T.away.give} – ${T.home.give}.`]);
-    return out.length ? `<div class="rc-facts">${out.map(([g, text]) => `<div class="rc-fact">${svg(g)}<span>${text}</span></div>`).join("")}</div>`
-      : `<p class="rail-quiet">The trends read themselves from the plays once the puck drops.</p>`;
-  }
-  function rightHTML(d, k) {
-    const tab = S.right;
-    const body = tab === "stats" ? byPeriodHTML(d, k) : tab === "trends" ? trendsHTML(d, k)
-      : tab === "props" ? (typeof pbpPropsHTML === "function" ? pbpPropsHTML(d, "nhl") : "") : playsHTML(d, k);
-    const tabs = [["plays", "Play by Play"], ["stats", "Game Stats"], ["trends", "Trends"], ["props", "Props"]]
-      .map(([key, label]) => `<button type="button" class="rc-pill${tab === key ? " on" : ""}" data-rc-right="${key}">${label}</button>`).join("");
-    // The inner box lets the column take the arena's height on a wide
-    // screen without its list setting it (css/rinkcast.css).
-    return `<div class="card rc-card rc-right" style="--ca:${k.colors.away};--ch:${k.colors.home}"><div class="rc-right-in">
-      <div class="rc-pills" role="tablist">${tabs}</div><div class="rc-right-body${tab === "plays" ? " plays" : ""}">${body}</div></div></div>`;
+    const faces = {};
+    Object.values(k.men).forEach((m) => { if (m.face) faces[String(m.name).toLowerCase()] = m.face; });
+    const person = (name) => {
+      const m = k.men[name] || {};
+      return { name, row: { name }, where: [m.team, m.pos, m.num != null ? `#${m.num}` : ""].filter(Boolean).join(" · "), line: lines[name] || "" };
+    };
+    // The power play and whose puck it is are the score's to say (parts `mid`, `ball`), once.
+    return G.playNow(d, "nhl", faces, { team: e.team || "", when: [periodShort(e.period), clockOf(e)].filter(Boolean).join(" "),
+      kind: playWords(e, d, k).title, said: `${bits.map((x) => (x && x.b ? x.b : x)).join("")}${where}.${score}`,
+      people: bits.filter((x) => x && x.b).map((x) => person(x.b)),
+      since: ev.slice(ev.indexOf(e) + 1).map((r) => momentOf(r, d)).filter(Boolean).slice(-4) });
   }
 
-  /* ---------------- the lower row ---------------- */
-  function bars(d, k) {
+  /* ---------------- in the Stats room ----------------
+     Hockey counts its own game off the league's events, so the page's team
+     stats and box scores are these (the same row, the same card: detail.js
+     gpTsRowHTML, gpTsCardHTML, gpBoxCardHTML); and after them what only it
+     has: every attempt from above, the shots period by period and the
+     trends. */
+  function teamStatsHTML(d, k) {
     const T = k.stats, foPct = (s) => (T.away.fo ? Math.round((100 * T[s].fow) / T.away.fo) : null);
+    // Nothing counted yet: the summary's own team stats, when it has any, stand (null).
+    if (!(T.away.att + T.home.att + T.away.fo) || typeof gpTsCardHTML !== "function") return null;
     const rows = [["Shots on goal", T.away.sog, T.home.sog], ["Shot attempts", T.away.att, T.home.att],
                   ["Faceoff %", foPct("away"), foPct("home")], ["Hits", T.away.hits, T.home.hits], ["Blocked shots", T.away.blocks, T.home.blocks],
                   ["Takeaways", T.away.take, T.home.take], ["Giveaways", T.away.give, T.home.give], ["Penalty minutes", T.away.pim, T.home.pim],
                   ["Power plays", `${T.away.ppg}/${T.away.ppo}`, `${T.home.ppg}/${T.home.ppo}`]];
     if ((d.rink || {}).xg) rows.push(["xG · our model", T.away.xg.toFixed(2), T.home.xg.toFixed(2)]);
-    if (!(T.away.att + T.home.att + T.away.fo)) return `<p class="rail-quiet">The team stats fill in from the opening faceoff.</p>`;
-    const val = (s) => { const m = /^(\d+)\/(\d+)$/.exec(String(s)); return m ? Number(m[1]) : Number(s) || 0; };
-    return `<div class="rc-ts-head"><span>${teamMarkIn("nhl", d.away, 22)} <b>${esc(d.away)}</b></span><span><b>${esc(d.home)}</b> ${teamMarkIn("nhl", d.home, 22)}</span></div>
-      ${rows.filter(([, a, h]) => a != null && h != null).map(([label, a, h]) => {
-        const x = val(a), y = val(h), top = Math.max(x, y) || 1;
-        return `<div class="rc-ts"><b class="rc-ts-v">${esc(a)}</b><span class="rc-bar away"><i style="width:${Math.round((x / top) * 100)}%"></i></span>
-          <span class="rc-ts-k">${esc(label)}</span><span class="rc-bar home"><i style="width:${Math.round((y / top) * 100)}%"></i></span><b class="rc-ts-v r">${esc(h)}</b></div>`;
-      }).join("")}`;
+    const val = (v) => { const m = /^(\d+)\/(\d+)$/.exec(String(v)); return m ? Number(m[1]) : Number(v) || 0; };
+    return gpTsCardHTML(d, "nhl", rows.filter(([, a, h]) => a != null && h != null)
+      .map(([label, a, h]) => gpTsRowHTML(label, esc(a), esc(h), val(a), val(h))).join(""), "");
+  }
+  function boxHTML(d, ha) {
+    const b = ((d.rink || {}).box || {})[d[ha]] || {};
+    const skaters = b.skaters || [], goalies = b.goalies || [];
+    if ((!skaters.length && !goalies.length) || typeof gpBoxCardHTML !== "function") return "";
+    const byToi = (a, c) => (secs(c.toi) || 0) - (secs(a.toi) || 0);
+    const shirt = (p) => (p.num != null ? `#${p.num}` : "");
+    const line = (rows) => rows.slice().sort(byToi).map((p) => ({ name: p.name, pos: shirt(p),
+      cells: [p.g, p.a, p.sog, `${p.pm > 0 ? "+" : ""}${p.pm}`, p.hits, p.toi] }));
+    const labels = ["G", "A", "SOG", "+/-", "HIT", "TOI"];
+    return gpBoxCardHTML("nhl", d[ha], [
+      { key: `${ha}-forwards`, title: "Forwards", labels, rows: line(skaters.filter((p) => p.pos !== "D")) },
+      { key: `${ha}-defense`, title: "Defense", labels, rows: line(skaters.filter((p) => p.pos === "D")) },
+      { key: `${ha}-goalies`, title: "Goalies", labels: ["SA", "SV", "GA", "SV%", "TOI"],
+        rows: goalies.map((g) => ({ name: g.name, pos: shirt(g), cells: [g.sa, g.sv, g.ga, g.sa ? (g.sv / g.sa).toFixed(3).replace(/^0/, "") : "–", g.toi] })) },
+    ], false);
   }
   /* Every attempt on a flat rink, the away side at the left. */
   function flatRinkHTML(d, k) {
@@ -909,116 +865,105 @@
         ${circ(0, 0, 15, "rc-fl-ring")}${[[-69, 22], [-69, -22], [69, 22], [69, -22]].map(([a, b]) => circ(a, b, 15, "rc-fl-ring")).join("")}
         <path d="M55 182 a30 30 0 0 1 0 60" class="rc-fl-crease"/><path d="M945 182 a30 30 0 0 0 0 60" class="rc-fl-crease"/>
         ${marks}</svg>
-      <p class="mini rc-note">${esc(d.away)} shoot at the left net, ${esc(d.home)} at the right, every period turned to match.</p>`;
+      <p class="mini rc-flat-note">${esc(d.away)} shoot at the left net, ${esc(d.home)} at the right, every period turned to match.</p>`;
   }
-  function playerStatsHTML(d, k) {
+  /* Shots on goal period by period (the goals are the page's line score). */
+  function sogByPeriodHTML(d, k) {
+    const ev = events(d);
+    const periods = [...new Set(ev.map((e) => Number(e.period)).filter(Boolean))].sort((a, b) => a - b);
+    if (!periods.length) return "";
+    const count = (side, p) => ev.filter((e) => Number(e.period) === p && sideOf(d, e.team) === side && (e.kind === "sog" || e.kind === "goal")).length;
+    const row = (side) => `<tr><th scope="row">${esc(d[side])}</th>${periods.map((p) => `<td>${count(side, p)}</td>`).join("")}<td class="t">${k.stats[side].sog}</td></tr>`;
+    return `<p class="rc-mini-k">Shots on goal</p><table class="rc-ls"><thead><tr><th></th>${periods.map((p) =>
+      `<th scope="col">${esc(periodShort(p))}</th>`).join("")}<th scope="col">T</th></tr></thead><tbody>${row("away")}${row("home")}</tbody></table>`;
+  }
+  /* The trends, read off the events: who is pressing, the power play, a side
+     gone quiet, an empty net, our expected goals, each goalie's night (the
+     saves, and the goals saved above what our shot model expected of the
+     chances faced), the physical game. */
+  function trendsHTML(d, k) {
+    const out = [];
+    const lv = d.live || {}, T = k.stats;
+    if (lv.state === "live") {
+      const p = pressure(d, 300);
+      if (p.away || p.home) out.push([GLYPH.sog, `Last five minutes: ${esc(d.away)} <b>${p.away}</b> attempts, ${esc(d.home)} <b>${p.home}</b>.`]);
+      if (k.pp) out.push([GLYPH.penalty, `${esc(d[k.pp.side])} on the power play${k.pp.left != null && k.pp.left > 0 ? `, <b>${mmss(k.pp.left)}</b> left` : ""}.`]);
+      const q = quiet(d);
+      ["away", "home"].forEach((s) => { if (q[s] >= 300) out.push([GLYPH.stoppage, `${esc(d[s])}: no shot on goal in <b>${mmss(q[s])}</b>.`]); });
+      const ev = events(d), sit = ev.length ? sitOf(ev[ev.length - 1].sc) : null;
+      if (sit && sit.en) out.push([GLYPH.goal, `${esc(d[sit.en])} have pulled their goalie.`]);
+    }
+    if ((d.rink || {}).xg && (T.away.xgn || T.home.xgn)) out.push([GLYPH.goal, `Expected goals (our model): ${esc(d.away)} <b>${T.away.xg.toFixed(2)}</b>, ${esc(d.home)} <b>${T.home.xg.toFixed(2)}</b>.`]);
     const box = (d.rink || {}).box || {};
-    const team = S.team || d.away;
-    const b = box[team] || { skaters: [], goalies: [] };
-    const toggle = ["away", "home"].map((s) => `<button type="button" class="rc-chip${team === d[s] ? " on" : ""}" data-rc-team="${escapeAttr(d[s])}">${esc(d[s])}</button>`).join("");
-    if (!b.skaters.length) return `<div class="rc-toggle">${toggle}</div><p class="rail-quiet">No box score yet.</p>`;
-    const rows = b.skaters.slice().sort((a, c) => (c.g + c.a) - (a.g + a.a) || (secs(c.toi) || 0) - (secs(a.toi) || 0));
-    return `<div class="rc-toggle">${toggle}</div><table class="rc-box"><thead><tr><th>#</th><th class="l">Player</th><th>G</th><th>A</th><th>SOG</th><th>+/-</th><th>HIT</th><th>TOI</th></tr></thead>
-      <tbody>${rows.map((p) => `<tr><td>${esc(p.num == null ? "" : p.num)}</td><td class="l">${esc(p.name)}</td><td>${esc(p.g)}</td><td>${esc(p.a)}</td><td>${esc(p.sog)}</td>
-        <td>${p.pm > 0 ? "+" : ""}${esc(p.pm)}</td><td>${esc(p.hits)}</td><td>${esc(p.toi)}</td></tr>`).join("")}</tbody></table>`;
-  }
-  function statsCardHTML(d, k) {
-    const tab = S.stats;
-    const body = tab === "players" ? playerStatsHTML(d, k) : tab === "shots" ? flatRinkHTML(d, k) : tab === "flow" ? flowPaneHTML(d, k) : bars(d, k);
-    const tabs = [["team", "Team Stats"], ["players", "Player Stats"], ["shots", "Shot Chart"], ["flow", "Game Flow"]]
-      .map(([key, label]) => `<button type="button" class="rc-tab${tab === key ? " on" : ""}" data-rc-stats="${key}">${label}</button>`).join("");
-    return `<div class="card rc-card rc-stats" style="--ca:${k.colors.away};--ch:${k.colors.home}">
-      <div class="rc-tabs" role="tablist">${tabs}</div><div class="rc-card-body">${body}</div></div>`;
-  }
-  function lineupHTML(d, k) {
-    const box = (d.rink || {}).box || {};
-    const team = S.team || d.away;
-    const b = box[team] || { skaters: [], goalies: [] };
-    const toggle = ["away", "home"].map((s) => `<button type="button" class="rc-chip${team === d[s] ? " on" : ""}" data-rc-team="${escapeAttr(d[s])}">${esc(d[s])}</button>`).join("");
-    const tab = S.lineup;
-    const byToi = (a, c) => (secs(c.toi) || 0) - (secs(a.toi) || 0);
-    let body;
-    if (!b.skaters.length && !b.goalies.length) {
-      body = `<p class="rail-quiet">The lineups fill in from the league's box score once the game is on.</p>`;
-    } else if (tab === "toi") {
-      const all = b.skaters.slice().sort(byToi), top = secs((all[0] || {}).toi) || 1;
-      body = `<div class="rc-tois">${all.map((p) => `<div class="rc-toi-row"><span>${p.num != null ? `#${esc(p.num)} ` : ""}${esc(p.name)}</span>
-        <span class="rc-bar home solo"><i style="width:${Math.round(((secs(p.toi) || 0) / top) * 100)}%"></i></span><b>${esc(p.toi)}</b></div>`).join("")}</div>`;
-    } else if (tab === "goalies") {
-      body = ["away", "home"].map((s) => ((box[d[s]] || {}).goalies || []).map((g) => {
+    ["away", "home"].forEach((s) => {
+      ((box[d[s]] || {}).goalies || []).filter((g) => g && g.sa).forEach((g) => {
         const faced = events(d).filter((e) => sideOf(d, e.team) === other(s) && (e.kind === "sog" || e.kind === "goal") && e.player2 === g.name);
         const xga = faced.reduce((a, e) => a + (Number(e.xg) || 0), 0);
         const gsax = (d.rink || {}).xg && faced.length ? xga - faced.filter((e) => e.kind === "goal").length : null;
-        return `<div class="rc-goalie">${faceHTML(g.name, k, 44)}<div class="rc-trk-t"><b>${g.num != null ? `#${esc(g.num)} ` : ""}${esc(g.name)} · ${esc(d[s])}</b>
-          <span>${esc(g.sv)} saves on ${esc(g.sa)}${g.sa ? ` (${(g.sv / g.sa).toFixed(3).replace(/^0/, "")})` : ""} · ${esc(g.ga)} against · ${esc(g.toi)}</span>
-          ${gsax != null ? `<span>Goals saved above expected <b>${gsax > 0 ? "+" : ""}${gsax.toFixed(2)}</b> <i class="mini">our model</i></span>` : ""}</div></div>`;
-      }).join("")).join("") || `<p class="rail-quiet">No goalie line yet.</p>`;
-    } else {
-      const table = (rows, label) => rows.length ? `<p class="rc-mini-k">${label}</p><table class="rc-box"><thead><tr><th>#</th><th class="l">Player</th><th>TOI</th><th>G</th><th>A</th><th>SOG</th><th>+/-</th></tr></thead>
-        <tbody>${rows.map((p) => `<tr><td>${esc(p.num == null ? "" : p.num)}</td><td class="l">${esc(p.name)}</td><td>${esc(p.toi)}</td><td>${esc(p.g)}</td><td>${esc(p.a)}</td><td>${esc(p.sog)}</td><td>${p.pm > 0 ? "+" : ""}${esc(p.pm)}</td></tr>`).join("")}</tbody></table>` : "";
-      const fw = b.skaters.filter((p) => p.pos !== "D").sort(byToi), df = b.skaters.filter((p) => p.pos === "D").sort(byToi);
-      const gl = b.goalies.map((g) => `<tr><td>${esc(g.num == null ? "" : g.num)}</td><td class="l">${esc(g.name)}</td><td>${esc(g.sv)}</td><td>${esc(g.ga)}</td>
-        <td>${g.sa ? (g.sv / g.sa).toFixed(3).replace(/^0/, "") : "–"}</td><td>${esc(g.toi)}</td></tr>`).join("");
-      body = `${table(fw, "Forwards")}${table(df, "Defence")}${gl ? `<p class="rc-mini-k">Goalie</p><table class="rc-box"><thead><tr><th>#</th><th class="l">Player</th><th>SV</th><th>GA</th><th>SV%</th><th>TOI</th></tr></thead><tbody>${gl}</tbody></table>` : ""}`;
-    }
-    const tabs = [["lineup", "Lineup"], ["toi", "Ice Time"], ["goalies", "Goalies"]]
-      .map(([key, label]) => `<button type="button" class="rc-tab${tab === key ? " on" : ""}" data-rc-lineup="${key}">${label}</button>`).join("");
-    return `<div class="card rc-card rc-lineup" style="--ca:${k.colors.away};--ch:${k.colors.home}">
-      <div class="rc-tabs" role="tablist">${tabs}</div><div class="rc-card-body">${tab === "goalies" ? "" : `<div class="rc-toggle">${toggle}</div>`}${body}</div></div>`;
+        out.push([GLYPH.block, `${esc(g.name)}: <b>${g.sv}</b> saves on ${g.sa}${gsax != null
+          ? `, <b>${gsax > 0 ? "+" : gsax < 0 ? "\u2212" : ""}${Math.abs(gsax).toFixed(2)}</b> goals saved above expected (our model)` : ""}.`]);
+      });
+    });
+    if (T.away.att + T.home.att) out.push([GLYPH.hit, `Hits ${esc(d.away)} <b>${T.away.hits}</b>, ${esc(d.home)} <b>${T.home.hits}</b>; takeaways ${T.away.take} – ${T.home.take}, giveaways ${T.away.give} – ${T.home.give}.`]);
+    return out.length ? `<div class="rc-facts">${out.map(([g, text]) => `<div class="rc-fact">${svg(g)}<span>${text}</span></div>`).join("")}</div>` : "";
   }
-  const signed = (n) => (n > 0 ? `+${n}` : typeof trueMinus === "function" ? trueMinus(String(n)) : String(n));
-  const price = (v) => (v == null || v === "" || !Number(v) ? "" : (typeof oddsTxt === "function" ? oddsTxt(v) : String(v)));
-  function oddsHTML(d, k) {
-    const g = k.boardGame || {};
-    const sp = num(g.spread), tot = num(g.total);
-    const rows = [];
-    if (sp != null) rows.push(["Puck line", `${esc(d.away)} ${esc(signed(-sp))}`, `${esc(d.home)} ${esc(signed(sp))}`]);
-    if (num(g.away_ml) || num(g.home_ml)) rows.push(["Moneyline", `${esc(d.away)} ${esc(price(g.away_ml) || "—")}`, `${esc(d.home)} ${esc(price(g.home_ml) || "—")}`]);
-    if (tot != null) rows.push(["Total goals", `Over ${esc(tot)}`, `Under ${esc(tot)}`]);
-    const lines = rows.length ? `<div class="rc-lines">${rows.map(([key, a, h]) =>
-      `<div class="rc-line-row"><span class="rc-line-k">${key}</span><span class="rc-line-v">${a}</span><span class="rc-line-v">${h}</span></div>`).join("")}</div>
-      <p class="mini rc-note">The board's best price across the books, from its last pull before the puck dropped.</p>`
-      : `<p class="rail-quiet">${k.boardGame ? "No game lines on the board for this game." : "Open the NHL board for its lines on this game."}</p>`;
-    const wp = (d.live || {}).win_prob;
-    let win = "";
-    if (wp && wp.home_win_prob != null) {
-      const h = Number(wp.home_win_prob), a = wp.away_win_prob != null ? Number(wp.away_win_prob) : 1 - h;
-      win = `<div class="rc-win"><span class="rc-line-k">Win chance (our model)</span>
-        <div class="rc-winbar"><i class="away" style="width:${Math.round(a * 100)}%"></i><i class="home" style="width:${Math.round(h * 100)}%"></i></div>
-        <div class="rc-win-v"><span>${esc(d.away)} <b>${Math.round(a * 100)}%</b></span><span><b>${Math.round(h * 100)}%</b> ${esc(d.home)}</span></div></div>`;
-    }
-    const track = k.boardGame && k.boardGame.line_track && typeof lineTrackHTML === "function" ? lineTrackHTML(k.boardGame) : "";
-    return `${lines}${win}${track}`;
-  }
-  function oddsCardHTML(d, k) {
-    const tab = S.odds;
-    const body = tab === "props" ? (typeof pbpPropsHTML === "function" ? pbpPropsHTML(d, "nhl") : "") : oddsHTML(d, k);
-    const tabs = [["odds", "Game Odds"], ["props", "Live Props"]]
-      .map(([key, label]) => `<button type="button" class="rc-tab${tab === key ? " on" : ""}" data-rc-odds="${key}">${label}</button>`).join("");
-    const door = k.boardGame && typeof gameId === "function"
-      ? `<button type="button" class="btn ghost rc-door" id="pbp-game-door" data-gid="${escapeAttr(gameId(k.boardGame))}">Full game page — lines, props, long shots →</button>` : "";
-    return `<div class="card rc-card rc-odds" style="--ca:${k.colors.away};--ch:${k.colors.home}">
-      <div class="rc-tabs" role="tablist">${tabs}</div><div class="rc-card-body">${body}</div>${door}</div>`;
+  function statsExtraHTML(d, k) {
+    // The cards are the page's own (detail.js gpCardHTML).
+    const card = (title, sub, body) => gpCardHTML(title, sub, body, "rc-icecard", `--ca:${k.colors.away};--ch:${k.colors.home}`);
+    const any = events(d).some((e) => ATTEMPTS.has(e.kind) && e.x != null);
+    return `${card("Shot chart", "every attempt, from above", any ? flatRinkHTML(d, k) : "")}${
+      card("Trends", "", `${sogByPeriodHTML(d, k)}${trendsHTML(d, k)}`)}`;
   }
 
-  /* ---------------- the page ---------------- */
+  /* ---------------- the parts of the page ----------------
+     The page is every sport's now (detail.js gpPageHTML, 2026-11-21; Ethan:
+     "all sports in all aspects should be trying to match nfl and that should
+     be automatic when we do any visual changes"): the bar that stays when you
+     scroll, the score on the clubs' colours with a goal flashed on it, the
+     line score, the rooms. This file drew a page of its own beside it, and
+     nothing done there reached it. It brings what is hockey's (gpKit): the
+     arena under the score, the newest play in words, the plays period by
+     period off the league's own events, its own count of the game for the
+     Stats room, and on the score the puck, the power play, the shots on
+     goal and the league's own clock. Before the puck drops there is no
+     arena, as there is no field. */
   function facts(d, ctx) {
     return { colors: colours(d), men: menOf(d), stats: teamStats(d), puck: puckAfter(d), pp: (d.live || {}).state === "live" ? powerPlay(d) : null,
              faces: (ctx && ctx.faces) || {}, boardGame: (ctx && ctx.boardGame) || null };
   }
-  function pageHTML(d, ctx) {
+  function parts(ctx) {
+    const d = ctx.d;
+    if (S.game !== String(d.event_id)) { S.game = String(d.event_id); S.run = null; }
     const k = facts(d, ctx);
-    return `<div class="rc" data-league="nhl">
-      <div class="rc-top">${scoreboardHTML(d, k)}${typeof gpLineHTML === "function" ? gpLineHTML(d, "nhl", d.live || {}) : ""}<div class="gch-entry-slot"></div>${stageHTML(d, k)}${(ctx && ctx.callit) || ""}</div>
-      ${rightHTML(d, k)}
-      <div class="rc-low">${statsCardHTML(d, k)}${lineupHTML(d, k)}</div>
-      ${oddsCardHTML(d, k)}</div>`;
+    const lv = d.live || {}, c = (d.rink || {}).clock || {};
+    const on = lv.state === "live" || lv.state === "final";
+    const per = Number(c.period) || 0;
+    const boxes = `${boxHTML(d, "away")}${boxHTML(d, "home")}`;
+    const ev = events(d);
+    return {
+      stage: on ? stageHTML(d, k) : "",
+      now: lv.state === "live" ? nowHTML(d, k) : "",
+      // The league's own events as the page's rows; until the first of them lands, the game file's.
+      rows: ev.length ? ev.map(rowOf) : null, say: (p) => (p && p.rink ? sayPlay(p.rink, d) : null),
+      teamStats: teamStatsHTML(d, k), boxes: boxes || null,
+      statsExtra: on ? statsExtraHTML(d, k) : "",
+      ball: lv.state === "live" ? (k.puck || "") : "", ballIcon: "hockey", ballTitle: "Puck — from the last play",
+      mid: on ? midHTML(d, k) : "",
+      down: k.pp ? `PP ${d[k.pp.side]}${k.pp.left != null && k.pp.left > 0 ? ` ${mmss(k.pp.left)}` : ""}` : "",
+      // The league's own clock, where the file carries it: the period, the time left, an intermission.
+      live: lv.state === "live" && per ? { period: `P${per}`, clock: String(c.left || lv.clock || "").replace(/^0(\d:)/, "$1"),
+                                           ...(c.intermission && !lv.hold ? { hold: "Intermission" } : {}) } : null,
+      wire,
+    };
   }
+  /* The arena's own buttons (the views, the chips over them, Replay, full
+     screen); a choice draws the page again (detail.js renderPbpPage), which
+     keeps the picture already painted. Bound once to the page's host. */
   function wire(host) {
-    if (host.dataset.rcWired) return;
+    if (!host || host.dataset.rcWired) return;
     host.dataset.rcWired = "1";
     host.addEventListener("click", (e) => {
-      const t = e.target.closest("[data-rc-view],[data-rc-right],[data-rc-stats],[data-rc-lineup],[data-rc-odds],[data-rc-shots],[data-rc-ice],[data-rc-team],[data-rc-full],[data-rc-replay],[data-rc-flow]");
+      const t = e.target.closest("[data-rc-view],[data-rc-shots],[data-rc-ice],[data-rc-full],[data-rc-replay],[data-rc-flow]");
       if (!t || !host.contains(t)) return;
       if (t.hasAttribute("data-rc-full")) {
         const st = host.querySelector(".rc-stage");
@@ -1028,48 +973,17 @@
       const ds = t.dataset;
       if (t.hasAttribute("data-rc-replay")) S.replay = true;
       if (ds.rcView) S.view = ds.rcView;
-      if (ds.rcRight) S.right = ds.rcRight;
-      if (ds.rcStats) S.stats = ds.rcStats;
-      if (ds.rcLineup) S.lineup = ds.rcLineup;
-      if (ds.rcOdds) S.odds = ds.rcOdds;
       if (ds.rcShots) S.shots = ds.rcShots;
       if (ds.rcIce) S.ice = ds.rcIce;
-      if (ds.rcTeam) S.team = ds.rcTeam;
       if (ds.rcFlow) S.flowBy = ds.rcFlow;
-      if (S.ctx) render(host, S.ctx, true);
+      if (typeof renderPbpPage === "function") renderPbpPage();
     });
-    host.addEventListener("change", (e) => {
-      const t = e.target.closest("[data-rc-q]");
-      if (!t) return;
-      S.q = t.value === "" ? null : Number(t.value);
-      if (S.ctx) render(host, S.ctx, true);
-    });
-  }
-  /* The whole page into `host`: the strip of the night's games and the way
-     back are app.js's, wired by its own `wire`. The redraw after every
-     refresh keeps the arena's picture as it was (a new one paints black
-     until it decodes) and, unless the reader just chose something
-     (`chose`), where the plays and the pane were scrolled to. */
-  function render(host, ctx, chose) {
-    if (!host || !ctx || !ctx.d || !ctx.d.rink) return false;
-    const same = !!(S.ctx && S.ctx.d && S.ctx.d.event_id === ctx.d.event_id);
-    if (!same) { S.run = null; S.q = null; S.team = ""; }
-    S.ctx = ctx;
-    const pic = same ? host.querySelector(".rc-frame > picture") : null;
-    const scrolled = same && !chose ? [".rc-play-list", ".rc-pane"].map((sel) => [sel, (host.querySelector(sel) || {}).scrollTop || 0]) : [];
-    host.innerHTML = `${ctx.stripHTML || ""}${pageHTML(ctx.d, ctx)}${ctx.back || ""}`;
-    const fresh = pic ? host.querySelector(".rc-frame > picture") : null;
-    if (fresh) fresh.replaceWith(pic);
-    scrolled.forEach(([sel, top]) => { const el = host.querySelector(sel); if (el && top) el.scrollTop = top; });
-    wire(host);
-    if (typeof ctx.wire === "function") ctx.wire();
-    return true;
   }
 
   window.QBRink = {
-    render,
+    parts,
     // The readers, for the tests and for Ask.
     events, sitOf, puckAfter, endOf, powerPlay, teamStats, flow, pressure, quiet, nowElapsed, toArt, colours, playWords, CP,
-    goalSeen, goalFor, GOAL_MS,
+    said, momentOf, sayPlay, rowOf,
   };
 })();

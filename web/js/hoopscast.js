@@ -1,4 +1,4 @@
-/* Qellys Book — the basketball live page (js/hoopscast.js), in Ethan's render.
+/* Qellys Book — basketball's parts of the live game page (js/hoopscast.js).
    ==========================================================================
    Ethan, 2026-10-15, with two renders — the arena (ours, the crown at centre
    court) and the page: "the live play by play screen for nba looks like shit
@@ -7,13 +7,21 @@
    the vector court at its own size inside a box built for photographs: a
    small court in the corner of an empty card.
 
-   THE PAGE, TOP TO BOTTOM, as the render lays it out: the scoreboard (the
-   clubs, their records, the score, the quarter and the clock — timeouts,
-   team fouls and the bonus only when ESPN's scorer's-table block carries
-   them, livescore_build.pbp_doc `situation`), the arena with four views
-   (Live, Shot Chart, Player Tracker, Game Flow), then three panels: every
-   play by quarter; the stats (Team | Players | Shots | Flow); the odds (the
-   board's lines, our picks on the game with how each is going, the trends).
+   ONE PAGE FOR EVERY SPORT (2026-11-21; Ethan: "all sports in all aspects
+   should be trying to match nfl and that should be automatic when we do any
+   visual changes"). This file drew a whole page of its own until then: its
+   own scoreboard, play list, stats card and odds cards, in a layout the
+   football page did not share. The page is detail.js's now (gpPageHTML), the
+   same one football draws, and this file hands it basketball's parts
+   (`parts`): the arena with its four views (Live, Shots, Players, Flow) for
+   the place football's field has; the newest play, said in a sentence, for
+   the last-play card; each play's sentence for the period cards; the bonus,
+   team fouls and timeouts under each side's score (only when ESPN's
+   scorer's-table block carries them, livescore_build.pbp_doc `situation`);
+   which side has the ball; and the shot chart and the trends for the Stats
+   tab. It writes none of the page's own markup: the cards are made by the
+   page's builders (gpStageHTML, gpCardHTML, QBGamecast.playNow), so a change
+   to the page's look is a change here too.
 
    WHAT IS TRACKED, AND HOW FAR IT CAN BE TRUSTED. Nobody publishes ball
    tracking to us; the league's own feed is the closest thing and it answers
@@ -48,20 +56,19 @@
    a three lands outside the painted arc, a layup in the paint. The rims are
    where the render draws them, (372, 566) and (1300, 566).
 
-   Loaded by js/gamecast.js (QBGamecast.hoops) the first time a basketball
-   game opens; uses app.js's helpers by name. No inline handlers. */
+   Loaded by detail.js (gpSportMod) the first time a basketball game opens;
+   uses app.js's helpers by name. No inline handlers. */
 (function () {
   "use strict";
-  const HOOPS = new Set(["nba", "wnba", "cbb"]);
   const esc = (v) => escapeHtml(String(v == null ? "" : v));
   const num = (v) => { const n = Number(v); return v === null || v === "" || !Number.isFinite(n) ? null : n; };
   const lower = (s) => String(s || "").toLowerCase();
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const still = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  /* What the reader chose, kept across the twelve-second redraws. `q` null
-     follows the quarter being played; 0 is every play. */
-  const S = { view: "live", stats: "team", odds: "odds", q: null, shots: "both", run: null, replay: false, ctx: null };
+  /* What the reader chose on the arena, kept across the page's redraws, and
+     the game it was chosen on (`game`: another game starts its run again). */
+  const S = { view: "live", shots: "both", run: null, replay: false, game: "" };
 
   /* ---------------- the clock ---------------- */
   /* A regulation period's seconds: the NBA's and the WNBA's quarters, and
@@ -336,64 +343,33 @@
     return `<span class="hc-face">${icon("people", 14)}<img src="${escapeAttr(small)}" alt="" loading="lazy" decoding="async"${fall}></span>`;
   }
 
-  /* ---------------- the scoreboard ---------------- */
-  // A college side's mascot, over its school (the big name, `nick`, since
-  // 18 November): the full name past the school ("Houston Cougars" → "Cougars").
-  const mascot = (t) => {
-    const name = String(t.name || ""), base = [t.loc, t.nick].find((x) => x && name.startsWith(`${x} `));
-    return base ? name.slice(base.length + 1) : "";
-  };
-  function scoreboardHTML(d, league, k) {
-    const lv = d.live || {}, sit = d.situation || {};
-    const ball = sit.possession || k.ball;
-    const table = typeof teamsIn === "function" ? (teamsIn(league) || {}) : {};
-    const side = (ha) => {
-      const abbr = d[ha], t = table[abbr] || {};
-      const score = ha === "home" ? lv.home_score : lv.away_score;
-      const rec = (d.records || {})[abbr];
-      const marks = [
-        sit.bonus && sit.bonus[ha] ? `<span class="hc-bonus">Bonus</span>` : "",
-        sit.fouls && sit.fouls[ha] != null ? `<span class="hc-k">Fouls <b>${esc(sit.fouls[ha])}</b></span>` : "",
-        sit.timeouts && sit.timeouts[ha] != null ? `<span class="hc-k">Timeouts <b>${esc(sit.timeouts[ha])}</b></span>` : "",
-      ].join("");
-      const has = lv.state === "live" && ball === ha
-        ? `<span class="hc-ball" title="${sit.possession ? "Ball" : "Ball — from the last play"}">${icon("basketball", 14)}</span>` : "";
-      return `<div class="hc-side ${ha}">
-          <span class="hc-crest">${teamMarkIn(league, abbr, 56)}</span>
-          <div class="hc-team"><span class="hc-loc">${esc(league === "cbb" ? mascot(t) : t.loc || "")}</span>
-            <b class="hc-nick">${esc(t.nick || d[`${ha}_abbr`] || teamNameIn(league, abbr) || abbr)}</b>
-            ${rec ? `<span class="hc-rec">${esc(rec)}</span>` : ""}${marks ? `<span class="hc-marks-row">${marks}</span>` : ""}</div>
-          <b class="hc-pts">${has}${score != null ? esc(score) : "–"}</b></div>`;
-    };
-    const hold = lv.state === "live" && typeof liveHoldWord === "function" ? liveHoldWord(lv) : "";
-    const per = /^[QH](\d+)$/.exec(String(lv.period || ""));
-    const pnum = per ? Number(per[1]) : 0;
-    let mid;
-    if (lv.state === "live") {
-      mid = `<span class="hc-per">${esc(hold ? hold.split(/\s[—-]\s/)[0] : (periodWord(pnum) || lv.period || ""))}</span>
-        <b class="hc-clock">${esc(hold ? "" : (lv.clock || ""))}</b>
-        <span class="hc-live">${icon("dot", 8)} Live</span>`;
-    } else if (lv.state === "final") {
-      mid = `<span class="hc-per">Final</span><b class="hc-clock">${esc(pnum > regN(league) ? periodShort(pnum) : "")}</b>`;
-    } else {
-      const tip = typeof pbpTime === "function" ? pbpTime(lv.start_time) : "";
-      mid = `<span class="hc-per">Tip-off</span><b class="hc-clock">${esc(tip || "—")}</b>`;
-    }
-    const ago = d.archive && typeof pbpPlayedOn === "function" ? pbpPlayedOn(d)
-      : typeof pbpAgo === "function" ? pbpAgo(d.generated_at) : "";
-    // The watch buttons are the card's last row, under the clock and both
-    // sides. Inside the clock's column they set that column's width, and on
-    // a phone that left each side 32px for a 56px crest and the score
-    // (Ethan, 2026-10-20, 76ers @ Knicks: the crest under the "54").
-    const watch = lv.state === "live" && typeof watchHTML === "function" ? watchHTML(d, league, "pbp-watch hc-watch") : "";
-    return `<div class="card hc-score" style="--ca:${k.colors.away};--ch:${k.colors.home}">
-      ${side("away")}
-      <div class="hc-mid">${mid}${ago ? `<span class="hc-ago">${esc(ago)}</span>` : ""}</div>
-      ${side("home")}${watch}</div>`;
+  /* ---------------- on the score ----------------
+     The score is the page's own (detail.js pbpBoardHTML), the same for every
+     sport. Basketball's part of it: the ball beside the side that has it
+     (`parts`), and under each side's record the scorer's table when ESPN's
+     block carries it (livescore_build.pbp_doc `situation`): the bonus, the
+     team fouls, the timeouts left. */
+  function marksHTML(d, ha) {
+    const sit = d.situation || {};
+    const marks = [
+      sit.bonus && sit.bonus[ha] ? `<span class="hc-bonus">Bonus</span>` : "",
+      sit.fouls && sit.fouls[ha] != null ? `<span class="hc-k">Fouls <b>${esc(sit.fouls[ha])}</b></span>` : "",
+      sit.timeouts && sit.timeouts[ha] != null ? `<span class="hc-k">Timeouts <b>${esc(sit.timeouts[ha])}</b></span>` : "",
+    ].join("");
+    return marks ? `<span class="hc-marks-row">${marks}</span>` : "";
   }
 
+  //: A side by its club's name; a school the table does not know (keyed "espn:<id>") by the scoreboard's own letters, never its key.
+  function sideName(d, league, ha) {
+    const name = teamNameIn(league, d[ha]) || "";
+    return name && !String(name).startsWith("espn:") ? name : (d[`${ha}_abbr`] || d[ha] || "");
+  }
+  //: A run in words: the side by its short name, and "an 8–0 run" where the number is said with a vowel.
+  const runSide = (d, run) => d[`${run.side}_abbr`] || d[run.side] || "";
+  const anRun = (pts) => (/^(8|11|18)/.test(String(pts)) ? "an" : "a");
+
   /* ---------------- the arena ---------------- */
-  const PICTURE = `<picture>
+  const PICTURE = `<picture data-gp-hold="arena">
       <source type="image/webp" srcset="img/arena/nba-arena@640.webp 640w, img/arena/nba-arena.webp 1280w" sizes="(max-width: 720px) 190vw, 100vw">
       <img class="hc-photo" src="img/arena/nba-arena.jpg" srcset="img/arena/nba-arena@640.jpg 640w, img/arena/nba-arena.jpg 1280w"
         sizes="(max-width: 720px) 190vw, 100vw" alt="" decoding="async"></picture>`;
@@ -515,17 +491,6 @@
     return k.shots.filter((s) => courtSpot(s) && (S.shots === "both" || s.side === S.shots))
       .map((s) => shotMark(s, 0.92, k)).join("");
   }
-  /* The last play, in words the plays carry — the caption under the art. */
-  function captionHTML(d, league, k) {
-    const p = (d.plays || []).slice().reverse().find((r) => r && r.event && !/^end /i.test(String(r.event)));
-    if (!p) return "";
-    const row = k.findRow(p.player);
-    return `<div class="hc-caption">
-      ${p.player ? faceHTML(league, row || { name: p.player }, k.faces, 36) : (p.team ? teamMarkIn(league, p.team, 28) : "")}
-      <div class="hc-cap-t"><span class="hc-cap-k">Last play · ${esc([periodShort(p.period), p.clock].filter(Boolean).join(" "))}</span>
-        <b>${esc(p.player || teamNameIn(league, p.team) || "")}</b><span>${playWords(p, d, k)}</span></div>
-      ${p.away_score != null ? `<span class="hc-cap-sc">${esc(d.away_abbr || d.away)} ${esc(p.away_score)} – ${esc(p.home_score)} ${esc(d.home_abbr || d.home)}</span>` : ""}</div>`;
-  }
   function trackerHTML(d, league, k) {
     const floor = k.floor;
     const col = (ha) => {
@@ -537,7 +502,7 @@
         return v != null && v !== "" ? `${esc(v)} ${w}` : "";
       }).filter(Boolean).join(" · ");
       const pf = (r) => { const v = num(cellOf(box, r, "PF")); return v == null ? "" : `<span class="hc-pf${v >= 5 ? " hot" : ""}">PF ${v}</span>`; };
-      return `<div class="hc-trk-col"><div class="hc-trk-head">${teamMarkIn(league, d[ha], 22)} ${esc(teamNameIn(league, d[ha]) || d[ha])}</div>
+      return `<div class="hc-trk-col"><div class="hc-trk-head">${teamMarkIn(league, d[ha], 22)} ${esc(sideName(d, league, ha))}</div>
         ${rows.length ? rows.map((r) => `<div class="hc-trk-row">${faceHTML(league, r, k.faces, 34)}
           <div class="hc-trk-t"><b>${esc(r.name)}</b><span>${line(r) || "&nbsp;"}</span></div>${pf(r)}</div>`).join("")
           : `<p class="rail-quiet">No box score yet.</p>`}</div>`;
@@ -577,7 +542,7 @@
   function flowPaneHTML(d, league, k) {
     const L = k.leads;
     const big = (ha) => (L.big[ha] ? `+${L.big[ha]}` : "—");
-    return `<div class="hc-pane-head"><b>Game flow</b><span class="mini">${esc(teamNameIn(league, d.home) || d.home)} above the line, ${esc(teamNameIn(league, d.away) || d.away)} below.</span></div>
+    return `<div class="hc-pane-head"><b>Game flow</b><span class="mini">${esc(sideName(d, league, "home"))} above the line, ${esc(sideName(d, league, "away"))} below.</span></div>
       ${flowSVG(d, league, k, 220)}
       <div class="hc-flow-stats">
         <span><b>${L.changes}</b> lead changes</span><span><b>${L.ties}</b> ties</span>
@@ -598,7 +563,7 @@
     const pane = view === "tracker" ? trackerHTML(d, league, k) : view === "flow" ? flowPaneHTML(d, league, k) : "";
     const v = d.venue || {};
     const where = v.name ? `<div class="hc-venue"><b>${esc(v.name)}</b>${v.city ? `<span>${esc([v.city, v.state].filter(Boolean).join(", "))}</span>` : ""}</div>` : "";
-    const run = k.leads.run && (d.live || {}).state === "live" ? `<div class="hc-run" style="--rc:${k.leads.run.side === "home" ? "var(--ch)" : "var(--ca)"}">${icon("hot", 12)} ${esc(d[k.leads.run.side])} on a ${k.leads.run.pts}–0 run</div>` : "";
+    const run = k.leads.run && (d.live || {}).state === "live" ? `<div class="hc-run" style="--rc:${k.leads.run.side === "home" ? "var(--ch)" : "var(--ca)"}">${icon("hot", 12)} ${esc(runSide(d, k.leads.run))} on ${anRun(k.leads.run.pts)} ${k.leads.run.pts}–0 run</div>` : "";
     const legend = view === "shots" ? shotLegendHTML(d, league, k) : "";
     // A phone reads the short word, so the four fit across it.
     const tabs = [["live", "Live", "Live", "basketball"], ["shots", "Shot Chart", "Shots", "target"],
@@ -612,15 +577,16 @@
     // for a phone (detail.js pbpArenaSVG, the live page's file).
     const lit = typeof pbpArenaSVG === "function" ? pbpArenaSVG(d, league) : "";
     const shout = typeof pbpMomentBannerHTML === "function" ? pbpMomentBannerHTML(d, league) : "";
-    return `<div class="card hc-stage v-${view}" style="--ca:${k.colors.away};--ch:${k.colors.home}">
+    // The card is the page's own (detail.js gpStageHTML); what is in it is this file's.
+    return gpStageHTML(`hc-stage v-${view}`, `--ca:${k.colors.away};--ch:${k.colors.home}`, `
       <div class="hc-art" data-side="${side}">
         <div class="hc-frame">${PICTURE}
           <svg class="hc-svg" viewBox="0 0 ${ART.w} ${ART.h}" preserveAspectRatio="none" aria-hidden="true">${lit}${svg}</svg></div>
         ${shout}${where}${view === "live" ? run : ""}</div>
-      ${legend}${view === "live" ? captionHTML(d, league, k) : ""}
-      ${pane ? `<div class="hc-pane">${pane}</div>` : ""}
+      ${legend}
+      ${pane ? `<div class="hc-pane" data-gp-scroll="hc-${view}">${pane}</div>` : ""}
       <div class="hc-views" role="toolbar" aria-label="What the arena shows">${tabs}
-        ${view === "live" && last ? `<button type="button" class="hc-replay" data-hc-replay aria-label="Replay the last shots">${REPLAY}<span>Replay</span></button>` : ""}<button type="button" class="hc-full" data-hc-full aria-label="Full screen">${EXPAND}</button></div></div>`;
+        ${view === "live" && last ? `<button type="button" class="hc-replay" data-hc-replay aria-label="Replay the last shots">${REPLAY}<span>Replay</span></button>` : ""}<button type="button" class="hc-full" data-hc-full aria-label="Full screen">${EXPAND}</button></div>`);
   }
   function shotLegendHTML(d, league, k) {
     const tally = (side) => { const s = k.shots.filter((r) => r.side === side); return `${s.filter((r) => r.made).length}/${s.length}`; };
@@ -630,65 +596,127 @@
   }
 
   /* ---------------- the plays ---------------- */
+  //: A play's type label with its words apart: college's run together ("JumpShot", "MadeFreeThrow").
+  const labelOf = (p) => String((p && p.event) || "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/\s+/g, " ").trim();
   function playKind(p) {
-    const ev = lower(p.event);
+    const ev = lower(labelOf(p));
     if (/free throw/.test(ev)) return p.scoring ? "ft" : "ftmiss";
+    if (/^block/.test(ev)) return "block";
+    if (/^steal/.test(ev)) return "steal";
     if (p.shot) return p.scoring ? "made" : "miss";
     if (/rebound/.test(ev)) return "reb";
     if (/turnover|traveling/.test(ev)) return "to";
     if (/foul/.test(ev)) return "foul";
     if (/substitution/.test(ev)) return "sub";
-    if (/timeout/.test(ev)) return "time";
+    if (/time ?out/.test(ev)) return "time";
+    if (/^end /.test(ev)) return "end";
+    if (/jump ?ball/.test(ev)) return "jump";
     return "other";
   }
-  const KIND = { made: "+", miss: "×", ft: "FT", ftmiss: "FT", reb: "R", to: "TO", foul: "PF", sub: "⇄", time: "T", other: "·" };
-  /* The play in the plays' own words: the type label, made or missed, and
-     the second man's role only where the box score puts him on that
-     role's side. */
-  function playWords(p, d, k) {
-    const ev = String(p.event || "Play");
-    const kind = playKind(p), own = sideOf(d, p.team);
-    const second = (p.players || [])[1] || "", his = second ? k.sideOfName(second) : "";
-    const bits = [esc(ev)];
-    if (kind === "made" || kind === "miss") bits.push(`${kind === "made" ? "made" : "missed"} ${p.points_attempted || ""}`.trim());
-    if (kind === "ftmiss") bits.push("missed");
-    if (second && his) {
-      if (kind === "made" && his === own) bits.push(`assist ${esc(second)}`);
-      else if (kind === "miss" && his === other(own)) bits.push(`blocked by ${esc(second)}`);
-      else if (kind === "to" && his === other(own)) bits.push(`stolen by ${esc(second)}`);
-      else if (kind === "foul" && his === other(own)) bits.push(`drawn by ${esc(second)}`);
-    }
-    if (kind === "sub" && k.floor && (p.players || []).length === 2) {
-      const [a, b] = p.players;
-      bits.push(`${esc(k.floor.inFirst ? a : b)} in, ${esc(k.floor.inFirst ? b : a)} out`);
-    }
-    return bits.join(" · ");
+  //: The play's name on its card ("Three-pointer", "Rebound"); a kind with none is its own label.
+  const KIND_WORD = { miss: "Missed shot", ft: "Free throw", ftmiss: "Missed free throw", reb: "Rebound", to: "Turnover", foul: "Foul",
+                      sub: "Substitution", time: "Timeout", block: "Block", steal: "Steal", jump: "Jump ball" };
+  const kindWord = (p) => (playKind(p) === "made" ? (Number(p.points_attempted) === 3 ? "Three-pointer" : /dunk/i.test(labelOf(p)) ? "Dunk" : "Basket")
+    : KIND_WORD[playKind(p)] || labelOf(p) || "Play");
+  /* A shot's label as words: "Driving Floating Jump Shot" → "driving floating
+     jump shot", "Alley Oop Dunk Shot" → "alley-oop dunk", "Lay Up Shot" →
+     "layup"; a three says so ("3-point pull-up jump shot"). */
+  const SHOT_WORDS = [[/\blay up\b/g, "layup"], [/\balley oop\b/g, "alley-oop"], [/\bfade away\b/g, "fadeaway"], [/\bpullup\b/g, "pull-up"],
+                      [/\bstep back\b/g, "step-back"], [/^layup shot putback$/, "putback layup"], [/^layup driving reverse$/, "driving reverse layup"],
+                      [/^jump shot bank$/, "bank shot"], [/\b(layup|dunk) shot\b/g, "$1"], [/^tip shot$/, "tip-in"]];
+  function shotWords(p) {
+    let w = lower(labelOf(p)) || "shot";
+    SHOT_WORDS.forEach(([re, to]) => { w = w.replace(re, to); });
+    return `${Number(p.points_attempted) === 3 && !/three|3-point/.test(w) ? "3-point " : ""}${w}`;
   }
-  function playsCardHTML(d, league, k) {
+  /* WHO DID WHAT, IN OUR OWN WORDS (2026-11-21, when the page became every
+     sport's; football's is app.js footballLine). A row read as a label and
+     its facts ("Jump Shot · made 3 · assist Paul Reed"); it reads as a line
+     now ("Isaiah Joe makes a 3-point jump shot, assist Paul Reed"), from the
+     same facts: the play's type label, made or missed, and the second name's
+     part only where the box score puts that player on the side the part
+     belongs to. ESPN's own sentence is not in the file and is not drawn.
+     Returned as the line's pieces, a string or a name ({b}), so a row sets
+     the names in bold (`sayPlay`) and a card says them plain (`sayText`);
+     null for a moment in the game, which `momentOf` names. */
+  function said(p, d, k) {
+    const kind = playKind(p), ev = labelOf(p), own = sideOf(d, p.team);
+    if (kind === "end" || kind === "time") return null;
+    const club = p.team && !String(p.team).startsWith("espn:") ? (teamNameIn(LG, p.team) || "") : "";
+    const who = p.player ? { b: p.player } : club;
+    const second = (p.players || [])[1] || "", theirs = second ? k.sideOfName(second) : "";
+    const mate = second && theirs === own, foe = second && theirs === other(own);
+    if (kind === "made") return [who, ` makes a ${shotWords(p)}`, ...(mate ? [", assist ", { b: second }] : [])];
+    if (kind === "miss") return [who, ` misses a ${shotWords(p)}`, ...(foe ? [", blocked by ", { b: second }] : [])];
+    if (kind === "ft" || kind === "ftmiss") {
+      const n = /(\d+) of (\d+)/.exec(ev);
+      return [who, ` ${kind === "ft" ? "makes" : "misses"} ${n ? `free throw ${n[1]} of ${n[2]}` : "a free throw"}`];
+    }
+    if (kind === "reb") {
+      const which = /offensive/i.test(ev) ? "an offensive rebound" : /defensive/i.test(ev) ? "a defensive rebound" : "a rebound";
+      // A rebound no player is credited with is the team's (the row and the card name the side).
+      return p.player ? [who, ` grabs ${which}`] : ["Team rebound"];
+    }
+    if (kind === "to") {
+      const why = lower(ev.replace(/\s*turnover\s*/i, " ").replace(/\s+/g, " ").trim());
+      // A shot clock or an eight-second count is the team's turnover, nobody's.
+      if (!p.player) return [why ? `${why.charAt(0).toUpperCase()}${why.slice(1)} turnover` : "Turnover"];
+      return [who, " turns it over", why ? `: ${why}` : "", ...(foe ? [", stolen by ", { b: second }] : [])];
+    }
+    if (kind === "foul") return [`${ev.charAt(0)}${lower(ev.slice(1))}`, ...(who ? [" on ", who] : []), ...(foe ? [", drawn by ", { b: second }] : [])];
+    if (kind === "block") return [who, " blocks the shot"];
+    if (kind === "steal") return [who, " with the steal"];
+    if (kind === "sub") {
+      const [a, b] = p.players || [];
+      // Who came in is said only when every substitution in the game fits one order of the two names (onFloor).
+      if (k.floor && a && b) return [{ b: k.floor.inFirst ? a : b }, " in for ", { b: k.floor.inFirst ? b : a }];
+      return ["Substitution", ...(who ? [": ", who] : [])];
+    }
+    if (kind === "jump") {
+      const [a, b] = p.players || [];
+      return a && b ? ["Jump ball: ", { b: a }, " and ", { b: b }] : ["Jump ball"];
+    }
+    return [...(who ? [who, ": "] : []), lower(ev) || "play"];
+  }
+  //: A moment in the game, as a quiet line of its own: a period's end, a timeout.
+  function momentOf(p) {
+    const kind = playKind(p), ev = labelOf(p);
+    if (kind === "end") return `End of the ${periodWord(Number(p.period))}${regN(LG) === 4 && Number(p.period) <= 4 ? " quarter" : ""}`;
+    if (kind !== "time") return "";
+    const club = p.team && !String(p.team).startsWith("espn:") ? (teamNameIn(LG, p.team) || "") : "";
+    const what = /tv|official/i.test(ev) ? "Media timeout" : /full/i.test(ev) ? "Full timeout" : /short|20/i.test(ev) ? "Short timeout" : "Timeout";
+    return club && !/media/i.test(what) ? `${what}, ${club}` : what;
+  }
+  /* A row's words for the page's play list (app.js playsHTML `say`). */
+  function sayPlay(p, d, k) {
+    const m = momentOf(p);
+    if (m) return { moment: m };
+    const bits = said(p, d, k);
+    return bits ? { html: bits.map((x) => (x && x.b ? `<b>${esc(x.b)}</b>` : esc(x))).join("") } : null;
+  }
+  /* THE PLAY RIGHT NOW, on the card every sport's is drawn on (js/gamecast.js
+     playNow): the newest play in words, the score it left when it scored, and
+     the people in it with their game so far. The caption under the arena
+     said this, in a layout of its own. A run is said once, on the arena
+     above it (stageHTML). */
+  function nowHTML(d, league, k) {
+    const G = window.QBGamecast;
     const plays = d.plays || [];
-    const periods = [...new Set(plays.map((p) => Number(p.period)).filter(Boolean))].sort((a, b) => a - b);
-    const cur = periods[periods.length - 1] || 0;
-    const q = S.q == null ? cur : S.q;
-    const shown = plays.filter((p) => p && p.event && (q === 0 || Number(p.period) === q)).slice().reverse();
-    const live = (d.live || {}).state === "live";
-    const opts = [`<option value=""${S.q == null ? " selected" : ""}>${live ? "Now" : "Latest"}${cur ? ` — ${periodWord(cur)}` : ""}</option>`]
-      .concat(periods.map((p) => `<option value="${p}"${S.q === p ? " selected" : ""}>${periodWord(p)}${p <= regN(LG) && regN(LG) === 4 ? " quarter" : ""}</option>`))
-      .concat([`<option value="0"${S.q === 0 ? " selected" : ""}>Every play</option>`]).join("");
-    const rows = shown.map((p) => {
-      const kind = playKind(p), side = sideOf(d, p.team);
-      const who = p.player || (p.team && !String(p.team).startsWith("espn:") ? teamNameIn(league, p.team) : "") || "";
-      return `<div class="hc-play k-${kind}${p.scoring ? " scored" : ""}">
-          <span class="hc-pclock">${esc(p.clock || "")}</span>
-          <span class="hc-pmark">${side ? teamMarkIn(league, p.team, 22) : ""}</span>
-          <span class="hc-pkind">${esc(KIND[kind])}</span>
-          <span class="hc-pwhat">${who ? `<b>${esc(who)}</b>` : ""}<span>${playWords(p, d, k)}</span></span>
-          <span class="hc-psc${p.scoring && side ? ` ${side}` : ""}">${p.away_score != null ? `${esc(p.away_score)}–${esc(p.home_score)}` : ""}</span>${
-          typeof chatPlayBadge === "function" && d.event_id && !d.archive ? chatPlayBadge(`${league}_${d.event_id}`, p) : ""}</div>`;
-    }).join("");
-    return `<div class="card hc-card hc-plays">
-      <div class="hc-card-head"><b>${live ? "Live Play by Play" : "Play by Play"}</b>${live ? `<span class="hc-pill">${icon("dot", 8)} Live</span>` : ""}
-        <select class="hc-q" data-hc-q aria-label="Which quarter">${opts}</select></div>
-      <div class="hc-play-list">${rows || `<p class="rail-quiet">No plays yet${cur ? " this quarter" : ""}.</p>`}</div></div>`;
+    // The newest play that is one. What has happened since that is not (a
+    // timeout, a period's end, a substitution) is said under it, as
+    // football's card says a timeout under its last snap.
+    const aside = (r) => !!momentOf(r) || playKind(r) === "sub";
+    const p = plays.slice().reverse().find((r) => r && r.event && !aside(r));
+    const bits = p ? said(p, d, k) : null;
+    if (!bits || !G || !G.playNow) return "";
+    const text = (r) => momentOf(r) || (said(r, d, k) || []).map((x) => (x && x.b ? x.b : x)).join("");
+    const score = p.scoring && p.away_score != null && p.home_score != null
+      ? ` ${d.away_abbr || d.away} ${p.away_score}, ${d.home_abbr || d.home} ${p.home_score}.` : "";
+    return G.playNow(d, league, k.faces, { team: p.team && !String(p.team).startsWith("espn:") ? p.team : "",
+      when: [periodShort(p.period), p.clock].filter(Boolean).join(" "), kind: kindWord(p),
+      said: `${bits.map((x) => (x && x.b ? x.b : x)).join("")}.${score}`,
+      people: bits.filter((x) => x && x.b).map((x) => ({ name: x.b })),
+      since: plays.slice(plays.indexOf(p) + 1).filter((r) => r && r.event).map(text).filter(Boolean).slice(-4) });
   }
 
   /* ---------------- the stats ---------------- */
@@ -729,25 +757,6 @@
     }
     return out;
   }
-  function teamStatsHTML(d, league, k) {
-    const T = teamTotals(d), lv = d.live || {};
-    const rows = [["Points", lv.away_score != null ? String(lv.away_score) : "", lv.home_score != null ? String(lv.home_score) : ""]]
-      .concat(TEAM_ROWS.map(([label]) => [label, T.away[label], T.home[label]]))
-      .filter(([, a, h]) => a != null && a !== "" && h != null && h !== "");
-    if (rows.length <= 1) return `<p class="rail-quiet">The team stats fill in from the tip.</p>`;
-    const val = (s) => { const m = /^(\d+)-(\d+)$/.exec(s); return m ? (Number(m[2]) ? Number(m[1]) / Number(m[2]) : 0) : (num(s) || 0); };
-    // A shooting line reads as its rate, the makes and tries under it.
-    const shown = (s) => { const m = /^(\d+)-(\d+)$/.exec(s); return m ? `${Number(m[2]) ? Math.round((100 * Number(m[1])) / Number(m[2])) : 0}%<small>${m[1]}/${m[2]}</small>` : esc(s); };
-    return `<div class="hc-ts-head"><span>${teamMarkIn(league, d.away, 22)} <b>${esc(d.away_abbr || d.away)}</b></span><span><b>${esc(d.home_abbr || d.home)}</b> ${teamMarkIn(league, d.home, 22)}</span></div>
-      ${rows.map(([label, a, h]) => {
-        const x = val(a), y = val(h), top = Math.max(x, y) || 1;
-        return `<div class="hc-ts"><b class="hc-ts-v">${shown(a)}</b>
-          <span class="hc-bar away"><i style="width:${Math.round((x / top) * 100)}%"></i></span>
-          <span class="hc-ts-k">${esc(label)}</span>
-          <span class="hc-bar home"><i style="width:${Math.round((y / top) * 100)}%"></i></span>
-          <b class="hc-ts-v r">${shown(h)}</b></div>`;
-      }).join("")}`;
-  }
   /* Every shot on a flat court, the away side at the left basket, and each
      side's makes by the league's zones. */
   function flatCourtHTML(d, league, k) {
@@ -778,69 +787,9 @@
       <div class="hc-zones"><div>${teamMarkIn(league, d.away, 18)} <b>${esc(d.away_abbr || d.away)}</b>${zones("away") || `<p class="rail-quiet">No shots yet.</p>`}</div>
         <div>${teamMarkIn(league, d.home, 18)} <b>${esc(d.home_abbr || d.home)}</b>${zones("home") || `<p class="rail-quiet">No shots yet.</p>`}</div></div>`;
   }
-  function linescoreHTML(d) {
-    const ls = d.linescores || {};
-    const A = ls[d.away] || [], Hh = ls[d.home] || [];
-    const n = Math.max(A.length, Hh.length);
-    if (!n) return "";
-    const head = Array.from({ length: n }, (_, i) => `<th scope="col">${esc(periodShort(i + 1))}</th>`).join("");
-    const row = (abbr, xs, total) => `<tr><th scope="row">${esc(abbr)}</th>${Array.from({ length: n }, (_, i) =>
-      `<td>${xs[i] == null ? "" : esc(xs[i])}</td>`).join("")}<td class="t">${total == null ? "" : esc(total)}</td></tr>`;
-    const lv = d.live || {};
-    return `<table class="hc-ls"><thead><tr><th></th>${head}<th scope="col">T</th></tr></thead>
-      <tbody>${row(d.away_abbr || d.away, A, lv.away_score)}${row(d.home_abbr || d.home, Hh, lv.home_score)}</tbody></table>`;
-  }
-  function flowTabHTML(d, league, k) {
-    const L = k.leads, dr = k.droughts;
-    const line = (ic, text) => `<div class="hc-fact">${icon(ic, 14)}<span>${text}</span></div>`;
-    const facts = [
-      line("rising", `<b>${L.changes}</b> lead change${L.changes === 1 ? "" : "s"}, <b>${L.ties}</b> tie${L.ties === 1 ? "" : "s"}`),
-      L.big.away ? line("bolt", `${esc(d.away_abbr || d.away)}'s largest lead: <b>${L.big.away}</b>`) : "",
-      L.big.home ? line("bolt", `${esc(d.home_abbr || d.home)}'s largest lead: <b>${L.big.home}</b>`) : "",
-      L.best ? line("hot", `Longest run: <b>${esc(d[L.best.side])} ${L.best.pts}–0</b>`) : "",
-      L.run ? line("hot", `Right now: <b>${esc(d[L.run.side])} on a ${L.run.pts}–0 run</b>`) : "",
-      ...["away", "home"].map((ha) => ((d.live || {}).state === "live" && dr[ha] >= 180
-        ? line("cold", `${esc(d[ha])}: no field goal in <b>${mmss(dr[ha])}</b>`) : "")),
-    ].filter(Boolean).join("");
-    return `${linescoreHTML(d)}<div class="hc-facts">${facts}</div>`;
-  }
-  function statsCardHTML(d, league, k) {
-    const tab = S.stats;
-    const body = tab === "players" ? (window.QBGamecast ? window.QBGamecast.panel("box", { d, league, faces: k.faces }) : "")
-      : tab === "shots" ? flatCourtHTML(d, league, k)
-      : tab === "flow" ? flowTabHTML(d, league, k)
-      : teamStatsHTML(d, league, k);
-    const tabs = [["team", "Team Stats"], ["players", "Player Stats"], ["shots", "Shot Chart"], ["flow", "Game Flow"]]
-      .map(([key, label]) => `<button type="button" class="hc-tab${tab === key ? " on" : ""}" data-hc-stats="${key}">${label}</button>`).join("");
-    return `<div class="card hc-card hc-stats" style="--ca:${k.colors.away};--ch:${k.colors.home}">
-      <div class="hc-tabs" role="tablist">${tabs}</div><div class="hc-card-body">${body}</div></div>`;
-  }
-
-  /* ---------------- the odds ---------------- */
-  const signed = (n) => (n > 0 ? `+${n}` : typeof trueMinus === "function" ? trueMinus(String(n)) : String(n));
-  const price = (v) => (v == null || v === "" || !Number(v) ? "" : (typeof oddsTxt === "function" ? oddsTxt(v) : String(v)));
-  function gameOddsHTML(d, league, k) {
-    const g = k.boardGame || {};
-    const sp = num(g.spread), tot = num(g.total);
-    const rows = [];
-    if (sp != null) rows.push(["Spread", `${esc(d.away_abbr || d.away)} ${esc(signed(-sp))}`, `${esc(d.home_abbr || d.home)} ${esc(signed(sp))}`]);
-    if (num(g.away_ml) || num(g.home_ml)) rows.push(["Moneyline", `${esc(d.away_abbr || d.away)} ${esc(price(g.away_ml) || "—")}`, `${esc(d.home_abbr || d.home)} ${esc(price(g.home_ml) || "—")}`]);
-    if (tot != null) rows.push(["Total", `Over ${esc(tot)}`, `Under ${esc(tot)}`]);
-    const lines = rows.length ? `<div class="hc-lines">${rows.map(([k2, a, h]) =>
-      `<div class="hc-line-row"><span class="hc-line-k">${k2}</span><span class="hc-line-v">${a}</span><span class="hc-line-v">${h}</span></div>`).join("")}</div>
-      <p class="mini hc-note">The board's best price across the books, from its last pull before the tip.</p>`
-      : `<p class="rail-quiet">${k.boardGame ? "No game lines on the board for this game." : `Open the ${esc(LEAGUE_LABEL[league] || league.toUpperCase())} board for its lines on this game.`}</p>`;
-    const wp = (d.live || {}).win_prob;
-    let win = "";
-    if (wp && wp.home_win_prob != null) {
-      const h = Number(wp.home_win_prob), a = wp.away_win_prob != null ? Number(wp.away_win_prob) : 1 - h;
-      win = `<div class="hc-win"><span class="hc-line-k">Win chance (our model)</span>
-        <div class="hc-winbar"><i class="away" style="width:${Math.round(a * 100)}%"></i><i class="home" style="width:${Math.round(h * 100)}%"></i></div>
-        <div class="hc-win-v"><span>${esc(d.away_abbr || d.away)} <b>${Math.round(a * 100)}%</b></span><span><b>${Math.round(h * 100)}%</b> ${esc(d.home_abbr || d.home)}</span></div></div>`;
-    }
-    const track = k.boardGame && k.boardGame.line_track && typeof lineTrackHTML === "function" ? lineTrackHTML(k.boardGame) : "";
-    return `${lines}${win}${track}`;
-  }
+  /* The trends, read off the plays: the pace against the board's total, each
+     side's shooting, a run or a drought on now, how often the lead changed,
+     the longest run of the game. */
   function trendsHTML(d, league, k) {
     const out = [];
     const lv = d.live || {}, plays = d.plays || [];
@@ -858,25 +807,31 @@
     if (fa != null && fh != null) out.push(["target", `Shooting: ${esc(d.away_abbr || d.away)} <b>${fa}%</b>, ${esc(d.home_abbr || d.home)} <b>${fh}%</b> from the floor.`]);
     const ta = pct(T.away["3-pointers"]), th = pct(T.home["3-pointers"]);
     if (ta != null && th != null) out.push(["target", `From three: ${esc(d.away_abbr || d.away)} <b>${ta}%</b>, ${esc(d.home_abbr || d.home)} <b>${th}%</b>.`]);
-    if (k.leads.run) out.push(["hot", `${esc(d[k.leads.run.side])} on a <b>${k.leads.run.pts}–0</b> run.`]);
+    if (k.leads.run && lv.state === "live") out.push(["hot", `${esc(runSide(d, k.leads.run))} on ${anRun(k.leads.run.pts)} <b>${k.leads.run.pts}–0</b> run.`]);
     ["away", "home"].forEach((ha) => { if (lv.state === "live" && k.droughts[ha] >= 180) out.push(["cold", `${esc(d[ha])}: no field goal in <b>${mmss(k.droughts[ha])}</b>.`]); });
-    if (k.leads.changes || k.leads.ties) out.push(["rising", `<b>${k.leads.changes}</b> lead changes and <b>${k.leads.ties}</b> ties so far.`]);
-    return out.length ? `<div class="hc-facts">${out.map(([ic, text]) => `<div class="hc-fact">${icon(ic, 14)}<span>${text}</span></div>`).join("")}</div>`
-      : `<p class="rail-quiet">The trends read themselves from the plays once the game is a few minutes old.</p>`;
+    if (k.leads.changes || k.leads.ties) out.push(["rising", `<b>${k.leads.changes}</b> lead change${k.leads.changes === 1 ? "" : "s"} and <b>${k.leads.ties}</b> tie${k.leads.ties === 1 ? "" : "s"}${lv.state === "final" ? "" : " so far"}.`]);
+    if (k.leads.best) out.push(["bolt", `Longest run: <b>${esc(d[k.leads.best.side])} ${k.leads.best.pts}–0</b>.`]);
+    return out.length ? `<div class="hc-facts">${out.map(([ic, text]) => `<div class="hc-fact">${icon(ic, 14)}<span>${text}</span></div>`).join("")}</div>` : "";
   }
-  function oddsCardHTML(d, league, k) {
-    const tab = S.odds;
-    const body = tab === "props" ? (typeof pbpPropsHTML === "function" ? pbpPropsHTML(d, league) : "")
-      : tab === "trends" ? trendsHTML(d, league, k) : gameOddsHTML(d, league, k);
-    const tabs = [["odds", "Game Odds"], ["props", "Live Props"], ["trends", "Trends"]]
-      .map(([key, label]) => `<button type="button" class="hc-tab${tab === key ? " on" : ""}" data-hc-odds="${key}">${label}</button>`).join("");
-    const door = k.boardGame && typeof gameId === "function"
-      ? `<button type="button" class="btn ghost hc-door" id="pbp-game-door" data-gid="${escapeAttr(gameId(k.boardGame))}">Full game page — lines, props, long shots →</button>` : "";
-    return `<div class="card hc-card hc-odds" style="--ca:${k.colors.away};--ch:${k.colors.home}">
-      <div class="hc-tabs" role="tablist">${tabs}</div><div class="hc-card-body">${body}</div>${door}</div>`;
+  /* What basketball adds to the page's Stats room, after the box scores: every
+     shot from above with each side's makes by zone, and the trends. The cards
+     are the page's own (detail.js gpCardHTML). */
+  function statsExtraHTML(d, league, k) {
+    const card = (title, sub, body) => gpCardHTML(title, sub, body, "hc-card", `--ca:${k.colors.away};--ch:${k.colors.home}`);
+    const shots = k.shots.some((s) => courtSpot(s));
+    return `${card("Shot chart", "every shot, from above", shots ? flatCourtHTML(d, league, k) : "")}${card("Trends", "", trendsHTML(d, league, k))}`;
   }
 
-  /* ---------------- the page ---------------- */
+  /* ---------------- the parts of the page ----------------
+     The page is every sport's now (detail.js gpPageHTML, 2026-11-21; Ethan:
+     "all sports in all aspects should be trying to match nfl and that should
+     be automatic when we do any visual changes"): the bar that stays when you
+     scroll, the score on the clubs' colours, the line score, the rooms. This
+     file drew a page of its own beside it, and nothing done there reached
+     it. It brings what is basketball's (gpKit): the arena under the score,
+     the newest play in words, the plays period by period in its own words,
+     the shot chart and the trends, and on the score the ball and the scorer's
+     table. Before the tip there is no arena, as there is no field. */
   function facts(d, league, ctx) {
     const sideOfName = rosterSide(d);
     const allRows = ["away", "home"].flatMap((ha) => boxOf(d, d[ha]).rows);
@@ -889,17 +844,33 @@
       faces: (ctx && ctx.faces) || {}, boardGame: (ctx && ctx.boardGame) || null,
     };
   }
-  function pageHTML(d, league, ctx) {
+  function parts(ctx) {
+    const d = ctx.d, league = String(ctx.league || d.league || "");
+    LG = league;
+    if (S.game !== String(d.event_id)) { S.game = String(d.event_id); S.run = null; }
     const k = facts(d, league, ctx);
-    return `<div class="hc" data-league="${escapeAttr(league)}">
-      ${scoreboardHTML(d, league, k)}${typeof gpLineHTML === "function" ? gpLineHTML(d, league, d.live || {}) : ""}${d.archive ? "" : `<div class="gch-entry-slot"></div>`}${stageHTML(d, league, k)}${(ctx && ctx.callit) || ""}
-      <div class="hc-row">${playsCardHTML(d, league, k)}${statsCardHTML(d, league, k)}${oddsCardHTML(d, league, k)}</div></div>`;
+    const lv = d.live || {}, sit = d.situation || {};
+    const live = lv.state === "live", on = live || lv.state === "final";
+    return {
+      stage: on ? stageHTML(d, league, k) : "",
+      // The play right now, the ball and the scorer's table are a game being played's.
+      now: live ? nowHTML(d, league, k) : "",
+      say: (p) => sayPlay(p, d, k),
+      statsExtra: on ? statsExtraHTML(d, league, k) : "",
+      ball: live ? (k.ballSide || "") : "", ballIcon: "basketball",
+      ballTitle: sit.possession ? "Ball" : "Ball — from the last play",
+      marks: live ? { away: marksHTML(d, "away"), home: marksHTML(d, "home") } : null,
+      wire,
+    };
   }
+  /* The arena's own buttons (the views, the shot chart's sides, Replay, full
+     screen); a choice draws the page again (detail.js renderPbpPage), which
+     keeps the picture already painted. Bound once to the page's host. */
   function wire(host) {
-    if (host.dataset.hcWired) return;
+    if (!host || host.dataset.hcWired) return;
     host.dataset.hcWired = "1";
     host.addEventListener("click", (e) => {
-      const t = e.target.closest("[data-hc-view],[data-hc-stats],[data-hc-odds],[data-hc-shots],[data-hc-full],[data-hc-replay]");
+      const t = e.target.closest("[data-hc-view],[data-hc-shots],[data-hc-full],[data-hc-replay]");
       if (!t || !host.contains(t)) return;
       if (t.hasAttribute("data-hc-full")) {
         const st = host.querySelector(".hc-stage");
@@ -908,45 +879,15 @@
       }
       if (t.hasAttribute("data-hc-replay")) S.replay = true;
       if (t.dataset.hcView) S.view = t.dataset.hcView;
-      if (t.dataset.hcStats) S.stats = t.dataset.hcStats;
-      if (t.dataset.hcOdds) S.odds = t.dataset.hcOdds;
       if (t.dataset.hcShots) S.shots = t.dataset.hcShots;
-      if (S.ctx) render(host, S.ctx, true);
+      if (typeof renderPbpPage === "function") renderPbpPage();
     });
-    host.addEventListener("change", (e) => {
-      const t = e.target.closest("[data-hc-q]");
-      if (!t) return;
-      S.q = t.value === "" ? null : Number(t.value);
-      if (S.ctx) render(host, S.ctx, true);
-    });
-  }
-  /* The whole page into `host`: the strip of the night's games and the
-     way back are app.js's, wired by its own `wire`. The redraw that follows
-     every refresh keeps the arena's picture as it was (a new one paints
-     black until it decodes, a blink every few seconds) and, unless the
-     reader just chose something (`chose`), where the plays and the pane
-     were scrolled to. */
-  function render(host, ctx, chose) {
-    if (!host || !ctx || !ctx.d) return false;
-    LG = String(ctx.league || ctx.d.league || "");
-    if (!S.ctx || !S.ctx.d || S.ctx.d.event_id !== ctx.d.event_id) { S.run = null; S.q = null; }
-    const same = !!(S.ctx && S.ctx.d && S.ctx.d.event_id === ctx.d.event_id);
-    S.ctx = ctx;
-    const pic = same ? host.querySelector(".hc-frame > picture") : null;
-    const scrolled = same && !chose ? [".hc-play-list", ".hc-pane"].map((sel) => [sel, (host.querySelector(sel) || {}).scrollTop || 0]) : [];
-    host.innerHTML = `${ctx.stripHTML || ""}${pageHTML(ctx.d, ctx.league, ctx)}${ctx.back || ""}`;
-    const fresh = pic ? host.querySelector(".hc-frame > picture") : null;
-    if (fresh) fresh.replaceWith(pic);
-    scrolled.forEach(([sel, top]) => { const el = host.querySelector(sel); if (el && top) el.scrollTop = top; });
-    wire(host);
-    if (typeof ctx.wire === "function") ctx.wire();
-    return true;
   }
 
   window.QBHoops = {
-    render, HOOPS,
+    parts,
     // The readers, for the tests and for Ask.
     ballAfter, flow, leads, droughts, onFloor, shotsOf, zoneOf, courtSpot, artSpot, toArt, homography,
-    elapsed, clockSecs, colours, teamTotals, playWords, playKind,
+    elapsed, clockSecs, colours, teamTotals, playKind, sayPlay, said, momentOf,
   };
 })();

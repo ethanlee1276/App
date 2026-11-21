@@ -16,17 +16,22 @@ only where ESPN carries one. The box score marks its starters. Nothing is
 written that ESPN wrote as a sentence. hoopsprobe.py prints, on the box,
 what a real game carries.
 
-THE PAGE (web/js/hoopscast.js + css/hoopscast.css, loaded by js/gamecast.js
-`hoops` the first time a basketball game opens): the scoreboard, Ethan's
-arena with Live / Shot Chart / Player Tracker / Game Flow, then the plays,
-the stats and the odds. What it works out from the plays is pinned here —
-whose ball it is (only where a play settles it), runs, leads, droughts, the
-five on the floor (only when one order of ESPN's two names holds for every
-substitution), the league's shot zones, a name's role (only when the box
-puts him on that role's side) — and the court on the picture: the four
-corners land where they were read off the render, each side's shots on its
-own half. The redraw every twelve seconds keeps the decoded picture and the
-scroll of the plays.
+THE PAGE. Until 21 November 2026 web/js/hoopscast.js drew a whole page of its
+own: its scoreboard, the arena, then the plays, the stats and the odds. Every
+sport's page is the one page now (detail.js gpPageHTML; Ethan: "all sports in
+all aspects should be trying to match nfl and that should be automatic when we
+do any visual changes"), and the file hands it basketball's parts (`parts`):
+Ethan's arena with Live / Shot Chart / Player Tracker / Game Flow where
+football's field is, the newest play in words for the shared card, each play's
+line for the period cards, the scorer's table under the score, and the shot
+chart and the trends for the Stats room. What it works out from the plays is
+pinned here — whose ball it is (only where a play settles it), runs, leads,
+droughts, the five on the floor (only when one order of ESPN's two names holds
+for every substitution), the league's shot zones, a name's role (only when the
+box puts that player on that role's side) — and the court on the picture: the
+four corners land where they were read off the render, each side's shots on
+its own half. A redraw keeps the decoded picture and a scrolled view's place
+(the page's own rule now: gpHoldTake, gpHoldGive).
 
 Offline throughout; the browser half is opt-in (QB_BROWSER_TESTS=1) and
 aborts every request that leaves the page's own server.
@@ -48,7 +53,7 @@ sys.path.insert(0, str(ROOT))
 import hoopsprobe as P                                       # noqa: E402
 import livescore_build as B                                  # noqa: E402
 from engine.sources import espnplays as E                    # noqa: E402
-from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
+from _app import app_js, page_builders  # noqa: E402  (app.js and its rooms; the game page's own card builders)
 
 TEXT = "ESPN's own sentence about the play"
 SHORT = "ESPN's shorter sentence"
@@ -283,12 +288,15 @@ STUBS = """
 
 def _node(js, gc=False):
     """`gc` loads js/gamecast.js first, as the page has it: the shared run
-    (QBGamecast.track) that moves the ball. Without it every mark is drawn
-    where it is, which is what a reader who asked for less motion sees."""
+    (QBGamecast.track) that moves the ball and the card the newest play is
+    drawn on. Without it every mark is drawn where it is, which is what a
+    reader who asked for less motion sees. The page's own boxes (detail.js)
+    are the real ones (_app.page_builders)."""
     node = shutil.which("node")
     if not node:
         return None
-    prog = f"{STUBS}\n{GC if gc else ''}\n{HC}\nconsole.log(JSON.stringify((() => {{ const Q = window.QBHoops; {js} }})()));"
+    prog = (f"{STUBS}\n{page_builders()}\n{GC if gc else ''}\n{HC}\n"
+            f"console.log(JSON.stringify((() => {{ const Q = window.QBHoops; {js} }})()));")
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog)
         path = fh.name
@@ -300,14 +308,23 @@ def _node(js, gc=False):
     return json.loads(out.stdout.strip())
 
 
-def _page(doc, board=None, view="live", gc=False):
-    """The page `render` writes, through a stand-in host."""
-    return _node(f"""
-      const host = {{ innerHTML: "", dataset: {{}}, querySelector: () => null, addEventListener: () => {{}} }};
-      const ctx = {{ d: {json.dumps(doc)}, league: "nba", stripHTML: "<nav>strip</nav>", back: "<b>back</b>",
-                    boardGame: {json.dumps(board)}, faces: {{}}, wire: () => {{}} }};
-      Q.render(host, ctx);
-      return host.innerHTML;""", gc=gc)
+#: What the sport hands the one page, as text: each part, and its words for every play.
+PARTS = """
+  const partsOf = (ctx) => {
+    const P = Q.parts(ctx), out = {};
+    for (const [key, v] of Object.entries(P)) if (typeof v !== "function") out[key] = v;
+    out.says = (ctx.d.plays || []).map((p) => P.say(p));
+    out.wire = typeof P.wire;
+    return out;
+  };
+"""
+
+
+def _parts(doc, board=None, gc=True, league="nba"):
+    """Basketball's parts of the page (QBHoops.parts), as detail.js gpKit asks for them."""
+    return _node(f"""{PARTS}
+      return partsOf({{ d: {json.dumps(doc)}, league: "{league}", lv: {json.dumps(doc.get("live") or {})},
+                       boardGame: {json.dumps(board)}, faces: {{}} }});""", gc=gc)
 
 
 def test_the_ball_is_somebodys_only_where_a_play_settles_it():
@@ -408,7 +425,9 @@ def test_the_leagues_zones_and_each_sides_half_of_the_court():
     assert got["nowhere"] == [None, None]
 
 
-def test_a_play_reads_as_its_label_the_names_and_a_role_only_the_box_backs():
+def test_a_play_reads_as_a_line_and_a_role_only_the_box_backs():
+    """Who did what, in our own words (21 November 2026): the label and its facts were a row of pieces ("Jump Shot
+    · missed 2 · blocked by Al Horford"); the same facts are a line now, the names in bold on a row."""
     doc = _deep()
     stray = dict(doc["plays"][0], id="x1", players=["LeBron James", "Jayson Tatum"])        # an "assist" from the other side
     ghost = dict(doc["plays"][0], id="x2", players=["LeBron James", "Somebody Else"])        # a name the box does not list
@@ -418,19 +437,22 @@ def test_a_play_reads_as_its_label_the_names_and_a_role_only_the_box_backs():
                                          "Jayson Tatum": "home", "Al Horford": "home", "Jrue Holiday": "home" }})[n] || "",
                   floor: Q.onFloor(d) }};
       const P = d.plays;
-      return [P[0], P[3], P[6], P[12], P[2], P[13], P[14], {json.dumps(stray)}, {json.dumps(ghost)}].map((p) => Q.playWords(p, d, k))
+      const line = (p) => {{ const s = Q.sayPlay(p, d, k); return !s ? null : s.moment ? `[${{s.moment}}]` : s.html; }};
+      return [P[0], P[3], P[6], P[12], P[2], P[13], P[14], {json.dumps(stray)}, {json.dumps(ghost)}, P[8], P[16]].map(line)
         .concat([Q.playKind(P[0]), Q.playKind(P[3]), Q.playKind(P[13]), Q.playKind(P[14]), Q.playKind(P[16])]);""")
     if got is None:
         return
-    assert got[0] == "Driving Layup Shot · made 2 · assist Austin Reaves"
-    assert got[1] == "Jump Shot · missed 2 · blocked by Al Horford"
-    assert got[2] == "Lost Ball Turnover · stolen by Jrue Holiday"
-    assert got[3] == "Shooting Foul · drawn by Anthony Davis"
-    assert got[4] == "Substitution · Payton Pritchard in, Derrick White out"
-    assert got[5] == "Free Throw - 1 of 2" and got[6] == "Free Throw - 2 of 2 · missed"
-    assert got[7] == "Driving Layup Shot · made 2", "a teammate's assist, never the other side's"
-    assert got[8] == "Driving Layup Shot · made 2", "no role for a name the box does not list"
-    assert got[9:] == ["made", "miss", "ft", "ftmiss", "time"]
+    assert got[0] == "<b>LeBron James</b> makes a driving layup, assist <b>Austin Reaves</b>"
+    assert got[1] == "<b>Anthony Davis</b> misses a jump shot, blocked by <b>Al Horford</b>"
+    assert got[2] == "<b>Austin Reaves</b> turns it over: lost ball, stolen by <b>Jrue Holiday</b>"
+    assert got[3] == "Shooting foul on <b>Jayson Tatum</b>, drawn by <b>Anthony Davis</b>"
+    assert got[4] == "<b>Payton Pritchard</b> in for <b>Derrick White</b>"
+    assert got[5] == "<b>Anthony Davis</b> makes free throw 1 of 2" and got[6] == "<b>Anthony Davis</b> misses free throw 2 of 2"
+    assert got[7] == "<b>LeBron James</b> makes a driving layup", "a teammate's assist, never the other side's"
+    assert got[8] == "<b>LeBron James</b> makes a driving layup", "no role for a name the box does not list"
+    assert got[9:11] == ["[End of the 1st quarter]", "[Timeout, Celtics]"], "a moment in the game is named, not a play"
+    assert got[11:] == ["made", "miss", "ft", "ftmiss", "time"]
+    assert TEXT not in json.dumps(got), "ESPN's sentence is never the line"
 
 
 def test_each_side_wears_a_colour_that_reads_on_the_dark_floor():
@@ -444,83 +466,103 @@ def test_each_side_wears_a_colour_that_reads_on_the_dark_floor():
     assert got[2] == {"home": "var(--text-mute)", "away": "var(--brand)"}, "a club off the table takes the site's own"
 
 
-# --- the page: what it draws -------------------------------------------------------
-def test_the_page_draws_the_scoreboard_the_arena_and_the_three_panels():
-    board = {"home": "BOS", "away": "LAL", "spread": -4.5, "total": 227.5, "home_ml": -180, "away_ml": 150}
-    html = _page(_deep(), board, gc=True)
-    if html is None:
+# --- the parts it hands the page -----------------------------------------------------
+def test_the_parts_are_the_arena_the_newest_play_the_scorers_table_and_two_stats_cards():
+    """One page for every sport (detail.js gpPageHTML, 21 November 2026). This file drew a page of its own: a
+    scoreboard, an arena and three cards with tabs. It hands the page its parts now, and nothing else."""
+    P = _parts(_deep(), {"home": "BOS", "away": "LAL", "spread": -4.5, "total": 227.5})
+    if P is None:
         return
-    assert html.startswith("<nav>strip</nav>") and html.endswith("<b>back</b>"), "app.js's strip and way back"
-    for part in ('class="card hc-score"', 'class="card hc-stage v-live"', 'class="card hc-card hc-plays"',
-                 'class="card hc-card hc-stats"', 'class="card hc-card hc-odds"'):
-        assert part in html, part
+    assert set(P) == {"stage", "now", "statsExtra", "ball", "ballIcon", "ballTitle", "marks", "says", "wire"}, sorted(P)
+    stage = P["stage"]
+    # The arena, in the page's own box (gpStageHTML), in the clubs' colours.
+    assert stage.startswith('<div class="card gp-stage hc-stage v-live" style="--ca:#fdb927;--ch:#007a33">'), stage[:120]
     for key, label in (("live", "Live"), ("shots", "Shot Chart"), ("tracker", "Player Tracker"), ("flow", "Game Flow")):
-        assert f'data-hc-view="{key}"' in html and f'aria-label="{label}"' in html, key
-    assert 'data-hc-full aria-label="Full screen"' in html
-    assert "img/arena/nba-arena.webp 1280w" in html and "img/arena/nba-arena@640.webp 640w" in html
-    assert '<div class="hc-venue"><b>TD Garden</b><span>Boston, MA</span></div>' in html
-    # The scorer's table, ESPN's block: LAL in the bonus, the timeouts, the ball with LAL.
-    away, home = html.split('<div class="hc-side home">')[0], html.split('<div class="hc-side home">')[1].split('class="hc-mid"')[0]
-    assert '<span class="hc-bonus">Bonus</span>' in away and "hc-bonus" not in html.split('<div class="hc-side home">')[1].split("hc-stage")[0]
-    assert "Timeouts <b>3</b>" in away and "Fouls <b>2</b>" in away
-    assert 'class="hc-ball"' in away and 'title="Ball"' in away, "ESPN's possession wins over the plays' guess"
+        assert f'data-hc-view="{key}"' in stage and f'aria-label="{label}"' in stage, key
+    assert 'data-hc-full aria-label="Full screen"' in stage
+    assert "img/arena/nba-arena.webp 1280w" in stage and "img/arena/nba-arena@640.webp 640w" in stage
+    assert '<div class="hc-venue"><b>TD Garden</b><span>Boston, MA</span></div>' in stage
     # The last shot flies to the rim and the arrow points the ball's way.
     # The ball runs the last shots on the shared timeline (QBGamecast.track,
     # 2026-10-15): a translate along the points, not a flight of its own.
-    assert 'class="hc-flight' in html and '<animateTransform attributeName="transform" type="translate"' in html and 'class="hc-arrow"' in html
-    # The plays: the quarter being played, newest first; the choices.
-    plays = re.findall(r'<div class="hc-play k-', html)
-    assert len(plays) == 8, len(plays)
-    assert html.index("Timeout") < html.index("Step Back Jump Shot"), "newest first"
-    assert ">Now — 2nd</option>" in html and ">1st quarter</option>" in html and ">Every play</option>" in html
-    # The stats: the box added up; the odds: the board's lines and our win chance.
-    assert 'class="hc-ts-k">Field goals</span>' in html and "<small>" in html
-    for line in ("Spread", "Moneyline", "Total"):
-        assert f'<span class="hc-line-k">{line}</span>' in html, line
-    assert "LAL +4.5" in html and "BOS -4.5" in html and "Over 227.5" in html
-    assert "Win chance (our model)" in html and "BOS <b>" not in html.split("hc-win-v")[0][-5:]
-    assert 'id="pbp-game-door" data-gid="LAL@BOS"' in html
-    assert TEXT not in html, "ESPN's sentences are never drawn"
-    assert "onclick" not in html and "onerror" not in html
+    assert 'class="hc-flight' in stage and '<animateTransform attributeName="transform" type="translate"' in stage and 'class="hc-arrow"' in stage
+    assert "LAL on an 8–0 run" in stage, "said once, on the arena"
+    # The scorer's table, ESPN's block, under each side's record on the page's score: LAL in the bonus.
+    assert P["marks"] == {
+        "away": '<span class="hc-marks-row"><span class="hc-bonus">Bonus</span><span class="hc-k">Fouls <b>2</b></span>'
+                '<span class="hc-k">Timeouts <b>3</b></span></span>',
+        "home": '<span class="hc-marks-row"><span class="hc-k">Fouls <b>5</b></span><span class="hc-k">Timeouts <b>4</b></span></span>'}
+    assert (P["ball"], P["ballIcon"], P["ballTitle"]) == ("away", "basketball", "Ball"), "ESPN's possession wins over the plays' guess"
+    # The newest play, on the card every sport's is drawn on (gamecast.js playNowHTML): the last real play,
+    # who was in it with their game so far, and what has happened since.
+    now = P["now"]
+    assert now.startswith('<div class="card gc-dv" data-gc-dv>')
+    assert '<div class="gc-k">Last play · Q2 5:38</div><b>Rebound</b>' in now
+    assert '<p class="gc-dv-said">Al Horford grabs a defensive rebound.</p>' in now
+    assert now.count('class="gc-chip"') == 1 and "<b>Al Horford</b>" in now and "8 PTS, 3 REB, 2 AST" in now
+    assert '<div class="gc-dv-before"><span>Timeout, Celtics</span></div>' in now, "a timeout is said under the play, not as it"
+    assert "run" not in now, "the run is the arena's to say"
+    # Every play in words, for the period cards and the list beside the page (app.js playsHTML `say`).
+    assert len(P["says"]) == 17 and P["says"][-1] == {"moment": "Timeout, Celtics"}
+    assert P["says"][1] == {"html": "<b>Jayson Tatum</b> makes a 3-point jump shot, assist <b>Derrick White</b>"}
+    # What only basketball has, for the Stats room: two of the page's own cards (gpCardHTML).
+    extra = P["statsExtra"]
+    assert extra.count('<div class="card gp-card hc-card" style="--ca:#fdb927;--ch:#007a33">') == 2
+    assert "<b>Shot chart</b><span>every shot, from above</span>" in extra and "<b>Trends</b>" in extra
+    assert 'class="hc-fcourt"' in extra and "At the rim" in extra and "Corner 3" in extra
+    assert "On pace for" in extra and "BOS: no field goal in <b>8:50</b>" in extra
+    # And none of the page it used to draw: the score, the play list, the team stats, the odds, the chat's slot.
+    whole = json.dumps(P)
+    for gone in ("hc-score", "hc-plays", "hc-stats", "hc-odds", "hc-ts-k", "hc-line-k", "gch-entry-slot", "pbp-game-door",
+                 "Win chance (our model)", "<nav>", "pbp-foot"):
+        assert gone not in whole, gone
+    assert TEXT not in whole, "ESPN's sentences are never drawn"
+    assert "onclick" not in whole and "onerror" not in whole
+    assert P["wire"] == "function"
 
 
 def test_what_espn_does_not_carry_draws_nothing_and_a_final_holds_no_ball():
     bare = _deep(situation=False)
     for key in ("venue", "linescores"):
         bare.pop(key)
-    html = _page(bare)
-    if html is None:
+    P = _parts(bare)
+    if P is None:
         return
-    for gone in ("hc-bonus", "Timeouts", "Fouls", "hc-venue"):
-        assert gone not in html, gone
-    assert 'class="hc-ball" title="Ball — from the last play"' in html, "the plays' own read, said as such"
-    final = _page(_deep(state="final"))
-    assert "hc-arrow" not in final and 'class="hc-ball"' not in final and "hc-run" not in final, "nobody's ball after the final"
-    assert "<b>Play by Play</b>" in final and ">Latest — 2nd</option>" in final and "hc-pill" not in final
+    assert P["marks"] == {"away": "", "home": ""}, "no scorer's table, no line of it under the score"
+    assert "hc-venue" not in P["stage"]
+    assert (P["ball"], P["ballTitle"]) == ("home", "Ball — from the last play"), "the plays' own read, said as such"
+    final = _parts(_deep(state="final"))
+    assert final["ball"] == "" and final["marks"] is None and final["now"] == "", "nobody's ball, bonus or last play after the final"
+    assert "hc-arrow" not in final["stage"] and "hc-run" not in final["stage"]
+    # A final opens on its shot chart, with no Live view to choose (tests/test_a_finished_game_is_its_record.py).
+    assert 'class="card gp-stage hc-stage v-shots"' in final["stage"] and 'data-hc-view="live"' not in final["stage"]
+    assert "<b>Trends</b>" in final["statsExtra"] and "On pace for" not in final["statsExtra"]
     pre = _deep(state="scheduled")
     pre["plays"], pre["box"] = [], []
     pre["live"] = {"state": "scheduled", "start_time": "2026-10-15T23:30Z"}
-    html = _page(pre)
-    assert "No plays yet." in html and "The team stats fill in from the tip." in html
-    assert "Tip-off" in html
+    P = _parts(pre)
+    assert (P["stage"], P["now"], P["statsExtra"], P["ball"], P["marks"]) == ("", "", "", "", None), \
+        "before the tip there is no arena to draw: the page's own score says Tip-off"
+    assert 'mlb: "First pitch", nba: "Tip-off", wnba: "Tip-off", cbb: "Tip-off", nhl: "Puck drop"' in APP
 
 
 def test_the_views_draw_the_shots_the_five_and_the_flow():
     got = _node(f"""
-      const host = {{ innerHTML: "", dataset: {{}}, querySelector: () => null, addEventListener: (t, f) => {{ host["on" + t] = f; }} }};
+      let redraws = 0, binds = 0;
+      globalThis.renderPbpPage = () => {{ redraws++; }};
+      const host = {{ dataset: {{}}, contains: () => true, querySelector: () => null,
+                     addEventListener: (t, f) => {{ binds++; host["on" + t] = f; }} }};
       const ctx = {{ d: {json.dumps(_deep())}, league: "nba", boardGame: null, faces: {{}} }};
-      Q.render(host, ctx);
+      const first = Q.parts(ctx);
+      first.wire(host); Q.parts(ctx).wire(host);          // bound once, however often the page is drawn
       const click = (attr, v) => host.onclick({{ target: {{ closest: () => ({{ dataset: {{ [attr]: v }}, hasAttribute: () => false }}) }} }});
-      host.contains = () => true;
       const out = {{}};
-      click("hcView", "shots"); out.shots = host.innerHTML;
-      click("hcShots", "away"); out.away = host.innerHTML;
-      click("hcView", "tracker"); out.tracker = host.innerHTML;
-      click("hcView", "flow"); out.flow = host.innerHTML;
-      click("hcStats", "shots"); out.flat = host.innerHTML;
-      click("hcOdds", "trends"); out.trends = host.innerHTML;
-      host.onchange({{ target: {{ closest: () => ({{ value: "0" }}) }} }}); out.every = host.innerHTML;
-      return out;""")
+      click("hcView", "shots"); out.shots = Q.parts(ctx).stage;
+      click("hcShots", "away"); out.away = Q.parts(ctx).stage;
+      click("hcView", "tracker"); out.tracker = Q.parts(ctx).stage;
+      click("hcView", "flow"); out.flow = Q.parts(ctx).stage;
+      out.redraws = redraws; out.binds = binds;
+      return out;""", gc=True)
     if got is None:
         return
     spotted = [p for p in _deep()["plays"] if p.get("shot") and p["points_attempted"] >= 2]
@@ -531,36 +573,52 @@ def test_the_views_draw_the_shots_the_five_and_the_flow():
     assert got["tracker"].count('class="hc-trk-row"') == 10 and "<b>On the floor</b>" in got["tracker"]
     assert "Payton Pritchard" in got["tracker"].split("hc-trk-col")[2] and "<b>Derrick White</b>" not in got["tracker"].split("hc-row")[0]
     assert 'class="hc-flow"' in got["flow"] and "lead changes" in got["flow"]
-    assert 'class="hc-fcourt"' in got["flat"] and "At the rim" in got["flat"] and "Corner 3" in got["flat"]
-    assert "On pace for" in got["trends"] and "BOS: no field goal in <b>8:50</b>" in got["trends"]
-    assert len(re.findall(r'<div class="hc-play k-', got["every"])) == 17, "every play, the end of the first included"
+    # A reader's choice draws the page again (detail.js renderPbpPage), which keeps the picture already painted.
+    assert (got["redraws"], got["binds"]) == (4, 1)
+    # The view a reader scrolled inside keeps its place by name; another view starts at its top.
+    assert 'class="hc-pane" data-gp-scroll="hc-tracker"' in got["tracker"] and 'data-gp-scroll="hc-flow"' in got["flow"]
 
 
 # --- the page: the wiring ----------------------------------------------------------
-def test_the_page_is_handed_over_and_loaded_the_way_the_others_are():
-    assert ('if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, '
-            'callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpMineSlotsHTML() + pbpCallItHTML(d, league) + pbpFootHTML() })) '
-            '{ if (lv.state === "live") again(); return; }') in APP
-    assert "function hoops(host, ctx)" in GC and 'css.href = "css/hoopscast.css";' in GC and 'el.src = "js/hoopscast.js";' in GC
-    assert 'el.addEventListener("error", () => { _hoopsFailed = true; resolve(false); });' in GC
-    assert "try { return window.QBHoops.render(host, ctx); } catch (e)" in GC, "a page that throws hands back to the old rooms"
-    assert "panel, hoops, setTeam" in GC
+def test_the_page_asks_for_the_parts_and_loads_the_file_the_way_the_others_are():
+    det = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
+    assert 'const GP_SPORT_FILE = { nba: "hoopscast", wnba: "hoopscast", cbb: "hoopscast", nhl: "rinkcast" };' in det
+    mod = det[det.index("function gpSportMod(league, d) {"):det.index("function gpPlainKit(o) {")]
+    assert "css.href = `css/${name}.css`;" in mod and "el.src = `js/${name}.js`;" in mod
+    assert 'el.addEventListener("error", done("failed"));' in mod, "a file that will not load leaves the sport on the plain page"
+    assert 'const done = (how) => () => { _gpSportFile[name] = how; if (state.view === "pbp") renderPbpPage(); };' in mod
+    kit = det[det.index("function gpKit(o) {"):det.index("function gpStageHTML(")]
+    assert "try { return { ...plain, ...mod.parts(o) }; } catch (e) {" in kit, "a part that throws leaves the page on the plain ones"
+    assert "Loading the ${wait}…" in kit, "the page is drawn at once, and again when the file lands"
+    # The old handover (js/gamecast.js `hoops`, a page of its own drawn into the host) is gone.
+    assert "function hoops(" not in GC and "QBHoops" not in GC and "GC.hoops" not in det
+    assert "function render(" not in HC and "host.innerHTML" not in HC, "the page is drawn by the page"
+    assert not re.search(r'class="[^"]*\bgp-', HC), "the page's own class names are written by the page's builders"
     for inline in ("onclick", "onerror", "onload=", "onchange", "eval(", "new Function"):
         assert inline not in HC, f"{inline}: the page's CSP forbids it"
     for prose in ("p.text", ".shortDescription", ".description"):
         assert prose not in HC, prose
-    assert "window.QBHoops = {" in HC
+    assert "window.QBHoops = {\n    parts,\n" in HC
     nba = (ROOT / "nba_build.py").read_text(encoding="utf-8")
     assert 'gd["home_ml"] = g.home_ml or None' in nba and 'gd["away_ml"] = g.away_ml or None' in nba, \
-        "the board's NBA games carry their moneylines (the live page's odds, lineopen's closes)"
+        "the board's NBA games carry their moneylines (the page's odds card, lineopen's closes)"
 
 
 def test_the_redraw_keeps_the_picture_and_the_scroll():
-    i = HC.index("  function render(host, ctx, chose) {")
-    body = HC[i:HC.index("\n  }\n", i)]
-    assert 'host.querySelector(".hc-frame > picture")' in body and "fresh.replaceWith(pic)" in body
-    assert '[".hc-play-list", ".hc-pane"]' in body and "same && !chose" in body
-    assert HC.count("render(host, S.ctx, true)") == 2, "a reader's own choice starts the list at the top"
+    """The arenas' rule since 2026-10-15, the page's own now (detail.js gpHoldTake, gpHoldGive): the sport names
+    what a redraw must leave as it is, and the page keeps it for every sport."""
+    assert 'const PICTURE = `<picture data-gp-hold="arena">' in HC
+    assert '`<div class="hc-pane" data-gp-scroll="hc-${view}">${pane}</div>`' in HC
+    det = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
+    page = det[det.index("async function renderPbpPage("):det.index("THE GAME PAGE IN THE CLUBS' COLOURS")]
+    take, draw, give = (page.index("const held = one ? gpHoldTake(host, `${league}:${event}`) : null;"),
+                        page.index("host.innerHTML = one ? gpPageHTML({"), page.index("gpHoldGive(host, held);"))
+    assert take < draw < give
+    give_fn = det[det.index("function gpHoldGive(host, held) {"):det.index("let _gpFor = ")]
+    assert "if (fresh && fresh !== old) fresh.replaceWith(old);" in give_fn, "the picture on the screen is put back"
+    assert "if (el) el.scrollTop = top;" in give_fn
+    assert "if (!same) return null;" in det[det.index("function gpHoldTake(host, key) {"):det.index("function gpHoldGive(")], \
+        "only for the game already on the screen"
 
 
 def test_the_stylesheet_is_the_sites_tokens():
@@ -614,27 +672,51 @@ def test_the_page_in_a_browser_at_390_and_1280():
                     page.route("**/data/pbp/nba_401810010.json*", lambda r: r.fulfill(status=200, content_type="application/json", body=doc))
                     page.route("**/data/live_nba.json*", lambda r: r.fulfill(status=200, content_type="application/json", body=strip))
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/nba/401810010", wait_until="load")
-                    page.wait_for_selector(".hc-stage .hc-photo", timeout=15000)
+                    page.wait_for_selector(".gp .hc-stage .hc-photo", timeout=15000)
                     page.evaluate("document.querySelectorAll('#tour-overlay, .tour-pop').forEach((n) => n.remove())")
                     page.wait_for_function("() => document.querySelector('.hc-photo').naturalWidth > 0", timeout=8000)
                     assert page.query_selector(".hc-svg .hc-flight"), "the last shot's flight"
-                    assert len(page.query_selector_all(".hc-play")) == 8
-                    # The four tabs fit across a phone; nothing scrolls sideways.
+                    # THE ONE PAGE, in football's order: the bar that stays, the score, the arena where the field
+                    # is, the line score, the play right now, the tabs and the room behind them.
+                    order = page.evaluate("""(() => {
+                      const main = document.querySelector('.pbp-layout.gp .pbp-main');
+                      const want = ['.gp-stick', '.pbp-hero', '.gp-stage', '.gp-line', '.gc-dv', '.pbp-tabs', '.pbp-panel'];
+                      return want.map((sel) => { const el = main.querySelector(':scope > ' + sel); return el ? [...main.children].indexOf(el) : -1; });
+                    })()""")
+                    assert all(i >= 0 for i in order) and order == sorted(order), order
+                    assert page.evaluate("[...document.querySelectorAll('.pbp-tabs .pbp-tab')].map((b) => b.textContent.trim())")[:4] == \
+                        ["Stats", "Play-By-Play", "Standings", "Our picks"]
+                    assert not page.query_selector(".hc-score") and not page.query_selector(".hc-plays"), "no page of its own"
+                    # A live game opens on its plays: the period being played is open, its rows in sentences.
+                    assert page.evaluate("document.querySelector('.pbp-tab.active').dataset.pbpTab") == "plays"
+                    assert page.evaluate("document.querySelectorAll('details.gp-dr').length") == 2, "the 1st and the 2nd"
+                    rows = page.evaluate("[...document.querySelectorAll('details.gp-dr[open] .lb-play')].map((r) => r.textContent.replace(/\\s+/g, ' ').trim())")
+                    assert len(rows) == 8 and "Timeout, Celtics" in rows[0], rows[:2]
+                    assert any("LeBron James makes a 3-point step-back jump shot" in r for r in rows), rows
+                    # The score wears the scorer's table and the ball; the newest play is on the shared card.
+                    assert page.evaluate("document.querySelector('.pbp-sb-side.away .hc-bonus').textContent") == "Bonus"
+                    assert "Al Horford grabs a defensive rebound." in page.evaluate("document.querySelector('.gc-dv .gc-dv-said').textContent")
+                    # The four views fit across a phone; nothing scrolls sideways.
                     assert page.evaluate("(() => { const v = document.querySelector('.hc-views'); return v.scrollWidth <= v.clientWidth + 1; })()")
                     page.click("[data-hc-view='shots']")
+                    page.wait_for_selector(".hc-stage.v-shots")
                     assert len(page.query_selector_all(".hc-stage.v-shots .hc-svg .hc-shot")) == 8
                     page.click("[data-hc-view='tracker']")
+                    page.wait_for_selector(".hc-stage.v-tracker")
                     assert len(page.query_selector_all(".hc-trk-row")) == 10
                     page.click("[data-hc-view='flow']")
-                    assert page.query_selector(".hc-pane .hc-flow")
+                    page.wait_for_selector(".hc-pane .hc-flow")
                     page.click("[data-hc-view='live']")
-                    # A redraw keeps the picture already painted, and where the plays were scrolled.
-                    page.select_option("[data-hc-q]", "0")
-                    page.evaluate("document.querySelector('.hc-photo').__kept = 1; document.querySelector('.hc-play-list').scrollTop = 60")
-                    top = page.evaluate("document.querySelector('.hc-play-list').scrollTop")
+                    page.wait_for_selector(".hc-stage.v-live")
+                    # A redraw keeps the picture already painted (detail.js gpHoldGive).
+                    page.evaluate("document.querySelector('.hc-photo').__kept = 1")
                     assert page.evaluate("renderPbpPage().then(() => document.querySelector('.hc-photo').__kept === 1)"), \
                         "the redraw painted a new picture"
-                    assert page.evaluate("document.querySelector('.hc-play-list').scrollTop") == top
+                    # The Stats room: the page's team stats and box scores, then basketball's own two cards.
+                    page.click(".pbp-tabs [data-pbp-tab='stats']")
+                    page.wait_for_selector(".pbp-panel[data-pbp-panel='stats'] .hc-card")
+                    heads = page.evaluate("[...document.querySelectorAll('.pbp-panel .gp-card-head b')].map((b) => b.textContent)")
+                    assert heads.index("Lakers") < heads.index("Celtics") < heads.index("Shot chart") < heads.index("Trends"), heads
                     assert page.evaluate("document.scrollingElement.scrollWidth") <= width
                     assert not errors, errors
                     ctx.close()

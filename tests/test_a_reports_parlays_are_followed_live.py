@@ -334,8 +334,8 @@ def test_the_page_asks_on_the_live_tab_and_only_loads_the_report_script_for_a_ti
 
 
 def test_a_live_games_own_page_carries_its_tickets_in_every_sport():
-    """The picks rail every sport's live page draws (football's gamecast, the court, the rink, the ballpark:
-    app.js pbpPropsHTML) ends in a slot for the game's own tickets, filled from the same read."""
+    """The picks rail every sport's live page draws (the one page's Our picks tab and side list, and the
+    ballpark's own tab: app.js pbpPropsHTML) ends in a slot for the game's own tickets, filled from the same read."""
     app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     rail = app[app.index("function pbpPropsHTML(d, league) {"):app.index("function openPbp(")]
     assert "const tickets = reportLiveSlot(d, league);" in rail
@@ -343,8 +343,16 @@ def test_a_live_games_own_page_carries_its_tickets_in_every_sport():
     assert rail.index("if (isWalled())") < rail.index("reportLiveSlot(d, league)"), "a member's, like the picks over it"
     slot = app[app.index("function reportLiveSlot(d, league) {"):app.index("/* A SLIP SHARED IN (2026-10-24)")]
     assert 'data-rl="${escapeAttr(`${league}|${d.away}|${d.home}`)}"' in slot and "reportLiveAsk();" in slot
-    for page in ("gamecast.js", "hoopscast.js", "rinkcast.js", "detail.js"):
-        assert "pbpPropsHTML(d, " in (ROOT / "web" / "js" / page).read_text(encoding="utf-8"), page
+    # Every sport's page but baseball's is the one page since 21 November 2026 (detail.js gpPageHTML): its Our
+    # picks tab and the list beside its plays draw the rail, and so does baseball's own tab. The sport files
+    # bring their parts to that page and draw no rail of their own.
+    det = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
+    for fn in ("gpPicksHTML", "gpRailPicksHTML"):
+        body = det[det.index(f"function {fn}("):]
+        assert "pbpPropsHTML(d, league)" in body[:body.index("\n}\n")], fn
+    assert 'tab === "props" ? pbpPropsHTML(d, league)' in det, "baseball's tab"
+    for page in ("gamecast.js", "hoopscast.js", "rinkcast.js"):
+        assert "pbpPropsHTML(" not in (ROOT / "web" / "js" / page).read_text(encoding="utf-8"), page
     with tempfile.TemporaryDirectory() as d:
         RL.forget()
         doc = RL.snapshot({"nba": NBA, "nhl": NHL}, _fast(d), time.time())

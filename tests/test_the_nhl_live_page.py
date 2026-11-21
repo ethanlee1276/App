@@ -47,7 +47,7 @@ sys.path.insert(0, str(ROOT))
 import livescore_build as B                                  # noqa: E402
 import rinkprobe as P                                        # noqa: E402
 from engine.sources import nhlrink as R                      # noqa: E402
-from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
+from _app import app_js, page_builders  # noqa: E402  (app.js and its rooms; the game page's own card builders)
 
 HOME_ID, AWAY_ID, GAME = 6, 3, 2026020123                    # BOS at home, NYR away
 PAST, MARCH, LIND, MCAVOY, SWAY = 8477956, 8473419, 8480000, 8479325, 8480280
@@ -385,12 +385,15 @@ STUBS = """
 
 def _node(js, gc=False):
     """`gc` loads js/gamecast.js first, as the page has it: the shared run
-    (QBGamecast.track) that moves the puck. Without it the page draws every
-    mark where it is, which is what a reader who asked for less motion sees."""
+    (QBGamecast.track) that moves the puck and the card the newest play is
+    drawn on. Without it every mark is drawn where it is, which is what a
+    reader who asked for less motion sees. The page's own boxes (detail.js)
+    are the real ones (_app.page_builders)."""
     node = shutil.which("node")
     if not node:
         return None
-    prog = f"{TEAMS}\n{STUBS}\n{GC if gc else ''}\n{RC}\nconsole.log(JSON.stringify((() => {{ const Q = window.QBRink; {js} }})()));"
+    prog = (f"{TEAMS}\n{STUBS}\n{page_builders()}\n{GC if gc else ''}\n{RC}\n"
+            f"console.log(JSON.stringify((() => {{ const Q = window.QBRink; {js} }})()));")
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog)
         path = fh.name
@@ -402,13 +405,23 @@ def _node(js, gc=False):
     return json.loads(out.stdout.strip())
 
 
-def _page(doc, board=None, gc=False):
-    return _node(f"""
-      const host = {{ innerHTML: "", dataset: {{}}, querySelector: () => null, addEventListener: () => {{}} }};
-      const ctx = {{ d: {json.dumps(doc)}, league: "nhl", stripHTML: "<nav>strip</nav>", back: "<b>back</b>",
-                    boardGame: {json.dumps(board)}, faces: {{}}, wire: () => {{}} }};
-      Q.render(host, ctx);
-      return host.innerHTML;""", gc=gc)
+#: What the sport hands the one page, as text: each part, its rows, and its words for every row.
+PARTS = """
+  const partsOf = (ctx) => {
+    const P = Q.parts(ctx), out = {};
+    for (const [key, v] of Object.entries(P)) if (typeof v !== "function") out[key] = v;
+    out.says = (P.rows || []).map((p) => P.say(p));
+    out.wire = typeof P.wire;
+    return out;
+  };
+"""
+
+
+def _parts(doc, board=None, gc=True):
+    """Hockey's parts of the page (QBRink.parts), as detail.js gpKit asks for them."""
+    return _node(f"""{PARTS}
+      return partsOf({{ d: {json.dumps(doc)}, league: "nhl", lv: {json.dumps(doc.get("live") or {})},
+                       boardGame: {json.dumps(board)}, faces: {{}} }});""", gc=gc)
 
 
 def test_the_page_and_the_parser_read_a_situation_code_alike():
@@ -521,102 +534,140 @@ def test_a_play_reads_as_the_feeds_codes_and_names():
     assert miss["sub"] == "#88 David Pastrnak · slap · wide of net" and first["title"] == "Faceoff"
 
 
-# --- the page: what it draws -------------------------------------------------------
-def test_the_page_draws_the_scoreboard_the_arena_the_plays_and_the_three_cards():
-    board = {"home": "BOS", "away": "NYR", "spread": -1.5, "total": 6.5, "home_ml": -150, "away_ml": 130}
-    html = _page(_deep(), board)
-    if html is None:
+# --- the parts it hands the page -----------------------------------------------------
+def test_the_parts_are_the_arena_the_newest_event_the_power_play_and_the_stats_cards():
+    """One page for every sport (detail.js gpPageHTML, 21 November 2026). This file drew a page of its own: a
+    scoreboard, the arena, a play list down the right, and stats, lineup and odds cards. It hands the page its
+    parts now, and nothing else."""
+    P = _parts(_deep(), {"home": "BOS", "away": "NYR", "spread": -1.5, "total": 6.5})
+    if P is None:
         return
-    assert html.startswith("<nav>strip</nav>") and html.endswith("<b>back</b>"), "app.js's strip and way back"
-    for part in ('class="card rc-score"', 'class="card rc-stage v-live"', 'class="card rc-card rc-right"',
-                 'class="card rc-card rc-stats"', 'class="card rc-card rc-lineup"', 'class="card rc-card rc-odds"'):
-        assert part in html, part
+    assert set(P) == {"stage", "now", "rows", "teamStats", "boxes", "statsExtra", "ball", "ballIcon", "ballTitle",
+                      "mid", "down", "live", "says", "wire"}, sorted(P)
+    stage = P["stage"]
+    # The arena, in the page's own box (gpStageHTML), in the clubs' colours.
+    assert stage.startswith('<div class="card gp-stage rc-stage v-live" style="--ca:#1a52c3;--ch:#fdb927">'), stage[:120]
     for key, label in (("live", "Live"), ("shots", "Shot Chart"), ("ice", "Ice Tracker"), ("tracker", "Player Tracker"),
                        ("flow", "Game Flow")):
-        assert f'data-rc-view="{key}"' in html and f'aria-label="{label}"' in html, key
-    assert 'data-rc-full aria-label="Full screen"' in html
-    assert "img/arena/nhl-arena.webp 1280w" in html and "img/arena/nhl-arena@640.webp 640w" in html
-    assert '<div class="rc-venue"><b>TD Garden</b><span>Boston</span></div>' in html
-    score = html.split('class="card rc-stage')[0]
-    assert ">PP BOS 1:40</span>" in score and "SOG 0 – 4" in score and "4-2-0" in score and ">Rangers</b>" in score
-    assert "BOS power play · 1:40" in html, "the badge on the arena"
-    # The newest event is NYR's faceoff win: the puck is theirs, said once, and the sequence starts at the dot.
-    assert 'class="rc-arrow"' in html and "Puck: NYR" in html and 'class="rc-puckmark"' in html.split('class="rc-side home"')[0]
+        assert f'data-rc-view="{key}"' in stage and f'aria-label="{label}"' in stage, key
+    assert 'data-rc-full aria-label="Full screen"' in stage
+    assert "img/arena/nhl-arena.webp 1280w" in stage and "img/arena/nhl-arena@640.webp 640w" in stage
+    assert '<div class="rc-venue"><b>TD Garden</b><span>Boston</span></div>' in stage
+    assert "BOS power play · 1:40" in stage, "the badge on the arena"
+    assert 'class="rc-arrow"' in stage, "the newest event is NYR's faceoff win: the puck is theirs"
     # The run is the period's (2026-10-15): the miss and the shot each fly to
     # the net and play goes on from there, one join; the faceoff is the drop
-    # and is joined to nothing — the puck appears on the dot.
-    stage = html.split('class="card rc-stage')[1].split('class="card rc-card rc-right"')[0]
-    assert stage.count('class="rc-flight') == 2 and stage.count('class="rc-trail"') == 1, "a faceoff is the drop: nothing to join it to"
-    # The plays: the period being played, newest first; the choices.
-    assert len(re.findall(r'<div class="rc-play k-', html)) == 6
-    assert html.index("Won by #93 Mika Zibanejad") < html.index("Missed shot"), "newest first"
-    assert ">Now — 3rd period</option>" in html and ">1st period</option>" in html and ">Every play</option>" in html
-    # The cards: the bars, the lineup, the board's lines and our win chance.
-    assert 'class="rc-ts-k">Shots on goal</span>' in html and 'class="rc-ts-k">xG · our model</span>' in html
-    assert ">Mika Zibanejad</td>" in html and "<p class=\"rc-mini-k\">Defence</p>" in html
-    for line in ("Puck line", "Moneyline", "Total goals"):
-        assert f'<span class="rc-line-k">{line}</span>' in html, line
-    assert "NYR +1.5" in html and "BOS -1.5" in html and "Over 6.5" in html and "NYR +130" in html
-    assert "Win chance (our model)" in html and "<b>71%</b> BOS" in html
-    assert 'id="pbp-game-door" data-gid="NYR@BOS"' in html
-    assert SENTENCE not in html and "onclick" not in html and "onerror" not in html
+    # and is joined to nothing — the puck appears on the dot. (Without the
+    # shared timeline every mark is drawn where it is.)
+    still = _parts(_deep(), gc=False)["stage"]
+    assert still.count('class="rc-flight') == 2 and still.count('class="rc-trail"') == 1, "a faceoff is the drop: nothing to join it to"
+    # Under the clock on the page's score: the power play in the side's colour and the shots (gpChipHTML, gpNoteHTML);
+    # the bar that stays says the power play too; and the clock is the league's own.
+    assert P["mid"] == '<span class="gp-sb-chip" style="--pc:#fdb927">PP BOS 1:40</span><span class="gp-sb-note">SOG 0 – 4</span>'
+    assert P["down"] == "PP BOS 1:40" and P["live"] == {"period": "P3", "clock": "16:00"}
+    assert (P["ball"], P["ballIcon"], P["ballTitle"]) == ("away", "hockey", "Puck — from the last play")
+    # The newest event on the card every sport's is drawn on (gamecast.js playNowHTML), said in a sentence.
+    now = P["now"]
+    assert now.startswith('<div class="card gc-dv" data-gc-dv>')
+    assert '<div class="gc-k">Last play · P3 16:00</div><b>Faceoff</b>' in now
+    assert '<p class="gc-dv-said">Mika Zibanejad wins the faceoff over Elias Lindholm in the NYR end.</p>' in now
+    assert now.count('class="gc-chip"') == 2 and "NYR · C · #93" in now and "0 G, 0 A, 1 SOG" in now
+    assert "power play" not in now and "Puck:" not in now, "the score above says both, once"
+    # The league's own events as the rows of the period cards and of the list beside the page, each with its
+    # words; a row keeps the league's id, the key its thread in the chat is filed under.
+    assert [r["id"] for r in P["rows"]] == list(range(1, 18)) and all(r["kind"] == "hockey" for r in P["rows"])
+    goal = {k: v for k, v in P["rows"][10].items() if k != "rink"}
+    assert goal == {"kind": "hockey", "id": 11, "period": 2, "clock": "15:50", "team": "BOS", "player": "David Pastrnak",
+                    "event": "goal", "scoring": True, "shot": False, "away_score": 0, "home_score": 1}
+    assert P["says"][10] == {"html": "<b>David Pastrnak</b> scores on the power play (wrist), from <b>Brad Marchand</b> and <b>Charlie McAvoy</b>"}
+    assert P["says"][0] == {"moment": "Start of the 1st period"} and P["says"][7] == {"moment": "Stoppage"}, \
+        "the sentence never reached the page"
+    # The Stats room, in the page's own cards (gpTsCardHTML, gpBoxCardHTML, gpCardHTML): the team stats counted
+    # off the league's events, both box scores, then what only hockey has.
+    assert P["teamStats"].startswith('<div class="card gp-card gp-tscard">')
+    for label in ("Shots on goal", "Shot attempts", "Faceoff %", "Hits", "Power plays", "xG · our model"):
+        assert f"<span>{label}</span>" in P["teamStats"], label
+    assert P["boxes"].count('<div class="card gp-card gp-boxcard">') == 2
+    for head in ("Forwards", "Defense", "Goalies"):
+        assert P["boxes"].count(f'<th scope="col">{head}</th>') == 2, head
+    assert '<th scope="row" title="Mika Zibanejad">Mika Zibanejad <span class="gp-pos">#93</span></th>' in P["boxes"]
+    extra = P["statsExtra"]
+    assert extra.count('<div class="card gp-card rc-icecard" style="--ca:#1a52c3;--ch:#fdb927">') == 2
+    assert "<b>Shot chart</b><span>every attempt, from above</span>" in extra and "<b>Trends</b>" in extra
+    assert 'class="rc-flat"' in extra and "NYR shoot at the left net, BOS at the right" in extra
+    assert "Last five minutes: NYR <b>0</b> attempts, BOS <b>2</b>." in extra
+    assert "goals saved above expected" in extra and "our model" in extra
+    # And none of the page it used to draw.
+    whole = json.dumps(P)
+    for gone in ("rc-score", "rc-right", "rc-lineup", "rc-odds", "rc-line-k", "rc-ts-k", "rc-play-list", "gch-entry-slot",
+                 "pbp-game-door", "Win chance (our model)", "<nav>", "pbp-foot"):
+        assert gone not in whole, gone
+    assert SENTENCE not in whole and "onclick" not in whole and "onerror" not in whole
+    assert P["wire"] == "function"
 
 
 def test_the_live_view_flies_the_last_shot_and_joins_its_sequence():
-    html = _page(_deep(upto=14), gc=True)
-    if html is None:
+    P = _parts(_deep(upto=14))
+    if P is None:
         return
-    stage = html.split('class="card rc-stage')[1].split('class="card rc-card rc-right"')[0]
+    stage = P["stage"]
     # The puck runs the sequence on the shared timeline (QBGamecast.track):
     # a translate along the points, not a flight of its own.
     assert 'class="rc-flight' in stage and '<animateTransform attributeName="transform" type="translate"' in stage and 'class="rc-ring"' in stage
     assert stage.count('class="rc-trail"') == 1, "the miss and the shot of the third, joined"
     assert 'data-half="right"' in stage, "a phone sees the half the shot went up in"
-    assert "Shot on goal" in stage and "saved by #31 Igor Shesterkin" in stage and "in the NYR end" in stage
-    assert "rc-arrow" not in stage, "after a shot the puck is loose: no arrow"
+    assert "rc-arrow" not in stage and P["ball"] == "", "after a shot the puck is loose: no arrow, nobody's puck"
+    # What the caption under the arena said is the page's card now.
+    assert '<div class="gc-k">Last play · P3 17:20</div><b>Shot on goal</b>' in P["now"]
+    assert '<p class="gc-dv-said">Brad Marchand shoots (backhand), saved by Igor Shesterkin in the NYR end.</p>' in P["now"]
+    assert "3 saves on 4" in P["now"], "the goalie's game beside the shooter's"
 
 
 def test_what_the_feed_does_not_carry_draws_nothing_and_a_final_holds_no_puck():
     bare = _deep(situation=False, box=False, xg=False)
     bare["rink"].pop("venue")
-    html = _page(bare)
-    if html is None:
+    P = _parts(bare)
+    if P is None:
         return
-    assert "rc-venue" not in html and "xG" not in html and "our model</i>" not in html
-    assert "The lineups fill in from the league's box score once the game is on." in html
-    final = _page(_deep(state="final"))
-    assert "rc-arrow" not in final and "rc-puckmark" not in final and "rc-pp" not in final and "Puck:" not in final
-    assert '<span class="rc-per">Final</span>' in final and ">Latest — 3rd period</option>" in final
+    assert "rc-venue" not in P["stage"] and "xG" not in json.dumps(P)
+    assert P["boxes"] is None, "no league box score: the page's own, off the game file, stands (detail.js gpStatsHTML)"
+    assert P["mid"] == '<span class="gp-sb-note">SOG 0 – 4</span>' and P["down"] == "", "no power play the sheet cannot back"
+    final = _parts(_deep(state="final"))
+    assert final["ball"] == "" and final["now"] == "" and final["live"] is None and final["down"] == ""
+    assert "rc-arrow" not in final["stage"] and "rc-ppbadge" not in final["stage"] and "gp-sb-chip" not in final["mid"]
+    # A final opens on its shot chart, with no Live view to choose (tests/test_a_finished_game_is_its_record.py).
+    assert 'class="card gp-stage rc-stage v-shots"' in final["stage"] and 'data-rc-view="live"' not in final["stage"]
     pre = _deep(state="scheduled")
     pre["rink"]["events"], pre["rink"]["box"] = [], {}
     pre["live"] = {"state": "scheduled", "start_time": "2026-10-15T23:00Z"}
-    html = _page(pre)
-    assert "Puck drop" in html and "No plays yet." in html and "The team stats fill in from the opening faceoff." in html
+    P = _parts(pre)
+    assert (P["stage"], P["now"], P["statsExtra"], P["ball"], P["mid"], P["live"]) == ("", "", "", "", "", None), \
+        "before the puck drops there is no arena to draw: the page's own score says Puck drop"
+    assert P["rows"] is None and P["teamStats"] is None and P["boxes"] is None, "nothing counted yet: the page's own stand"
+    assert 'mlb: "First pitch", nba: "Tip-off", wnba: "Tip-off", cbb: "Tip-off", nhl: "Puck drop"' in APP
 
 
 def test_the_views_draw_the_shots_the_ice_the_men_and_the_race():
     got = _node(f"""
-      const host = {{ innerHTML: "", dataset: {{}}, querySelector: () => null, addEventListener: (t, f) => {{ host["on" + t] = f; }} }};
+      let redraws = 0, binds = 0;
+      globalThis.renderPbpPage = () => {{ redraws++; }};
+      const host = {{ dataset: {{}}, contains: () => true, querySelector: () => null,
+                     addEventListener: (t, f) => {{ binds++; host["on" + t] = f; }} }};
       const ctx = {{ d: {json.dumps(_deep())}, league: "nhl", boardGame: null, faces: {{}} }};
-      Q.render(host, ctx);
-      host.contains = () => true;
+      Q.parts(ctx).wire(host); Q.parts(ctx).wire(host);      // bound once, however often the page is drawn
       const click = (attr, v) => host.onclick({{ target: {{ closest: () => ({{ dataset: {{ [attr]: v }}, hasAttribute: () => false }}) }} }});
       const out = {{}};
-      click("rcView", "shots"); out.shots = host.innerHTML;
-      click("rcShots", "away"); out.away = host.innerHTML;
-      click("rcView", "ice"); out.ice = host.innerHTML;
-      click("rcIce", "hit"); out.hits = host.innerHTML;
-      click("rcView", "tracker"); out.tracker = host.innerHTML;
-      click("rcView", "flow"); out.flow = host.innerHTML;
-      click("rcStats", "shots"); out.flat = host.innerHTML;
-      click("rcLineup", "goalies"); out.goalies = host.innerHTML;
-      click("rcRight", "trends"); out.trends = host.innerHTML;
-      click("rcRight", "plays");
-      host.onchange({{ target: {{ closest: () => ({{ value: "0" }}) }} }}); out.every = host.innerHTML;
+      click("rcView", "shots"); out.shots = Q.parts(ctx).stage;
+      click("rcShots", "away"); out.away = Q.parts(ctx).stage;
+      click("rcView", "ice"); out.ice = Q.parts(ctx).stage;
+      click("rcIce", "hit"); out.hits = Q.parts(ctx).stage;
+      click("rcView", "tracker"); out.tracker = Q.parts(ctx).stage;
+      click("rcView", "flow"); out.flow = Q.parts(ctx).stage;
+      out.redraws = redraws; out.binds = binds;
       return out;""")
     if got is None:
         return
-    marks = lambda html: len(re.findall(r'class="rc-shot (?:made|miss|block)"', html.split("rc-card rc-right")[0]))
+    marks = lambda html: len(re.findall(r'class="rc-shot (?:made|miss|block)"', html))
     assert "rc-stage v-shots" in got["shots"] and marks(got["shots"]) == 6, "five BOS attempts and NYR's blocked one"
     assert marks(got["away"]) == 1 and 'data-half="left"' in got["away"] and "NYR 0/0" in got["away"] and "BOS 1/4" in got["away"]
     ice = lambda html: len(re.findall(r'class="rc-ice ', html))
@@ -624,34 +675,38 @@ def test_the_views_draw_the_shots_the_ice_the_men_and_the_race():
     assert got["tracker"].count('class="rc-trk-row"') == 8 and got["tracker"].count('class="rc-trk-row goalie"') == 2
     assert "Who is on the ice is not in the league's live feed" in got["tracker"]
     assert 'class="rc-flow"' in got["flow"] and "Attempts <b>1</b> – <b>5</b>" in got["flow"]
-    assert 'class="rc-flat"' in got["flat"] and "NYR shoot at the left net, BOS at the right" in got["flat"]
-    assert "Goals saved above expected" in got["goalies"] and "our model" in got["goalies"]
-    assert "Last five minutes: NYR <b>0</b> attempts, BOS <b>2</b>." in got["trends"]
-    assert len(re.findall(r'<div class="rc-play k-', got["every"])) == 17, "every play of the game"
+    # A reader's choice draws the page again (detail.js renderPbpPage), which keeps the picture already painted.
+    assert (got["redraws"], got["binds"]) == (6, 1)
+    assert 'class="rc-pane" data-gp-scroll="rc-tracker"' in got["tracker"] and 'data-gp-scroll="rc-flow"' in got["flow"]
 
 
 # --- the page: the wiring ----------------------------------------------------------
-def test_the_page_is_handed_over_and_loaded_the_way_the_basketball_one_is():
-    assert ('if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, '
-            'callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpMineSlotsHTML() + pbpCallItHTML(d, league) + pbpFootHTML() })) '
-            '{ if (lv.state === "live") again(); return; }') in APP
-    assert 'if (host && ctx && ctx.league === "nhl") return rink(host, ctx);' in GC
-    assert "function rink(host, ctx)" in GC and 'css.href = "css/rinkcast.css";' in GC and 'el.src = "js/rinkcast.js";' in GC
-    assert "if (!ctx.d || !ctx.d.rink || _rinkFailed) return false;" in GC, "a game without the league's events keeps the old rooms"
-    assert 'el.addEventListener("error", () => { _rinkFailed = true; resolve(false); });' in GC
-    assert "try { return window.QBRink.render(host, ctx); } catch (e)" in GC, "a page that throws hands back to the old rooms"
+def test_the_page_asks_for_the_parts_and_a_game_without_the_leagues_events_is_the_plain_page():
+    det = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
+    assert 'const GP_SPORT_FILE = { nba: "hoopscast", wnba: "hoopscast", cbb: "hoopscast", nhl: "rinkcast" };' in det
+    mod = det[det.index("function gpSportMod(league, d) {"):det.index("function gpPlainKit(o) {")]
+    assert 'if (!name || (name === "rinkcast" && !(d || {}).rink)) return { mod: null, wait: "" };' in mod, \
+        "a game without the league's events is drawn from the game file alone"
+    assert 'el.addEventListener("error", done("failed"));' in mod, "a file that will not load leaves the sport on the plain page"
+    plain = det[det.index("function gpPlainKit(o) {"):det.index("function gpKit(o) {")]
+    assert "return { now: GC.plainNow ? GC.plainNow(o.d, o.league, o.faces) : \"\" };" in plain
+    kit = det[det.index("function gpKit(o) {"):det.index("function gpStageHTML(")]
+    assert "try { return { ...plain, ...mod.parts(o) }; } catch (e) {" in kit, "a part that throws leaves the page on the plain ones"
+    # The old handover (js/gamecast.js `rink`, a page of its own drawn into the host) is gone.
+    assert "function rink(" not in GC and "QBRink" not in GC
+    assert "function render(" not in RC and "host.innerHTML" not in RC, "the page is drawn by the page"
+    assert not re.search(r'class="[^"]*\bgp-', RC), "the page's own class names are written by the page's builders"
     for inline in ("onclick", "onerror=", "onload=", "onchange", "eval(", "new Function"):
         assert inline not in RC, f"{inline}: the page's CSP forbids it"
     assert 'data-onerr="remove"' in RC, "a face that will not load goes, through visuals.js"
-    assert "window.QBRink = {" in RC
+    assert "window.QBRink = {\n    parts,\n" in RC
 
 
 def test_the_redraw_keeps_the_picture_and_the_scroll():
-    i = RC.index("  function render(host, ctx, chose) {")
-    body = RC[i:RC.index("\n  }\n", i)]
-    assert 'host.querySelector(".rc-frame > picture")' in body and "fresh.replaceWith(pic)" in body
-    assert '[".rc-play-list", ".rc-pane"]' in body and "same && !chose" in body
-    assert RC.count("render(host, S.ctx, true)") == 2, "a reader's own choice starts the list at the top"
+    """The page's own rule since 21 November 2026 (detail.js gpHoldTake, gpHoldGive; pinned in
+    tests/test_the_nba_live_page.py): the sport names what a redraw must leave as it is."""
+    assert 'const PICTURE = `<picture data-gp-hold="arena">' in RC
+    assert '`<div class="rc-pane" data-gp-scroll="rc-${view}">${pane}</div>`' in RC
 
 
 def test_the_stylesheet_is_the_sites_tokens():
@@ -684,7 +739,8 @@ def test_the_page_in_a_browser_at_390_and_1280():
         return
     import rendercheck
     chromium = os.environ.get("CHROMIUM_PATH", "/opt/pw-browsers/chromium")
-    doc = json.dumps(_deep())
+    # The period-by-period line the scoreboard feed carries, for the page's line score.
+    doc = json.dumps(dict(_deep(), linescores={"NYR": [0, 0, 0], "BOS": [0, 1, 0]}))
     strip = json.dumps({"games": [{"event_id": "401802123", "home": "BOS", "away": "NYR", "live": _deep()["live"]}]})
     srv, port = rendercheck._serve()
     try:
@@ -707,27 +763,52 @@ def test_the_page_in_a_browser_at_390_and_1280():
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/nhl/401802123", wait_until="load")
                     # Thirty and twenty seconds (gate 169, 2026-11-09): three browser
                     # files at a time on the gate; a page that is ready returns at once.
-                    page.wait_for_selector(".rc-stage .rc-photo", timeout=30000)
+                    page.wait_for_selector(".gp .rc-stage .rc-photo", timeout=30000)
                     page.evaluate("document.querySelectorAll('#tour-overlay, .tour-pop').forEach((n) => n.remove())")
                     page.wait_for_function("() => document.querySelector('.rc-photo').naturalWidth > 0", timeout=20000)
                     assert page.query_selector(".rc-svg .rc-ring"), "the newest event, ringed"
-                    assert len(page.query_selector_all(".rc-play")) == 6
+                    # THE ONE PAGE, in football's order: the bar that stays, the score, the arena where the field
+                    # is, the line score, the play right now, the tabs and the room behind them.
+                    order = page.evaluate("""(() => {
+                      const main = document.querySelector('.pbp-layout.gp .pbp-main');
+                      const want = ['.gp-stick', '.pbp-hero', '.gp-stage', '.gp-line', '.gc-dv', '.pbp-tabs', '.pbp-panel'];
+                      return want.map((sel) => { const el = main.querySelector(':scope > ' + sel); return el ? [...main.children].indexOf(el) : -1; });
+                    })()""")
+                    assert all(i >= 0 for i in order) and order == sorted(order), order
+                    assert page.evaluate("[...document.querySelectorAll('.pbp-tabs .pbp-tab')].map((b) => b.textContent.trim())")[:4] == \
+                        ["Stats", "Play-By-Play", "Standings", "Our picks"]
+                    assert not page.query_selector(".rc-score") and not page.query_selector(".rc-right"), "no page of its own"
+                    # The score: the league's clock, the power play and the shots under it, the puck's side marked.
+                    hero = page.evaluate("document.querySelector('.pbp-hero').textContent.replace(/\\s+/g, ' ')")
+                    assert "PP BOS 1:40" in hero and "SOG 0 – 4" in hero, hero
+                    # A live game opens on its plays: the league's events, a period a card, the third open.
+                    assert page.evaluate("document.querySelector('.pbp-tab.active').dataset.pbpTab") == "plays"
+                    assert page.evaluate("document.querySelectorAll('details.gp-dr').length") == 3
+                    rows = page.evaluate("[...document.querySelectorAll('details.gp-dr[open] .lb-play')].map((r) => r.textContent.replace(/\\s+/g, ' ').trim())")
+                    assert len(rows) == 6 and "Mika Zibanejad wins the faceoff over Elias Lindholm" in rows[0], rows[:2]
+                    assert "Mika Zibanejad wins the faceoff over Elias Lindholm in the NYR end." in \
+                        page.evaluate("document.querySelector('.gc-dv .gc-dv-said').textContent")
                     # The five views fit across a phone; nothing scrolls sideways.
                     assert page.evaluate("(() => { const v = document.querySelector('.rc-views'); return v.scrollWidth <= v.clientWidth + 1; })()")
                     page.click("[data-rc-view='shots']")
+                    page.wait_for_selector(".rc-stage.v-shots")
                     assert len(page.query_selector_all(".rc-stage.v-shots .rc-svg .rc-shot")) == 6
                     page.click("[data-rc-view='tracker']")
+                    page.wait_for_selector(".rc-stage.v-tracker")
                     assert len(page.query_selector_all(".rc-trk-row")) == 10
                     page.click("[data-rc-view='flow']")
-                    assert page.query_selector(".rc-pane .rc-flow")
+                    page.wait_for_selector(".rc-pane .rc-flow")
                     page.click("[data-rc-view='live']")
-                    # A redraw keeps the picture already painted, and where the plays were scrolled.
-                    page.select_option("[data-rc-q]", "0")
-                    page.evaluate("document.querySelector('.rc-photo').__kept = 1; document.querySelector('.rc-play-list').scrollTop = 60")
-                    top = page.evaluate("document.querySelector('.rc-play-list').scrollTop")
+                    page.wait_for_selector(".rc-stage.v-live")
+                    # A redraw keeps the picture already painted (detail.js gpHoldGive).
+                    page.evaluate("document.querySelector('.rc-photo').__kept = 1")
                     assert page.evaluate("renderPbpPage().then(() => document.querySelector('.rc-photo').__kept === 1)"), \
                         "the redraw painted a new picture"
-                    assert page.evaluate("document.querySelector('.rc-play-list').scrollTop") == top
+                    # The Stats room: hockey's own count in the page's cards, then the shot chart and the trends.
+                    page.click(".pbp-tabs [data-pbp-tab='stats']")
+                    page.wait_for_selector(".pbp-panel[data-pbp-panel='stats'] .rc-icecard")
+                    heads = page.evaluate("[...document.querySelectorAll('.pbp-panel .gp-card-head b')].map((b) => b.textContent)")
+                    assert heads.index("Team stats") < heads.index("Rangers") < heads.index("Bruins") < heads.index("Shot chart") < heads.index("Trends"), heads
                     assert page.evaluate("document.scrollingElement.scrollWidth") <= width
                     assert not errors, errors
                     ctx.close()

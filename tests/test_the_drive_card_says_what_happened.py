@@ -186,8 +186,15 @@ def test_a_finished_drive_gives_way_to_the_side_with_the_ball():
 
 
 def test_the_card_is_the_play_right_now_above_the_tabs_and_drops_the_repeats():
-    i = DETAIL.index("function gpNowHTML(d, league, faces, boardGame, GC, top)")
+    i = DETAIL.index("function gpNowHTML(d, league, faces, boardGame, GC, top, kit)")
     body = DETAIL[i:DETAIL.index("\n}\n", i)]
+    # 2026-11-21: one page for every sport. Football's card is its drive's; another sport hands the page the
+    # same card with its own words in it (gpKit `now`, built by gamecast.js playNowHTML from the same four parts).
+    assert "const card = kit && kit.now != null ? kit.now : g.driveView ?" in body
+    assert "playNow: playNowHTML, plainNow: plainNowHTML," in GC
+    for part in ("function nowCardHTML(o) {", "function nowHeadHTML(league, team, k, title) {",
+                 "function nowChipHTML(league, faces, name, row, where, line) {", "function nowLastHTML(o) {"):
+        assert part in GC, part
     # 2026-11-15: the card is told when the strip under the score and our win
     # card already say its tiles, its drive line and its chip
     # (tests/test_the_live_page_says_each_thing_once).

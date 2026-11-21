@@ -9,8 +9,8 @@ its field goal. Baseball, basketball and hockey already read newest first,
 inside their groups too.
 
 Now a football drive's plays are newest first too, in the rail (app.js
-pbpGroups), on the Plays tab (detail.js gpDrivesHTML) and in the gamecast's
-drive cards (gamecast.js drivesHTML). The Live tab card's last few plays
+pbpGroups) and on the Plays tab (detail.js gpDrivesHTML; another sport's
+periods, gpPeriodsHTML). The Live tab card's last few plays
 read the same way. Each drive's head still reads the drive in game order:
 the key play is its first score or its last snap, and the score is the one
 it left.
@@ -111,10 +111,12 @@ def test_a_drives_head_still_reads_it_in_game_order():
     assert "const key = snaps.find((p) => p.scoring) || snaps[snaps.length - 1];" in drives
     assert "const last = rows.slice().reverse().find((p) => p.away_score != null && p.home_score != null) || {};" in drives
     assert "playsHTML({ plays: rows.slice().reverse(), home: d.home, away: d.away, league, room: pbpRoom(d, league) })" in drives
-    # The gamecast's cards: the score after the drive's last play, the rows newest first.
-    cards = GC[GC.index("function drivesHTML("):GC.index("function playsTabHTML(")]
-    assert "const last = rows[rows.length - 1] || {};" in cards
-    assert "playsHTML({ plays: rows.slice().reverse(), home: d.home, away: d.away," in cards
+    # A sport with no drives reads period by period on the same page (21 November 2026: the gamecast's own
+    # drive cards went with its tabs), the newest period first and the newest play on top of each.
+    periods = _fn("gpPeriodsHTML")
+    assert "return pers.slice().reverse().map((per) => {" in periods
+    assert "playsHTML({ plays: rows.slice().reverse(), home: d.home, away: d.away, home_abbr: d.home_abbr, away_abbr: d.away_abbr, league," in periods
+    assert "function drivesHTML(" not in GC and "function playsTabHTML(" not in GC
     # The Live tab card's last few plays, the newest on top of them.
     card = _fn("liveCardHTML")
     assert "${playsHTML({ ...g, plays: (g.plays || []).slice().reverse()," in card

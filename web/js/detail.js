@@ -3138,7 +3138,10 @@ function liveRowFor(sport, g) {
 }
 /* `_pbpShowAll` used to live here, beside its readers. It is declared
    near the top of the file now — see the comment there. */
-let _pbpTab = "gamecast";
+//: The tab the reader chose ("" until they choose one: the page opens on
+//: its own first tab, a live game's on its plays). stats | plays |
+//: standings | props — baseball: info | props | injuries | players.
+let _pbpTab = "";
 /* ---------------- The page's other rooms ----------------
    Ethan, 2026-09-05: "the play by plays other rooms". The render's
    sub-tabs: Game info (the park facts), Our picks (the Most Likely and
@@ -3149,11 +3152,10 @@ let _pbpTab = "gamecast";
    trusts). Team stats and Splits are not built FOR BASEBALL: the MLB
    deep file is the MLB builder's own shape, and a room drawn from an
    unread shape would be the fabricated number this site exists not to
-   print. Football, hoops and hockey have them since 2026-10-08 — the
-   summary's box and team blocks, read by livescore_build.pbp_doc and
-   drawn by js/gamecast.js (GC_TABS below). */
+   print. Every other sport's page is the one page (gpPageHTML, GP_TABS):
+   the summary's box and team blocks, read by livescore_build.pbp_doc. */
 const PBP_TABS = [["info", "Game info"], ["props", "Our picks"], ["injuries", "Injuries"], ["players", "Player stats"]];
-const pbpTabsFor = (league) => league === "mlb" ? PBP_TABS : PBP_FOOTBALL.has(league) ? GP_FB_TABS : GC_TABS;
+const pbpTabsFor = (league) => (league === "mlb" ? PBP_TABS : GP_TABS);
 
 /* Both clubs' designations, matched on the injury feed's own club name
    — the team table's `name` — never on a nickname. */
@@ -4248,10 +4250,14 @@ function pbpRowHTML(r, league, batting, room) {
     <span class="pbp-time">${escapeHtml(when)}</span>${room ? chatPlayBadge(room, r) : ""}</div>`;
 }
 
-function pbpRailHTML(d, league) {
+/* `o.plays` and `o.say`, where the sport reads a feed of its own or has its
+   own words for a play (gpKit `rows`, `say`): the list beside the page is
+   then the same rows, in the same words, as its Play-By-Play room. */
+function pbpRailHTML(d, league, o) {
+  const opt = o || {};
   const PEEK = 40;
   const mlb = league === "mlb";
-  const groups = mlb ? pbpBaseballGroups(d) : pbpGroups(d);
+  const groups = mlb ? pbpBaseballGroups(d) : pbpGroups(opt.plays ? { ...d, plays: opt.plays } : d);
   const total = groups.reduce((a, g) => a + g.rows.length, 0);
   let budget = _pbpShowAll ? Infinity : PEEK;
   const shown = [];
@@ -4267,7 +4273,8 @@ function pbpRailHTML(d, league) {
         g.sub ? ` — ${escapeHtml(g.sub)}` : ""}</span>${
         g.tag ? `<span class="pbp-tag${/TURNOVER|INTERCEPTION|FUMBLE|SAFETY/.test(g.tag) ? " turnover" : /TOUCHDOWN|FIELD GOAL|SCORE/.test(g.tag) ? " score" : g.tag === "IN PROGRESS" ? " live" : ""}">${escapeHtml(g.tag)}</span>` : ""}</div>
       ${mlb ? g.rows.map((r) => pbpRowHTML(r, league, g.batting, pbpRoom(d, league))).join("")
-            : (playsHTML({ plays: g.rows, home: d.home, away: d.away, league, room: pbpRoom(d, league) }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`)}
+            : (playsHTML({ plays: g.rows, home: d.home, away: d.away, home_abbr: d.home_abbr, away_abbr: d.away_abbr, league,
+                           room: pbpRoom(d, league), say: opt.say }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`)}
     </div>`;
   const more = total - shown.reduce((a, g) => a + g.rows.length, 0);
   return `${shown.length ? shown.map(group).join("") : `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`}
@@ -5099,6 +5106,8 @@ function pbpBallSide(d, league, lv) {
 }
 /* The middle: the quarter and the clock with the down and distance under
    them, or the inning with its runners, outs and count. */
+//: What a game's start is called before it has one.
+const GP_START_WORD = { mlb: "First pitch", nba: "Tip-off", wnba: "Tip-off", cbb: "Tip-off", nhl: "Puck drop" };
 function pbpBoardMidHTML(d, league, lv, opts) {
   if (lv.state === "final") {
     const extra = league === "mlb" ? ((d.current || {}).inning > 9 ? `F/${(d.current || {}).inning}` : "")
@@ -5106,7 +5115,7 @@ function pbpBoardMidHTML(d, league, lv, opts) {
     return `<span class="pbp-sb-per">Final</span><b class="pbp-sb-clock">${escapeHtml(extra)}</b>`;
   }
   if (lv.state !== "live") {
-    return `<span class="pbp-sb-per">${league === "mlb" ? "First pitch" : "Kickoff"}</span>
+    return `<span class="pbp-sb-per">${GP_START_WORD[league] || "Kickoff"}</span>
       <b class="pbp-sb-clock">${escapeHtml(pbpTime(lv.start_time) || "—")}</b>`;
   }
   /* A HOLD READS AS ONE, NEVER AS LIVE (tests/test_a_delayed_game_says_so):
@@ -5131,8 +5140,9 @@ function pbpBoardMidHTML(d, league, lv, opts) {
       <span class="pbp-sb-bases">${miniDiamond(lv.bases)}</span>
       ${sit([stopped(inning), outs, hold ? "" : count])}${sit(why)}${live}`;
   }
-  const q = /^Q(\d)$/.exec(String(lv.period || ""));
-  const quarter = q ? `${pbpOrd(Number(q[1]))} quarter` : (lv.period || "");
+  // "Q3", "H2", "P2": the 3rd quarter, the 2nd half, the 2nd period.
+  const q = /^[QHP](\d+)$/.exec(String(lv.period || ""));
+  const quarter = q ? gpPeriodName(league, Number(q[1]), d) : (lv.period || "");
   return `<span class="pbp-sb-per">${escapeHtml(word || quarter)}</span>
     <b class="pbp-sb-clock">${escapeHtml(hold ? "" : (lv.clock || ""))}</b>
     ${hold ? sit([stopped(quarter), ...why]) : sit([(opts || {}).noDetail ? "" : lv.detail])}${live}`;
@@ -5321,45 +5331,104 @@ function gpTdFor(d, league, ha, now) {
   if (!f || f.side !== ha || f.key !== `${league}:${(d || {}).event_id || ""}`) return null;
   return t - f.start < GP_TD_MS ? Math.max(0, t - f.start) : null;
 }
-function gpTdWordHTML(league, d, ha, say) {
+function gpTdWordHTML(league, d, ha, say, word = "Touchdown") {
   const name = teamNameIn(league, d[ha]) || d[ha] || "";
-  return `<span class="gp-td-word"${say ? ` role="status" aria-label="${escapeAttr(`Touchdown, ${name}`)}"` : ' aria-hidden="true"'}>Touchdown</span>`;
+  return `<span class="gp-td-word"${say ? ` role="status" aria-label="${escapeAttr(`${word}, ${name}`)}"` : ' aria-hidden="true"'}>${escapeHtml(word)}</span>`;
 }
+/* A GOAL, FLASHED (2026-11-17, on hockey's own page then; here since
+   2026-11-21, when every sport's page became this one). The touchdown's
+   flash for hockey: when a side's score rises while the game's page is open,
+   live and on screen, that side's score lights up with GOAL over it, in the
+   same markup and for the same few seconds. Only a goal seen happen: never
+   on opening the page or coming back to it (a draw more than two minutes
+   after the last is a return), never one that came in while the tab was
+   hidden, and never a shootout's deciding goal, which settles the game but
+   is no goal in the run of play. It reads the score on the screen, so a
+   reader on a TV delay sees it when the TV does. Kept per page visit only. */
+const GP_GOAL = { key: "", away: null, home: null, at: 0, live: false, flash: null };
+const gpGoalKey = (d) => String((d || {}).event_id || `${(d || {}).away}@${(d || {}).home}`);
+function gpGoalSeen(d, lv, now) {
+  if (!d) return null;
+  const t = now == null ? Date.now() : now, key = gpGoalKey(d);
+  const num = (v) => (v == null || v === "" || !isFinite(Number(v)) ? null : Number(v));
+  const a = num(lv.away_score), h = num(lv.home_score);
+  const per = Number(((d.rink || {}).clock || {}).period) || Number((/^P?(\d)/i.exec(String(lv.period || "")) || [])[1]) || 0;
+  const shootout = per >= 5 || /\bSO\b|shootout/i.test(`${lv.period || ""} ${lv.detail || ""}`);
+  const hidden = typeof document !== "undefined" && !!document.hidden;
+  if (GP_GOAL.key !== key) {
+    GP_GOAL.key = key; GP_GOAL.flash = null;
+  } else if (GP_GOAL.live && !hidden && !shootout && t - GP_GOAL.at < GP_TD_FRESH_MS && a != null && h != null
+             && GP_GOAL.away != null && GP_GOAL.home != null) {
+    const da = a - GP_GOAL.away, dh = h - GP_GOAL.home;
+    const rose = da >= 1 && da >= dh ? "away" : dh >= 1 ? "home" : null;
+    if (rose) GP_GOAL.flash = { key, side: rose, start: t };
+  }
+  GP_GOAL.away = a; GP_GOAL.home = h; GP_GOAL.at = t; GP_GOAL.live = lv.state === "live";
+  return GP_GOAL.flash;
+}
+function gpGoalFor(d, ha, now) {
+  const f = GP_GOAL.flash, t = now == null ? Date.now() : now;
+  if (!f || f.side !== ha || f.key !== gpGoalKey(d)) return null;
+  return t - f.start < GP_TD_MS ? Math.max(0, t - f.start) : null;
+}
+/* A score seen change (the page calls it once a draw, before the score is
+   drawn), and the flash a side wears now: how far in it is (ms) and its
+   word, or null. One pair for every sport, so the score at the top and the
+   bar that stays when you scroll never ask which sport they are. */
+function gpScoreSeen(league, d, lv, now) {
+  return PBP_FOOTBALL.has(league) ? gpTouchdownSeen(league, d, lv, now) : league === "nhl" ? gpGoalSeen(d, lv, now) : null;
+}
+function gpFlashFor(d, league, ha, now) {
+  const hockey = league === "nhl";
+  const t = PBP_FOOTBALL.has(league) ? gpTdFor(d, league, ha, now) : hockey ? gpGoalFor(d, ha, now) : null;
+  return t == null ? null : { t, word: hockey ? "Goal" : "Touchdown" };
+}
+/* WHAT A SPORT HANDS THE SCORE (2026-11-21, one page for every sport: gpKit).
+   The score reads the same for every sport; a sport says only what is its
+   own: `ball`, the side with it ("home", "away" or ""), with its `ballIcon`
+   and `ballTitle`; `marks`, a line under each side (basketball's bonus,
+   fouls and timeouts: words, so they take the side's whole width, where
+   football's three timeout pips sit under its record); and `mid`, a line
+   under the clock (hockey's shots on goal and power play). Football's and
+   baseball's are worked out here when none is handed in. */
 function pbpBoardHTML(d, league, lv, opts) {
   const o = opts || {};
   const table = teamsIn(league) || {};
   const col = pbpSideColours(league, d);
-  const ball = pbpBallSide(d, league, lv);
+  const ball = o.ball != null ? o.ball : pbpBallSide(d, league, lv);
   if (league === "cfb") pbpCfbTeamsWarm();
   if (league === "cbb") pbpCbbTeamsWarm();
-  const tos = gpTimeouts(d, league, lv);
+  const tos = o.marks ? null : gpTimeouts(d, league, lv);
+  const pips = tos ? { away: gpTimeoutsHTML(tos.away, tos.total, "pbp-sb-tos"), home: gpTimeoutsHTML(tos.home, tos.total, "pbp-sb-tos") } : {};
+  const own = o.marks || {};
   const side = (ha) => {
     const abbr = d[ha], t = table[abbr] || {};
     const full = (ha === "home" ? d.home_name : d.away_name) || teamNameIn(league, abbr) || abbr || "";
     const { big, small } = pbpSideNames(league, t, full);
     const score = ha === "home" ? lv.home_score : lv.away_score;
     const rec = (d.records || {})[abbr];
-    const has = ball === ha ? `<span class="pbp-sb-ball" title="${league === "mlb" ? "At bat" : "Ball"}">${
-      icon(league === "mlb" ? "baseball" : "football", 14)}</span>` : "";
+    const has = ball === ha ? `<span class="pbp-sb-ball" title="${escapeHtml(o.ballTitle || (league === "mlb" ? "At bat" : "Ball"))}">${
+      icon(o.ballIcon || (league === "mlb" ? "baseball" : "football"), 14)}</span>` : "";
     // A final dims the side that lost, as the score's own page does (GP1).
     const other = ha === "home" ? lv.away_score : lv.home_score;
     const lost = lv.state === "final" && score != null && other != null && Number(score) < Number(other);
-    // A touchdown just seen (gpTouchdownSeen), on the football page only.
-    const td = gpTdFor(d, league, ha);
-    return `<div class="pbp-sb-side ${ha}${lost ? " lost" : ""}${td != null ? " gp-td" : ""}"${
-      td != null ? ` style="--td-t:-${Math.round(td)}ms"` : ""}>
+    // A touchdown or a goal just seen (gpScoreSeen).
+    const fl = gpFlashFor(d, league, ha);
+    return `<div class="pbp-sb-side ${ha}${lost ? " lost" : ""}${fl ? " gp-td" : ""}"${
+      fl ? ` style="--td-t:-${Math.round(fl.t)}ms"` : ""}>
         <span class="pbp-sb-crest">${teamMarkIn(league, abbr, 56)}</span>
         <div class="pbp-sb-team">${small ? `<span class="pbp-sb-loc">${escapeHtml(small)}</span>` : ""}
           <b class="pbp-sb-nick">${escapeHtml(big)}</b>${rec ? `<span class="pbp-sb-rec">${escapeHtml(rec)}</span>` : ""}${
-          tos ? gpTimeoutsHTML(tos[ha], tos.total, "pbp-sb-tos") : ""}${td != null ? gpTdWordHTML(league, d, ha, true) : ""}</div>
-        <b class="pbp-sb-pts">${has}${score != null ? escapeHtml(String(score)) : "–"}</b></div>`;
+          pips[ha] || ""}${fl ? gpTdWordHTML(league, d, ha, true, fl.word) : ""}</div>
+        <b class="pbp-sb-pts">${has}${score != null ? escapeHtml(String(score)) : "–"}</b>${
+        own[ha] ? `<div class="pbp-sb-marks">${own[ha]}</div>` : ""}</div>`;
   };
   // Live, the Watch button names the carrier; the pill is for before and after.
   const carrier = (d.tv || [])[0] && lv.state !== "live" ? `<span class="pbp-sb-tv">${escapeHtml((d.tv || [])[0])}</span>` : "";
   const ago = d.archive ? pbpPlayedOn(d) : pbpAgo(d.generated_at);
   return `<div class="card pbp-hero" style="--ca:${col.away};--ch:${col.home}">
       ${side("away")}
-      <div class="pbp-sb-mid">${pbpBoardMidHTML(d, league, lv, { noDetail: o.noDetail })}${carrier}${ago ? `<span class="pbp-sb-ago">${escapeHtml(ago)}</span>` : ""}</div>
+      <div class="pbp-sb-mid">${pbpBoardMidHTML(d, league, lv, { noDetail: o.noDetail })}${o.mid || ""}${carrier}${ago ? `<span class="pbp-sb-ago">${escapeHtml(ago)}</span>` : ""}</div>
       ${side("home")}
       ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}
       ${o.noLock ? "" : lockGameHTML(league, { event_id: (state.pbp || {}).event, home: d.home, away: d.away, live: lv })}
@@ -5469,12 +5538,6 @@ async function renderPbpPage(tick) {
     if (g) g.addEventListener("click", () => openGame(g.dataset.gid));
     host.querySelectorAll("[data-pbp-tab]").forEach((b) =>
       b.addEventListener("click", () => { _gpJump = "gpJump" in b.dataset; _pbpTab = b.dataset.pbpTab; renderPbpPage(); }));
-    // The box score's team toggle (js/gamecast.js keeps the choice).
-    host.querySelectorAll("[data-gc-team]").forEach((b) =>
-      b.addEventListener("click", () => {
-        if (window.QBGamecast) window.QBGamecast.setTeam(b.dataset.gcTeam);
-        renderPbpPage();
-      }));
   };
   if (!league || !event) {
     gpWashOff();
@@ -5646,32 +5709,23 @@ async function renderPbpPage(tick) {
     : `<p class="rail-quiet">Team totals fill in from the drives as they are played. Park and
        weather facts come off the league’s board — open the ${
        escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab for them.</p>`;
-  /* THE GAMECAST (2026-10-08): football, hoops and hockey draw ESPN's
-     tab set from js/gamecast.js — the drive in progress, the last play
-     with the players in it, the leaders, the whole box score, the drives,
-     the team stats. Loaded on the first live game opened; until it lands
-     the panel says so and the page redraws itself when it does. Baseball
-     keeps its own four rooms. */
+  /* ONE PAGE (gpPageHTML, 2026-11-21): every sport but baseball draws the
+     football page's rooms, its own parts handed in (gpKit). js/gamecast.js
+     holds the cards they share (the newest play, the leaders, the scoring):
+     loaded on the first game opened, and the page drawn again when it
+     lands. Baseball keeps its own four rooms, and loads the file too, for
+     the at-bat's pitches (QBGamecast.zone). */
   const tabs = pbpTabsFor(league);
-  const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab
-    : tabs === GP_FB_TABS && lv.state === "live" ? "plays" : tabs[0][0];
+  const one = tabs === GP_TABS;
+  const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab : one && lv.state === "live" ? "plays" : tabs[0][0];
   const GC = league === "mlb" ? null : (window.QBGamecast || null);
-  // Baseball loads it too, for the at-bat's pitches (QBGamecast.zone).
   if (!window.QBGamecast) {
     loadGamecast().then((mod) => { if (mod && state.view === "pbp") renderPbpPage(); });
   }
-  // Basketball: Ethan's render, its own page (js/hoopscast.js via QBGamecast.hoops).
-  // Call it rides in on the basketball and hockey pages too, under the arena (pbpCallItHTML).
-  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpMineSlotsHTML() + pbpCallItHTML(d, league) + pbpFootHTML() })) { if (lv.state === "live") again(); return; }
-  // Football: the page in the clubs' colours (GP1, gpFootballHTML), its
-  // own panels; the other layout's below are not built for it.
-  const fb = PBP_FOOTBALL.has(league);
-  const panel = fb ? "" : tab === "props" ? pbpPropsHTML(d, league)
+  const panel = one ? "" : tab === "props" ? pbpPropsHTML(d, league)
     : tab === "injuries" ? pbpInjuriesHTML(d, league)
     : tab === "players" ? pbpPlayersHTML(d, league)
-    : league === "mlb" ? infoPanel
-    : GC ? GC.panel(tab, { d, league, faces, boardGame })
-    : `<p class="rail-quiet">Loading the gamecast…</p>`;
+    : infoPanel;
   const infoHTML = `${pbpTabsHTML(tab, boardGame, tabs)}<div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>`;
   const winProb = boardGame && boardGame.line_track ? `<div class="card">${lineTrackHTML(boardGame)}</div>` : "";
   /* A FINISHED GAME IS ITS RECORD, NOT ITS PICTURE (Ethan, 2026-10-30, the
@@ -5684,11 +5738,14 @@ async function renderPbpPage(tick) {
   // "toggle" event (gpWire), which comes a moment after the tap and never reaches a fold this line removes,
   // so the ⋯ menu a reader opened just before the live poll's redraw came back shut (the gate's spoiler test
   // caught it on a busy box). Each fold's state as it stands is kept first; a new game clears them all
-  // (gpFootballHTML, `_gpFor`).
+  // (gpPageHTML, `_gpFor`).
   host.querySelectorAll("details[data-gp-key]").forEach((el) => _gpOpen.set(el.dataset.gpKey, el.open));
-  host.innerHTML = fb ? gpFootballHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event }) : `
+  // The sport's own parts (gpKit), and what this redraw must leave as it is (gpHoldTake).
+  const kit = one ? gpKit({ d, league, lv, GC, boardGame, faces, event }) : null;
+  const held = one ? gpHoldTake(host, `${league}:${event}`) : null;
+  host.innerHTML = one ? gpPageHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event, kit }) : `
     ${stripHTML}
-    <div class="pbp-layout gp${league === "mlb" ? "" : " pbp-has-tabs"}">
+    <div class="pbp-layout gp">
       <div class="pbp-main">
         ${pbpBoardHTML(d, league, lv)}
         ${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
@@ -5697,7 +5754,7 @@ async function renderPbpPage(tick) {
         ${lv.state === "final" ? "" : `<div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}
           ${pbpParkHTML(d, league, boardGame, lastPlay)}
-          ${pbpSituationHTML(d, league, faces)}${league === "mlb" && window.QBGamecast && QBGamecast.zone ? QBGamecast.zone(d) : ""}
+          ${pbpSituationHTML(d, league, faces)}${window.QBGamecast && QBGamecast.zone ? QBGamecast.zone(d) : ""}
         </div>`}
         ${pbpCallItHTML(d, league)}
         ${infoHTML}
@@ -5716,8 +5773,12 @@ async function renderPbpPage(tick) {
         ${pbpCrewHTML(d, league, boardGame)}
       </aside>
     </div>`;
+  gpHoldGive(host, held);
   wire();
-  if (fb) gpWire(host);
+  if (one) {
+    gpWire(host);
+    if (kit && typeof kit.wire === "function") kit.wire(host);
+  }
   // An old game's final: our report on it, graded, under the score (pbpOurReportFill).
   if (d.archive && lv.state === "final") {
     const hero = host.querySelector(".pbp-hero");
@@ -5791,8 +5852,8 @@ function gpWashColours(league, d) {
   return { home, away };
 }
 /* The wash is the view's own layer, not the page's markup: every sport's
-   layout draws over it (football here, basketball and hockey in their own
-   files), and leaving the view takes it away (app.js _switchViewNow). */
+   page draws over it (gpPageHTML, and baseball's rooms), and leaving the view
+   takes it away (app.js _switchViewNow). */
 function gpWashOn(league, d) {
   const view = document.getElementById("view-pbp");
   if (!view) return;
@@ -6161,21 +6222,23 @@ function gpClockWord(league, lv) {
   if (hold) return hold.split(/\s[—-]\s/)[0];
   return [lv.period, lv.clock].filter(Boolean).join(" ");
 }
-function gpCompactHTML(d, league, lv, tabs, tab) {
+function gpCompactHTML(d, league, lv, tabs, tab, kit) {
   const tos = gpTimeouts(d, league, lv);
   const side = (ha) => {
     const s = ha === "home" ? lv.home_score : lv.away_score;
     const mark = teamMarkIn(league, d[ha], 24);
-    const td = gpTdFor(d, league, ha);
-    return `<span class="gp-c-side ${ha}${td != null ? " gp-td" : ""}"${td != null ? ` style="--td-t:-${Math.round(td)}ms"` : ""}>${
+    const fl = gpFlashFor(d, league, ha);
+    return `<span class="gp-c-side ${ha}${fl ? " gp-td" : ""}"${fl ? ` style="--td-t:-${Math.round(fl.t)}ms"` : ""}>${
       tos ? `<span class="gp-c-crest">${mark}${gpTimeoutsHTML(tos[ha], tos.total, "gp-c-tos")}</span>` : mark}<b>${
-      s != null ? escapeHtml(String(s)) : "–"}</b>${td != null ? gpTdWordHTML(league, d, ha, false) : ""}</span>`;
+      s != null ? escapeHtml(String(s)) : "–"}</b>${fl ? gpTdWordHTML(league, d, ha, false, fl.word) : ""}</span>`;
   };
   const m = gpFieldModel(d, league, lv);
   // The down and the spot ride under the clock, so the top of the screen
   // says them wherever the page is scrolled (the drive card below no
-  // longer repeats them; gamecast driveViewHTML `top`).
-  const down = m && m.words ? `<span class="gp-c-down">${escapeHtml(m.words)}</span>` : "";
+  // longer repeats them; gamecast driveViewHTML `top`). Another sport's
+  // line there is its own (`down`: hockey's power play).
+  const words = (m && m.words) || (kit || {}).down || "";
+  const down = words ? `<span class="gp-c-down">${escapeHtml(words)}</span>` : "";
   return `<div class="gp-stick"><div class="gp-compact${_gpStuck ? " on" : ""}${_gpTabsStuck ? " tabs-on" : ""}"${_gpStuck ? "" : " inert"}>
       <div class="gp-c-row"><button type="button" class="gp-c-back" data-gp-back aria-label="${escapeAttr(pbpBack().label.replace(/^←\s*/, ""))}">${GP_BACK_SVG}</button>
         ${side("away")}<span class="gp-c-mid">${escapeHtml(gpClockWord(league, lv))}${down}</span>${side("home")}<span class="gp-c-end"></span></div>
@@ -6271,15 +6334,20 @@ function gpMoreHTML(d, league, event) {
    the odds, the pressure rates beside the stats, the injuries and the crew
    with the facts. A final opens on its scoring plays — the record of the
    game (Ethan, 2026-10-30: "the espn page with the past game data"). */
-function gpStatsHTML(d, league, boardGame, faces, GC) {
+function gpStatsHTML(d, league, boardGame, faces, GC, kit) {
+  const k = kit || {};
   const lv = d.live || {};
   const scoring = lv.state === "final" && GC && GC.scoring
     ? `${GC.scoring(d, league)}${GC.leaders ? GC.leaders(d, league, faces) : ""}` : "";
   // The win chance through the game: with the plays while the ball is live
   // (gpPlaysHTML), here once it is over, as the record of how it swung.
   const win = lv.state === "live" ? "" : `${pbpWinChartHTML(d, league, boardGame)}${pbpModelWinProbHTML(d)}`;
-  return `${scoring}${gpOddsHTML(d, league, boardGame)}${win}${gpTeamStatsHTML(d, league)}${gpBoxHTML(d, league, faces, "away")}${
-    gpBoxHTML(d, league, faces, "home")}${pbpPressureHTML(d, league, boardGame)}${gpInfoHTML(d, league, boardGame)}${
+  // A sport's own count of the game stands in for the summary's (hockey's,
+  // off the league's events: `teamStats`, `boxes`), and what only it has
+  // follows the box scores (`statsExtra`: a shot chart's zones, the trends).
+  return `${scoring}${gpOddsHTML(d, league, boardGame)}${win}${k.teamStats != null ? k.teamStats : gpTeamStatsHTML(d, league)}${
+    k.boxes != null ? k.boxes : `${gpBoxHTML(d, league, faces, "away")}${gpBoxHTML(d, league, faces, "home")}`}${k.statsExtra || ""}${
+    pbpPressureHTML(d, league, boardGame)}${gpInfoHTML(d, league, boardGame)}${
     pbpCrewHTML(d, league, boardGame)}${gpInjuriesHTML(d, league)}`;
 }
 
@@ -6338,7 +6406,27 @@ function gpOddsHTML(d, league, g) {
 const GP_TS_KEY = ["firstDowns", "totalYards", "netPassingYards", "rushingYards", "thirdDownEff", "fourthDownEff",
                    "redZoneAttempts", "turnovers", "totalPenaltiesYards", "sacksYardsLost", "possessionTime"];
 const GP_TS_READ = { thirdDownEff: "rate", fourthDownEff: "rate", redZoneAttempts: "rate", completionAttempts: "rate",
-                     possessionTime: "clock", totalPenaltiesYards: "first", sacksYardsLost: "first" };
+                     possessionTime: "clock", totalPenaltiesYards: "first", sacksYardsLost: "first",
+                     "fieldGoalsMade-fieldGoalsAttempted": "rate", "threePointFieldGoalsMade-threePointFieldGoalsAttempted": "rate",
+                     "freeThrowsMade-freeThrowsAttempted": "rate" };
+/* The other sports' lead rows (2026-11-21, one page for every sport), in the
+   order their own box scores are read; the rest fold under "More", as
+   football's do. A shooting line reads as its rate with the makes and tries
+   beside it ("55% 42/77": GP_TS_PCT), and a few of the summary's labels are
+   said in plainer words (GP_TS_WORD). */
+const GP_TS_HOOPS = ["fieldGoalsMade-fieldGoalsAttempted", "threePointFieldGoalsMade-threePointFieldGoalsAttempted",
+                     "freeThrowsMade-freeThrowsAttempted", "totalRebounds", "assists", "totalTurnovers", "steals", "blocks",
+                     "pointsInPaint", "fastBreakPoints", "largestLead"];
+const GP_TS_LEAD = { nba: GP_TS_HOOPS, wnba: GP_TS_HOOPS, cbb: GP_TS_HOOPS,
+                     nhl: ["shotsTotal", "faceoffPercent", "powerPlayGoals", "powerPlayOpportunities", "hits", "blockedShots",
+                           "takeaways", "giveaways", "penaltyMinutes"] };
+const GP_TS_PCT = new Set(["fieldGoalsMade-fieldGoalsAttempted", "threePointFieldGoalsMade-threePointFieldGoalsAttempted",
+                           "freeThrowsMade-freeThrowsAttempted"]);
+const GP_TS_WORD = { "fieldGoalsMade-fieldGoalsAttempted": "Field goals", "threePointFieldGoalsMade-threePointFieldGoalsAttempted": "3-pointers",
+                     "freeThrowsMade-freeThrowsAttempted": "Free throws", totalTurnovers: "Turnovers", pointsInPaint: "Points in the paint",
+                     fastBreakPoints: "Fast break points", largestLead: "Largest lead", shotsTotal: "Shots on goal",
+                     faceoffPercent: "Faceoff %", powerPlayGoals: "Power play goals", powerPlayOpportunities: "Power plays",
+                     blockedShots: "Blocked shots", penaltyMinutes: "Penalty minutes" };
 function gpStatNum(name, v) {
   const s = String(v == null ? "" : v).trim();
   const how = GP_TS_READ[name];
@@ -6357,29 +6445,44 @@ function gpTeamStatsHTML(d, league) {
   const byName = (rows) => { const m = new Map(); rows.forEach((r) => { const k = r.name || r.label; if (k && !m.has(k)) m.set(k, r); }); return m; };
   const a = byName(A), h = byName(H);
   const names = [...new Set([...a.keys(), ...h.keys()])];
-  const lead = PBP_FOOTBALL.has(league) ? GP_TS_KEY.filter((k) => names.includes(k)) : names.slice(0, 8);
+  const lead = PBP_FOOTBALL.has(league) ? GP_TS_KEY.filter((k) => names.includes(k))
+    : GP_TS_LEAD[league] ? GP_TS_LEAD[league].filter((k) => names.includes(k)) : names.slice(0, 8);
   const rest = names.filter((k) => !lead.includes(k));
+  // "42-77" as its rate, the makes and tries beside it; anything else as the summary wrote it.
+  const shown = (k, v) => {
+    const m = GP_TS_PCT.has(k) ? /^(\d+)\s*[-/]\s*(\d+)$/.exec(String(v).trim()) : null;
+    return m ? `${Number(m[2]) ? Math.round((100 * Number(m[1])) / Number(m[2])) : 0}%<small>${m[1]}/${m[2]}</small>` : escapeHtml(String(v));
+  };
   const row = (k) => {
     const ra = a.get(k), rh = h.get(k);
     const av = ra ? ra.value : "—", hv = rh ? rh.value : "—";
-    const x = gpStatNum(k, av), y = gpStatNum(k, hv);
-    let bars = "";
-    if (x != null && y != null && x >= 0 && y >= 0) {
-      const top = Math.max(x, y) || 1;
-      // Whole class names, built first: a name written straight onto a
-      // template ("a${…}") reads as a run-time prefix to the room check
-      // (tests/test_a_rooms_styles_are_its_own).
-      const ca = x >= y && x > 0 ? "a lead" : "a", ch = y >= x && y > 0 ? "h lead" : "h";
-      bars = `<div class="gp-ts-bars" aria-hidden="true"><span class="${ca}"><i style="width:${Math.round((x / top) * 100)}%"></i></span><span class="${ch}"><i style="width:${Math.round((y / top) * 100)}%"></i></span></div>`;
-    }
-    return `<div class="gp-ts"><div class="gp-ts-row"><b>${escapeHtml(String(av))}</b><span>${escapeHtml((ra || rh).label || k)}</span><b>${
-      escapeHtml(String(hv))}</b></div>${bars}</div>`;
+    return gpTsRowHTML(GP_TS_WORD[k] || (ra || rh).label || k, shown(k, av), shown(k, hv), gpStatNum(k, av), gpStatNum(k, hv));
   };
-  const more = rest.length ? `<details class="gp-more-stats" data-gp-key="ts-more"${gpOpenAttr("ts-more", false)}><summary>More team stats</summary>${
-    rest.map(row).join("")}</details>` : "";
+  return gpTsCardHTML(d, league, lead.map(row).join(""), rest.map(row).join(""));
+}
+/* One row and one card for every sport's team stats: the two values (markup
+   already: a rate carries its makes and tries), the stat's name between
+   them, and a bar a side where the two can be compared (`x`, `y`: numbers,
+   or null for none). A sport that counts its own game (hockey, off the
+   league's events) builds its rows with these too. */
+function gpTsRowHTML(label, av, hv, x, y) {
+  let bars = "";
+  if (x != null && y != null && x >= 0 && y >= 0) {
+    const top = Math.max(x, y) || 1;
+    // Whole class names, built first: a name written straight onto a
+    // template ("a${…}") reads as a run-time prefix to the room check
+    // (tests/test_a_rooms_styles_are_its_own).
+    const ca = x >= y && x > 0 ? "a lead" : "a", ch = y >= x && y > 0 ? "h lead" : "h";
+    bars = `<div class="gp-ts-bars" aria-hidden="true"><span class="${ca}"><i style="width:${Math.round((x / top) * 100)}%"></i></span><span class="${ch}"><i style="width:${Math.round((y / top) * 100)}%"></i></span></div>`;
+  }
+  return `<div class="gp-ts"><div class="gp-ts-row"><b>${av}</b><span>${escapeHtml(label)}</span><b>${hv}</b></div>${bars}</div>`;
+}
+function gpTsCardHTML(d, league, lead, rest) {
+  const more = rest ? `<details class="gp-more-stats" data-gp-key="ts-more"${gpOpenAttr("ts-more", false)}><summary>More team stats</summary>${
+    rest}</details>` : "";
   return `<div class="card gp-card gp-tscard"><div class="gp-card-head gp-ts-head"><span class="gp-ls-team">${teamMarkIn(league, d.away, 22)}<span>${
     escapeHtml(d.away_abbr || d.away || "")}</span></span><b>Team stats</b><span class="gp-ls-team home"><span>${escapeHtml(d.home_abbr || d.home || "")}</span>${
-    teamMarkIn(league, d.home, 22)}</span></div>${lead.map(row).join("")}${more}</div>`;
+    teamMarkIn(league, d.home, 22)}</span></div>${lead}${more}</div>`;
 }
 
 /* Each side's box score, a card a club: its groups in the order a box score
@@ -6390,30 +6493,62 @@ function gpTeamStatsHTML(d, league) {
 const GP_BOX_ORDER = ["passing", "rushing", "receiving", "kicking", "punting", "kickReturns", "puntReturns",
                       "interceptions", "fumbles", "defensive"];
 const GP_BOX_TITLE = { passing: "Passing", rushing: "Rushing", receiving: "Receiving", kicking: "Kicking", punting: "Punting",
-  kickReturns: "Kick returns", puntReturns: "Punt returns", interceptions: "Interceptions", fumbles: "Fumbles", defensive: "Defense" };
-const GP_BOX_LABEL = { TOT: "TCKL", SACKS: "SACK", "QB HTS": "QBH" };
+  kickReturns: "Kick returns", puntReturns: "Punt returns", interceptions: "Interceptions", fumbles: "Fumbles", defensive: "Defense",
+  forwards: "Forwards", defenses: "Defense", goalies: "Goalies" };
+const GP_BOX_LABEL = { TOT: "TCKL", SACKS: "SACK", "QB HTS": "QBH", HT: "HIT", BS: "BLK" };
 const GP_BOX_ROWS = 8;
 function gpShortName(n) {
   const parts = String(n || "").trim().split(/\s+/);
   if (parts.length < 2) return String(n || "");
   return `${parts[0][0]}. ${parts.slice(1).join(" ")}`;
 }
+/* THE OTHER SPORTS' BOX SCORES (2026-11-21, one page for every sport). The
+   summary's basketball table is one group with no name and fourteen columns,
+   and its hockey tables twenty-one in the order the feed lists them; each
+   is read here in the order its own box score is (GP_BOX_COLS), basketball's
+   as its starters and its bench (the summary marks a starter). */
+const GP_BOX_HOOPS = ["MIN", "PTS", "REB", "AST", "FG", "3PT", "FT", "STL", "BLK", "TO", "PF", "+/-"];
+const GP_BOX_SKATER = ["G", "A", "SOG", "+/-", "TOI", "HT", "BS", "PIM"];
+const GP_BOX_COLS = { "": GP_BOX_HOOPS, forwards: GP_BOX_SKATER, defenses: GP_BOX_SKATER, goalies: ["SA", "SV", "GA", "SV%", "TOI"] };
 function gpBoxHTML(d, league, faces, ha) {
   const team = d[ha];
   const box = (d.box || []).find((b) => b && b.team === team);
   if (!box || !(box.groups || []).length) return "";
   const rank = (g) => { const i = GP_BOX_ORDER.indexOf(String(g.name || "")); return i < 0 ? GP_BOX_ORDER.length : i; };
-  const groups = box.groups.slice().sort((x, y) => rank(x) - rank(y));
-  const tables = groups.map((g) => {
+  const groups = [];
+  box.groups.slice().sort((x, y) => rank(x) - rank(y)).forEach((g) => {
     const rows = (g.rows || []).filter((r) => (r.stats || []).some((s) => s && s !== "--"));
+    if (!rows.length) return;
+    const all = g.labels || [], name = String(g.name || "");
+    // The columns this table reads, where the sport has an order of its own; else the summary's, as they come.
+    const want = GP_BOX_COLS[name] && !PBP_FOOTBALL.has(league) ? GP_BOX_COLS[name].filter((l) => all.includes(l)) : null;
+    const labels = want && want.length ? want : all;
+    const at = labels.map((l) => all.indexOf(l));
+    const cut = (list, key, title) => ({ key, title, labels: labels.map((l) => GP_BOX_LABEL[l] || l),
+      rows: list.map((r) => ({ name: r.name || "", pos: r.pos || "", cells: at.map((i) => (r.stats || [])[i]) })) });
+    const title = GP_BOX_TITLE[name] || titleCaseWords(name);
+    const starters = rows.filter((r) => r.starter);
+    if (!name && starters.length && starters.length < rows.length) {
+      groups.push(cut(starters, `${ha}-starters`, "Starters"), cut(rows.filter((r) => !r.starter), `${ha}-bench`, "Bench"));
+    } else groups.push(cut(rows, `${ha}-${name}`, title || "Players"));
+  });
+  return gpBoxCardHTML(league, team, groups, PBP_FOOTBALL.has(league));
+}
+/* One card for a side's box score, whichever sport's and whoever counted it
+   (the summary's, above; hockey's own, off the league's box: js/rinkcast.js):
+   each group a compact table under its own name, `labels` its columns and
+   each row a name, a position and its `cells`; a long group shows its first
+   eight and folds the rest. `short` writes a first initial and the surname
+   (football's, so a phone has room for the numbers). */
+function gpBoxCardHTML(league, team, groups, short) {
+  const tables = (groups || []).map((g) => {
+    const rows = g.rows || [];
     if (!rows.length) return "";
-    const labels = g.labels || [];
-    const title = GP_BOX_TITLE[g.name] || titleCaseWords(String(g.name || ""));
-    const tr = (r) => `<tr><th scope="row" title="${escapeAttr(r.name || "")}">${escapeHtml(PBP_FOOTBALL.has(league) ? gpShortName(r.name) : (r.name || ""))}${
-      r.pos ? ` <span class="gp-pos">${escapeHtml(r.pos)}</span>` : ""}</th>${labels.map((_l, i) =>
-        `<td>${escapeHtml((r.stats || [])[i] == null ? "—" : String(r.stats[i]))}</td>`).join("")}</tr>`;
-    const head = `<thead><tr><th scope="col">${escapeHtml(title)}</th>${labels.map((l) => `<th scope="col">${escapeHtml(GP_BOX_LABEL[l] || l)}</th>`).join("")}</tr></thead>`;
-    const key = `bx-${ha}-${g.name}`;
+    const tr = (r) => `<tr><th scope="row" title="${escapeAttr(r.name || "")}">${escapeHtml(short ? gpShortName(r.name) : (r.name || ""))}${
+      r.pos ? ` <span class="gp-pos">${escapeHtml(r.pos)}</span>` : ""}</th>${(g.labels || []).map((_l, i) =>
+        `<td>${escapeHtml((r.cells || [])[i] == null ? "—" : String(r.cells[i]))}</td>`).join("")}</tr>`;
+    const head = `<thead><tr><th scope="col">${escapeHtml(g.title || "")}</th>${(g.labels || []).map((l) => `<th scope="col">${escapeHtml(l)}</th>`).join("")}</tr></thead>`;
+    const key = `bx-${g.key}`;
     const extra = rows.length > GP_BOX_ROWS ? `<details class="gp-bx-more" data-gp-key="${escapeAttr(key)}"${gpOpenAttr(key, false)}><summary>All ${rows.length}</summary>
         <div class="gp-bx-wrap"><table class="gp-bx">${head}<tbody>${rows.slice(GP_BOX_ROWS).map(tr).join("")}</tbody></table></div></details>` : "";
     return `<div class="gp-bx-wrap"><table class="gp-bx">${head}<tbody>${rows.slice(0, GP_BOX_ROWS).map(tr).join("")}</tbody></table></div>${extra}`;
@@ -6476,6 +6611,13 @@ function gpPeriodWord(league, n) {
   if (k <= reg) return `${pbpOrd(k)} ${league === "nhl" ? "period" : league === "cbb" ? "half" : "quarter"}`;
   return k === reg + 1 ? "Overtime" : `${k - reg}OT`;
 }
+/* …and for this game: hockey's fifth period is the shootout in the regular
+   season (the league's own game type, 3 in the playoffs, where it is a
+   second overtime). */
+function gpPeriodName(league, n, d) {
+  if (league === "nhl" && Number(n) > 4 && Number(((d || {}).rink || {}).game_type || 2) !== 3) return "Shootout";
+  return gpPeriodWord(league, n);
+}
 function gpDrivesHTML(d, league) {
   const lv = d.live || {};
   const drives = (d.drives || []).slice().reverse();
@@ -6508,6 +6650,57 @@ function gpDrivesHTML(d, league) {
           || `<p class="rail-quiet">No plays yet.</p>`}</details>`;
   }).join("");
 }
+/* PERIOD BY PERIOD, FOR A SPORT WITH NO DRIVES (2026-11-21, one page for every
+   sport). Football's plays fold into its drives; a basketball or hockey game
+   has none, and listed whole it runs four hundred rows down the page. So
+   each period is the card a drive is: its name, what each side scored in
+   it, how many plays, the score it left; open it for every play, the newest
+   on top, in the same rows a drive's are (app.js playsHTML). The period
+   being played is open, and what a reader opens stays open through the
+   poll. `o.plays` are the rows when the sport reads a feed of its own
+   (hockey's, the league's events), and `o.say` its words for one (js/
+   hoopscast.js, js/rinkcast.js); without them the game file's own. */
+function gpPeriodsHTML(d, league, o) {
+  const opt = o || {};
+  const lv = d.live || {};
+  const plays = (opt.plays || d.plays || []).filter((p) => p && p.event && Number(p.period) > 0);
+  if (!plays.length) return `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`;
+  const pers = [...new Set(plays.map((p) => Number(p.period)))].sort((x, y) => x - y);
+  // The score each period left, read off its plays in order (a period with
+  // no score on any row leaves the one before it).
+  const left = {};
+  let a = 0, h = 0;
+  pers.forEach((per) => {
+    plays.forEach((p) => {
+      if (Number(p.period) === per && p.away_score != null && p.home_score != null) { a = Number(p.away_score); h = Number(p.home_score); }
+    });
+    left[per] = [a, h];
+  });
+  const newest = pers[pers.length - 1];
+  // The newest period catches up with the scoreboard, as the line score does.
+  if (lv.away_score != null && lv.home_score != null && isFinite(Number(lv.away_score)) && isFinite(Number(lv.home_score))) {
+    left[newest] = [Math.max(left[newest][0], Number(lv.away_score)), Math.max(left[newest][1], Number(lv.home_score))];
+  }
+  const aw = d.away_abbr || d.away || "", hm = d.home_abbr || d.home || "";
+  const reg = GP_REG[league] || 4;
+  return pers.slice().reverse().map((per) => {
+    const rows = plays.filter((p) => Number(p.period) === per);
+    const now = per === newest && lv.state === "live";
+    const [ta, th] = left[per], [pa, ph] = left[pers[pers.indexOf(per) - 1]] || [0, 0];
+    const name = gpPeriodName(league, per, d);
+    const mark = per <= reg ? String(per) : name === "Shootout" ? "SO" : per === reg + 1 ? "OT" : `${per - reg}OT`;
+    const id = `per-${per}`;
+    return `<details class="card gp-dr${now ? " live" : ""}" data-gp-key="${id}"${gpOpenAttr(id, now)}>
+        <summary class="gp-dr-head"><span class="gp-dr-per" aria-hidden="true">${escapeHtml(mark)}</span>
+          <span class="gp-dr-t"><b>${escapeHtml(name.charAt(0).toUpperCase() + name.slice(1))}</b><span class="gp-dr-play">${
+            escapeHtml(`${aw} ${ta - pa}, ${hm} ${th - ph}`)}</span>
+            <span class="gp-dr-meta">${rows.length} play${rows.length === 1 ? "" : "s"}</span></span>
+          <span class="gp-dr-score"><span>${escapeHtml(aw)} <b>${ta}</b></span><span>${escapeHtml(hm)} <b>${th}</b></span></span></summary>
+        ${playsHTML({ plays: rows.slice().reverse(), home: d.home, away: d.away, home_abbr: d.home_abbr, away_abbr: d.away_abbr, league,
+                      room: opt.room === false ? "" : pbpRoom(d, league), say: opt.say })
+          || `<p class="rail-quiet">No plays yet.</p>`}</details>`;
+  }).join("");
+}
 /* THE PLAY-BY-PLAY TAB, LIVE (Ethan, 2026-11-01, with another app's drive
    card: "It's cool too look at (ours) but it's still hard to understand
    exactly what's happening in the game so we need to fix that and make it
@@ -6536,11 +6729,13 @@ function gpDrivesHTML(d, league) {
    none of it. ONE FIELD (Ethan, 2026-11-15, circling the stadium photograph
    with the play drawn on it and its "Ball on" strip: "remove this since we
    have the other field"): the strip under the score is the page's field. */
-function gpNowHTML(d, league, faces, boardGame, GC, top) {
+function gpNowHTML(d, league, faces, boardGame, GC, top, kit) {
   if ((d.live || {}).state !== "live") return "";
   const g = GC || {};
   const ours = pbpModelWinProbHTML(d);
-  const card = g.driveView ? g.driveView(d, league, faces, { top, win: !!ours }) : "";
+  // Football's card is its drive's (gamecast driveView); another sport's is
+  // the same card with its own words in it (gpKit `now`).
+  const card = kit && kit.now != null ? kit.now : g.driveView ? g.driveView(d, league, faces, { top, win: !!ours }) : "";
   return `${card}${pbpWinChartHTML(d, league, boardGame)}${ours}`;
 }
 
@@ -6548,7 +6743,9 @@ function gpNowHTML(d, league, faces, boardGame, GC, top) {
    The game so far, drive by drive, newest first (gpDrivesHTML); a final
    opens on its drive chart (Ethan, 2026-10-30: "the espn page with the past
    game data"). The play in progress is above the tabs (gpNowHTML). */
-function gpPlaysHTML(d, league, GC) {
+function gpPlaysHTML(d, league, GC, kit) {
+  // A sport with no drives reads period by period (gpPeriodsHTML): its own rows and its own words where it has them.
+  if (!PBP_FOOTBALL.has(league)) return gpPeriodsHTML(d, league, { plays: (kit || {}).rows, say: (kit || {}).say });
   const chart = (d.live || {}).state !== "live" && GC && GC.gameChart ? GC.gameChart(d, league) : "";
   return `${chart}${gpDrivesHTML(d, league)}`;
 }
@@ -6611,17 +6808,140 @@ function gpPicksHTML(d, league, boardGame) {
   return `${typeof pbpPropsHTML === "function" ? pbpPropsHTML(d, league) : ""}${door}`;
 }
 
-/* ---------------- the football page ---------------- */
-const GP_FB_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];
+/* ======================================================================
+   ONE PAGE FOR EVERY SPORT (Ethan, 2026-11-21: "go work on the nba and CFB
+   and all other sports live page to try to match nfl. We have put a lot of
+   work into nfls live page and nfl in general so all sports in all aspects
+   should be trying to match nfl and that should be automatic when we do any
+   visual changes and anything in that aspect").
+
+   The football page WAS one of three. Basketball and hockey each drew a page
+   of their own (js/hoopscast.js, js/rinkcast.js): a scoreboard, an arena and
+   three cards with tabs of their own, restyled by hand to look like this one
+   (css: "basketball, hockey: the same score on the wash"), so nothing done
+   here ever reached them: no bar that stays when you scroll, no ⋯ menu, no
+   card for the play right now, no Standings, a footer in the middle of the
+   page. Now every sport but baseball is drawn by gpPageHTML, top to bottom
+   as football's is, and a sport brings only what is its own (gpKit):
+
+     stage       the picture under the score (football's field, basketball's
+                 and hockey's arenas);
+     now         the newest play, in words, on the card every sport's is
+                 drawn on (gamecast nowCardHTML);
+     rows, say   its plays, where it reads a feed of its own (hockey's, the
+                 league's events), and its words for one. Football's
+                 Play-By-Play is its drives; the others read period by
+                 period (gpPeriodsHTML), and the list beside the page is
+                 the same rows in the same words (pbpRailHTML);
+     teamStats, boxes, statsExtra
+                 what its Stats room counts itself or adds;
+     ball, ballIcon, ballTitle, marks, mid, down, live
+                 the little a score says that is one sport's (pbpBoardHTML,
+                 gpCompactHTML), and the clock where its own feed has a
+                 newer one than the scoreboard's (`live`: hockey's);
+     wire        its own buttons.
+
+   Baseball keeps its four rooms until its season: the MLB file is the MLB
+   builder's own shape.
+   ====================================================================== */
+const GP_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];
+/* A sport's own file, loaded with its styles the first time one of its
+   games opens; the page is drawn at once on the parts every game file can
+   make and again when the file lands. Hockey's reads the league's own
+   events (`rink`, livescore_build.nhl_rink_pass): a game without them is
+   the plain page. A file that will not load leaves the sport on it. */
+const GP_SPORT_FILE = { nba: "hoopscast", wnba: "hoopscast", cbb: "hoopscast", nhl: "rinkcast" };
+const GP_SPORT_MOD = { hoopscast: "QBHoops", rinkcast: "QBRink" };
+const GP_SPORT_STAGE = { hoopscast: "court", rinkcast: "rink" };
+const _gpSportFile = {};
+function gpSportMod(league, d) {
+  const name = GP_SPORT_FILE[league];
+  if (!name || (name === "rinkcast" && !(d || {}).rink)) return { mod: null, wait: "" };
+  const mod = window[GP_SPORT_MOD[name]];
+  if (mod) return { mod, wait: "" };
+  if (!_gpSportFile[name] && typeof document !== "undefined") {
+    _gpSportFile[name] = "loading";
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = `css/${name}.css`;
+    document.head.appendChild(css);
+    const el = document.createElement("script");
+    el.src = `js/${name}.js`;
+    const done = (how) => () => { _gpSportFile[name] = how; if (state.view === "pbp") renderPbpPage(); };
+    el.addEventListener("load", done("ready"));
+    el.addEventListener("error", done("failed"));
+    document.head.appendChild(el);
+  }
+  return { mod: null, wait: _gpSportFile[name] === "loading" ? GP_SPORT_STAGE[name] : "" };
+}
+/* The parts any game file can make: the newest play on the shared card (its
+   plays are the file's own, period by period: gpPlaysHTML). */
+function gpPlainKit(o) {
+  const GC = o.GC || {};
+  return { now: GC.plainNow ? GC.plainNow(o.d, o.league, o.faces) : "" };
+}
+function gpKit(o) {
+  const { d, league } = o;
+  if (PBP_FOOTBALL.has(league)) return { stage: gpFieldHTML(d, league, o.lv) };
+  const plain = gpPlainKit(o);
+  const { mod, wait } = gpSportMod(league, d);
+  if (!mod || typeof mod.parts !== "function") {
+    return wait ? { ...plain, stage: `<div class="card gp-stage-wait"><p class="rail-quiet">Loading the ${wait}…</p></div>` } : plain;
+  }
+  // A part that throws leaves the page on the plain ones for this draw, and says so where it can be read.
+  try { return { ...plain, ...mod.parts(o) }; } catch (e) { console.error("gpKit", league, e); return plain; }
+}
+/* THE PAGE'S OWN BOXES, FOR A SPORT'S PARTS. A sport's file writes what is
+   inside its picture and its cards, in its own class names and its own
+   stylesheet; the boxes themselves are the page's, made here, so their
+   look is one sport's as much as another's and a change to it is made
+   once: the card its picture sits in under the score (`gpStageHTML`), a
+   card of the Stats room with its head (`gpCardHTML`; nothing to show, no
+   card), and under the clock a plain note and a chip in a side's colour
+   (`gpNoteHTML`, `gpChipHTML`). `cls` and `style` are the sport's own. */
+function gpStageHTML(cls, style, inner) {
+  return `<div class="card gp-stage ${escapeAttr(cls || "")}"${style ? ` style="${escapeAttr(style)}"` : ""}>${inner}</div>`;
+}
+function gpCardHTML(title, sub, body, cls, style) {
+  if (!body) return "";
+  return `<div class="card gp-card ${escapeAttr(cls || "")}"${style ? ` style="${escapeAttr(style)}"` : ""}>
+      <div class="gp-card-head"><b>${escapeHtml(title)}</b>${sub ? `<span>${escapeHtml(sub)}</span>` : ""}</div>${body}</div>`;
+}
+const gpNoteHTML = (text) => (text ? `<span class="gp-sb-note">${escapeHtml(text)}</span>` : "");
+const gpChipHTML = (text, colour) => (text ? `<span class="gp-sb-chip"${colour ? ` style="--pc:${escapeAttr(colour)}"` : ""}>${escapeHtml(text)}</span>` : "");
+/* WHAT A REDRAW MUST NOT REPAINT OR MOVE (the arenas' rule since 2026-10-15,
+   the page's now). A new <picture> paints black until it decodes, a blink
+   every few seconds on a live game, so the one on the screen is put back in
+   the new page's place for it (`data-gp-hold`, named); and a box a reader
+   has scrolled inside keeps its place (`data-gp-scroll`, named: a view the
+   reader has just changed has another name, and starts at its top). Only
+   for the game already on the screen. */
+let _gpHeldFor = "";
+function gpHoldTake(host, key) {
+  const same = _gpHeldFor === key;
+  _gpHeldFor = key;
+  if (!same) return null;
+  return { pics: [...host.querySelectorAll("[data-gp-hold]")].map((el) => [el.dataset.gpHold, el]),
+           tops: [...host.querySelectorAll("[data-gp-scroll]")].map((el) => [el.dataset.gpScroll, el.scrollTop || 0]) };
+}
+function gpHoldGive(host, held) {
+  if (!held) return;
+  const find = (attr, name) => [...host.querySelectorAll(`[${attr}]`)].find((el) => el.getAttribute(attr) === name);
+  held.pics.forEach(([name, old]) => { const fresh = find("data-gp-hold", name); if (fresh && fresh !== old) fresh.replaceWith(old); });
+  held.tops.forEach(([name, top]) => { const el = top ? find("data-gp-scroll", name) : null; if (el) el.scrollTop = top; });
+}
 let _gpFor = "";
-function gpFootballHTML(o) {
+function gpPageHTML(o) {
   const { d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event } = o;
   // Another game opens at its top: no compact bar carried over from the last.
   if (_gpFor !== `${league}:${event}`) { _gpFor = `${league}:${event}`; _gpStuck = false; _gpTabsStuck = false; _gpOpen.clear(); }
-  gpTouchdownSeen(league, d, lv);
-  const field = gpFieldHTML(d, league, lv);
-  const panel = tab === "stats" ? gpStatsHTML(d, league, boardGame, faces, GC)
-    : tab === "plays" ? gpPlaysHTML(d, league, GC)
+  gpScoreSeen(league, d, lv);
+  const kit = o.kit || gpKit(o);
+  const stage = kit.stage || "";
+  // The clock the score shows: the scoreboard's, or the sport's own where it has one.
+  const at = kit.live ? { ...lv, ...kit.live } : lv;
+  const panel = tab === "stats" ? gpStatsHTML(d, league, boardGame, faces, GC, kit)
+    : tab === "plays" ? gpPlaysHTML(d, league, GC, kit)
     : tab === "standings" ? gpStandingsHTML(d, league)
     : gpPicksHTML(d, league, boardGame);
   /* TOP TO BOTTOM, THE ORDER A FAN ASKS IN (Ethan, 2026-11-15: "re organize
@@ -6634,14 +6954,15 @@ function gpFootballHTML(o) {
      chat, and went away on every other tab. */
   return `
     ${stripHTML}
-    <div class="pbp-layout pbp-has-tabs gp">
+    <div class="pbp-layout pbp-has-tabs gp" data-league="${escapeAttr(league)}">
       <div class="pbp-main">
-        ${gpCompactHTML(d, league, lv, tabs, tab)}
-        ${pbpBoardHTML(d, league, lv, { more: gpMoreHTML(d, league, event), noDetail: !!field, noLock: true })}
-        ${field}
-        ${gpLineHTML(d, league, lv)}
+        ${gpCompactHTML(d, league, at, tabs, tab, kit)}
+        ${pbpBoardHTML(d, league, at, { more: gpMoreHTML(d, league, event), noDetail: !!stage && PBP_FOOTBALL.has(league), noLock: true,
+                                        ball: kit.ball, ballIcon: kit.ballIcon, ballTitle: kit.ballTitle, marks: kit.marks, mid: kit.mid })}
+        ${stage}
+        ${gpLineHTML(d, league, at)}
         ${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
-        ${gpNowHTML(d, league, faces, boardGame, GC, !!field)}
+        ${gpNowHTML(d, league, faces, boardGame, GC, !!stage, kit)}
         ${pbpMineSlotsHTML()}
         ${lv.state === "live" ? pbpCallItHTML(d, league) : ""}
         ${d.archive ? "" : `<div class="gch-entry-slot"></div>`}
@@ -6652,8 +6973,8 @@ function gpFootballHTML(o) {
       </div>
       <aside class="pbp-rail">
         ${tab === "plays" ? gpRailPicksHTML(d, league) : `<div class="card pbp-railcard">
-          <div class="pbp-rail-head">Play by play <span class="mini">${(d.plays || []).length} on file</span></div>
-          ${pbpRailHTML(d, league)}
+          <div class="pbp-rail-head">Play by play <span class="mini">${(kit.rows || d.plays || []).length} on file</span></div>
+          ${pbpRailHTML(d, league, { plays: kit.rows, say: kit.say })}
         </div>`}
       </aside>
     </div>`;

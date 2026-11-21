@@ -35,9 +35,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DETAIL = open(os.path.join(ROOT, "web", "js", "detail.js"), encoding="utf-8").read()
 CSS = open(os.path.join(ROOT, "web", "css", "detail.css"), encoding="utf-8").read()
 BLOCK = DETAIL[DETAIL.index("const PBP_READS"):DETAIL.index("async function renderPbpPage(")]
+# A period's name in words, which the middle of the score says for every sport
+# since the page became every sport's (step AAI, 21 November): defined with the
+# page's other period words, below the board.
+BLOCK += "\n" + DETAIL[DETAIL.index("const GP_REG = "):DETAIL.index("\n", DETAIL.index("const GP_REG = ")) + 1]
+BLOCK += "".join(DETAIL[DETAIL.index(f"function {n}("):DETAIL.index("\n}\n", DETAIL.index(f"function {n}(")) + 3]
+                 for n in ("gpPeriodWord", "gpPeriodName"))
 
 STUBS = r"""
 const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const escapeAttr = escapeHtml;
 const PBP_FOOTBALL = new Set(["nfl", "cfb"]);
 const icon = (n) => `<i data-icon="${n}"></i>`;
 const miniDiamond = (b) => `<svg class="lb-diamond" data-bases="${(b || []).join(",")}"></svg>`;

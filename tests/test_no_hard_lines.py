@@ -182,11 +182,15 @@ def test_a_state_is_a_wash_or_a_pill():
     group = group[:group.index("}")]
     assert "--grad-tone:" in group and "background-image: var(--grad-tone);" in group
     for f, sel in (("more.css", ".tm-tab.on {"), ("chat.css", ".gch-tab.on {"), ("detail.css", ".pbp-tab.active {"),
-                   ("carrychart.css", ".cc-tab.on {"), ("hoopscast.css", ".hc-tab.on {"), ("rinkcast.css", ".rc-tab.on {")):
+                   ("carrychart.css", ".cc-tab.on {")):
         s = (CSS_DIR / f).read_text(encoding="utf-8")
         rule = s[s.index(sel):]
         rule = rule[:rule.index("}")]
         assert "border-bottom-color: transparent; border-radius: 999px;" in rule, (f, sel)
+    # The basketball and hockey pages had tab rows of their own until every sport's page became the one page
+    # (21 November 2026): its tabs are detail.css's, above, and the two files style no tabs.
+    for f, tab in (("hoopscast.css", ".hc-tab"), ("rinkcast.css", ".rc-tab")):
+        assert tab not in (CSS_DIR / f).read_text(encoding="utf-8"), f
 
 
 def test_a_selected_thing_is_tinted_not_ringed():

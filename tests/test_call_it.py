@@ -192,9 +192,12 @@ def test_the_server_reads_only_a_league_it_plays_and_an_id_of_digits():
 def test_the_page_the_privacy_page_and_deletion():
     det = (ROOT / "web" / "js" / "detail.js").read_text()
     assert "${pbpCallItHTML(d, league)}" in det
-    assert "pbpCallItHTML(d, league) + pbpFootHTML() })) {" in det, "the basketball page draws its own layout"
+    # Every sport but baseball is the one page (gpPageHTML, 21 November 2026): it draws the card while the game
+    # is live, and basketball's and hockey's files bring their parts to it, never a card of their own.
+    one = det[det.index("function gpPageHTML(o) {"):det.index("function gpRailPicksHTML(")]
+    assert '${lv.state === "live" ? pbpCallItHTML(d, league) : ""}' in one
     for page in ("hoopscast.js", "rinkcast.js"):
-        assert '${(ctx && ctx.callit) || ""}' in (ROOT / "web" / "js" / page).read_text(), page
+        assert "callit" not in (ROOT / "web" / "js" / page).read_text().lower(), page
     fn = det[det.index("function ciBodyHTML("):det.index("function ciPaint(")]
     assert "escapeHtml(v.open.prompt)" in fn and "escapeHtml(r.handle)" in fn and "escapeHtml(label)" in fn
     assert 'if (typeof window !== "undefined" && !window._ciBound)' in det

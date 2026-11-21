@@ -9338,6 +9338,34 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAI. Every sport's live game page is the NFL's page** (step 823; 21 November). Nothing to run. You asked for the
+NBA, college and every other sport's live page to match the NFL's, and for that to be automatic. It could not be,
+the way the pages were built: football drew one page, and basketball and hockey each drew a whole page of their own,
+with a scoreboard, an arena and cards restyled by hand to look like football's. Nothing done to the NFL page reached
+them. They had no bar that stays at the top when you scroll, no ⋯ menu, no card for the play right now, no Standings
+tab, and the footer sat in the middle of the page. Now there is one page, and every sport but baseball is drawn by
+it: the same score on the clubs' colours, the same line score, last-play card, win chance, Call it, chat, four tabs
+(Stats, Play-By-Play, Standings, Our picks), box scores and team stats. A sport hands that page only what is its
+own. Basketball and hockey put their arena where football has its field, with the views they had (Live, Shots,
+Players, Flow; hockey's Ice as well). The newest play is said in a sentence on the card football's is on ("Zach
+Whitecloud's shot is blocked by Matt Boldy in the MIN end"). The plays read as sentences too, a period to a card as
+football's are a drive to a card, with the period being played open. Under the score, basketball says the bonus,
+fouls and timeouts and hockey the power play and shots on goal. The Stats tab adds each sport's shot chart and
+trends, and hockey's team stats and box scores come from the league's own events. A hockey game those events never
+reach is still the same page, drawn from the game file. Why it stays matched: the two sport files no longer contain
+any of the page. A test fails if either writes one of the page's own boxes or styles, and a browser check opens an
+NFL, college football, NBA, college basketball and NHL game and compares them part by part, on a phone and on a
+desktop. So a visual change to the game page is made once. Three things the checks caught and this fixes: the
+arenas' view buttons were sized by the screen and ran 107px past their card on a 1280px desktop, and they now size
+to the card; basketball's fouls and timeouts ran past a phone's narrow name column, and they now take the full width
+of their side; and a scoring run or a power play was said three times on one screen, and is now said once. A long
+team name that breaks across two lines now breaks at a syllable with a hyphen where the phone's browser can do that;
+that could not be measured here, so look at a Timberwolves or Buccaneers game on your phone. Gone with the old
+pages: the play list's quarter picker (the period cards replace it), hockey's Lineup card (the box scores replace
+it) and their own odds cards (the Stats tab's Betting odds card is every sport's). Baseball keeps its own four
+rooms; it is out of season, and moving it is a decision in the list. Still in the shared file, unused, is the old
+football drive tracker the site stopped drawing on 15 November; taking it out is its own step.
+
 **AAH. Touchdown picks and moneylines come out of the player-prop parlays** (step 822; 21 November). Nothing to run.
 The count from step AAG answered on its first board. The NFL's 32 legs with no book at their number were 28 anytime-
 touchdown legs and 4 moneylines, all of them Most Likely picks, sitting inside the three-leg and two-leg player-prop
@@ -9352,6 +9380,9 @@ three until their other props fill in; the heartbeat's `threes_short` and `twos_
 scorers are left where they were, since v3.1 is football's and hockey's tickets are winning; the heartbeat now
 counts them (`scorer_legs_on_props`) and that is a decision in the list. A report's touchdown pick says where it
 went (`pick_fates` `td_apart`).
+Measured on the NFL board of 5:04 AM ET on 21 November: 23 three-leg and 35 two-leg player-prop parlays, every one
+of their 139 legs with a book's quote at its number (none unlisted, where 32 had none), and 53 of the 58 naming one
+sportsbook that prices the whole ticket.
 
 **AAG. Counting why a parlay leg has no book at its number** (step 821; 21 November). Nothing to run. Step AAF's fix
 was real and small. On the next NFL board the legs with no book at their number went from 35 to 32 of 165, and the

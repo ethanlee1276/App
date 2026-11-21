@@ -81,11 +81,16 @@ def test_every_play_row_carries_its_thread():
     assert rows.count("${at}${bubble(p)}</div>`") == 3, "football, basketball/hockey and baseball rows"
     assert "playsHTML({ ...g, plays: (g.plays || []).slice().reverse(),\n      room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : \"\" })" in APP
     assert "room: pbpRoom(d, league)" in DETAIL and "chatPlayBadge(room, r)" in DETAIL
-    assert "chatPlayBadge(`${league}_${d.event_id}`, p)" in HOOPS
-    assert "chatPlayBadge(`nhl_${d.event_id}`, e)" in RINK
+    # One renderer for every sport's rows since 2026-11-21 (the one page, detail.js gpPageHTML): basketball's
+    # and hockey's files hand the page their rows and their words and draw no bubble of their own. Hockey's
+    # rows are the league's own events and carry the league's id, the key the chat reads its threads by.
+    for name, src in (("hoopscast", HOOPS), ("rinkcast", RINK), ("gamecast", GC)):
+        assert "chatPlayBadge" not in src, name
+    assert 'const rowOf = (e) => ({ kind: "hockey", id: e.id,' in RINK
+    assert 'if (CH.league === "nhl" && d.rink && (d.rink.events || []).length) return d.rink.events;' in CHAT
     # Every game being watched: an old game's page has no room, so no bubble
     # (2026-10-30, engine/gamearchive; tests/test_every_game_has_a_page.py).
-    assert GC.count("room: d.event_id && !d.archive ? `${league}_${d.event_id}` : \"\"") == 2
+    assert 'const pbpRoom = (d, league) => {\n  if (d && d.archive) return "";' in DETAIL
     # One key everywhere: the chat files threads under it, the rows read it.
     assert 'const chatPlayKey = (p) => String((p && (p.kind === "atbat" ? (p.at_bat != null ? `ab${p.at_bat}` : "") : p.id)) || "");' in APP
     assert "chatPlayKey(p) === key" in CHAT

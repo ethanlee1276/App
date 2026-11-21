@@ -190,8 +190,10 @@ def test_a_punt_is_not_drawn_flying_its_return():
 
 
 def test_the_repeated_pieces_are_gone_on_a_phone():
-    # One play list: the gamecast's tab, not the rail's copy under it.
-    assert '"" : " pbp-has-tabs"' in DETAIL
+    # One play list: the Play-By-Play tab, not the rail's copy under it. Every sport's page but baseball's is
+    # the one page with that tab (gpPageHTML, 21 November 2026); baseball's own rooms have no such tab.
+    assert '<div class="pbp-layout pbp-has-tabs gp" data-league="${escapeAttr(league)}">' in DETAIL
+    assert DETAIL.count("pbp-has-tabs gp") == 1 and '<div class="pbp-layout gp">' in DETAIL
     assert "@media (max-width: 980px) { .pbp-has-tabs .pbp-railcard { display: none; } }" in DETAIL_CSS
     # The club's short name where "Indianapolis Colts" ran into its score:
     # the scoreboard's big name is the nickname (a college's, its school),

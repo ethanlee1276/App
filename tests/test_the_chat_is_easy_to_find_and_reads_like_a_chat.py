@@ -36,17 +36,18 @@ def test_every_game_page_leaves_the_card_a_slot_under_the_scoreboard():
     # (2026-10-30, engine/gamearchive; tests/test_every_game_has_a_page.py).
     # The line score sits with the score since 2026-11-01 (detail.js
     # gpLineHTML, Ethan's Apple Sports screenshots); the slot is under both.
-    assert ('${scoreboardHTML(d, league, k)}${typeof gpLineHTML === "function" ? gpLineHTML(d, league, d.live || {}) : ""}'
-            '${d.archive ? "" : `<div class="gch-entry-slot"></div>`}') in JS("hoopscast.js")
-    assert ('${scoreboardHTML(d, k)}${typeof gpLineHTML === "function" ? gpLineHTML(d, "nhl", d.live || {}) : ""}'
-            '<div class="gch-entry-slot"></div>') in JS("rinkcast.js")
-    fb = det[det.index("function gpFootballHTML("):]
-    fb = fb[:fb.index("\n}\n")]
-    assert fb.index("${gpLineHTML(d, league, lv)}") < fb.index('<div class="gch-entry-slot"></div>') < fb.index("${pbpTabsHTML("), \
-        "football: under the score and its line, over the tabs"
+    # One page for every sport but baseball since 2026-11-21 (gpPageHTML):
+    # the slot is the page's, and basketball's and hockey's files draw none.
+    one = det[det.index("function gpPageHTML(o) {"):]
+    one = one[:one.index("\n}\n")]
+    assert one.index("${gpLineHTML(d, league, at)}") < one.index('<div class="gch-entry-slot"></div>') < one.index("${pbpTabsHTML("), \
+        "every sport: under the score and its line, over the tabs"
+    assert '${d.archive ? "" : `<div class="gch-entry-slot"></div>`}' in one
+    for name in ("hoopscast.js", "rinkcast.js"):
+        assert "gch-entry-slot" not in JS(name), name
     wire = det[det.index("  const wire = () => {"):]
     assert 'if (typeof chatEntryPaint === "function") chatEntryPaint();' in wire[:400], \
-        "filled on every draw, whichever layout drew it (the arenas call the same wire)"
+        "filled on every draw, whichever layout drew it"
 
 
 def test_the_card_and_the_bar_say_who_is_here_and_what_was_said():

@@ -135,17 +135,19 @@ def test_the_card_draws_no_field_of_its_own():
 
 
 def test_the_play_right_now_sits_above_the_tabs_and_each_thing_is_said_once():
-    now = _fn(DETAIL, "function gpNowHTML(d, league, faces, boardGame, GC, top)")
+    now = _fn(DETAIL, "function gpNowHTML(d, league, faces, boardGame, GC, top, kit)")
     assert 'if ((d.live || {}).state !== "live") return "";' in now, "a game not being played has no play right now"
     assert "g.driveView(d, league, faces, { top, win: !!ours })" in now
     assert "return `${card}${pbpWinChartHTML(d, league, boardGame)}${ours}`;" in now, "the words, then the chance"
     # One field: the strip under the score. The photograph and its "Ball on"
     # strip are gone (Ethan: "remove this since we have the other field").
     assert "pbpParkHTML" not in now
-    page = _fn(DETAIL, "function gpFootballHTML(o)")
-    assert "${gpNowHTML(d, league, faces, boardGame, GC, !!field)}" in page
+    # The page is every sport's but baseball's since 2026-11-21 (gpPageHTML): the picture under the score is
+    # the sport's own (`stage`: football's field, a court, a rink), and the play right now sits where it did.
+    page = _fn(DETAIL, "function gpPageHTML(o)")
+    assert "${gpNowHTML(d, league, faces, boardGame, GC, !!stage, kit)}" in page
     assert page.index("${gpNowHTML(") < page.index("${pbpTabsHTML(tab, null, tabs)}"), "no tab takes it away"
-    plays = _fn(DETAIL, "function gpPlaysHTML(d, league, GC)")
+    plays = _fn(DETAIL, "function gpPlaysHTML(d, league, GC, kit)")
     assert "const chart = (d.live || {}).state !== \"live\" && GC && GC.gameChart ? GC.gameChart(d, league) : \"\";" in plays, \
         "no drive chart while live"
     assert "return `${chart}${gpDrivesHTML(d, league)}`;" in plays, "the tab is the game so far, drive by drive"
@@ -153,7 +155,7 @@ def test_the_play_right_now_sits_above_the_tabs_and_each_thing_is_said_once():
 
 
 def test_the_rail_holds_the_picks_on_the_plays_tab_and_the_plays_elsewhere():
-    page = _fn(DETAIL, "function gpFootballHTML(o)")
+    page = _fn(DETAIL, "function gpPageHTML(o)")
     assert '${tab === "plays" ? gpRailPicksHTML(d, league) : `<div class="card pbp-railcard">' in page
     rail = _fn(DETAIL, "function gpRailPicksHTML(d, league)")
     assert 'class="card pbp-railcard gp-rail-picks"' in rail and "pbpPropsHTML(d, league)" in rail
@@ -162,8 +164,10 @@ def test_the_rail_holds_the_picks_on_the_plays_tab_and_the_plays_elsewhere():
 
 
 def test_the_compact_bar_says_the_down_under_the_clock():
-    bar = _fn(DETAIL, "function gpCompactHTML(d, league, lv, tabs, tab)")
-    assert '<span class="gp-c-down">${escapeHtml(m.words)}</span>' in bar
+    bar = _fn(DETAIL, "function gpCompactHTML(d, league, lv, tabs, tab, kit)")
+    # Football's down and spot; another sport's own line there (hockey's power play: gpKit `down`).
+    assert 'const words = (m && m.words) || (kit || {}).down || "";' in bar
+    assert 'const down = words ? `<span class="gp-c-down">${escapeHtml(words)}</span>` : "";' in bar
     assert "${escapeHtml(gpClockWord(league, lv))}${down}</span>" in bar
     assert ".gp-c-down { display: block;" in DETAIL_CSS
 

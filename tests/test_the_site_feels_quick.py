@@ -622,12 +622,13 @@ def test_the_gamecast_faces_ride_espns_resize():
       globalThis.facePreview = (u, px) => u.indexOf("a.espncdn.com") >= 0 ? "SMALL-" + px : u;
       const d = { home: "DAL", away: "TB", box: [{ team: "TB", groups: [{ name: "passing",
         labels: ["C/ATT", "YDS"], rows: [{ name: "Baker Mayfield", id: "16757", stats: ["3/4", "37"] }] }] }] };
-      QBGamecast.setTeam("TB");
-      return { box: QBGamecast.panel("box", { d, league: "nfl", faces: {}, boardGame: null }) };
+      // The game leaders (the module's own box score went with its tabs, 2026-11-21): the same face, the same way.
+      return { box: QBGamecast.leaders(d, "nfl", {}) };
     """)
     if got is None:
         print("  SKIP node not installed"); return
     box = got["box"]
+    assert "Baker Mayfield" in box, "the passing leader's row"
     assert 'src="SMALL-40"' in box, "the face is not asked for at its drawn size"
     assert 'data-full="https://a.espncdn.com/i/headshots/nfl/players/full/16757.png"' in box
     assert 'data-onerr="swapFull"' in box, "the full file is the first fallback"

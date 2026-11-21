@@ -166,14 +166,15 @@ def test_the_page_has_four_real_tabs_and_says_what_is_not_built():
     assert 'const PBP_TABS = [["info", "Game info"], ["props", "Our picks"], ["injuries", "Injuries"], ["players", "Player stats"]];' in APP[i:i + 200]
     assert "Team stats and Splits are not built" in APP[i - 900:i]
     page = _fn("renderPbpPage")
-    # 2026-10-08: the tab set is the league's — baseball keeps these four,
-    # football, hoops and hockey draw ESPN's six from js/gamecast.js.
-    assert "const tabs = pbpTabsFor(league);" in page
-    # Football opens on Play-By-Play while the ball is live, Stats otherwise
-    # (GP_FB_TABS, 2026-11-01); every other set opens on its first.
-    assert ("const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab\n"
-            '    : tabs === GP_FB_TABS && lv.state === "live" ? "plays" : tabs[0][0];') in page
-    assert 'const pbpTabsFor = (league) => league === "mlb" ? PBP_TABS : PBP_FOOTBALL.has(league) ? GP_FB_TABS : GC_TABS;' in APP
+    # The tab set is the league's: baseball keeps these four, and every other sport draws the one page's four
+    # (GP_TABS; football's since 2026-11-01, basketball's and hockey's since 2026-11-21, when ESPN's six from
+    # js/gamecast.js went).
+    assert "const tabs = pbpTabsFor(league);" in page and "const one = tabs === GP_TABS;" in page
+    # The one page opens on Play-By-Play while the game is live, Stats otherwise; baseball on its first.
+    assert 'const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab : one && lv.state === "live" ? "plays" : tabs[0][0];' in page
+    assert 'const pbpTabsFor = (league) => (league === "mlb" ? PBP_TABS : GP_TABS);' in APP
+    assert 'const GP_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];' in APP
+    assert "GC_TABS" not in APP and "GP_FB_TABS" not in APP
     assert 'tab === "props" ? pbpPropsHTML(d, league)' in page and 'tab === "players" ? pbpPlayersHTML(d, league)' in page
     assert '_pbpTab = b.dataset.pbpTab; renderPbpPage();' in page
     props = _fn("pbpPropsHTML")

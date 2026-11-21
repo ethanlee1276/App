@@ -137,10 +137,12 @@ def test_the_server_answers_pace_and_ticket_clv():
 def test_the_page_draws_both_cards_the_market_and_the_footer():
     from _app import app_js
     js = READ("web", "js", "detail.js")
-    # Three layouts since 2026-11-01: the hoops and hockey handover, the
-    # baseball page, and football's own (gpFootballHTML).
-    assert js.count('id="pbp-action"') == 1 and js.count("pbpMineSlotsHTML()") == 4, "every layout"
-    assert js.count("pbpFootHTML()") >= 2
+    # Two layouts since 2026-11-21: baseball's own rooms, and the one page every
+    # other sport is drawn on (gpPageHTML); the third use is the function itself.
+    assert js.count('id="pbp-action"') == 1 and js.count("pbpMineSlotsHTML()") == 3, "every layout"
+    one = js[js.index("function gpPageHTML(o) {"):js.index("function gpRailPicksHTML(")]
+    assert "${pbpMineSlotsHTML()}" in one and "${pbpFootHTML()}" in one
+    assert js.count("pbpFootHTML()") >= 3
     wire = js[js.index("  const wire = () => {"):js.index("  const wire = () => {") + 900]
     assert "pbpActionFill(league, event);" in wire and "pbpPaceFill(league, event);" in wire
     foot = js[js.index("function pbpFootHTML()"):js.index("function pbpFootHTML()") + 400]

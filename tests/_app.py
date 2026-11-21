@@ -165,3 +165,27 @@ def styles_css() -> str:
     some visits open moved out with its code (2026-10-24), in the cascade
     order a browser applies them."""
     return "\n".join((CSS / f).read_text(encoding="utf-8") for f in ["styles.css"] + room_sheets())
+
+
+#: The game page's own boxes (detail.js, "THE PAGE'S OWN BOXES, FOR A SPORT'S
+#: PARTS"): a sport's file hands its parts to them and writes none of the
+#: page's markup itself, so a node harness that draws a sport's parts needs
+#: these beside it.
+PAGE_BUILDERS = ("gpStageHTML", "gpCardHTML", "gpShortName", "gpTsRowHTML", "gpTsCardHTML", "gpBoxCardHTML")
+PAGE_BUILDER_LINES = ("const GP_BOX_ROWS = ", "const _gpOpen = ", "const gpOpenAttr = ", "const gpNoteHTML = ", "const gpChipHTML = ")
+
+
+def page_builders() -> str:
+    """The page's builders as detail.js has them, for a node harness: the real
+    code, so a sport's parts are drawn in a test as the page draws them."""
+    det = (JS / "detail.js").read_text(encoding="utf-8")
+    out = []
+    for head in PAGE_BUILDER_LINES:
+        i = det.index("\n" + head) + 1
+        out.append(det[i:det.index("\n", i) + 1])
+    for name in PAGE_BUILDERS:
+        i = det.index(f"\nfunction {name}(") + 1
+        out.append(det[i:det.index("\n}\n", i) + 3])
+    # On globalThis, as the page's own scripts see them (a sport's file reads them by name).
+    names = [h.split()[1] for h in PAGE_BUILDER_LINES] + list(PAGE_BUILDERS)
+    return "".join(out) + "\n" + "\n".join(f"globalThis.{n} = {n};" for n in names) + "\n"

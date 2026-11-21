@@ -207,7 +207,7 @@ def test_the_rail_shows_the_newest_forty_and_offers_the_rest():
     assert "const PEEK = 40;" in body
     assert "_pbpShowAll ? Infinity : PEEK" in body
     assert 'id="pbp-more"' in body and "View full play by play" in body
-    assert "playsHTML({ plays: g.rows, home: d.home, away: d.away, league, room: pbpRoom(d, league) })" in body, \
+    assert "playsHTML({ plays: g.rows, home: d.home, away: d.away, home_abbr: d.home_abbr, away_abbr: d.away_abbr, league," in body, \
         "football and hoops keep the card's rows"
     page = _fn("renderPbpPage")
     assert "_pbpShowAll = true; renderPbpPage();" in page
@@ -219,8 +219,8 @@ def test_win_probability_is_the_boards_track_when_the_board_matches():
     assert "boardGame && boardGame.line_track ? `<div class=\"card\">${lineTrackHTML(boardGame)}</div>` : \"\"" in page
     # The door moved into the tabs row the page draws (pbpTabsHTML,
     # 2026-09-05, the page's other rooms); the wiring stayed on the page.
-    # (2026-10-08: the call carries the league's tab set — baseball's four
-    # rooms, the Gamecast's six for the rest.)
+    # (The call carries the league's tab set: baseball's four rooms here, the
+    # one page's four for every other sport, drawn by gpPageHTML.)
     assert 'id="pbp-game-door"' in _fn("pbpTabsHTML") and "pbpTabsHTML(tab, boardGame, tabs)" in page
     assert "openGame(g.dataset.gid)" in page
 
@@ -231,7 +231,7 @@ def test_the_page_still_reads_only_the_deep_file_and_never_prose():
     assert "await fetch(" not in page and "paidFetch" not in page
     for prose in ("p.text", "p.description", "shortDescription", "r.description"):
         assert prose not in APP[APP.index("function pbpRowHTML"):APP.index("async function renderPbpPage")], prose
-    assert 'if (lv.state === "live") again();' in page
+    assert 'if (lv.state === "live" || pbpStartsSoon(lv)) again();' in page
     assert 'if (state.view !== "pbp") return;' in page
 
 

@@ -50,8 +50,11 @@ def test_a_comeback_the_play_of_the_game_and_the_best_line():
 
 
 def test_every_page_gets_it_and_share_is_the_phones_own_sheet():
-    assert "${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}" in DET
-    assert "pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpMineSlotsHTML() + pbpCallItHTML(d, league)" in DET
+    # Twice: baseball's own layout, and the one page every other sport is drawn on (gpPageHTML, 21 November 2026;
+    # basketball and hockey were handed it through a page of their own until then).
+    assert DET.count("${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}") == 2
+    one = DET[DET.index("function gpPageHTML(o) {"):DET.index("function gpRailPicksHTML(")]
+    assert "${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}" in one
     share = DET[DET.index("if (typeof window !== \"undefined\" && !window._recapBound)"):]
     assert "navigator.share({ title: \"Qellys Book\", text })" in share[:700] and "navigator.clipboard.writeText(text)" in share[:700]
 

@@ -325,11 +325,13 @@ def test_the_pages_draw_it():
     html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     assert 'data-sport="cbb" data-kind="league"' in html
     hc = (ROOT / "web" / "js" / "hoopscast.js").read_text(encoding="utf-8")
-    assert '"cbb"' in hc and "cbb: 1200" in hc and "REG_PERIODS = { cbb: 2 }" in hc
+    assert "cbb: 1200" in hc and "REG_PERIODS = { cbb: 2 }" in hc
     gc = (ROOT / "web" / "js" / "gamecast.js").read_text(encoding="utf-8")
     assert 'cbb: "mens-college-basketball"' in gc
     det = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
     assert "cbb: 2 }" in det
+    # The one game page hands a college game to basketball's parts (detail.js gpSportMod).
+    assert 'const GP_SPORT_FILE = { nba: "hoopscast", wnba: "hoopscast", cbb: "hoopscast", nhl: "rinkcast" };' in det
 
 
 

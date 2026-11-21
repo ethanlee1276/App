@@ -38,8 +38,15 @@ CSS, CHAT_CSS = READ("web", "css", "styles.css"), READ("web", "css", "chat.css")
 def test_a_final_draws_no_field_and_no_last_play():
     page = DETAIL[DETAIL.index("async function renderPbpPage("):]
     assert '${lv.state === "final" ? "" : `<div class="card pbp-parkcard">' in page, "no field or ballpark on a final"
-    assert ('${lv.state === "final" ? "" : lastPlayHTML(d, league, faces)}${leadersHTML(d, league, faces)}'
-            '${scoringHTML(d, league)}') in GC, "the Gamecast tab opens on the leaders and the scoring"
+    # Every other sport's page is the one page (gpPageHTML, 21 November 2026): the play right now is a live
+    # game's card, and a final's Stats tab opens on the scoring plays and the leaders, in every sport.
+    now = DETAIL[DETAIL.index("function gpNowHTML("):DETAIL.index("function gpPlaysHTML(")]
+    assert 'if ((d.live || {}).state !== "live") return "";' in now, "no last play on a final"
+    stats = DETAIL[DETAIL.index("function gpStatsHTML("):DETAIL.index("function gpOddsHTML(")]
+    assert ('const scoring = lv.state === "final" && GC && GC.scoring\n'
+            '    ? `${GC.scoring(d, league)}${GC.leaders ? GC.leaders(d, league, faces) : ""}` : "";') in stats
+    assert "return `${scoring}${gpOddsHTML(d, league, boardGame)}" in stats, "the Stats tab opens on the scoring and the leaders"
+    assert "gamecastHTML" not in GC and "QBGamecast.panel" not in DETAIL, "the old Gamecast tab is gone"
 
 
 def test_the_arenas_open_a_final_on_the_shot_chart():

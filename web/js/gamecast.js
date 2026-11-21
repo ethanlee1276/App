@@ -1,4 +1,4 @@
-/* Qellys Book — Gamecast: the live game page's rooms, in ESPN's layout.
+/* Qellys Book — Gamecast: the cards the live game page's rooms share.
    ==========================================================================
    Ethan, 2026-10-08, with three screenshots of ESPN's app on a live
    Bucs–Cowboys game: "I want the page to look like ESPN's app looks … see
@@ -6,25 +6,29 @@
    game leaders and shit and see the actual play by play and all of that.
    We should have the box score and all of that."
 
-   WHAT IS HERE: the panels under the tabs — Gamecast (the drive in
-   progress, the last play with the players in it and their lines so far,
-   the game leaders), Box score (every group ESPN's box carries, by team),
-   Play-by-play (drive by drive, newest first, how each ended), Team stats
-   (the two sides' totals as a comparison), Odds & picks. The hero, the
-   field and the tabs stay in app.js (renderPbpPage), which loads this the
-   first time a live game is opened (loadGamecast), like the Feed.
+   WHAT IS HERE: the cards every sport's page draws (detail.js gpPageHTML,
+   one page for every sport but baseball since 2026-11-21) — the newest
+   play with the people in it and their lines so far (football's from its
+   drive, driveViewHTML; any other sport's through playNowHTML), the game
+   leaders, the scoring plays, football's whole-game chart — and the moving
+   mark the court, the rink and the field run on (track). Baseball's at-bat,
+   pitch by pitch, and the drawing on the ballpark photograph are here too.
+   The page, its score, its tabs, its box scores and its team stats are
+   detail.js's; this file was the page's five tabs (Gamecast, Box score,
+   Play-by-play, Team stats, Odds & picks) until the one page replaced them.
+   Loaded the first time a game is opened (app.js loadGamecast).
 
    THE NUMBERS, NEVER THE WRITING. Every line is composed from the deep
    file's fields — a play's type, yards, down and distance, the names the
    builder matched against the box score, a box row's stats under ESPN's
-   own column labels, a team stat's label and value. ESPN's sentences are
-   not in the file (livescore_build.pbp_doc) and could not be drawn if they
-   were. The win percentage on the last play is OUR model's (live.win_prob),
-   never a number read off somebody else's page.
+   own column labels. ESPN's sentences are not in the file
+   (livescore_build.pbp_doc) and could not be drawn if they were. The win
+   percentage on the last play is OUR model's (live.win_prob), never a
+   number read off somebody else's page.
 
    Runs in the page's global scope beside app.js and uses its helpers
-   (escapeHtml, escapeAttr, icon, teamMarkIn, teamNameIn, playsHTML,
-   pbpGroups, pbpOrd, pbpAgo, pbpPropsHTML, lineTrackHTML …) by name. */
+   (escapeHtml, escapeAttr, icon, teamMarkIn, teamNameIn, pbpOrd,
+   footballWords …) by name. */
 (function () {
   "use strict";
   const FOOTBALL = new Set(["nfl", "cfb"]);
@@ -33,15 +37,10 @@
   //: the board's own first (the deep file's `faces`), this second, blank
   //: third.
   const FACE_DIR = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl", cbb: "mens-college-basketball" };
-  //: The box score's open side (the team toggle), kept across redraws.
-  let _team = "";
-
   const esc = (v) => escapeHtml(String(v == null ? "" : v));
   const num = (s) => { const m = /-?\d+(\.\d+)?/.exec(String(s == null ? "" : s)); return m ? Number(m[0]) : NaN; };
   const plain = (s) => /^-?\d+(\.\d+)?$/.test(String(s == null ? "" : s).trim());
   const lower = (s) => String(s || "").toLowerCase();
-  const titleCase = (v) => String(v || "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
 
   /* ---------------- faces ---------------- */
   function faceURL(league, row, faces) {
@@ -97,7 +96,9 @@
     receiving: ["REC", "YDS", "TD"], defensive: ["TOT", "SOLO", "SACKS"],
     interceptions: ["INT", "YDS", "TD"], kicking: ["FG", "XP", "PTS"], punting: ["NO", "AVG"],
     kickreturns: ["NO", "YDS", "TD"], puntreturns: ["NO", "YDS", "TD"], fumbles: ["FUM", "LOST"],
-    goalies: ["SV", "GA"], skaters: ["G", "A", "SOG"],
+    goalies: ["SV", "GA"], skaters: ["G", "A", "SOG"], forwards: ["G", "A", "SOG"], defenses: ["G", "A", "SOG"],
+    // Basketball's one table has no name: a player's line is the three a box score leads with.
+    "": ["PTS", "REB", "AST"],
   };
   const BARE = new Set(["C/ATT", "FG", "XP"]);
   function lineFor(g, row) {
@@ -1453,16 +1454,79 @@
       on ? `<div><span>Ball on</span><b>${esc(on)}</b></div>` : ""}</div>` : "";
     const named = p ? dvName(d, p) : null;
     const lastTeam = p && (p.team || offense);
-    const head = o.top && named
-      ? `${lastTeam ? teamMarkIn(league, lastTeam, 30) : ""}<div class="gc-dv-who"><div class="gc-k">Last play${named.when ? ` · ${esc(named.when)}` : ""}</div><b>${esc(named.kind)}</b></div>`
-      : dr
-      ? `${teamMarkIn(league, dr.team, 30)}<div class="gc-dv-who"><div class="gc-k">Current drive</div><b>${esc(driveWords(dr))}</b></div>`
-      : `${offense ? teamMarkIn(league, offense, 30) : ""}<div class="gc-dv-who"><div class="gc-k">On the field</div><b>${esc(teamNameIn(league, offense) || "")}</b></div>`;
+    const head = o.top && named ? nowHeadHTML(league, lastTeam, `Last play${named.when ? ` · ${named.when}` : ""}`, named.kind)
+      : dr ? nowHeadHTML(league, dr.team, "Current drive", driveWords(dr))
+      : nowHeadHTML(league, offense, "On the field", teamNameIn(league, offense) || "");
     const rz = nx && dir && (dir > 0 ? nx.los >= 80 : nx.los <= 20) ? `<span class="gc-rz">Red zone</span>` : "";
+    return nowCardHTML({ head, end: rz, tiles, last: p ? dvLastHTML(d, league, faces, p, m, o) : "" });
+  }
+
+  /* THE CARD EVERY SPORT'S NEWEST PLAY IS DRAWN ON (2026-11-21; Ethan: "all
+     sports in all aspects should be trying to match nfl and that should be
+     automatic when we do any visual changes"). Football's card above was
+     built in one piece, and basketball and hockey each captioned their
+     arena in a layout of their own. The card is four parts now, and every
+     sport's is made of the same four: the box (nowCardHTML), its head (a
+     crest, a small line, the play's name: nowHeadHTML), a person in it with
+     their game so far (nowChipHTML), and the body under the head (the
+     sentence, the people, what came before and since: nowLastHTML). A change
+     to any of them is a change to every sport's card. */
+  function nowCardHTML(o) {
     return `<div class="card gc-dv" data-gc-dv>
-      <div class="gc-dv-head">${head}<span class="gc-dv-end">${rz}</span></div>
-      ${tiles}
-      ${p ? dvLastHTML(d, league, faces, p, m, o) : ""}</div>`;
+      <div class="gc-dv-head">${o.head || ""}<span class="gc-dv-end">${o.end || ""}</span></div>
+      ${o.tiles || ""}
+      ${o.last || ""}</div>`;
+  }
+  function nowHeadHTML(league, team, k, title) {
+    return `${team ? teamMarkIn(league, team, 30) : ""}<div class="gc-dv-who"><div class="gc-k">${esc(k)}</div><b>${esc(title)}</b></div>`;
+  }
+  //: `where` and `line` are markup already (a line is "value label" pairs, escaped where it is made: lineFor).
+  function nowChipHTML(league, faces, name, row, where, line) {
+    return `<div class="gc-chip">${faceHTML(league, row || { name }, faces)}
+        <div class="gc-chip-t"><b>${esc(name)}</b><span class="mini">${where || ""}</span>
+          ${line ? `<span class="gc-chip-line">${line}</span>` : ""}</div></div>`;
+  }
+  function nowLastHTML(o) {
+    const since = o.since || [];
+    return `<div class="gc-dv-last">
+      ${o.lhead || ""}
+      <p class="gc-dv-said">${esc(o.said)}</p>
+      ${o.chips ? `<div class="gc-chips">${o.chips}</div>` : ""}
+      ${o.before || since.length ? `<div class="gc-dv-before">${o.before ? `<span><i>Before the play</i> ${o.before}</span>` : ""}${
+        since.map((w) => `<span>${esc(w)}</span>`).join("")}</div>` : ""}</div>`;
+  }
+  /* A sport that is not football says its newest play in the same card
+     (detail.js gpKit → js/hoopscast.js, js/rinkcast.js): the side, when,
+     the play's name, the sentence, up to two people in it (each with their
+     line from the box score, playerLine, unless the sport gives its own)
+     and the moments since. No sentence, no card. The head has no chip of
+     its own: a run or a power play is said once, by the arena and the
+     score above the card. */
+  function playNowHTML(d, league, faces, o) {
+    if (!o || !o.said) return "";
+    const chips = (o.people || []).filter((p) => p && p.name).slice(0, 2).map((p) => {
+      const got = p.line != null ? { row: p.row || null, line: esc(p.line) } : playerLine(d, p.name, "any");
+      const where = p.where != null ? esc(p.where)
+        : `${esc(teamOf(d, p.name) || o.team || "")}${got.row && got.row.pos ? `, ${esc(got.row.pos)}` : ""}`;
+      return nowChipHTML(league, p.faces || faces, p.name, p.row || got.row, where, got.line);
+    }).join("");
+    return nowCardHTML({ head: nowHeadHTML(league, o.team, `Last play${o.when ? ` · ${o.when}` : ""}`, o.kind || "Play"),
+                         last: nowLastHTML({ said: o.said, chips, since: o.since }) });
+  }
+  /* Every sport's newest play from the game file alone (the plain page: a
+     hockey game the league's own events never reached, a sport whose own
+     file would not load): the play's label as its name, who it names. */
+  function plainNowHTML(d, league, faces) {
+    const p = newestPlay(d, league);
+    if (!p || FOOTBALL.has(league)) return "";
+    const per = p.period ? (league === "nhl" ? hockeyPeriod(p.period) : league === "cbb" ? halfPeriod(p.period)
+      : (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`)) : "";
+    const ev = String(p.event || "Play").replace(/\s+/g, " ").trim();
+    const side = teamNameIn(league, p.team) || "";
+    const score = p.scoring && p.away_score != null && p.home_score != null
+      ? ` ${d.away_abbr || d.away} ${p.away_score}, ${d.home_abbr || d.home} ${p.home_score}.` : "";
+    return playNowHTML(d, league, faces, { team: p.team, when: [per, p.clock].filter(Boolean).join(" "), kind: ev,
+      said: `${[p.player || side, ev].filter(Boolean).join(": ")}.${score}`, people: [{ name: p.player }] });
   }
 
   /* The last play's name and when it was snapped ("Sack", "Q1 9:43"). */
@@ -1498,9 +1562,8 @@
     (p.players || []).filter((n) => n && !named.has(n)).slice(0, Math.max(0, 2 - people.length)).forEach((n) => people.push([n, ""]));
     const chips = people.map(([name, group]) => {
       const got = groupLine(name, group);
-      return `<div class="gc-chip">${faceHTML(league, got.row || { name }, faces)}
-        <div class="gc-chip-t"><b>${esc(name)}</b><span class="mini">${esc(teamOf(d, name) || "")}${got.row && got.row.pos ? `, ${esc(got.row.pos)}` : ""}</span>
-          ${got.line ? `<span class="gc-chip-line">${got.line}</span>` : ""}</div></div>`;
+      return nowChipHTML(league, faces, name, got.row,
+        `${esc(teamOf(d, name) || "")}${got.row && got.row.pos ? `, ${esc(got.row.pos)}` : ""}`, got.line);
     }).join("");
     // The sentence opens on the down and the spot when it has them ("On 3rd &
     // 9 from the DET 44, ..."); the line under it says them only when it can't.
@@ -1516,12 +1579,7 @@
       ? `<div class="gc-dv-lhead"><b class="gc-dv-kind">${esc(kind)}</b>
         <span class="gc-dv-lside">${win}<span class="gc-dv-chip">Last play${when ? ` · ${esc(when)}` : ""}</span></span></div>`
       : win ? `<div class="gc-dv-lhead"><span class="gc-dv-lside">${win}</span></div>` : "";
-    return `<div class="gc-dv-last">
-      ${lhead}
-      <p class="gc-dv-said">${esc(said)}</p>
-      ${chips ? `<div class="gc-chips">${chips}</div>` : ""}
-      ${before || since.length ? `<div class="gc-dv-before">${before ? `<span><i>Before the play</i> ${before}</span>` : ""}${
-        since.map((w) => `<span>${esc(w)}</span>`).join("")}</div>` : ""}</div>`;
+    return nowLastHTML({ lhead, said, chips, before, since });
   }
 
   /* ---------------- the game leaders ----------------
@@ -1571,131 +1629,6 @@
       <div class="gc-head">Game leaders</div>
       <div class="gc-lead-teams"><span>${teamMarkIn(league, d.away, 22)} ${esc(d.away)}</span>
         <span>${esc(d.home)} ${teamMarkIn(league, d.home, 22)}</span></div>${rows}</div>`;
-  }
-
-  /* ---------------- the box score ----------------
-     ESPN's BOX SCORE tab: one side at a time behind a team toggle, every
-     group as its own table under ESPN's labels, a face beside each name.
-     The toggle's choice lives in this module (`_team`), so a redraw on
-     the twelve-second clock keeps the side the reader chose. A deep file
-     from before `box` existed falls back to the Player stats room's own
-     table (pbpPlayersHTML), which read the four markets the tracker
-     grades on — thinner, never wrong. */
-  function boxHTML(d, league, faces) {
-    const box = d.box || [];
-    if (!box.length) return typeof pbpPlayersHTML === "function" ? pbpPlayersHTML(d, league)
-      : `<p class="rail-quiet">No box score on file yet.</p>`;
-    const sides = [d.away, d.home].filter((t) => box.some((b) => b.team === t));
-    if (!sides.length) return `<p class="rail-quiet">No box score on file yet.</p>`;
-    if (!sides.includes(_team)) _team = sides[0];
-    const toggle = `<div class="gc-toggle">${sides.map((t) => `<button type="button" class="gc-tog${t === _team ? " active" : ""}" data-gc-team="${escapeAttr(t)}">${
-      teamMarkIn(league, t, 18)} ${esc(teamNameIn(league, t))}</button>`).join("")}</div>`;
-    const groups = teamBox(d, _team);
-    const tables = groups.map((g) => {
-      const rows = (g.rows || []).filter((r) => (r.stats || []).some((s) => s && s !== "--"));
-      if (!rows.length) return "";
-      return `<div class="pbp-bx-wrap"><table class="pbp-bx gc-bx">
-        <thead><tr><th scope="col" class="pbp-bx-who">${esc(titleCase(g.name))}</th>${
-          (g.labels || []).map((l) => `<th scope="col">${esc(l)}</th>`).join("")}</tr></thead>
-        <tbody>${rows.map((r) => `<tr><th scope="row" class="pbp-bx-who">${faceHTML(league, r, faces)}<span>${esc(r.name)}${
-          r.pos ? ` <span class="mini">${esc(r.pos)}</span>` : ""}</span></th>${
-          (g.labels || []).map((_l, i) => `<td>${esc((r.stats || [])[i] == null ? "—" : (r.stats || [])[i])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
-    }).join("");
-    return `${toggle}${tables || `<p class="rail-quiet">Nothing logged for this club yet.</p>`}
-      ${d.archive ? "" : `<p class="mini" style="opacity:.6">Box score ${esc(pbpAgo(d.generated_at))}.</p>`}`;
-  }
-
-  /* ---------------- team stats ----------------
-     ESPN's TEAM STATS tab: the two sides' totals as a comparison — the
-     away value, the stat's name, the home value, and a split bar under
-     the plain numbers (first downs, total yards) showing the share each
-     side has. A bar is drawn only where both values are a bare number: a
-     "5-12" third-down line or a "31:12" possession clock is shown as it
-     is, not parsed into a fraction and drawn as if it were yards. Rows
-     are the away side's order, with anything only the home side lists
-     appended, so the two never drift apart. A deep file without
-     `team_stats` falls back to the totals the page adds up from its own
-     drives (pbpTotalsHTML). */
-  function teamStatsHTML(d, league) {
-    const ts = d.team_stats || {};
-    const A = ts[d.away] || [], H = ts[d.home] || [];
-    if (!A.length && !H.length) return typeof pbpTotalsHTML === "function" ? (pbpTotalsHTML(d, league)
-      || `<p class="rail-quiet">Team totals fill in as the game is played.</p>`) : "";
-    const byKey = (rows) => { const m = {}; rows.forEach((r) => { m[r.name || r.label] = r; }); return m; };
-    const h = byKey(H), seen = new Set();
-    const order = [...A, ...H.filter((r) => !A.some((a) => (a.name || a.label) === (r.name || r.label)))];
-    const rows = order.map((r) => {
-      const key = r.name || r.label;
-      if (seen.has(key)) return "";
-      seen.add(key);
-      const a = A.find((x) => (x.name || x.label) === key), b = h[key];
-      const av = a ? a.value : "—", hv = b ? b.value : "—";
-      let bar = "";
-      if (plain(av) && plain(hv)) {
-        const x = Number(av), y = Number(hv), tot = x + y;
-        const left = tot > 0 ? Math.round((x / tot) * 100) : 50;
-        bar = `<div class="gc-bar"><span style="width:${left}%"></span><span style="width:${100 - left}%"></span></div>`;
-      }
-      return `<div class="gc-ts"><div class="gc-ts-row"><b>${esc(av)}</b><span class="gc-ts-k">${esc(r.label || key)}</span><b>${esc(hv)}</b></div>${bar}</div>`;
-    }).join("");
-    return `<div class="card gc-tstats"><div class="gc-ts-head"><span>${teamMarkIn(league, d.away, 20)} ${esc(d.away)}</span>
-      <span class="gc-head">Team stats</span><span>${esc(d.home)} ${teamMarkIn(league, d.home, 20)}</span></div>${rows}</div>`;
-  }
-
-  /* ---------------- play by play, drive by drive ----------------
-     ESPN's PLAY-BY-PLAY tab: each drive a card, newest first, headed by
-     the mark, the team, "7 plays · 66 yd · 3:23 · Q1", how it ended
-     ("Touchdown", "Punt" — the summary's `displayResult`, read by
-     espnplays as a label and refused as a sentence) and the score it
-     left, with every play of it under the head, the newest on top (Ethan,
-     2026-11-15: "The most recent play should be at the top"; playsHTML
-     draws the rows the rail draws, so a row is the same row in both
-     places, in the same order). A drive from a file
-     without `result` falls back to the rail's derived tag — Score,
-     Turnover, In progress. The other sports draw their periods the way
-     the rail groups them (pbpGroups), every play of each. */
-  function drivesHTML(d, league) {
-    const lv = d.live || {};
-    const drives = (d.drives || []).slice().reverse();
-    if (!drives.length) return `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`;
-    return gameChartHTML(d, league) + drives.map((dr, i) => {
-      const rows = dr.plays || [];
-      const n = dr.offensive_plays || rows.length;
-      const result = (typeof driveResultWord === "function" ? driveResultWord(dr) : dr.result) || (dr.scoring ? "Score" : rows.some((p) => p.turnover) ? "Turnover"
-        : (i === 0 && lv.state === "live") ? "In progress" : "");
-      const last = rows[rows.length - 1] || {};
-      const score = (last.away_score != null && last.home_score != null) ? `${last.away_score}–${last.home_score}` : "";
-      return `<div class="card gc-dr${dr.scoring ? " scoring" : ""}">
-        <div class="gc-dr-head">${teamMarkIn(league, dr.team, 22)}
-          <div><b>${esc(dr.team || "—")}</b><span class="mini"> · ${n} play${n === 1 ? "" : "s"}, ${dr.yards || 0} yd${dr.yards === 1 ? "" : "s"}${
-            dr.elapsed ? `, ${esc(dr.elapsed)}` : ""}${dr.period ? ` · Q${esc(dr.period)}` : ""}</span></div>
-          ${result ? `<span class="gc-tag${/turnover|interception|fumble|safety/i.test(result) ? " turnover" : /touchdown|field goal|score/i.test(result) ? "" : " quiet"}">${esc(result)}</span>` : ""}
-          ${score ? `<span class="gc-dr-score">${esc(score)}</span>` : ""}</div>
-        ${playsHTML({ plays: rows.slice().reverse(), home: d.home, away: d.away, room: d.event_id && !d.archive ? `${league}_${d.event_id}` : "" }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}</div>`;
-    }).join("");
-  }
-  function playsTabHTML(d, league) {
-    if (FOOTBALL.has(league)) return drivesHTML(d, league);
-    const groups = pbpGroups(d);
-    if (!groups.length) return `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`;
-    return groups.map((g) => `<div class="card gc-dr"><div class="gc-dr-head"><div><b>${esc(g.head)}</b>${
-      g.sub ? `<span class="mini"> — ${esc(g.sub)}</span>` : ""}</div>${g.tag ? `<span class="gc-tag">${esc(g.tag)}</span>` : ""}</div>
-      ${playsHTML({ plays: g.rows, room: d.event_id && !d.archive ? `${league}_${d.event_id}` : "" }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}</div>`).join("");
-  }
-
-  /* ---------------- odds & picks ----------------
-     ESPN's ODDS tab is a sportsbook's lines; ours is the site's own
-     reading of this game — the live line track off the board (the
-     opened → now chart the game page draws) and the two boards' picks on
-     the game as the Live tab words them (pbpPropsHTML: Pick of the Day,
-     Most Likely, Edge, each with the tracker's word), with the door to
-     the full game page for the lines, the props and the long shots. */
-  function oddsHTML(d, league, boardGame) {
-    const picks = typeof pbpPropsHTML === "function" ? pbpPropsHTML(d, league) : "";
-    const track = boardGame && boardGame.line_track && typeof lineTrackHTML === "function"
-      ? `<div class="card">${lineTrackHTML(boardGame)}</div>` : "";
-    const door = boardGame ? `<button type="button" class="btn ghost" id="pbp-game-door" data-gid="${escapeAttr(gameId(boardGame))}">Full game page — lines, props, long shots →</button>` : "";
-    return `${track}${picks}${door}`;
   }
 
   /* ---------------- the scoring plays ----------------
@@ -1763,97 +1696,6 @@
       </div>`;
     }).join("");
     return `<div class="card gc-scoring"><div class="gc-head">Scoring plays</div>${cards}</div>`;
-  }
-
-  /* ---------------- the Gamecast tab ----------------
-     ESPN's first tab, top to bottom: the drive in progress, the field
-     (app.js draws it above the tabs, on the park card, so it is on every
-     tab), the last play, the leaders. A final has no drive and says so in
-     one line over the leaders; a scheduled game draws nothing here, and
-     the page's own empty state covers it. */
-  function gamecastHTML(d, league, faces) {
-    const last = newestPlay(d, league);
-    const lv = d.live || {};
-    const quiet = lv.state === "live" ? "" : lv.state === "final"
-      ? `<p class="rail-quiet">Final. The leaders and the scoring are above; the box score, every play and the team stats are on the tabs.</p>` : "";
-    // A final's last play is not news: its tab opens on the leaders and the scoring, as ESPN's.
-    return `${currentDriveHTML(d, league, last)}${lv.state === "final" ? "" : lastPlayHTML(d, league, faces)}${leadersHTML(d, league, faces)}${scoringHTML(d, league)}${quiet}`;
-  }
-
-  function panel(tab, ctx) {
-    const { d, league, faces, boardGame } = ctx || {};
-    if (!d) return "";
-    switch (tab) {
-      case "box": return boxHTML(d, league, faces || {});
-      case "plays": return playsTabHTML(d, league);
-      case "team": return teamStatsHTML(d, league);
-      case "odds": return oddsHTML(d, league, boardGame);
-      default: return gamecastHTML(d, league, faces || {});
-    }
-  }
-
-  /* ---------------- the basketball page ----------------
-     Ethan's NBA render (2026-10-15) is its own page — js/hoopscast.js and
-     css/hoopscast.css, loaded the first time a basketball game opens —
-     handed the strip, the way back and app.js's own wiring. Until it lands
-     the page says so; a file that will not load leaves basketball on the
-     rooms above, as it was. */
-  const HOOPS = new Set(["nba", "wnba", "cbb"]);
-  let _hoops = null, _hoopsFailed = false;
-  function hoops(host, ctx) {
-    if (host && ctx && ctx.league === "nhl") return rink(host, ctx);
-    if (!host || !ctx || !HOOPS.has(ctx.league) || _hoopsFailed) return false;
-    // A page that throws leaves the host as it was and hands back to the
-    // old rooms for this pass; the next refresh tries the new page again.
-    if (window.QBHoops) {
-      try { return window.QBHoops.render(host, ctx); } catch (e) { console.error("hoopscast", e); return false; }
-    }
-    if (!_hoops) {
-      _hoops = new Promise((resolve) => {
-        const css = document.createElement("link");
-        css.rel = "stylesheet";
-        css.href = "css/hoopscast.css";
-        document.head.appendChild(css);
-        const el = document.createElement("script");
-        el.src = "js/hoopscast.js";
-        el.addEventListener("load", () => resolve(true));
-        el.addEventListener("error", () => { _hoopsFailed = true; resolve(false); });
-        document.head.appendChild(el);
-      }).then(() => { if (state.view === "pbp") renderPbpPage(); });
-    }
-    host.innerHTML = `${ctx.stripHTML || ""}<div class="card"><p class="rail-quiet">Loading the court…</p></div>${ctx.back || ""}`;
-    if (typeof ctx.wire === "function") ctx.wire();
-    return true;
-  }
-
-  /* ---------------- the hockey page ----------------
-     Ethan's NHL render (2026-10-15), the same way: js/rinkcast.js and
-     css/rinkcast.css, loaded the first time a hockey game opens whose file
-     carries the league's own events (`rink`, written by
-     livescore_build.nhl_rink_pass). A game without them, or a file that
-     will not load, stays on the rooms above. */
-  let _rink = null, _rinkFailed = false;
-  function rink(host, ctx) {
-    if (!ctx.d || !ctx.d.rink || _rinkFailed) return false;
-    if (window.QBRink) {
-      try { return window.QBRink.render(host, ctx); } catch (e) { console.error("rinkcast", e); return false; }
-    }
-    if (!_rink) {
-      _rink = new Promise((resolve) => {
-        const css = document.createElement("link");
-        css.rel = "stylesheet";
-        css.href = "css/rinkcast.css";
-        document.head.appendChild(css);
-        const el = document.createElement("script");
-        el.src = "js/rinkcast.js";
-        el.addEventListener("load", () => resolve(true));
-        el.addEventListener("error", () => { _rinkFailed = true; resolve(false); });
-        document.head.appendChild(el);
-      }).then(() => { if (state.view === "pbp") renderPbpPage(); });
-    }
-    host.innerHTML = `${ctx.stripHTML || ""}<div class="card"><p class="rail-quiet">Loading the rink…</p></div>${ctx.back || ""}`;
-    if (typeof ctx.wire === "function") ctx.wire();
-    return true;
   }
 
   /* ---------------- the moving mark ----------------
@@ -1961,7 +1803,6 @@
   }
 
   window.QBGamecast = {
-    panel, hoops, setTeam: (t) => { _team = String(t || ""); }, team: () => _team,
     // The moving mark, for the pages that move something over their art.
     track,
     // Baseball's at-bat, pitch by pitch, under the MLB page's at-bat card.
@@ -1972,6 +1813,9 @@
     // its Stats tab (the scoring, the leaders); the live tracking on its
     // Play-By-Play tab (the drive card, the last play, the whole game's chart).
     scoring: scoringHTML, leaders: leadersHTML, driveCard: currentDriveHTML, lastPlay: lastPlayHTML, driveView: driveViewHTML, gameChart: gameChartHTML,
+    // The same card for the other sports' newest play (detail.js gpKit), and
+    // the one any game file can make.
+    playNow: playNowHTML, plainNow: plainNowHTML,
     // Exposed for the tests and for Ask: the readers, not the markup.
     spotWord, playerLine, leaderOf, currentDrive, newestPlay, lineFor, faceURL, driveRows, nextSnap,
   };

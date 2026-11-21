@@ -60,9 +60,11 @@ GP = DETAIL[DETAIL.rindex("/*", 0, DETAIL.index("   THE GAME PAGE IN THE CLUBS' 
 GP += "\n" + "".join(DETAIL[DETAIL.index(f"function {n}("):DETAIL.index("\n}\n", DETAIL.index(f"function {n}(")) + 3]
                      for n in ("gpTimeouts", "gpTimeoutsHTML"))
 # A touchdown's flash, which the bar and the page draw too (detail.js
-# gpTouchdownSeen, gpTdFor, gpTdWordHTML; with the score block as well).
+# gpTouchdownSeen, gpTdFor, gpTdWordHTML; with the score block as well), and
+# since the page became every sport's (step AAI, 21 November) hockey's goal
+# beside it and the one pair every sport's score asks (gpScoreSeen, gpFlashFor).
 GP += "\n" + DETAIL[DETAIL.index("const GP_TD_MS = "):
-                    DETAIL.index("\n}\n", DETAIL.index("function gpTdWordHTML(")) + 3]
+                    DETAIL.index("\n}\n", DETAIL.index("function gpFlashFor(")) + 3]
 GP_CSS = CSS[CSS.rindex("/*", 0, CSS.index("   THE GAME PAGE IN THE CLUBS' COLOURS")):]
 COLOUR_MATH = DETAIL[DETAIL.index("const PBP_READS"):DETAIL.index("function pbpSideColours(")]
 
@@ -285,14 +287,17 @@ def test_the_field_reads_as_the_pages_other_fields_and_draws_the_two_lines():
 
 # --- the tabs and the panels ------------------------------------------------------
 def test_four_tabs_and_a_live_game_opens_on_the_plays():
-    assert 'const GP_FB_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];' in GP
+    assert 'const GP_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];' in GP
     page = _fn(DETAIL, "renderPbpPage")
-    assert ': tabs === GP_FB_TABS && lv.state === "live" ? "plays" : tabs[0][0];' in page
-    assert "host.innerHTML = fb ? gpFootballHTML({" in page and "if (fb) gpWire(host);" in page
-    fb = _fn(GP, "gpFootballHTML")
+    # Every sport but baseball draws the one page since step AAI (21 November): `one`.
+    assert "const one = tabs === GP_TABS;" in page
+    assert 'const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab : one && lv.state === "live" ? "plays" : tabs[0][0];' in page
+    assert "host.innerHTML = one ? gpPageHTML({" in page and "gpWire(host);" in page
+    fb = _fn(GP, "gpPageHTML")
     # 2026-11-15 (Ethan: "re organize it so it feels good and flows nice"):
     # the play right now and your bets before the things to do, then the tabs.
-    order = ["${gpCompactHTML(", "${pbpBoardHTML(d, league, lv, {", "${field}", "${gpLineHTML(d, league, lv)}",
+    # (`at` is the clock the score shows; `stage` the sport's picture: football's field.)
+    order = ["${gpCompactHTML(", "${pbpBoardHTML(d, league, at, {", "${stage}", "${gpLineHTML(d, league, at)}",
              "${gpNowHTML(", "${pbpMineSlotsHTML()}", '${lv.state === "live" ? pbpCallItHTML(d, league) : ""}',
              '<div class="gch-entry-slot"></div>', "${pbpTabsHTML(tab, null, tabs)}", "${back}"]
     at = [fb.index(x) for x in order]
@@ -389,7 +394,7 @@ def test_play_by_play_is_drive_by_drive_newest_first_and_the_drive_on_now_is_ope
     # first: the ⋯ menu a reader had just opened came back shut when the live poll redrew it (20 November 2026).
     keep = 'host.querySelectorAll("details[data-gp-key]").forEach((el) => _gpOpen.set(el.dataset.gpKey, el.open));'
     assert DETAIL.count(keep) == 1
-    assert DETAIL.index(keep) < DETAIL.index("host.innerHTML = fb ? gpFootballHTML("), "kept before the page is replaced"
+    assert DETAIL.index(keep) < DETAIL.index("host.innerHTML = one ? gpPageHTML("), "kept before the page is replaced"
 
 
 def test_standings_are_the_two_divisions_with_the_two_clubs_lit():
@@ -417,9 +422,9 @@ def test_standings_are_the_two_divisions_with_the_two_clubs_lit():
 def test_the_compact_bar_is_inert_until_shown_and_stays_shown_on_a_redraw():
     got = _node("""
       const d = { away: "MIN", home: "DET", live: { state: "live", period: "Q4", clock: "14:48", away_score: 7, home_score: 12 } };
-      const hidden = gpCompactHTML(d, "nfl", d.live, GP_FB_TABS, "stats");
+      const hidden = gpCompactHTML(d, "nfl", d.live, GP_TABS, "stats");
       _gpStuck = true;
-      const shown = gpCompactHTML(d, "nfl", d.live, GP_FB_TABS, "stats");
+      const shown = gpCompactHTML(d, "nfl", d.live, GP_TABS, "stats");
       return { hidden, shown, words: [gpClockWord("nfl", d.live), gpClockWord("nfl", { state: "final", period: "Final/OT" }),
                gpClockWord("nfl", { state: "live", hold: "Halftime — 2nd quarter" })] };
     """)
@@ -436,10 +441,25 @@ def test_the_compact_bar_is_inert_until_shown_and_stays_shown_on_a_redraw():
 
 
 def test_basketball_and_hockey_draw_the_line_under_their_score_too():
-    for f, league in (("hoopscast.js", "league"), ("rinkcast.js", '"nhl"')):
+    """…because their page is this one now (step AAI, 21 November): the line score is the page's own, under the
+    sport's picture, for every sport; neither sport's file writes one, and the copy of the score's rules that was
+    kept for their own class names is gone."""
+    page = _fn(GP, "gpPageHTML")
+    assert "${gpLineHTML(d, league, at)}" in page
+    for f in ("hoopscast.js", "rinkcast.js"):
         src = (ROOT / "web" / "js" / f).read_text(encoding="utf-8")
-        assert f'${{typeof gpLineHTML === "function" ? gpLineHTML(d, {league}, d.live || {{}}) : ""}}' in src, f
-    assert "#view-pbp.gp-on .hc-score, #view-pbp.gp-on .rc-score { background: none;" in GP_CSS
+        assert "gpLineHTML" not in src and "scoreboardHTML" not in src, f
+    assert ".hc-score" not in CSS and ".rc-score" not in CSS, "one set of rules for the score"
+    got = _node("""
+      const d = { away: "TOR", home: "DET", linescores: { TOR: [26, 28, 18], DET: [23, 25, 14] } };
+      return [gpLineHTML(d, "nba", { state: "live", period: "Q3", clock: "3:36", away_score: 72, home_score: 62 }),
+              gpLineHTML({ away: "MIN", home: "CGY", linescores: { MIN: [2, 1], CGY: [1, 0] } }, "nhl",
+                         { state: "live", period: "P2", clock: "9:27", away_score: 3, home_score: 1 })];
+    """)
+    if got is None:
+        return
+    assert got[0].count("<td") == 10 and '<th scope="col" class="now">3</th>' in got[0], "four quarters, the third on now"
+    assert got[1].count("<td") == 8 and '<th scope="col" class="now">2</th>' in got[1], "three periods"
 
 
 def test_a_yes_or_no_prop_reads_as_words():

@@ -240,9 +240,9 @@ def test_the_drive_card_draws_the_field_the_lines_and_the_ball_running_the_drive
     d = _fb_doc()
     got = _node(f"""const d = {json.dumps(d)};
       const ctx = {{ d, league: "nfl", faces: {{}}, boardGame: null }};
-      const first = Q.panel("gamecast", ctx);
+      const first = Q.driveCard(ctx.d, "nfl", Q.newestPlay(ctx.d, "nfl"));
       NOW += 60000;                                        // the page's redraw, a minute on
-      const later = Q.panel("gamecast", ctx);
+      const later = Q.driveCard(ctx.d, "nfl", Q.newestPlay(ctx.d, "nfl"));
       return {{ first, later }};""")
     if got is None:
         return
@@ -272,12 +272,12 @@ def test_a_new_play_runs_from_the_last_one_seen_and_the_red_zone_lights():
     snap = {"kind": "football", "id": "q99", "period": 3, "clock": "9:00", "team": "DAL", "event": "Rush", "down": 3,
             "distance": 8, "yards": 12, "scoring": False, "turnover": False, "penalty": False, "spot": 76}
     more["drives"][-1]["plays"].append(snap)
-    got = _node(f"""const ctx = (d) => ({{ d, league: "nfl", faces: {{}}, boardGame: null }});
-      Q.panel("gamecast", ctx({json.dumps(d)}));
+    got = _node(f"""const card = (d) => Q.driveCard(d, "nfl", Q.newestPlay(d, "nfl"));
+      card({json.dumps(d)});
       NOW += 60000;
-      Q.panel("gamecast", ctx({json.dumps(d)}));
+      card({json.dumps(d)});
       NOW += 1000;
-      return Q.panel("gamecast", ctx({json.dumps(more)}));""")
+      return card({json.dumps(more)});""")
     if got is None:
         return
     wide = re.search(r'<svg class="gc-fd-svg wide".*?</svg>', got, re.S).group(0)
@@ -289,24 +289,25 @@ def test_a_new_play_runs_from_the_last_one_seen_and_the_red_zone_lights():
 
 def test_no_spot_no_field_and_a_final_has_no_drive():
     bare = _node(f"""const d = {json.dumps(_fb_doc(spots=False))};
-      return Q.panel("gamecast", {{ d, league: "nfl", faces: {{}}, boardGame: null }});""")
+      return Q.driveCard(d, "nfl", Q.newestPlay(d, "nfl"));""")
     if bare is None:
         return
     assert "Current drive" in bare and "data-gc-fd" not in bare and "data-gc-replay" not in bare
     final = _node(f"""const d = {json.dumps(_fb_doc(state="final"))};
-      return Q.panel("gamecast", {{ d, league: "nfl", faces: {{}}, boardGame: null }});""")
+      return Q.driveCard(d, "nfl", Q.newestPlay(d, "nfl"));""")
     assert "Current drive" not in final and "data-gc-fd" not in final
 
 
 def test_the_plays_tab_leads_with_the_whole_game_a_drive_a_row():
     d = _fb_doc()
     got = _node(f"""const d = {json.dumps(d)};
-      const ctx = {{ d, league: "nfl", faces: {{}}, boardGame: null }};
-      return [Q.panel("plays", ctx), Q.panel("plays", ctx)];""")
+      return [Q.gameChart(d, "nfl"), Q.gameChart(d, "nfl")];""")
     if got is None:
         return
     first, again = got
-    assert first.index('class="card gc-chart"') < first.index('class="card gc-dr'), "the chart, then the drives"
+    # The chart, then the drives (detail.js gpPlaysHTML; a final's tab, since a live game's field is under its score).
+    det = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
+    assert "return `${chart}${gpDrivesHTML(d, league)}`;" in det and 'class="card gc-chart"' in first
     wide = re.search(r'<svg class="gc-fd-svg wide".*?</svg>', first, re.S).group(0)
     assert wide.count('class="gc-dc-row') == 4
     tags = re.findall(r'class="gc-dc-tag (\w*)"[^>]*>([^<]+)<', wide)
@@ -389,7 +390,8 @@ def test_between_at_bats_the_last_one_stays_with_how_it_ended_and_a_final_draws_
 
 
 def test_the_mlb_page_loads_the_module_and_draws_the_zone_under_the_at_bat():
-    assert '${pbpSituationHTML(d, league, faces)}${league === "mlb" && window.QBGamecast && QBGamecast.zone ? QBGamecast.zone(d) : ""}' in APP
+    # Baseball's own layout (every other sport is the one page, detail.js gpPageHTML, since 2026-11-21).
+    assert '${pbpSituationHTML(d, league, faces)}${window.QBGamecast && QBGamecast.zone ? QBGamecast.zone(d) : ""}' in APP
     assert 'if (!window.QBGamecast) {\n    loadGamecast().then((mod) => { if (mod && state.view === "pbp") renderPbpPage(); });' in APP
     assert 'const GC = league === "mlb" ? null : (window.QBGamecast || null);' in APP, "baseball keeps its own rooms"
     assert "zone," in GC.split("window.QBGamecast = {")[1]
@@ -430,7 +432,7 @@ def test_the_drive_on_the_photograph_runs_on_the_cards_clock():
     d = _fb_doc()
     hit = [p for p in d["plays"] if p.get("kind") == "football"][-1]
     got = _node(f"""const d = {json.dumps(d)}, hit = {json.dumps(hit)};
-      const card = Q.panel("gamecast", {{ d, league: "nfl", faces: {{}}, boardGame: null }});
+      const card = Q.driveCard(d, "nfl", Q.newestPlay(d, "nfl"));
       const photo = Q.art(d, "nfl", hit, null);
       NOW += 60000;
       return {{ card, photo, rest: Q.art(d, "nfl", hit, null) }};""")
@@ -573,11 +575,22 @@ def test_the_stylesheet_is_the_sites_tokens_and_motion_stops_for_a_reader_who_as
     assert ".pbp-park > .gc-art-replay { position: absolute; top: 8px; right: 8px; z-index: 1; }" in GC_CSS
 
 
-def test_the_views_bars_fit_with_replay_from_a_phone_to_a_desktop():
-    assert "@media (max-width: 480px) {\n  .rc-view .ic { display: none; }\n}" in RC_CSS
-    assert "@media (max-width: 400px) {\n  .rc-views { gap: 5px; }\n  .rc-view { padding: 8px 7px; }\n}" in RC_CSS
-    assert "@media (min-width: 1101px) and (max-width: 1299px) {" in RC_CSS, "a desktop with the plays beside the rink"
-    assert "@media (max-width: 420px) {\n  .hc-view .ic { display: none; }\n}" in HC_CSS
+def test_the_views_bars_fit_their_stage_from_a_phone_to_a_desktop():
+    """The arenas sit in the one page's column since 2026-11-21 (detail.js gpStageHTML): never wider than the
+    field football draws there, and on a desktop with the plays beside it as narrow as a phone. So what gives
+    way is asked of the stage's own width (a container query), never the screen's: the bars were sized by the
+    screen, and on a 1280px desktop the five hockey views ran 107px past a 644px card."""
+    for p, css in (("rc", RC_CSS), ("hc", HC_CSS)):
+        assert f"  container: {p}stage / inline-size; }}" in css, p
+        assert "@media (max-width" not in css and "@media (min-width" not in css, (p, "the screen's width decides nothing here")
+        assert css.count(f"@container {p}stage (max-width:") >= 4, p
+        short = css[css.index(f"@container {p}stage (max-width:"):]
+        short = short[:short.index("\n}\n")]
+        assert f".{p}-vl {{ display: none; }}" in short and f".{p}-replay span {{ display: none; }}" in short, \
+            (p, "the short words and Replay as its mark, wherever the stage is narrower than the long words need")
+    assert "@container rcstage (max-width: 800px) {" in RC_CSS, "five views never fit the page's column in their long words"
+    assert "@container hcstage (max-width: 640px) {" in HC_CSS
+    assert "  .rc-view .ic { display: none; }\n}" in RC_CSS and "  .hc-view .ic { display: none; }\n}" in HC_CSS
 
 
 # --- the page in a browser (opt-in) ------------------------------------------------

@@ -283,11 +283,12 @@
    second time below the leaders. Its other cards (the win chance, the
    pressure) stay. Baseball has no such tab, so its rail is its list. */
 @media (max-width: 980px) { .pbp-has-tabs .pbp-railcard { display: none; } }
-/* THE SCOREBOARD, THE BASKETBALL PAGE'S (Ethan, 2026-10-27: "We want all of
-   these too look like nba for all sports"). css/hoopscast.css .hc-score, for
-   football and baseball (pbpBoardHTML): each club's colour washed in from its
-   own edge, the crest, the city over the name in capitals and the record, the
-   score in the display face, and the clock in the middle. */
+/* THE SCOREBOARD (Ethan, 2026-10-27, of the basketball page's own board then:
+   "We want all of these too look like nba for all sports"). One board for
+   every sport (pbpBoardHTML; basketball's and hockey's own were retired for
+   it on 2026-11-21): each club's colour washed in from its own edge, the
+   crest, the city over the name in capitals and the record, the score in the
+   display face, and the clock in the middle. */
 .pbp-hero {
   --ca: var(--brand);
   --ch: var(--text-mute);
@@ -751,6 +752,12 @@
 .pbp-moment-banner.pbp-mb-below { top: 22%; }
 .pbp-moment-banner.pbp-mb-left { left: 8px; translate: none; }
 @media (max-width: 720px) { .pbp-moment-banner { display: flex; } }
+/* In an arena on the one page (gpStageHTML) the picture closes in by the
+   stage's own width, not the screen's (css/hoopscast.css, css/rinkcast.css:
+   a container query at 520px), so the banner that stands in for the big
+   screen the close-up leaves out follows the same width. */
+.gp-stage .pbp-moment-banner { display: none; }
+@container (max-width: 520px) { .gp-stage .pbp-moment-banner { display: flex; } }
 @media (prefers-reduced-motion: reduce) { .pbp-moment-banner { animation: none; } }
 
 /* Spoiler-free later (pbpSpoilHTML, pbpSpoilVeilHTML): the door beside the
@@ -931,8 +938,12 @@ button.tr-opt { cursor: pointer; }
    THE GAME PAGE IN THE CLUBS' COLOURS (Ethan, 2026-11-01, their Apple Sports
    screenshots of Vikings @ Lions: "I love how they use the team color for
    the background"). detail.js gpWashOn puts the two colours on <body> as
-   --wa and --wh and lights #view-pbp.gp-on; js/hoopscast.js and
-   js/rinkcast.js draw on the same wash.
+   --wa and --wh and lights #view-pbp.gp-on. EVERY SPORT'S PAGE IS THIS ONE
+   (detail.js gpPageHTML, 2026-11-21): basketball and hockey drew pages of
+   their own on the same wash, with a copy of these rules written out for
+   their own class names, so a change here never reached them. They bring
+   only their arenas now (js/hoopscast.js, js/rinkcast.js), and everything
+   below is every sport's.
 
    THE PAGE IS DARK ON THE WASH IN EITHER THEME: white type on the clubs'
    colours is the whole look, so inside the view (and the bar over it) the
@@ -1091,8 +1102,11 @@ body.gp-on .sportbar { background: transparent; }
 .gp .pbp-sb-crest > .team-mark-wrap { width: 56px !important; height: 56px !important; }
 .gp .pbp-sb-team { grid-area: team; align-items: center; }
 .gp .pbp-sb-loc { display: none; }
+/* A name longer than its column breaks at a syllable, with a hyphen
+   ("Timber-wolves"), where the browser knows the language's (the page is
+   lang="en"); anywhere, as before, only where it does not. */
 .gp .pbp-sb-nick { font: 700 var(--fs-md) / 1.2 var(--font-sans); text-transform: none; letter-spacing: 0; max-width: 100%;
-  white-space: normal; text-wrap: balance; overflow-wrap: anywhere; }
+  white-space: normal; text-wrap: balance; -webkit-hyphens: auto; hyphens: auto; overflow-wrap: anywhere; }
 .gp .pbp-sb-side.lost .pbp-sb-pts { color: var(--text-mute); }
 .gp .pbp-sb-rec { font: 500 var(--fs-xs) / 1.3 var(--font-mono); color: var(--text-mute); }
 .gp .pbp-sb-pts, .gp .pbp-sb-side.home .pbp-sb-pts { grid-area: pts; margin: 0; align-self: center; position: relative;
@@ -1107,6 +1121,10 @@ body.gp-on .sportbar { background: transparent; }
    club's name and record, lit for each one left, the way a broadcast's
    scorebug draws them. */
 .pbp-sb-tos { display: flex; justify-content: center; gap: 4px; margin-top: 6px; }
+/* A sport's own line under a side (pbpBoardHTML `marks`: basketball's bonus,
+   fouls and timeouts): words, so it takes the side's whole width, under the
+   crest, the name and the score alike. */
+.gp .pbp-sb-marks { grid-column: 1 / -1; min-width: 0; text-align: center; }
 .pbp-sb-tos > i { width: 13px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .2); }
 .pbp-sb-tos > i.on { background: #fff; }
 .gp .pbp-sb-per { font: 600 var(--fs-xs) / 1.2 var(--font-sans); letter-spacing: .02em; text-transform: none; color: var(--text-dim); }
@@ -1182,6 +1200,21 @@ svg text.gp3-num.far, .gp3-arrow.far { fill-opacity: .45; }
 .gp3-rim { stroke: rgba(255, 255, 255, .16); stroke-width: 1.5; fill: none; }
 .gp3-depth { pointer-events: none; }
 
+/* ---------------- another sport's picture ----------------
+   Where football draws its field, basketball and hockey draw their arenas
+   (detail.js gpKit `stage`; js/hoopscast.js, js/rinkcast.js): a card the
+   width of the page's own, whatever is inside it the sport's. While the
+   sport's file is on its way the card says so. */
+.gp-stage { box-sizing: border-box; width: 100%; max-width: 720px; margin: 2px auto var(--sp-3); }
+.gp-stage-wait { box-sizing: border-box; width: 100%; max-width: 720px; margin: 2px auto var(--sp-3); text-align: center; }
+.gp-stage-wait > .rail-quiet { margin: 0; }
+/* A line under the clock that is one sport's (pbpBoardHTML `mid`): hockey's
+   shots on goal, and the side on the power play in its own colour. */
+.gp-sb-note { font: 600 var(--fs-xs) / 1.3 var(--font-mono); color: var(--text-dim); white-space: nowrap; }
+.gp-sb-chip { display: inline-block; margin-top: 2px; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  font: 800 var(--fs-2xs) / 1.4 var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: #fff;
+  background: color-mix(in oklab, var(--pc, var(--text-mute)) 70%, #111); }
+
 /* ---------------- the line score ---------------- */
 .gp-line { box-sizing: border-box; width: 100%; max-width: 720px; margin: 0 auto var(--sp-3); padding: var(--sp-2) var(--sp-3); }
 .gp-ls, .gp-odds, .gp-bx, .gp-st { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -1225,6 +1258,8 @@ svg text.gp3-num.far, .gp3-arrow.far { fill-opacity: .45; }
 .gp-ts-row { display: grid; grid-template-columns: minmax(48px, auto) 1fr minmax(48px, auto); align-items: baseline; gap: var(--sp-2); }
 .gp-ts-row > b { font: 700 var(--fs-md) / 1.2 var(--font-display); font-variant-numeric: tabular-nums; }
 .gp-ts-row > b:last-child { text-align: right; }
+/* A rate's makes and tries beside it ("55% 42/77": gpTeamStatsHTML). */
+.gp-ts-row > b > small { margin-left: 5px; font: 500 var(--fs-2xs) / 1 var(--font-mono); color: var(--text-mute); }
 .gp-ts-row > span { text-align: center; font-size: var(--fs-xs); color: var(--text-dim); }
 .gp-ts-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 5px; }
 .gp-ts-bars > span { display: flex; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .07); overflow: hidden; }
@@ -1270,6 +1305,9 @@ details.gp-dr { padding: 0; margin-bottom: var(--sp-2); }
   padding: var(--sp-3); cursor: pointer; }
 .gp-dr-head::-webkit-details-marker { display: none; }
 .gp-dr-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* A period's card (gpPeriodsHTML) wears its number where a drive wears its club's crest. */
+.gp-dr-per { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: rgba(255, 255, 255, .12);
+  font: 800 var(--fs-xs) / 1 var(--font-sans); color: var(--text); }
 .gp-dr-t > b { font-size: var(--fs-md); }
 .gp-dr-play { font-size: var(--fs-sm); color: var(--text-dim); }
 .gp-dr-meta { font-size: var(--fs-xs); color: var(--text-mute); }
@@ -1443,41 +1481,4 @@ details.gp-dr > :not(summary) { padding: 0 var(--sp-3) var(--sp-2); }
   .gp .pbp-sb-crest > .team-mark-wrap { width: 38px !important; height: 38px !important; }
   .gp .pbp-sb-pts, .gp .pbp-sb-side.home .pbp-sb-pts { font-size: var(--fs-2xl); }
   .gp .pbp-sb-side, .gp .pbp-sb-side.home { gap: 4px 6px; }
-}
-
-/* ---------------- basketball, hockey: the same score on the wash ----------------
-   js/hoopscast.js and js/rinkcast.js draw their own boards (Ethan's NBA and
-   NHL renders, 2026-10-15); on the clubs' colours each sheds its card the
-   football score did, crest over name over record, the score big beside
-   it, and the line score under it (gpLineHTML, handed in as ctx.line). */
-#view-pbp.gp-on .hc-score, #view-pbp.gp-on .rc-score { background: none; padding: var(--sp-3) var(--sp-2) var(--sp-2);
-  max-width: 720px; margin: 0 auto 2px; gap: var(--sp-2); align-items: start; }
-#view-pbp.gp-on .hc-side, #view-pbp.gp-on .hc-side.home, #view-pbp.gp-on .rc-side, #view-pbp.gp-on .rc-side.home {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "crest pts" "team pts";
-  align-items: center; gap: 4px var(--sp-3); text-align: center; }
-#view-pbp.gp-on .hc-side.home, #view-pbp.gp-on .rc-side.home { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "pts crest" "pts team"; }
-#view-pbp.gp-on .hc-crest, #view-pbp.gp-on .rc-crest { grid-area: crest; display: grid; place-items: center; width: auto; }
-#view-pbp.gp-on .hc-crest > .team-mark-wrap, #view-pbp.gp-on .rc-crest > .team-mark-wrap { width: 56px !important; height: 56px !important; }
-#view-pbp.gp-on .hc-team, #view-pbp.gp-on .rc-team { grid-area: team; align-items: center; }
-#view-pbp.gp-on .hc-loc, #view-pbp.gp-on .rc-loc { display: none; }
-#view-pbp.gp-on .hc-nick, #view-pbp.gp-on .rc-nick { font: 700 var(--fs-md) / 1.2 var(--font-sans); text-transform: none; letter-spacing: 0;
-  white-space: normal; text-wrap: balance; }
-#view-pbp.gp-on .hc-rec, #view-pbp.gp-on .rc-rec { font: 500 var(--fs-xs) / 1.3 var(--font-mono); color: var(--text-mute); }
-#view-pbp.gp-on .hc-pts, #view-pbp.gp-on .hc-side.home .hc-pts, #view-pbp.gp-on .rc-pts, #view-pbp.gp-on .rc-side.home .rc-pts {
-  grid-area: pts; margin: 0; align-self: center; font: 700 var(--fs-4xl) / 1 var(--font-display); letter-spacing: -.02em; }
-#view-pbp.gp-on .hc-mid, #view-pbp.gp-on .rc-mid { align-self: center; }
-#view-pbp.gp-on .hc .gp-line, #view-pbp.gp-on .rc .gp-line { margin-top: var(--sp-1); }
-@media (max-width: 720px) {
-  #view-pbp.gp-on .hc-score, #view-pbp.gp-on .rc-score { padding: var(--sp-3) 0 var(--sp-2); gap: 6px; }
-  #view-pbp.gp-on .hc-crest > .team-mark-wrap, #view-pbp.gp-on .rc-crest > .team-mark-wrap { width: 46px !important; height: 46px !important; }
-  #view-pbp.gp-on .hc-side, #view-pbp.gp-on .hc-side.home, #view-pbp.gp-on .rc-side, #view-pbp.gp-on .rc-side.home { gap: 4px 10px; }
-  #view-pbp.gp-on .hc-pts, #view-pbp.gp-on .hc-side.home .hc-pts, #view-pbp.gp-on .rc-pts, #view-pbp.gp-on .rc-side.home .rc-pts {
-    font-size: var(--fs-3xl); }
-  #view-pbp.gp-on .hc-nick, #view-pbp.gp-on .rc-nick { font-size: var(--fs-sm); }
-}
-@media (max-width: 359px) {
-  #view-pbp.gp-on .hc-crest > .team-mark-wrap, #view-pbp.gp-on .rc-crest > .team-mark-wrap { width: 38px !important; height: 38px !important; }
-  #view-pbp.gp-on .hc-pts, #view-pbp.gp-on .hc-side.home .hc-pts, #view-pbp.gp-on .rc-pts, #view-pbp.gp-on .rc-side.home .rc-pts {
-    font-size: var(--fs-2xl); }
-  #view-pbp.gp-on .hc-side, #view-pbp.gp-on .hc-side.home, #view-pbp.gp-on .rc-side, #view-pbp.gp-on .rc-side.home { gap: 4px 6px; }
 }

@@ -311,9 +311,16 @@ def test_a_phone_gets_the_moment_as_a_banner_in_its_pictures_room():
     assert re.search(r'<div class="pbp-moment-banner pbp-mb-below" style="--t:0ms" aria-hidden="true"><b>TOUCHDOWN</b><span>DAL</span></div>', loud)
     assert '<div class="pbp-moment-banner pbp-mb-left"' in rink and "<b>GOAL</b><span>BOS</span>" in rink
     assert other == "", "another game's moment is not this one's"
-    assert "@media (max-width: 720px) { .pbp-moment-banner { display: flex; } }" in DETAIL_CSS, \
-        "a phone's (the arenas' own crop turns at 720)"
-    assert "@media (max-width: 720px) {" in open(os.path.join(ROOT, "web", "css", "hoopscast.css"), encoding="utf-8").read()
+    assert "@media (max-width: 720px) { .pbp-moment-banner { display: flex; } }" in DETAIL_CSS, "a phone's"
+    # In an arena on the one page the picture closes in by the stage's own width (a container query, since
+    # 21 November 2026: the stage sits in the page's column, a phone's width on some desktops), and the banner
+    # that stands in for the big screen the close-up leaves out turns at the same width.
+    assert (".gp-stage .pbp-moment-banner { display: none; }\n"
+            "@container (max-width: 520px) { .gp-stage .pbp-moment-banner { display: flex; } }") in DETAIL_CSS
+    for name, p in (("hoopscast.css", "hc"), ("rinkcast.css", "rc")):
+        sheet = open(os.path.join(ROOT, "web", "css", name), encoding="utf-8").read()
+        crop = sheet[sheet.index(f"@container {p}stage (max-width: 520px) {{"):]
+        assert f".{p}-art {{ --crop-x:" in crop[:crop.index("\n}\n")], (name, "the close-up, at the banner's width")
     assert "@media (prefers-reduced-motion: reduce) { .pbp-moment-banner { animation: none; } }" in DETAIL_CSS, \
         "reduced motion holds it, lit, until the next pass"
     for k in ("@keyframes pbp-banner", "@keyframes pbp-lamp"):
@@ -346,12 +353,18 @@ def test_a_room_replaces_only_its_own_entry_points():
 def test_the_last_play_card_sits_under_the_arena_and_off_its_big_screen():
     """Ethan's desktop hockey page, 2026-10-25: the page's last-play card
     ("PUCK: NYR") floated over the top-left of the arena, across the left
-    half of the jumbotron the score is lit on. It sits under the picture
-    now on every screen, as it already did on a phone."""
-    css = open(os.path.join(ROOT, "web", "css", "rinkcast.css"), encoding="utf-8").read()
-    rule = re.search(r"(?m)^\.rc-caption \{(.*?)\}", css, re.S).group(1)
-    assert "position: static" in rule and "position: absolute" not in rule
-    assert "max-width: min(460px, 48%)" not in rule
+    half of the jumbotron the score is lit on. It sat under the picture
+    after that, as a caption of the arena's own; since 21 November 2026 it
+    is the page's own card (gamecast.js playNowHTML), the one football's last
+    play is drawn on, under the arena and the line score on every screen."""
+    for name in ("rinkcast", "hoopscast"):
+        css = open(os.path.join(ROOT, "web", "css", f"{name}.css"), encoding="utf-8").read()
+        js = open(os.path.join(ROOT, "web", "js", f"{name}.js"), encoding="utf-8").read()
+        assert "-caption" not in css and "-caption" not in js, (name, "no caption over or under the picture")
+        assert "G.playNow(d, " in js, (name, "the newest play goes to the page's card")
+    page = DETAIL[DETAIL.index("function gpPageHTML(o) {"):]
+    page = page[:page.index("\n}\n")]
+    assert page.index("${stage}") < page.index("${gpLineHTML(d, league, at)}") < page.index("${gpNowHTML(d, league, faces, boardGame, GC, !!stage, kit)}")
 
 
 # --- in a browser -----------------------------------------------------------------------

@@ -145,11 +145,15 @@ def test_the_score_at_the_top_and_the_bar_wear_it_and_a_redraw_carries_on():
 
 def test_it_runs_once_a_draw_after_the_tv_hold_and_the_veil():
     page = DETAIL[DETAIL.index("async function renderPbpPage("):]
-    assert page.index("tvPick(") < page.index("spoiledG(league") < page.index("gpFootballHTML("), \
+    assert page.index("tvPick(") < page.index("spoiledG(league") < page.index("gpPageHTML("), \
         "the copy on the screen, and never a veiled game"
-    fb = DETAIL[DETAIL.index("function gpFootballHTML(o) {"):]
-    assert fb.index("gpTouchdownSeen(league, d, lv);") < fb.index("const field = gpFieldHTML(d, league, lv);")
-    assert DETAIL.count("gpTouchdownSeen(") == 2, "defined once, seen once a draw"
+    # The page is every sport's since step AAI (21 November): it asks once a draw whether a score was seen
+    # (gpScoreSeen: football's touchdown, hockey's goal), before the score is drawn.
+    fb = DETAIL[DETAIL.index("function gpPageHTML(o) {"):]
+    assert fb.index("gpScoreSeen(league, d, lv);") < fb.index("${pbpBoardHTML(d, league, at, {")
+    seen = DETAIL[DETAIL.index("function gpScoreSeen("):DETAIL.index("function gpFlashFor(")]
+    assert "PBP_FOOTBALL.has(league) ? gpTouchdownSeen(league, d, lv, now)" in seen
+    assert DETAIL.count("gpTouchdownSeen(") == 2 and DETAIL.count("gpScoreSeen(") == 2, "defined once, seen once a draw"
 
 
 def test_the_styles_pulse_and_fall_back_to_a_tint_without_motion():

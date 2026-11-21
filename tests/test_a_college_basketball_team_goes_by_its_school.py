@@ -71,28 +71,31 @@ def _fn(src, name):
 
 
 def test_the_scoreboards_put_the_mascot_over_the_school():
+    """One scoreboard since step AAI (21 November): the basketball page drew its own, with its own `mascot`; every
+    sport's score is the page's now (detail.js pbpBoardHTML), which names a college side the same way."""
     node = shutil.which("node") or "/opt/node22/bin/node"
     detail = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
     hoops = (ROOT / "web" / "js" / "hoopscast.js").read_text(encoding="utf-8")
-    i = hoops.index("  const mascot = (t) => {")
-    mascot = hoops[i:hoops.index("  };\n", i) + 5]
-    assert '<span class="hc-loc">${esc(league === "cbb" ? mascot(t) : t.loc || "")}</span>' in hoops
+    assert "const mascot" not in hoops and "hc-loc" not in hoops and "scoreboardHTML" not in hoops
+    board = _fn(detail, "pbpBoardHTML")
+    assert "const { big, small } = pbpSideNames(league, t, full);" in board
+    assert 'if (league === "cbb") pbpCbbTeamsWarm();' in board, "a college game opened from a link reads its schools once"
     if not os.path.exists(node):
         return
     hou = dict(HOU, nick="Houston")
     acu = dict(ACU, nick="Abilene Chrstn")
-    js = (_fn(detail, "pbpSideNames") + mascot
+    js = (_fn(detail, "pbpSideNames")
           + f"process.stdout.write(JSON.stringify([pbpSideNames('cbb', {json.dumps(hou)}, 'x'),"
             f" pbpSideNames('cbb', {json.dumps(acu)}, 'x'),"
             f" pbpSideNames('nba', {{nick: 'Celtics', name: 'Boston Celtics', loc: 'Boston'}}, 'x'),"
-            f" mascot({json.dumps(hou)}), mascot({json.dumps(acu)}), mascot({{name: 'Duke', nick: 'Duke'}})]));")
+            f" pbpSideNames('cbb', {{name: 'Duke', nick: 'Duke'}}, 'x')]));")
     out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-800:]
-    h, a, nba, mh, ma, none = json.loads(out.stdout)
+    h, a, nba, none = json.loads(out.stdout)
     assert h == {"big": "Houston", "small": "Cougars"}, h
     assert a == {"big": "Abilene Chrstn", "small": "Wildcats"}, "the mascot found past the long school name"
     assert nba == {"big": "Celtics", "small": "Boston"}, "a pro club as it was"
-    assert (mh, ma, none) == ("Cougars", "Wildcats", "")
+    assert none == {"big": "Duke", "small": ""}, "a school with no mascot after its name says none"
 
 
 def test_the_empty_board_note_is_plain():

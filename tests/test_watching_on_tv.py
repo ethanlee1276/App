@@ -68,8 +68,12 @@ def test_the_page_holds_the_final_and_the_strip_and_offers_the_choice():
         "the chat's scoreboard is the held one too"
     assert "? { ...g, live: { ...(g.live || {}), ...(d.live || {}) } } : g));" in fn[i:i + 600]
     assert '(!tvHeld.held && fast && (fast.live || {}).state === "final")' in fn
-    assert "${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}" in DET
-    assert "callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league)" in DET, "basketball and hockey too"
+    assert "${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}" in DET, "baseball's own layout"
+    # Football, basketball and hockey are the one page (gpPageHTML, 21 November 2026): the choice is in its ⋯ menu.
+    more = DET[DET.index("function gpMoreHTML("):DET.index("function gpStatsHTML(")]
+    assert "const inner = `${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}" in more, "every other sport too"
+    one = DET[DET.index("function gpPageHTML(o) {"):DET.index("function gpRailPicksHTML(")]
+    assert "more: gpMoreHTML(d, league, event)" in one
     tv = DET[DET.index("function pbpTvHTML("):]
     assert 'if (!d || (d.live || {}).state !== "live") return "";' in tv[:120]
 

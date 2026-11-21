@@ -401,14 +401,14 @@ def test_the_gamecast_carries_espns_scoring_plays():
              _drive("GB", [_p("Punt", 3, 13, period=2, scoring=False)], "Punt", period=2)]}
     got = _gct()._node(f"""
       const d = {json.dumps(d)};
-      const html = QBGamecast.panel("gamecast", {{ d, league: "nfl" }});
+      const html = QBGamecast.scoring(d, "nfl");
       const i = html.indexOf("Scoring plays");
       return {{ html: html.slice(i), i }};""")
     if got is None:
         print("      (skipped: no node)")
         return
     html = got["html"]
-    assert got["i"] >= 0, "the card is on the Gamecast tab"
+    assert got["i"] >= 0, "the card a final's Stats tab opens on (detail.js gpStatsHTML)"
     cards = re.findall(r'<div class="gc-sc">(.*?)</div>\s*</div>', html, re.S)
     assert len(cards) == 3, "one card per scoring drive: the punt is not a score, the missed kick is not its own"
     assert html.index("1st quarter") < html.index("2nd quarter")
@@ -432,7 +432,7 @@ def test_hockey_lists_its_goals():
                    {"kind": "hockey", "event": "Goal", "away_score": 1, "home_score": 2, "period": 4, "clock": "1:05",
                     "scoring": True, "team": "BOS"}]}
     got = _gct()._node(f"""
-      const html = QBGamecast.panel("gamecast", {{ d: {json.dumps(d)}, league: "nhl" }});
+      const html = QBGamecast.scoring({json.dumps(d)}, "nhl");
       return html.slice(html.indexOf("Scoring plays"));""")
     if got is None:
         print("      (skipped: no node)")
@@ -474,15 +474,18 @@ def test_an_old_game_says_its_day_and_has_no_chat():
     assert ('if (d && d.archive) { if (typeof chatReset === "function") { chatReset(); chatFab(); } }\n'
             "  else chatMount(league, event, d);") in detail
     slot = '${d.archive ? "" : `<div class="gch-entry-slot"></div>`}'
-    assert slot in detail
-    hoops = READ("web", "js", "hoopscast.js")
-    assert slot in hoops and 'd.archive && typeof pbpPlayedOn === "function" ? pbpPlayedOn(d)' in hoops
-    # No play's thread bubble either: the rail (pbpRoom), the gamecast's Play-by-play tab, the hoops page.
+    # Twice: baseball's own rooms, and the one page every other sport is drawn on (gpPageHTML, 21 November 2026).
+    assert detail.count(slot) == 2
+    one = detail[detail.index("function gpPageHTML(o) {"):detail.index("function gpRailPicksHTML(")]
+    assert slot in one
+    # No play's thread bubble either: one reading of the room (pbpRoom) for the rail, the drives and the
+    # periods, whichever sport's rows they are. Basketball's and hockey's files draw no rows of their own.
     assert 'const pbpRoom = (d, league) => {\n  if (d && d.archive) return "";' in detail
-    assert 'd.event_id && !d.archive ? chatPlayBadge(`${league}_${d.event_id}`, p)' in hoops
-    gc = READ("web", "js", "gamecast.js")
-    assert gc.count("room: d.event_id && !d.archive ? `${league}_${d.event_id}` : \"\"") == 2
-    assert '${d.archive ? "" : `<p class="mini" style="opacity:.6">Box score ${esc(pbpAgo(d.generated_at))}.</p>`}' in gc
+    assert "league, room: pbpRoom(d, league) })" in detail[detail.index("function gpDrivesHTML("):detail.index("function gpPeriodsHTML(")]
+    assert 'room: opt.room === false ? "" : pbpRoom(d, league), say: opt.say })' in \
+        detail[detail.index("function gpPeriodsHTML("):detail.index("function gpNowHTML(")]
+    for name in ("hoopscast.js", "rinkcast.js", "gamecast.js"):
+        assert "chatPlayBadge" not in READ("web", "js", name), name
 
 
 def test_a_hidden_card_stays_hidden():

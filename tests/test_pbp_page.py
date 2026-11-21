@@ -97,7 +97,11 @@ def test_rows_are_drawn_by_the_cards_own_renderer():
     body = _fn("pbpRailHTML")
     # The league rides along (2026-11-14): a finished college game has no
     # room to say it, and its halves are read off the league.
-    assert "playsHTML({ plays: g.rows, home: d.home, away: d.away, league, room: pbpRoom(d, league) })" in body
+    # The clubs' short names and the sport's own words for a play ride too (21 November 2026: one page for every
+    # sport, so the side list reads as the period cards beside it do — hockey's from the league's events).
+    assert ("playsHTML({ plays: g.rows, home: d.home, away: d.away, home_abbr: d.home_abbr, away_abbr: d.away_abbr, league,\n"
+            "                           room: pbpRoom(d, league), say: opt.say })") in body
+    assert "pbpGroups(opt.plays ? { ...d, plays: opt.plays } : d)" in body, "a sport's own rows, when it has them"
 
 
 def test_groups_are_the_way_each_sport_is_read_newest_first():
@@ -112,7 +116,8 @@ def test_groups_are_the_way_each_sport_is_read_newest_first():
 
 def test_it_refreshes_while_live_and_stops_when_the_reader_leaves():
     body = _fn("renderPbpPage")
-    assert 'if (lv.state === "live") again();' in body
+    # One clock for every sport's page: while the game is on, and through the hour before it starts.
+    assert 'if (lv.state === "live" || pbpStartsSoon(lv)) again();' in body and body.count("again();") == 3
     assert 'if (state.view === "pbp") renderPbpPage(true);' in body, "the timer checks the view before redrawing"
     assert 'if (state.view !== "pbp") return;' in body, "a fetch that lands after leaving draws nothing"
     assert "clearTimeout(_pbpTimer)" in body

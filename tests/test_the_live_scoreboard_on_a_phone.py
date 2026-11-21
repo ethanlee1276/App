@@ -21,8 +21,11 @@ Two causes, on the NBA and NHL pages alike:
 
 Football's and baseball's header became the same board on 2026-10-27
 (Ethan, circling the NBA's: "We want all of these too look like nba for all
-sports"), so the browser half measures the football, college and baseball
-boards with the same geometry as the basketball and hockey ones.
+sports"), and on 2026-11-21 basketball's and hockey's own scoreboards went:
+every sport's page is the one page (detail.js gpPageHTML) and its score is
+the one board (pbpBoardHTML), with a sport's own marks handed to it (the
+bonus, the fouls and the timeouts; the power play and the shots). So the
+browser half measures one board on six games, the busiest of them included.
 
 Offline; the browser half is opt-in (QB_BROWSER_TESTS=1) and aborts every
 request that leaves the page's own server.
@@ -46,21 +49,12 @@ from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first u
 
 APP = app_js()
 STYLES = styles_css()
-SHEETS = {"hc": (ROOT / "web" / "css" / "hoopscast.css").read_text(encoding="utf-8"),
-          "rc": (ROOT / "web" / "css" / "rinkcast.css").read_text(encoding="utf-8"),
-          # Football's and baseball's, the same board since 2026-10-27 (pbpBoardHTML).
-          "pbp-sb": (ROOT / "web" / "css" / "detail.css").read_text(encoding="utf-8")}
-
-# A stand-in for app.js's watchHTML: the page draws whatever it returns.
-WATCH = 'globalThis.watchHTML = (d, lg, cls) => `<div class="watch ${cls}"><a class="watch-main">Watch</a></div>`;'
-
-
-def _render(mod, league, doc):
-    return mod._node(f"""{WATCH}
-      const host = {{ innerHTML: "", dataset: {{}}, querySelector: () => null, addEventListener: () => {{}} }};
-      Q.render(host, {{ d: {json.dumps(doc)}, league: "{league}", stripHTML: "", back: "",
-                       boardGame: null, faces: {{}}, wire: () => {{}} }});
-      return host.innerHTML;""")
+HC = (ROOT / "web" / "js" / "hoopscast.js").read_text(encoding="utf-8")
+RC = (ROOT / "web" / "js" / "rinkcast.js").read_text(encoding="utf-8")
+HC_CSS = (ROOT / "web" / "css" / "hoopscast.css").read_text(encoding="utf-8")
+RC_CSS = (ROOT / "web" / "css" / "rinkcast.css").read_text(encoding="utf-8")
+#: The one board's sheet (pbpBoardHTML), every sport's since 2026-11-21.
+SHEETS = {"pbp-sb": (ROOT / "web" / "css" / "detail.css").read_text(encoding="utf-8")}
 
 
 def _phone_block(css: str) -> str:
@@ -71,17 +65,21 @@ def _phone_block(css: str) -> str:
 
 
 # --- the markup ----------------------------------------------------------------------
-def test_the_watch_row_is_the_scoreboards_last_row_not_the_clocks():
-    for p, mod, league in (("hc", NBA, "nba"), ("rc", NHL, "nhl")):
-        html = _render(mod, league, mod._deep())
-        if html is None:
-            return
-        board = html[html.index(f'class="card {p}-score"'):html.index(f'class="card {p}-stage')]
-        mid = board[board.index(f'class="{p}-mid"'):board.index(f'<div class="{p}-side home">')]
-        assert "watch" not in mid, f"{league}: the buttons set the clock column's width"
-        assert board.index(f'<div class="{p}-side home">') < board.index(f'class="watch pbp-watch {p}-watch"'), league
-        # Only while the game is on.
-        assert "pbp-watch" not in _render(mod, league, mod._deep(state="final")), league
+def test_basketball_and_hockey_draw_no_scoreboard_of_their_own():
+    """Theirs put the watch buttons in the clock's column (Ethan's screenshot). They are gone: the one board
+    draws every sport's score, and the two files hand it only what is theirs to say under it."""
+    for name, js, css, p in (("hoopscast", HC, HC_CSS, "hc"), ("rinkcast", RC, RC_CSS, "rc")):
+        assert "watchHTML" not in js and "scoreboardHTML" not in js, name
+        for gone in (f".{p}-score", f".{p}-side", f".{p}-mid", f".{p}-crest", f".{p}-pts", f".{p}-nick", f".{p}-watch"):
+            assert gone + " " not in css and gone + "," not in css and gone + "{" not in css, (name, gone)
+    assert "marks: live ? { away: marksHTML(d, \"away\"), home: marksHTML(d, \"home\") } : null," in HC
+    assert "mid: on ? midHTML(d, k) : \"\"," in RC
+    board = APP[APP.index("function pbpBoardHTML("):APP.index("async function renderPbpPage(")]
+    # A sport's own marks are words, so they take the side's whole width: under the narrow name column of a
+    # phone's board "Timeouts 4" ran 2px past a 59px column at 360px (the browser half below measures it).
+    assert "const own = o.marks || {};" in board and 'own[ha] ? `<div class="pbp-sb-marks">${own[ha]}</div>` : ""' in board
+    assert "o.mid" in board, "and a line under the clock (hockey's)"
+    assert ".gp .pbp-sb-marks { grid-column: 1 / -1; min-width: 0; text-align: center; }" in SHEETS["pbp-sb"]
 
 
 def test_the_football_and_baseball_header_puts_it_last_too():
@@ -95,8 +93,6 @@ def test_the_football_and_baseball_header_puts_it_last_too():
 
 # --- the stylesheets -------------------------------------------------------------------
 def test_the_row_spans_the_card():
-    assert ".hc-watch { grid-column: 1 / -1; margin-top: 0; }" in SHEETS["hc"]
-    assert ".rc-watch { grid-column: 1 / -1; margin-top: 0; }" in SHEETS["rc"]
     assert ".pbp-hero > .pbp-watch { grid-column: 1 / -1; margin-top: 0; }" in STYLES
 
 
@@ -205,11 +201,10 @@ def test_the_scoreboards_in_a_browser_from_320_to_1280():
     fb["live"].update({"away_score": 24, "home_score": 17})
     cases = [("nba", "opening", _nba("opening")), ("nba", "late", _nba("late")), ("nhl", "nhl", nhl),
              ("nfl", "football", fb), ("cfb", "college", _college(fb)), ("mlb", "baseball", _mlb())]
+    # One board for every sport (pbpBoardHTML).
     board = {"score": ".pbp-hero", "mid": ".pbp-sb-mid", "side": ".pbp-sb-side", "pts": ".pbp-sb-pts",
              "crest": ".pbp-sb-crest", "nick": ".pbp-sb-nick"}
-    sels = {"nba": {"score": ".hc-score", "mid": ".hc-mid", "side": ".hc-side", "pts": ".hc-pts", "crest": ".hc-crest", "nick": ".hc-nick"},
-            "nhl": {"score": ".rc-score", "mid": ".rc-mid", "side": ".rc-side", "pts": ".rc-pts", "crest": ".rc-crest", "nick": ".rc-nick"},
-            "nfl": board, "cfb": board, "mlb": board}
+    sels = {league: board for league in ("nba", "nhl", "nfl", "cfb", "mlb")}
     # The names each board must show whole, from 360px up: the opening's
     # 76ers and Knicks, and football's longest nickname beside a short one.
     whole = {"opening", "football"}
@@ -269,10 +264,9 @@ def test_the_scoreboards_in_a_browser_from_320_to_1280():
                         if width == 390:
                             assert all(round(s["crest"]["r"] - s["crest"]["l"]) == 46 for s in g["sides"].values()), at
                         assert g["page"] <= width, f"{at}: the page scrolls sideways"
-                        if league in ("nfl", "cfb", "mlb"):
-                            w = page.evaluate("(() => { const h = document.querySelector('.pbp-hero');"
-                                              " return [h.scrollWidth, h.clientWidth]; })()")
-                            assert w[0] <= w[1] + 1, f"{at}: the board is wider than its card"
+                        w = page.evaluate("(() => { const h = document.querySelector('.pbp-hero');"
+                                          " return [h.scrollWidth, h.clientWidth]; })()")
+                        assert w[0] <= w[1] + 1, f"{at}: the board is wider than its card"
                         assert not errors, errors
                         ctx.close()
             finally:

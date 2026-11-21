@@ -45,8 +45,8 @@
 .gc-last-since span { font-size: var(--fs-xs); color: var(--text-dim); padding: 2px 8px;
   border: var(--hairline) solid transparent; border-radius: 999px; }
 
-/* the leaders and the team stats: the card's head sits tight over its rows */
-.gc-leaders, .gc-tstats { padding-bottom: 6px; }
+/* the leaders: the card's head sits tight over its rows */
+.gc-leaders { padding-bottom: 6px; }
 .gc-lead-teams { display: flex; justify-content: space-between; align-items: center; font-weight: 700;
   padding-bottom: 8px; border-bottom: var(--hairline) solid var(--border); }
 .gc-lead-teams span { display: inline-flex; align-items: center; gap: 6px; }
@@ -60,43 +60,6 @@
 .gc-lead-t { display: flex; flex-direction: column; min-width: 0; }
 .gc-lead-v { font-family: var(--font-mono); font-size: var(--fs-xl); line-height: 1.05; }
 .gc-lead-n { font-weight: 600; overflow-wrap: anywhere; line-height: 1.2; }
-
-/* the box score */
-.gc-toggle { display: flex; gap: 8px; margin: 4px 0 12px; }
-.gc-tog { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; font: inherit;
-  color: var(--text-mute); background: var(--panel); border: var(--hairline) solid transparent;
-  border-radius: 999px; cursor: pointer; }
-.gc-tog.active { color: var(--text); border-color: transparent; font-weight: 700; }
-.gc-bx .pbp-bx-who { display: flex; align-items: center; gap: 8px; }
-.gc-bx .gc-face { width: 28px; height: 28px; }
-
-/* team stats */
-.gc-ts-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
-  padding-bottom: 8px; border-bottom: var(--hairline) solid var(--border); }
-.gc-ts-head > span:first-child, .gc-ts-head > span:last-child { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
-.gc-ts-head > span:last-child { justify-content: flex-end; }
-.gc-ts-head .gc-head { margin: 0; }
-.gc-ts { padding: 8px 0 6px; border-bottom: var(--hairline) solid var(--border-soft); }
-.gc-ts:last-child { border-bottom: 0; }
-.gc-ts-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: baseline; }
-.gc-ts-row b:last-child { text-align: right; }
-.gc-ts-row b { font-family: var(--font-mono); }
-.gc-ts-k { font-size: var(--fs-sm); color: var(--text-dim); text-align: center; }
-.gc-bar { display: flex; gap: 3px; height: 5px; margin-top: 6px; }
-.gc-bar span { display: block; height: 100%; border-radius: 999px; background: var(--text-mute); opacity: .35; }
-.gc-bar span:first-child { background: var(--gold); opacity: 1; }
-
-/* play by play, drive by drive */
-.gc-dr { margin-bottom: 10px; }
-.gc-dr.scoring { border-color: transparent; }
-/* The head is three columns — the mark, who and how long, then how it
-   ended over the score it left — so on a phone the score sits under its
-   tag instead of wrapping to a line of its own at the far edge. */
-.gc-dr-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
-  column-gap: 10px; row-gap: 2px; margin-bottom: 8px; }
-.gc-dr-head > :first-child, .gc-dr-head > div { grid-row: span 2; min-width: 0; }
-.gc-dr-head > .gc-tag { grid-column: 3; justify-self: end; margin-left: 0; }
-.gc-dr-score { grid-column: 3; justify-self: end; font-family: var(--font-mono); color: var(--text-mute); font-size: var(--fs-sm); }
 
 /* The scoring plays (gamecast.js scoringHTML): a quarter's head, then one
    row per score — the side's mark, what and when, the play and the drive,

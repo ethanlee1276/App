@@ -10,8 +10,13 @@ Two halves. The deep file (livescore_build.pbp_doc) now carries the whole
 box score, each side's game totals, the two records and the drive in
 progress, all read off the summary already in hand
 (engine/sources/espnplays) — numbers under labels, never ESPN's sentences.
-The page's rooms (web/js/gamecast.js, loaded on first use) draw them as
-Gamecast · Box score · Play-by-play · Team stats · Odds & picks.
+The page drew them as five tabs of web/js/gamecast.js (Gamecast · Box score ·
+Play-by-play · Team stats · Odds & picks) until every sport's page became the
+one page (detail.js gpPageHTML: football's on 2026-11-01, basketball's and
+hockey's on 2026-11-21). The module keeps the cards that page shares: the
+drive, the last play, the game leaders, the scoring plays. The page's own box
+scores and team stats are pinned in
+tests/test_the_game_page_wears_the_team_colours.py.
 
 Run directly: `python3 tests/test_gamecast.py`
 """
@@ -224,14 +229,11 @@ def _fn(name):
     return APP[i:j + 3]
 
 
-def test_the_page_loads_the_gamecast_on_first_use_and_draws_its_tabs():
-    assert 'let _pbpTab = "gamecast";' in APP
-    assert ('const GC_TABS = [["gamecast", "Gamecast"], ["box", "Box score"], ["plays", "Play-by-play"],\n'
-            '                 ["team", "Team stats"], ["odds", "Odds & picks"], ["injuries", "Injuries"]];') in APP
-    # Football's own four since 2026-11-01 (detail.js GP_FB_TABS, Ethan's
-    # Apple Sports screenshots); the gamecast's tabs stay the other sports'.
-    assert 'const pbpTabsFor = (league) => league === "mlb" ? PBP_TABS : PBP_FOOTBALL.has(league) ? GP_FB_TABS : GC_TABS;' in APP
-    assert 'const GP_FB_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];' in APP
+def test_the_page_loads_the_gamecast_on_first_use_and_draws_the_one_pages_tabs():
+    assert 'let _pbpTab = "";' in APP, "no tab chosen until the reader chooses one"
+    assert "GC_TABS" not in APP, "the gamecast's own six tabs are gone"
+    assert 'const pbpTabsFor = (league) => (league === "mlb" ? PBP_TABS : GP_TABS);' in APP
+    assert 'const GP_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];' in APP
     loader = _fn("loadGamecast")
     assert 'css.href = "css/gamecast.css";' in loader and 'el.src = "js/gamecast.js";' in loader
     assert "if (window.QBGamecast) return Promise.resolve(window.QBGamecast);" in loader
@@ -239,18 +241,18 @@ def test_the_page_loads_the_gamecast_on_first_use_and_draws_its_tabs():
     assert "const tabs = pbpTabsFor(league);" in page
     assert 'const GC = league === "mlb" ? null : (window.QBGamecast || null);' in page
     assert 'loadGamecast().then((mod) => { if (mod && state.view === "pbp") renderPbpPage(); });' in page
-    assert "GC ? GC.panel(tab, { d, league, faces, boardGame })" in page
-    assert "Loading the gamecast…" in page
-    assert "pbpTabsHTML(tab, boardGame, tabs)" in page
+    assert "GC.panel(" not in page and "Loading the gamecast…" not in page, "the page draws at once on what the file has"
+    assert "host.innerHTML = one ? gpPageHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event, kit })" in page
+    assert "pbpTabsHTML(tab, boardGame, tabs)" in page, "baseball's four rooms"
     # The scoreboard: the records and the carrier, absent when unknown.
     board = _fn("pbpBoardHTML")
     assert '${rec ? `<span class="pbp-sb-rec">${escapeHtml(rec)}</span>` : ""}' in board
     assert '`<span class="pbp-sb-tv">${escapeHtml((d.tv || [])[0])}</span>` : ""' in board
     assert ".pbp-sb-rec {" in CSS and ".pbp-sb-tv {" in CSS
-    # The box score's team toggle, wired like every other button on the page.
-    assert 'host.querySelectorAll("[data-gc-team]")' in page and "window.QBGamecast.setTeam(b.dataset.gcTeam)" in page
+    # Both sides' box scores are on the page at once (gpStatsHTML): no toggle to wire.
+    assert "data-gc-team" not in APP and "setTeam" not in GC
     # Baseball keeps its four rooms.
-    assert 'tab === "players" ? pbpPlayersHTML(d, league)' in page and ': league === "mlb" ? infoPanel' in page
+    assert 'tab === "players" ? pbpPlayersHTML(d, league)' in page and ": infoPanel;" in page
 
 
 def test_the_module_draws_numbers_and_never_a_sentence():
@@ -262,9 +264,14 @@ def test_the_module_draws_numbers_and_never_a_sentence():
     assert "https://a.espncdn.com/i/headshots/${dir}/players/full/" in GC
     assert 'const FACE_DIR = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl", cbb: "mens-college-basketball" };' in GC
     assert "onerror" not in GC and "onclick" not in GC, "no inline handlers under the page's CSP"
-    for cls in (".gc-drive", ".gc-last", ".gc-chip", ".gc-win", ".gc-leaders", ".gc-lead-row",
-                ".gc-toggle", ".gc-tog.active", ".gc-ts-row", ".gc-bar", ".gc-dr", ".gc-tag.turnover", ".gc-face"):
+    for cls in (".gc-drive", ".gc-last", ".gc-chip", ".gc-win", ".gc-leaders", ".gc-lead-row", ".gc-tag.turnover", ".gc-face"):
         assert cls in GC_CSS, cls
+    # The tabs' own box score, team stats and drive list went with them (2026-11-21), and their styles too.
+    for gone in (".gc-toggle", ".gc-tog", ".gc-ts-row", ".gc-bar", ".gc-dr "):
+        assert gone not in GC_CSS, gone
+    for gone in ("function panel(", "function boxHTML(", "function teamStatsHTML(", "function playsTabHTML(", "function oddsHTML(",
+                 "function hoops(", "function rink("):
+        assert gone not in GC, gone
     assert "js/gamecast.js" in shrink.FILES and "css/gamecast.css" in shrink.FILES
     caddy = (ROOT / "deploy" / "Caddyfile").read_text(encoding="utf-8")
     assert "/js/gamecast.js /css/gamecast.css" in caddy
@@ -316,26 +323,22 @@ def _node(js):
     return json.loads(out.stdout.strip())
 
 
-def test_the_rooms_draw_the_drive_the_last_play_the_leaders_the_box_and_the_totals():
+def test_the_cards_draw_the_drive_the_last_play_and_the_leaders():
     doc = B.pbp_doc("nfl", _game(), _summary())
     doc["plays"][-1]["text"] = TEXT                      # if a sentence ever got in, the page would still not draw it
     got = _node(f"""
       const d = {json.dumps(doc)};
-      const ctx = {{ d, league: "nfl", faces: {{ "javonte williams": "img/jw.png" }}, boardGame: {{ id: "TB@DAL", line_track: [1] }} }};
-      QBGamecast.setTeam("DAL");                     // the away side opens first; the test reads the home box
+      const faces = {{ "javonte williams": "img/jw.png" }};
       return {{
         spot: [QBGamecast.spotWord(d, 4), QBGamecast.spotWord(d, 96), QBGamecast.spotWord(d, 50), QBGamecast.spotWord(d, 120)],
         lead: QBGamecast.leaderOf(d, "DAL", "rushing", "YDS"),
         line: QBGamecast.playerLine(d, "Dak Prescott", "pass0").line,
         rbLine: QBGamecast.playerLine(d, "Javonte Williams", "any").line,
         unknown: QBGamecast.playerLine(d, "Nobody", "any").line,
-        face: QBGamecast.faceURL("nfl", {{ name: "Dak Prescott", id: "3042" }}, ctx.faces),
-        own: QBGamecast.faceURL("nfl", {{ name: "Javonte Williams", id: "4361" }}, ctx.faces),
-        gamecast: QBGamecast.panel("gamecast", ctx),
-        box: QBGamecast.panel("box", ctx),
-        team: QBGamecast.panel("team", ctx),
-        plays: QBGamecast.panel("plays", ctx),
-        odds: QBGamecast.panel("odds", ctx),
+        face: QBGamecast.faceURL("nfl", {{ name: "Dak Prescott", id: "3042" }}, faces),
+        own: QBGamecast.faceURL("nfl", {{ name: "Javonte Williams", id: "4361" }}, faces),
+        cards: QBGamecast.driveCard(d, "nfl", QBGamecast.newestPlay(d, "nfl")) + QBGamecast.lastPlay(d, "nfl", faces)
+          + QBGamecast.leaders(d, "nfl", faces) + QBGamecast.scoring(d, "nfl"),
       }};""")
     if got is None:
         print("  SKIP node not installed"); return
@@ -344,50 +347,35 @@ def test_the_rooms_draw_the_drive_the_last_play_the_leaders_the_box_and_the_tota
     assert got["line"] == "3/4, 37 YDS, 0 TD, 0 INT" and got["rbLine"] == "4 CAR, 26 YDS, 1 TD" and got["unknown"] == ""
     assert got["face"] == "https://a.espncdn.com/i/headshots/nfl/players/full/3042.png"
     assert got["own"] == "img/jw.png", "the board's own face first"
-    g = got["gamecast"]
+    g = got["cards"]
     for want in ("Current drive", "7 plays, 66 yards, 3:23", "TB 4",
                  "Last play · Q1 10:51", "Touchdown run, 1 yd", "Win % (our model)", "<b>92.0</b>",
                  "Game leaders", ">Passing<", ">Rushing<", ">Receiving<", ">Tackles<", "Dak Prescott",
                  "George Pickens", "Jalen Trotter", "2 TOT, 1 SOLO", "img/jw.png", ">Touchdown<", "on offense"):
         assert want in g, want
     # The next snap's down and spot are the header's (and the strip's):
-    # the gamecast no longer repeats them in tiles (2026-10-25).
+    # the cards no longer repeat them in tiles (2026-10-25).
     assert ">Down<" not in g and ">Ball on<" not in g
     assert ">Sacks<" not in g, "nobody has a sack: the row is not drawn"
-    # The last play's chips: the man named on it, his face, his line so
+    # The last play's chips: the person named on it, their face, their line so
     # far, and the snap it came from — no sentence anywhere on the page.
     assert g.count('class="gc-chip"') == 1 and "2nd &amp; 4 at TB 4" in g
     assert "TB 0 – 7 DAL" in g
     for prose in (TEXT, TD_TEXT, PASS_TEXT, "up the middle"):
-        assert prose not in g and prose not in got["plays"] and prose not in got["box"], prose
-    b = got["box"]
-    assert 'data-gc-team="TB"' in b and 'data-gc-team="DAL"' in b and "gc-tog active" in b
-    assert ">Passing<" in b and ">C/ATT<" in b and ">3/4<" in b and "Javonte Williams" in b
-    assert "Nobody Yet" not in b, "a row with no stats is not drawn"
-    t = got["team"]
-    assert "1st Downs" in t and ">12<" in t and ">9<" in t and "gc-bar" in t
-    assert "5-12" in t and t.count("gc-bar") == 2, "bars for the two plain numbers, none for 5-12 or 31:12"
-    p = got["plays"]
-    assert p.index("Touchdown") < p.index("Punt"), "newest drive first"
-    assert "7 plays, 66 yds, 3:23 · Q1" in p and "0–7" in p
-    assert "picks" in got["odds"] and "track" in got["odds"] and "Full game page" in got["odds"]
+        assert prose not in g, prose
 
 
-def test_the_box_toggle_remembers_the_side_and_a_final_says_so():
+def test_a_final_has_no_drive_and_keeps_its_leaders():
     doc = B.pbp_doc("nfl", _game(state="final"), _summary())
     got = _node(f"""
       const d = {json.dumps(doc)};
-      const ctx = {{ d, league: "nfl", faces: {{}}, boardGame: null }};
-      QBGamecast.setTeam("TB");
-      const box = QBGamecast.panel("box", ctx);
-      return {{ team: QBGamecast.team(), tbActive: box.indexOf('data-gc-team="TB"') < box.indexOf("gc-tog active") + 40,
-               hasTrotter: box.includes("Jalen Trotter"), noDak: !box.includes("Dak Prescott"),
-               gamecast: QBGamecast.panel("gamecast", ctx) }};""")
+      return {{ drive: QBGamecast.driveCard(d, "nfl", QBGamecast.newestPlay(d, "nfl")),
+               view: QBGamecast.driveView(d, "nfl", {{}}, {{ top: true }}),
+               leaders: QBGamecast.leaders(d, "nfl", {{}}), scoring: QBGamecast.scoring(d, "nfl") }};""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got["team"] == "TB" and got["hasTrotter"] and got["noDak"]
-    assert "Current drive" not in got["gamecast"], "a final has no drive in progress"
-    assert "Final." in got["gamecast"] and "Game leaders" in got["gamecast"]
+    assert got["drive"] == "" and got["view"] == "", "a final has no drive in progress and no play right now"
+    assert "Game leaders" in got["leaders"] and "Scoring plays" in got["scoring"], "its Stats tab opens on both (detail.js gpStatsHTML)"
 
 
 if __name__ == "__main__":
