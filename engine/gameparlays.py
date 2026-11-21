@@ -1510,7 +1510,10 @@ LEG_KEYS = ("player", "team", "opponent", "home", "away", "position", "market", 
             # correction is learned on our number, never on itself.
             "p_raw", "fit_w", "fit_shift",
             # Our chance where the book's, lower, is the leg's (`book_capped`, step AAM).
-            "p_own")
+            "p_own",
+            # The book's chance at the leg's OWN line (twoleg._fair_line_of, step AAT): the one
+            # `book_capped` holds it to, journaled beside `fair` (parlayledger, step AAU).
+            "fair_line")
 
 
 def slim(leg: dict) -> dict:

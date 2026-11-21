@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAU. The parlay record keeps each leg's own line's chance; the learned correction moves onto it only when its
+record says so** (step 835; 21 November). Nothing to run. You asked for this follow-up to step AAT. Every parlay leg
+is journaled with the book's fair chance beside ours, and on a Most Likely pick on an alternate line that was its
+main line's, so the record's legs read well under their own prices: the NBA's 53% (three-leg) and 56% (two-leg)
+where their newest legs were priced near 63% and 65% once the book's cut is taken out, hockey's 58% and 59% near 65%
+and 66%, the NFL's 59% and 55% near 63%, college's 53% and 51% near 58% and 61%. The learned correction (how far
+each league's legs are pulled toward the book's chance; hockey's pulls 20%) was fitted against those numbers. What
+changed: each leg is now journaled with its own line's chance too, in a column of its own, and the record's leg
+figures report it where it is kept. The correction compares the two anchors on its own record: once 60 graded legs
+carry both, the newest 30% of them are scored with each anchor's fit learned on the legs before them, and the own
+line's is taken only when it scores better; until then, and whenever it does not, every league's correction is
+exactly what it was. The heartbeat's `leg_fit` says which anchor each league reads. Measured first on the public
+record of settled Most Likely picks (a stand-in for the legs, with the main line's chance taken as the own line's
+less 10 points, which is rough): hockey's and the NBA's newest legs scored best with no pull at all against either
+anchor (0.6236 and 0.6406, the pulls a hair worse), so neither league's numbers should move far; the NFL's scored
+far better pulled all the way to their own line's chance (0.649, against 0.661 toward the main line's and 0.733 with
+none), which the book cap of step AAM already does; college's came out about even (0.678 and 0.675).
+
 **AAT. Each leg and card pick is held to its own line's chance, not its main line's** (step 834; 21 November).
 Nothing to run. A fix to steps AAM and AAO, found on the heartbeat. The NFL's board built at 2:25 PM ET kept 3 of
 its reports' 48 picks as parlay legs, where that morning's had kept 19, and posted 5 two-leg and 1 three-leg ticket,

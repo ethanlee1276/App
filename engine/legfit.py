@@ -10,8 +10,9 @@ took out the legs whose number nothing stood behind; this learns what is
 left, from the record, and corrects it.
 
 THE CORRECTION. Each leg's chance is pulled toward the book's own fair chance
-for it (the leg's `fair`: twoleg._fair_of), by a share `w` each league and
-kind learns:
+for it (the leg's `fair`: twoleg._fair_of; or, since step AAU and only where a
+league's record shows it scores better, its own line's: `_anchor_choice`), by a
+share `w` each league and kind learns:
 
     p' = p - w * (p - fair)
 
@@ -150,21 +151,25 @@ def _best_shift(rows, w: float) -> float:
     return min(SHIFT_GRID, key=lambda s: (round(_ll(rows, w, s), 9), abs(s)))
 
 
-def graded_legs(conn) -> dict:
+def graded_legs(conn, own_line: bool = False) -> dict:
     """{(league, kind): [(date, id, p, fair, won, pool, market)]}: every graded leg of
     the game parlays with the book's chance (`anchor`) and the pool it came
     from ("" before the journal named pools), each bet once (its game's day,
     the game, the player, the market, the side and the line: the first copy
-    journaled, as parlayledger.legs_once counts them), oldest first."""
+    journaled, as parlayledger.legs_once counts them), oldest first.
+
+    ``own_line``: the book's chance at each leg's OWN line (the journal's
+    `fair_line`, step AAU) in `fair`'s place, and only the legs that carry it."""
     cols = {r[1] for r in conn.execute("PRAGMA table_info(parlay_legs)")}
-    if "fair" not in cols:
+    if "fair" not in cols or (own_line and "fair_line" not in cols):
         return {}
     raw = "COALESCE(l.p_raw, l.p_final)" if "p_raw" in cols else "l.p_final"
     pool = "l.pool" if "pool" in cols else "''"
+    book = "l.fair_line" if own_line else "l.fair"
     marks = ",".join("?" * len(SOURCE_KIND))
     rows = conn.execute(
         f"SELECT t.sport, t.source, t.date, t.grade, l.id, l.player, l.market, l.side, l.line, {raw} AS p, "
-        f"l.fair, l.odds, l.status, {pool} FROM parlay_legs l JOIN parlays t ON t.id = l.parlay_id "
+        f"{book}, l.odds, l.status, {pool} FROM parlay_legs l JOIN parlays t ON t.id = l.parlay_id "
         f"WHERE t.source IN ({marks}) ORDER BY t.date, l.id", tuple(SOURCE_KIND)).fetchall()
     kind_of = SOURCE_KIND
     seen: set = set()
@@ -176,6 +181,8 @@ def graded_legs(conn) -> dict:
         if key in seen:
             continue
         seen.add(key)
+        if own_line and fair is None:
+            continue
         fair = anchor(fair, odds)
         if status not in ("won", "lost") or p is None or fair is None:
             continue
@@ -193,44 +200,13 @@ def fit(conn, write: bool = True) -> dict:
     models directory (FILE) for `w_for`."""
     import datetime as _dt
     out: dict = {"fitted_at": _dt.datetime.now().isoformat(timespec="seconds"), "min_n": MIN_N, "fits": {}}
+    # THE ANCHOR EACH LEAGUE AND KIND IS CORRECTED AGAINST (step AAU, `_anchor_choice`).
+    line_all = graded_legs(conn, own_line=True)
     for (sport, kind), legs in sorted(graded_legs(conn).items()):
-        # THE SHARE LEARNS FROM LEGS BUILT THE CURRENT WAY, AS THE SHIFT DOES
-        # (PARLAYWIN1, 2026-11-19). It learned from every graded leg, and the
-        # retired source (any priced prop, before gameparlays.credible_row and
-        # the named pools of 16 November) set the NFL's at 1.0: each leg pulled
-        # all the way to the book's, where the Most Likely picks the legs now
-        # are hit what they claim (62.2% said, 61.7% hit, 2,036 picks). On the
-        # Thursday the Sunday props were bought, eight games' reports had 11
-        # picks priced as legs and 5 still at 50% once pulled: no ticket.
-        rows = [(p, f, won) for _d, _i, p, f, won, pool, _m in legs if pool]
-        current = rows
-        n = len(rows)
-        said = {"n": n, "n_all": len(legs)}
-        if n:
-            said.update(claimed=round(sum(r[0] for r in rows) / n, 4), fair=round(sum(r[1] for r in rows) / n, 4),
-                        hit=round(sum(1 for r in rows if r[2]) / n, 4))
-        if n < MIN_N:
-            fit_ = {**said, "w": 0.0, "fitted": False,
-                    "why": f"waiting on legs built the current way: {n} graded, {MIN_N} needed"}
-        else:
-            cut = int(round(n * (1 - TEST_SHARE)))
-            train, test = rows[:cut], rows[cut:]
-            w_train = _best(train)
-            before, after = _ll(test, 0.0), _ll(test, w_train)
-            if w_train <= 0 or after >= before:
-                fit_ = {**said, "w": 0.0, "fitted": False, "test_n": len(test),
-                        "why": "the newest legs scored no better pulled toward the books' chances; ours stand"}
-            else:
-                w = _best(rows)
-                fit_ = {**said, "w": w, "fitted": True, "test_n": len(test),
-                        "test_loss": [round(before, 4), round(after, 4)],
-                        "why": (f"our legs claimed {said['claimed']:.0%} and hit {said['hit']:.0%} over {n}; the books "
-                                f"said {said['fair']:.0%}: each leg's chance is pulled {w:.0%} of the way to the book's")}
-        both = {**fit_, **_shift_fit(current, fit_["w"] if fit_.get("fitted") else 0.0)}
-        markets = _market_fits([leg for leg in legs if leg[5]], both["w"] if both.get("fitted") else 0.0,
-                               float(both.get("shift") or 0.0))
-        if markets:
-            both["markets"] = markets
+        line_legs = line_all.get((sport, kind)) or []
+        choice = _anchor_choice(legs, line_legs)
+        both = _fit_one(line_legs if choice["anchor"] == "line" else legs)
+        both.update(choice)
         out["fits"][f"{sport}:{kind}"] = both
     if write:
         import json as _json
@@ -243,6 +219,117 @@ def fit(conn, write: bool = True) -> dict:
             _json.dump(out, f, indent=1, sort_keys=True)
         _os.replace(tmp, p)
     return out
+
+
+def _fit_one(legs: list) -> dict:
+    """One league and kind's fit (the share, the shift and each market's own),
+    from its graded legs (`graded_legs`' rows, oldest first), against whichever
+    book's chance they carry in `fair`'s place."""
+    # THE SHARE LEARNS FROM LEGS BUILT THE CURRENT WAY, AS THE SHIFT DOES
+    # (PARLAYWIN1, 2026-11-19). It learned from every graded leg, and the
+    # retired source (any priced prop, before gameparlays.credible_row and
+    # the named pools of 16 November) set the NFL's at 1.0: each leg pulled
+    # all the way to the book's, where the Most Likely picks the legs now
+    # are hit what they claim (62.2% said, 61.7% hit, 2,036 picks). On the
+    # Thursday the Sunday props were bought, eight games' reports had 11
+    # picks priced as legs and 5 still at 50% once pulled: no ticket.
+    rows = [(p, f, won) for _d, _i, p, f, won, pool, _m in legs if pool]
+    current = rows
+    n = len(rows)
+    said = {"n": n, "n_all": len(legs)}
+    if n:
+        said.update(claimed=round(sum(r[0] for r in rows) / n, 4), fair=round(sum(r[1] for r in rows) / n, 4),
+                    hit=round(sum(1 for r in rows if r[2]) / n, 4))
+    if n < MIN_N:
+        fit_ = {**said, "w": 0.0, "fitted": False,
+                "why": f"waiting on legs built the current way: {n} graded, {MIN_N} needed"}
+    else:
+        cut = int(round(n * (1 - TEST_SHARE)))
+        train, test = rows[:cut], rows[cut:]
+        w_train = _best(train)
+        before, after = _ll(test, 0.0), _ll(test, w_train)
+        if w_train <= 0 or after >= before:
+            fit_ = {**said, "w": 0.0, "fitted": False, "test_n": len(test),
+                    "why": "the newest legs scored no better pulled toward the books' chances; ours stand"}
+        else:
+            w = _best(rows)
+            fit_ = {**said, "w": w, "fitted": True, "test_n": len(test),
+                    "test_loss": [round(before, 4), round(after, 4)],
+                    "why": (f"our legs claimed {said['claimed']:.0%} and hit {said['hit']:.0%} over {n}; the books "
+                            f"said {said['fair']:.0%}: each leg's chance is pulled {w:.0%} of the way to the book's")}
+    both = {**fit_, **_shift_fit(current, fit_["w"] if fit_.get("fitted") else 0.0)}
+    markets = _market_fits([leg for leg in legs if leg[5]], both["w"] if both.get("fitted") else 0.0,
+                           float(both.get("shift") or 0.0))
+    if markets:
+        both["markets"] = markets
+    return both
+
+
+def _predict(f: dict, p: float, fair: float, market) -> float:
+    """A leg's chance under the fit ``f``, as `apply` makes it: pulled toward
+    ``fair`` by the share in force, then moved by the shift and its market's own."""
+    w = min(max(float(f.get("w") or 0.0), 0.0), 1.0) if f.get("fitted") else 0.0
+    clamp = lambda v: min(max(float(v or 0.0), SHIFT_GRID[0]), SHIFT_GRID[-1])   # noqa: E731
+    m = ((f.get("markets") or {}).get(str(market or "")) or {}).get("shift")
+    return shifted(p - w * (p - fair), clamp(f.get("shift")) + clamp(m))
+
+
+#: WHICH BOOK'S CHANCE A LEAGUE'S CORRECTION IS ANCHORED ON (step AAU, 21
+#: November 2026; Ethan: "Do this task here"). The journal's `fair` is
+#: twoleg._fair_of's, which on a Most Likely pick on a ladder rung is its MAIN
+#: line's: the record's legs read 7 to 10 points under their own prices (the
+#: NBA's 53% where they were priced near 63%, hockey's 58% near 65%, college's
+#: 51% near 61%), and the share was learned against that. Since step AAU each
+#: leg is journaled with its own line's chance too (`fair_line`). A league and
+#: kind moves its anchor to the own line's only when its record says so: with
+#: MIN_N graded legs that carry both, the newest TEST_SHARE of them are scored
+#: twice, each anchor's fit learned on the legs before them, and the own
+#: line's is taken only when it scores them better. Until then, and whenever
+#: it does not, the correction is the one it was. On the public record of
+#: settled Most Likely picks (a stand-in for the legs, read 21 November) the
+#: newest 30% of hockey's and the NBA's legs scored best with no pull at all
+#: against either anchor, so neither league's correction is expected to move
+#: far; the NFL's scored far better pulled all the way to its own line's chance
+#: (0.649 against 0.733 with none), which the book cap of step AAM already does.
+ANCHORS = ("fair", "line")
+#: Held-out legs the comparison needs before it may move an anchor.
+ANCHOR_MIN_TEST = 10
+
+
+def _anchor_choice(legs: list, line_legs: list) -> dict:
+    """``{"anchor", "anchor_n", "anchor_why"}`` (and ``anchor_test``, the two
+    held-out losses, when they were read) for one league and kind: "line" when
+    its legs scored better against their own line's chance, else "fair"."""
+    cur = [l for l in line_legs if l[5]]
+    n = len(cur)
+    if n < MIN_N:
+        return {"anchor": "fair", "anchor_n": n,
+                "anchor_why": f"waiting on legs that carry their own line's chance: {n} graded, {MIN_N} needed"}
+    cut = int(round(n * (1 - TEST_SHARE)))
+    by_id = {l[1]: l for l in legs}
+    test = [l for l in cur[cut:] if l[1] in by_id]
+    if len(test) < ANCHOR_MIN_TEST:
+        return {"anchor": "fair", "anchor_n": n,
+                "anchor_why": f"too few held-out legs carry both chances: {len(test)}, {ANCHOR_MIN_TEST} needed"}
+    held = {l[1] for l in test}
+    f_line = _fit_one([l for l in cur if l[1] not in held])
+    f_fair = _fit_one([l for l in legs if l[1] not in held])
+
+    def loss(f, rows):
+        tot = 0.0
+        for _d, _i, p, a, won, _pool, market in rows:
+            q = min(max(_predict(f, p, a, market), EPS), 1 - EPS)
+            tot -= math.log(q if won else 1 - q)
+        return tot / len(rows)
+    l_fair, l_line = loss(f_fair, [by_id[l[1]] for l in test]), loss(f_line, test)
+    said = {"anchor_n": n, "anchor_test": [round(l_fair, 4), round(l_line, 4)]}
+    if l_line < l_fair:
+        return {"anchor": "line", **said,
+                "anchor_why": (f"the newest {len(test)} legs scored better against their own line's chance "
+                               f"({l_line:.4f} against {l_fair:.4f}): the correction reads it")}
+    return {"anchor": "fair", **said,
+            "anchor_why": (f"the newest {len(test)} legs scored no better against their own line's chance "
+                           f"({l_line:.4f} against {l_fair:.4f}): the correction stands as it was")}
 
 
 def _shift_fit(rows, w: float) -> dict:
@@ -370,6 +457,16 @@ def market_shift_for(sport: str, kind: str, market) -> float:
         return 0.0
 
 
+def anchor_of(sport: str, kind: str) -> str:
+    """The book's chance a league and kind's correction is anchored on, "fair"
+    (the journal's, as it was) or "line" (each leg's own line's, step AAU);
+    "fair" until a fit says otherwise. Never raises."""
+    try:
+        return "line" if (fits().get(f"{sport}:{kind}") or {}).get("anchor") == "line" else "fair"
+    except (TypeError, ValueError, AttributeError):
+        return "fair"
+
+
 def apply(leg: dict, sport: str, kind: str, w: float | None = None, shift: float | None = None) -> dict:
     """The leg with its chance corrected (``p``): pulled toward the book's by
     the share, then moved by the shift and its market's own shift. Ours is
@@ -382,7 +479,10 @@ def apply(leg: dict, sport: str, kind: str, w: float | None = None, shift: float
         if leg.get("p") is None or leg.get("p_raw") is not None:
             return leg
         p = q = float(leg["p"])
-        fair = anchor(leg.get("fair"), leg.get("odds"))
+        # The anchor its fit was learned on (`anchor_of`, step AAU): the leg's own line's chance where
+        # that is it and the leg carries one, else the journal's `fair` as before.
+        own = leg.get("fair_line") if anchor_of(sport, kind) == "line" else None
+        fair = anchor(own if own is not None else leg.get("fair"), leg.get("odds"))
         if w and fair is not None:
             q = q - w * (q - fair)
         else:
@@ -408,7 +508,8 @@ def census(sport: str) -> dict:
         if not f:
             continue
         c = {k: v for k, v in f.items()
-             if k in ("w", "fitted", "n", "why", "shift", "shift_n", "shift_why", "markets")}
+             if k in ("w", "fitted", "n", "why", "shift", "shift_n", "shift_why", "markets",
+                      "anchor", "anchor_n", "anchor_why")}
         if f.get("fitted") and "n_all" not in f:
             c.update(w=0.0, fitted=False, why="fitted before the share learned from legs built the current way "
                                               "alone: none until the next settle pass refits it")

@@ -71,7 +71,11 @@ def test_a_league_whose_legs_run_hot_is_pulled_toward_the_books():
                                 "w": 0.0, "fitted": False,
                                 "why": "waiting on legs built the current way: 20 graded, 60 needed",
                                 "shift": 0.0, "shift_n": 20,
-                                "shift_why": "waiting on legs built the current way: 20 graded, 60 needed"}
+                                "shift_why": "waiting on legs built the current way: 20 graded, 60 needed",
+                                # The anchor its correction reads (legfit._anchor_choice, step AAU): no leg
+                                # journaled with its own line's chance, so the journal's, as it was.
+                                "anchor": "fair", "anchor_n": 0,
+                                "anchor_why": "waiting on legs that carry their own line's chance: 0 graded, 60 needed"}
 
 
 def test_each_bet_counts_once_and_the_kinds_learn_apart():

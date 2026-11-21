@@ -151,8 +151,15 @@ def ensure_schema(conn) -> None:
     # …and OUR OWN CHANCE BEFORE THE LEARNED CORRECTION (`p_raw`, engine/legfit,
     # 2026-11-16), so the correction is always learned on our number and
     # never on top of itself; NULL where none applied (`p_final` is ours).
+    # …and THE BOOK'S CHANCE AT THE LEG'S OWN LINE (`fair_line`, step AAU, 21
+    # November 2026): `fair` is twoleg._fair_of's, which on a Most Likely pick
+    # on a ladder rung is its MAIN line's, so the record's legs read 7 to 10
+    # points under their own prices (the NBA's 53% where they were priced near
+    # 63%). Kept beside `fair` rather than in its place, so the learned
+    # correction's record of what it was fitted on reads as it did
+    # (engine/legfit picks its anchor on the legs that carry both).
     legcols = {r[1] for r in conn.execute("PRAGMA table_info(parlay_legs)")}
-    for col, kind in (("pool", "TEXT"), ("fair", "REAL"), ("p_raw", "REAL")):
+    for col, kind in (("pool", "TEXT"), ("fair", "REAL"), ("p_raw", "REAL"), ("fair_line", "REAL")):
         if col not in legcols:
             try:
                 conn.execute(f"ALTER TABLE parlay_legs ADD COLUMN {col} {kind}")
@@ -521,11 +528,11 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
                 for i, l in enumerate(legs, start=1):
                     conn.execute(
                         "INSERT INTO parlay_legs (parlay_id, leg_no, player, team, market, side, line, odds, book,"
-                        " p_final, status, pool, fair, p_raw) VALUES (?,?,?,?,?,?,?,?,?,?,'open',?,?,?)",
+                        " p_final, status, pool, fair, p_raw, fair_line) VALUES (?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?)",
                         (cur.lastrowid, i, l.get("player"), l.get("team"), l.get("market"),
                          str(l.get("side") or "").upper() or None,
                          l.get("line") if l.get("line") is not None else 0.5, l.get("odds"), l.get("book"),
-                         l.get("p"), l.get("pool") or None, l.get("fair"), l.get("p_raw")))
+                         l.get("p"), l.get("pool") or None, l.get("fair"), l.get("p_raw"), l.get("fair_line")))
                 wrote += 1
     if wrote:
         conn.commit()
@@ -728,7 +735,9 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
             for i in range(0, len(ids), 500):
                 chunk = ids[i:i + 500]
                 legs += conn.execute(
-                    f"SELECT parlay_id, leg_no, player, market, side, line, odds, p_final, status, actual, pool, fair "
+                    # The book's chance at each leg's own line where the journal keeps it (step AAU).
+                    f"SELECT parlay_id, leg_no, player, market, side, line, odds, p_final, status, actual, pool, "
+                    f"COALESCE(fair_line, fair) AS fair "
                     f"FROM parlay_legs WHERE parlay_id IN ({','.join('?' * len(chunk))}) ORDER BY parlay_id, leg_no",
                     chunk).fetchall()
             done = [l for l in legs if l["status"] in ("won", "lost")]

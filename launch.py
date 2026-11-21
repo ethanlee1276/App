@@ -789,7 +789,8 @@ def _board_counts(path: str) -> dict:
             out["leg_fit"] = {k: {f: (v.get(f) if f != "markets" else
                                       {m: (mv or {}).get("shift") for m, mv in (v.get("markets") or {}).items()
                                        if isinstance(mv, dict)})
-                                  for f in ("w", "shift", "fitted", "markets") if v.get(f) is not None}
+                                  # …and the book's chance it is anchored on (legfit.anchor_of, step AAU).
+                                  for f in ("w", "shift", "fitted", "markets", "anchor") if v.get(f) is not None}
                               for k, v in lf.items() if isinstance(v, dict)}
         # Bet it on a whole ticket (engine/betlinks._parlay_legs, 2026-11-15):
         # the tickets' legs, and how many carry the books that hold them.
