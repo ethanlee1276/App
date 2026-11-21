@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABF. A game's post time reads in your own zone, with its day** (step 846; 21 November). Nothing to run. Since step
+ABD a game's parlays post shortly before it starts, and its report and Report Picks said when in Eastern time ("post
+at Sun 11:45 AM ET") while every start on the site reads in the reader's own zone (your answer to decision 13). The
+page now says it the same way, from the game's post time ("post at Sun 8:45 AM" in Los Angeles), and Best Parlays,
+which said only the clock of the next post, gives its day too when that is not today where the reader is, so a
+Saturday evening's "the next at 11:45 AM" reads "the next at Sun, Nov 22 · 11:45 AM".
+
 **ABE. The heartbeat counts the NFL's capped picks, and why the NBA's Top two-leg parlays lost** (step 845; 21
 November). Nothing to run. The NFL board now says its cap (step AAV: a pick shown at no more than its own price's
 chance plus ten points) is on even on a build where it moved nothing, and the heartbeat counts what it moved

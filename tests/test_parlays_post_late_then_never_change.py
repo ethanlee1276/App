@@ -147,6 +147,100 @@ def test_every_leagues_report_stage_runs_it_after_the_reports_and_before_the_kee
     assert "parlays post later, about ${" in bp and "(the next at ${" in bp
 
 
+
+def test_best_parlays_says_the_next_posts_day_when_it_is_not_today():
+    """Step ABF: a Saturday evening's "the next at 11:45 AM" is Sunday's, and says so."""
+    import json
+    import shutil
+    import subprocess
+    import tempfile
+    node = shutil.which("node")
+    if not node:
+        print("  SKIP node not installed"); return
+    kick = __import__("test_football_kickoffs_read_in_the_readers_zone")
+    bp = (ROOT / "web" / "js" / "bestparlays.js").read_text(encoding="utf-8")
+    i = bp.index("function bpNextWhen(")
+    fn = bp[i:bp.index("\n}\n", i) + 3]
+    helpers = "\n".join(kick._fn(n) for n in ("tzOpts", "tzTime", "formatGameDate", "formatKickoff", "etInstant",
+                                               "whenLabel"))
+    out = {}
+    for tz in ("America/New_York", "Europe/London"):
+        prog = f"""
+          const settings = () => ({{ tz: {json.dumps(tz)} }});
+          const escapeHtml = (s) => String(s);
+          {helpers}
+          {fn}
+          Date.now = () => Date.UTC(2026, 10, 21, 23, 30);            // Sat 6:30 PM in New York
+          console.log(JSON.stringify([bpNextWhen(Date.UTC(2026, 10, 22, 0, 0)),     // Sat 7:00 PM New York
+                                      bpNextWhen(Date.UTC(2026, 10, 22, 16, 45)),   // Sun 11:45 AM New York
+                                      bpNextWhen(NaN)]));
+        """
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+            fh.write(prog); path = fh.name
+        try:
+            run = subprocess.run([node, path], capture_output=True, text=True, timeout=30,
+                                 env=dict(os.environ, TZ="Asia/Tokyo", LANG="en_US.UTF-8", LC_ALL="en_US.UTF-8"))
+        finally:
+            os.unlink(path)
+        assert run.returncode == 0, run.stderr
+        out[tz] = json.loads(run.stdout.strip())
+    assert out["America/New_York"] == ["7:00 PM", "Sun, Nov 22 · 11:45 AM", ""], out
+    assert out["Europe/London"] == ["Sun, Nov 22 · 12:00 AM", "Sun, Nov 22 · 4:45 PM", ""], \
+        "past midnight in London the next post is tomorrow there"
+    assert "bpNextWhen(nextAt) ? ` (the next at ${bpNextWhen(nextAt)})` : \"\"" in bp
+
+
+
+def test_a_held_games_post_time_reads_in_the_readers_zone():
+    """Step ABF (decision 13): the engine's "post at Sun 11:45 AM ET" is said in the reader's own zone."""
+    import json
+    import shutil
+    import subprocess
+    import tempfile
+    node = shutil.which("node")
+    if not node:
+        print("  SKIP node not installed"); return
+    kick = __import__("test_football_kickoffs_read_in_the_readers_zone")
+    rep = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
+    i = rep.index("  function postNote(")
+    fn = rep[i:rep.index("\n  }\n", i) + 5]
+    at = dt.datetime(2026, 11, 22, 16, 45, tzinfo=dt.timezone.utc)
+    note = GP._et_clock(at)
+    assert note == "Sun 11:45 AM ET", note
+    x = {"away": "NYG", "home": "WAS", "date": "2026-11-22", "kickoff": "13:00"}
+    GP.hold_until_post(x, "nfl", at - dt.timedelta(hours=18))
+    assert x["post_at"] == "2026-11-22T16:45:00Z" and "post at Sun 11:45 AM ET, about 75 minutes" in x["threes_note"]
+    out = {}
+    for tz, helpers in (("America/Los_Angeles", True), ("Europe/London", True), ("America/New_York", True),
+                        ("America/Los_Angeles", False)):
+        src = "\n".join(kick._fn(n) for n in ("tzOpts", "tzTime")) if helpers else ""
+        prog = f"""
+          const settings = () => ({{ tz: {json.dumps(tz)} }});
+          {src}
+          {fn}
+          const g = {json.dumps(x)};
+          console.log(JSON.stringify([postNote(g), postNote({{ ...g, post_at: "" }}),
+                                      postNote({{ threes_note: "No three-leg ticket", post_at: g.post_at }}),
+                                      postNote({{}})]));
+        """
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+            fh.write(prog); path = fh.name
+        try:
+            run = subprocess.run([node, path], capture_output=True, text=True, timeout=30,
+                                 env=dict(os.environ, TZ="Asia/Tokyo", LANG="en_US.UTF-8", LC_ALL="en_US.UTF-8"))
+        finally:
+            os.unlink(path)
+        assert run.returncode == 0, run.stderr
+        out[(tz, helpers)] = json.loads(run.stdout.strip())
+    la = out[("America/Los_Angeles", True)]
+    assert "post at Sun 8:45 AM, about 75 minutes" in la[0], la[0]
+    assert la[1] == x["threes_note"] and la[2] == "No three-leg ticket" and la[3] == "", la
+    assert "post at Sun 4:45 PM, about" in out[("Europe/London", True)][0]
+    assert "post at Sun 11:45 AM, about" in out[("America/New_York", True)][0]
+    assert out[("America/Los_Angeles", False)][0] == x["threes_note"], "without the page's helpers, as the engine said"
+    assert "escapeHtml(postNote(g) || \"No three-leg ticket without a conflict in this game.\")" in rep
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     fails = 0

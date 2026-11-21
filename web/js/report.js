@@ -943,6 +943,19 @@
       bet_legs: t.legs || [],
     };
   }
+  //: A HELD GAME'S POST TIME IN THE READER'S ZONE (step ABF; Ethan's answer to decision 13, every start
+  //: said in the reader's zone): the engine says it in Eastern time (gameparlays.hold_until_post, "post at
+  //: Sun 11:45 AM ET"), and the page says it as it says every start, from the game's `post_at`.
+  function postNote(g) {
+    const note = String((g && g.threes_note) || "");
+    const t = Date.parse((g && g.post_at) || "");
+    if (!note || !Number.isFinite(t) || typeof tzTime !== "function") return note;
+    try {
+      const o = typeof tzOpts === "function" ? tzOpts({ weekday: "short" }) : { weekday: "short" };
+      const day = new Intl.DateTimeFormat(undefined, o).format(new Date(t));
+      return note.replace(/\bat (Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2}:\d{2} (AM|PM) ET\b/, `at ${day} ${tzTime(new Date(t))}`);
+    } catch (e) { return note; }
+  }
   //: One game's tickets, its three-leg parlays, its two-leg ones, then its scorer pairs, each
   //: graded once the game is over (opts.results: game → the grader, app.js);
   //: the Report Picks page draws them under the game's bets (js/reportpicks.js).
@@ -966,7 +979,7 @@
       return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport, both)) })
           + (g.threes_note ? `<p class="gr-note">${escapeHtml(g.threes_note)}</p>` : "")
         : g.threes_paper ? `<p class="gr-note">Three-leg parlays: on paper for now, built and graded but not posted.</p>`
-        : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}${twos}
+        : `<p class="gr-note">${escapeHtml(postNote(g) || "No three-leg ticket without a conflict in this game.")}</p>`}${twos}
         ${(g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) }) : ""}${
           g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : ""}`;
     } finally { RESULTS = was; CLOSED = shut; }

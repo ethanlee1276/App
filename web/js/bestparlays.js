@@ -89,6 +89,19 @@ function bpGame(d, key, x) {
 }
 const bpStarted = (g) => { const s = ((g || {}).live || {}).state; return s === "live" || s === "final"; };
 
+// WHEN THE NEXT GAME'S PARLAYS POST, in the reader's zone (step ABF): its clock, and its day as well when that
+// is not today there, so a Saturday evening's "next at 11:45 AM" reads as Sunday's.
+function bpNextWhen(t) {
+  if (!Number.isFinite(t) || typeof tzTime !== "function") return "";
+  try {
+    const o = typeof tzOpts === "function" ? tzOpts({ year: "numeric", month: "2-digit", day: "2-digit" })
+      : { year: "numeric", month: "2-digit", day: "2-digit" };
+    const day = (x) => new Intl.DateTimeFormat("en-CA", o).format(new Date(x));
+    if (day(t) !== day(Date.now()) && typeof whenLabel === "function") return whenLabel("", new Date(t).toISOString());
+  } catch (e) { /* the clock alone */ }
+  return tzTime(new Date(t));
+}
+
 /* The ranked tickets of one kind still to play, each with its ticket and game: [{e, t, g}]. */
 function bpRows(d, kind) {
   const ranked = (((d || {}).game_parlays || {}).ranked || {})[kind] || [];
@@ -209,7 +222,7 @@ async function renderBestParlays() {
   const nextAt = ranked.next_post ? Date.parse(ranked.next_post) : NaN;
   const waiting = left.waiting ? `${left.waiting === 1 ? "1 game’s" : `${left.waiting} games’`} parlays post later, about ${
     Number(ranked.post_lead) || 90} minutes before each starts, once the news is in${
-    Number.isFinite(nextAt) ? ` (the next at ${typeof tzTime === "function" ? tzTime(new Date(nextAt)) : ""})` : ""}` : "";
+    bpNextWhen(nextAt) ? ` (the next at ${bpNextWhen(nextAt)})` : ""}` : "";
   const foot = [waiting, started ? `${plural(started, "game")} already under way ${started === 1 ? "is" : "are"} not listed` : "",
                 left.gone ? `${plural(left.gone, "ticket")} with a leg no book lists now ${left.gone === 1 ? "is" : "are"} left off` : ""]
     .filter(Boolean).join(" · ");
