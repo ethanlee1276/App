@@ -9362,10 +9362,11 @@ list (the page is for picking), and so does a ticket with a leg no book lists an
 both. Members only, as the reports' parlays are: a visitor without a plan sees the lock, and the plans page says
 what the page holds. The server makes the ranking when each board builds and again after the reports post their own
 tickets, so the page ranks exactly the tickets the reports show. If the ranking ever fails, the page says so rather
-than looking like a quiet day. The page's two files are served whole until the Caddy reinstall already waiting under
-Commands waiting for you (00k) is run; the same command now serves them trimmed too. Checked here on a made-up NFL
-board, at phone width and on a 1280px desktop, both sections, and by two new browser tests: the ranking on both
-tabs, and a card's Bet it putting a three-leg ticket on one slip.
+than looking like a quiet day. The public heartbeat counts it per league, numbers only: each kind's tickets by tier
+(`ranked_tiers`), the tickets left off, and the kind of error if it failed. The page's two files are served whole
+until the Caddy reinstall already waiting under Commands waiting for you (00k) is run; the same command now serves
+them trimmed too. Checked here on a made-up NFL board, at phone width and on a 1280px desktop, both sections, and by
+two new browser tests: the ranking on both tabs, and a card's Bet it putting a three-leg ticket on one slip.
 
 **AAK. Baseball's live game page is the one game page too** (step 825; 21 November). Nothing to run. Step AAI left
 baseball on four rooms of its own (Game info, Our picks, Injuries, Player stats) under its ballpark card. Now every

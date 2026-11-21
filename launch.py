@@ -714,6 +714,24 @@ def _board_counts(path: str) -> dict:
                 out["one_book_gaps"] = gaps
             if _scorer_markets:
                 out["scorer_legs_on_props"] = scorers_on_props
+        # THE BEST PARLAYS' RANKING (gameparlays.rank_parlays, step AAL): each kind's
+        # tickets by tier ({"twos": {"top": 3, "strong": 9}, ...}), the tickets it
+        # left off (a leg no book lists, a started game), and the kind of error when
+        # it failed. Counts only, as everything here is.
+        rk = gp.get("ranked")
+        if isinstance(rk, dict):
+            tiers: dict = {}
+            for kind in _gp.RANK_KINDS:
+                for e in rk.get(kind) or []:
+                    if isinstance(e, dict) and e.get("tier"):
+                        cell = tiers.setdefault(kind, {})
+                        cell[str(e["tier"])] = cell.get(str(e["tier"]), 0) + 1
+            out["ranked_tiers"] = tiers
+            lo = rk.get("left_off")
+            if isinstance(lo, dict) and any(lo.values()):
+                out["ranked_left_off"] = {str(k): int(v or 0) for k, v in lo.items()}
+            if rk.get("error"):
+                out["ranked_error"] = str(rk["error"]).split(":")[0]
         # The build could not read which picks are carried (gameparlays.mark_unlisted): the kind of error only.
         if c.get("unlisted_error"):
             out["unlisted_error"] = str(c["unlisted_error"]).split(":")[0]

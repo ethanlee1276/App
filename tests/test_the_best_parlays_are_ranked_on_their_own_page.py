@@ -130,6 +130,43 @@ def test_the_board_carries_it_inside_its_paid_parlays_after_the_reports():
         assert len(r[kind]) == n and [e["rank"] for e in r[kind]] == list(range(1, n + 1)), kind
 
 
+def _counts(b):
+    import launch as L
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(b, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            return L._board_counts(path)
+        finally:
+            L._full_copy = was
+
+
+def test_the_heartbeat_counts_the_tiers_and_never_a_ticket():
+    # The live check's eyes on a members-only list: each kind's tickets by tier, counts only.
+    EG = __import__("test_each_game_gets_its_parlays")
+    b = EG.board()
+    b["game_parlays"] = GP.build(b, "nfl")
+    GP.attach_ranked(b, "nfl")
+    want: dict = {}
+    for kind in GP.RANK_KINDS:
+        for e in b["game_parlays"]["ranked"][kind]:
+            want.setdefault(kind, {}).setdefault(e["tier"], 0)
+            want[kind][e["tier"]] += 1
+    got = _counts(b)
+    assert want and got["ranked_tiers"] == want, got.get("ranked_tiers")
+    assert all(isinstance(n, int) for cell in got["ranked_tiers"].values() for n in cell.values())
+    assert "ranked_left_off" not in got and "ranked_error" not in got
+    # A failed ranking is counted by its kind of error only.
+    b["game_parlays"]["ranked"] = {"twos": [], "threes": [], "scorers": [], "left_off": {"gone": 1, "started": 0},
+                                   "error": "TypeError: bad thing"}
+    got = _counts(b)
+    assert got["ranked_error"] == "TypeError" and got["ranked_tiers"] == {}
+    assert got["ranked_left_off"] == {"gone": 1, "started": 0}
+
+
 def test_the_page_is_its_own_with_two_sections_and_most_likelys_tiers():
     # Its own page, in the menu beside Report Picks, opened by an old #parlays link.
     assert 'data-view="bestparlays" id="bestparlays-tab"' in HTML and 'id="view-bestparlays"' in HTML
