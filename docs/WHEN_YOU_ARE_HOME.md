@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAP. Football's touchdown pairs take two scorers at our touchdown rule first** (step 830; 21 November). Nothing to
+run. A game report's two-leg touchdown pairs (NFL and college) were ranked on their research, and our 40% rule (a
+scorer we rate 40% or better) was only the pair card's words. On the record of every settled Most Likely touchdown
+pick, a college scorer at 40% or better scored 51% of the time in the first 60% of days and 53% since (279 picks),
+one under it 41% and 36% (211): two at the rule land together about 27% of the time, two under it about 15%. The
+NFL's: 46% and 58% at the rule (192), 44% and 36% under it (151). So a pair whose two scorers are both at the rule
+now ranks ahead of one that is not, and a game's scorers at the rule are tried first; inside each side the research
+still orders them, and a pair with a stand-in scorer still goes last. A shorter-priced scorer pays less, so this
+lifts how often a pair lands, not its price. Hockey's pairs rank on our chance as before. Switch:
+`QB_TD_RULE_FIRST=off`.
+
 **AAO. A report's card puts the picks the record backs first** (step 829; 21 November). Nothing to run. Each game
 report's card ranks its best picks (four, six on a featured game), and those are the picks the record grades and the
 parlays are built from first. The same record as step AAM says two kinds of pick do much worse than the rest: an NFL

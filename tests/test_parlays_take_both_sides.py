@@ -105,8 +105,10 @@ def _scorer(player, team, pos, p, research, odds=150):
 
 
 def test_touchdown_pairs_take_a_scorer_from_each_side_unless_one_side_is_clearly_stronger():
-    close = [_scorer("Christian McCaffrey", "SF", "RB", 0.48, 9), _scorer("George Kittle", "SF", "TE", 0.36, 8),
-             _scorer("Javonte Williams", "DAL", "RB", 0.40, 7), _scorer("CeeDee Lamb", "DAL", "WR", 0.38, 6)]
+    # Every scorer at our touchdown rule (40%), so the research alone orders them (a pair below the rule
+    # ranks behind one at it since step AAP: tests/test_touchdown_pairs_take_two_scorers_at_the_rule_first.py).
+    close = [_scorer("Christian McCaffrey", "SF", "RB", 0.48, 9), _scorer("George Kittle", "SF", "TE", 0.42, 8),
+             _scorer("Javonte Williams", "DAL", "RB", 0.40, 7), _scorer("CeeDee Lamb", "DAL", "WR", 0.41, 6)]
     build = lambda: GP.build_game("nfl", GAME, [], close)  # noqa: E731
     old = [_clubs(t) for t in _old_rule(build)["scorers"]]
     assert old[0] == ["SF"], ("the old way: the 49ers' two strongest cases first", old)

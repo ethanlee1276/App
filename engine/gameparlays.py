@@ -977,10 +977,34 @@ def _by_research(t: dict) -> tuple:
             -(t.get("ev_at_naive") or -9))
 
 
+#: TWO SCORERS AT OUR TOUCHDOWN RULE FIRST (step AAP, 21 November 2026; Ethan: "dial in ...
+#: the 2-leg touchdown picks"). In football a pair whose two scorers are both at TD_RULE_PAIR
+#: (40%) or better ranks ahead of one that is not, and a game's scorers are tried in that
+#: order before their research; the research still orders each side. The rule was the card's
+#: words only (`rule_note`). On the record of every settled Most Likely touchdown pick, a
+#: college scorer at 40% or better scored 51% of the time in the first 60% of days and 53%
+#: since (279), one under it 41% and 36% (211): two at the rule land together about 27% of
+#: the time, two under it about 15%. The NFL's: 46% and 58% at the rule (192), 44% and 36%
+#: under it (151), never worse. College's touchdown pairs went 1 of 16 from 17 November, the
+#: four with a stand-in scorer 0 of 4. A shorter-priced scorer pays less: this lifts how often
+#: a pair lands, not its price. Switch: QB_TD_RULE_FIRST=off.
+def td_rule_first_on() -> bool:
+    return os.environ.get("QB_TD_RULE_FIRST", "on").strip().lower() not in ("off", "0", "no", "false")
+
+
+def _rule_miss(t: dict) -> int:
+    """0 when every scorer of a pair is at our touchdown rule (TD_RULE_PAIR), else 1."""
+    legs = t.get("legs") or []
+    return 0 if legs and all(float(l.get("p") or 0) >= TD_RULE_PAIR for l in legs) else 1
+
+
 def scorer_rank(researched: bool):
     """A scorer pair's rank: the fewest stand-in scorers first (`stand_ins`),
-    then its research (football) or our chance (hockey)."""
+    then (football, step AAP) both scorers at our touchdown rule, then its
+    research (football) or our chance (hockey)."""
     if researched:
+        if td_rule_first_on():
+            return lambda t: (int(t.get("stand_ins") or 0), _rule_miss(t)) + _by_research(t)
         return lambda t: (int(t.get("stand_ins") or 0),) + _by_research(t)
     return lambda t: (int(t.get("stand_ins") or 0), -t["joint"], -(t.get("ev_at_naive") or -9))
 
@@ -2735,7 +2759,10 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
         # THE RESEARCH FIRST (RESEARCH_SPORTS): the strongest cases are the
         # scorers tried, and the pairs are ranked on them; our chance breaks
         # ties. Hockey ranks on the chance.
-        by_leg = (lambda l: (-int(l.get("research") or 0), -float(l["p"]))) if researched \
+        # Football's scorers at our touchdown rule are tried first (step AAP, `scorer_rank`).
+        rule = td_rule_first_on()
+        by_leg = (lambda l: (int(rule and float(l["p"]) < TD_RULE_PAIR), -int(l.get("research") or 0),
+                             -float(l["p"]))) if researched \
             else (lambda l: (-float(l["p"]),))
         sc = sorted(scorers, key=by_leg)[:MAX_SCORERS]
 
