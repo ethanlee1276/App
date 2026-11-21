@@ -66,7 +66,10 @@ def _history(old=2000, today=40):
                                  "player": f"Old Guy {i}", "market": "total_bases",
                                  "line": 1.5, "book": "DraftKings"}) + "\n")
         for i in range(today):
-            fh.write(json.dumps({"ts": now - 60, "player": f"Today Guy {i}",
+            # A minute ago, but never before midnight: in the day's first minute "a minute ago" was
+            # yesterday, and every one of today's rows fell to the day filter (the gate of 21 November
+            # 2026 ran this file at 00:00 on the machine's clock).
+            fh.write(json.dumps({"ts": max(mid, now - 60), "player": f"Today Guy {i}",
                                  "market": "rush_yds", "line": 54.5,
                                  "book": "FanDuel"}) + "\n")
     return path, today
