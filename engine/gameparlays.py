@@ -2230,9 +2230,10 @@ RANK_ERROR: str | None = None
 
 def rank_parlays(gp: dict, sport: str) -> dict:
     """``{kind: [entry]}`` for RANK_KINDS, each list best to worst, and what was left off. An entry is
-    ``{"game", "i", "tier", "against", "joint", "rank"}``: the game ("AWAY@HOME"), the ticket's place in
-    that game's list, its tier, the checks against it (RANK_AGAINST's keys), our chance, and its place
-    in the list. Never raises: a board it cannot read ranks nothing, and says so (``error``, printed once
+    ``{"game", "gi", "i", "tier", "against", "joint", "rank"}``: the game ("AWAY@HOME"), its entry's place
+    among the games (``gi``: a doubleheader's two games share their clubs), the ticket's place in that
+    game's list, its tier, the checks against it (RANK_AGAINST's keys), our chance, and its place in the
+    list. Never raises: a board it cannot read ranks nothing, and says so (``error``, printed once
     a process and kept in RANK_ERROR), since empty lists are also the quiet day with no parlays."""
     global RANK_ERROR
     out: dict = {k: [] for k in RANK_KINDS}
@@ -2242,7 +2243,7 @@ def rank_parlays(gp: dict, sport: str) -> dict:
         order = {t: i for i, (t, _w, _x) in enumerate(RANK_TIERS)}
         for kind in RANK_KINDS:
             rows = []
-            for x in (gp or {}).get("games") or []:
+            for gi, x in enumerate((gp or {}).get("games") or []):
                 if not isinstance(x, dict) or not x.get("away") or not x.get("home"):
                     continue
                 for i, t in enumerate(x.get(kind) or []):
@@ -2258,7 +2259,7 @@ def rank_parlays(gp: dict, sport: str) -> dict:
                     tier = rank_tier(checks)
                     research = _research_of(t) if kind == "scorers" and sp in RESEARCH_SPORTS else 0
                     key = (order[tier], -research, -float(t.get("joint") or 0), -float(t.get("ev_at_naive") or -9))
-                    rows.append((key, {"game": f"{x['away']}@{x['home']}", "i": i, "tier": tier,
+                    rows.append((key, {"game": f"{x['away']}@{x['home']}", "gi": gi, "i": i, "tier": tier,
                                        "against": [k for k, v in checks.items() if v is False],
                                        "joint": round(float(t.get("joint") or 0), 4)}))
             rows.sort(key=lambda r: r[0])

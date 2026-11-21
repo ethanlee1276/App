@@ -84,6 +84,18 @@ def test_the_ranking_is_tier_first_then_our_chance_across_every_game():
     assert [(e["game"], e["tier"]) for e in r["threes"]] == [("DAL@PHI", "top"), ("KC@BUF", "strong")]
     assert r["threes"][1]["against"] == ["own"]
     assert r["left_off"] == {"gone": 0, "started": 0}
+    assert [e["gi"] for e in r["threes"]] == [0, 1], "each names its game's entry"
+
+
+def test_a_doubleheaders_two_games_keep_their_own_tickets():
+    # Two games between the same clubs on one day share "AWAY@HOME": each ranked ticket names its own entry
+    # (`gi`), and the page reads that entry and the board's game at the same kickoff.
+    gp = _gp([(("NYY", "BOS"), {"twos": [_t(0.41)], "date": "2026-07-04", "kickoff": "13:05"}),
+              (("NYY", "BOS"), {"twos": [_t(0.52)], "date": "2026-07-04", "kickoff": "19:10"})])
+    r = GP.rank_parlays(gp, "mlb")
+    assert [(e["game"], e["gi"], e["i"], e["joint"]) for e in r["twos"]] == [("NYY@BOS", 1, 0, 0.52), ("NYY@BOS", 0, 0, 0.41)]
+    assert "const at = games[e.gi];" in PAGE and "return at && `${at.away}@${at.home}` === e.game ? at" in PAGE
+    assert "(!x.kickoff || g.kickoff === x.kickoff)" in PAGE and "const g = bpGame(d, e.game, x);" in PAGE
 
 
 def test_football_pairs_rank_on_research_inside_a_tier_and_the_unplaceable_and_started_are_left_off():

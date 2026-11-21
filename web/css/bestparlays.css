@@ -1,11 +1,14 @@
 /* Best Parlays (js/bestparlays.js), loaded with it: every parlay the game
    reports posted, ranked best to worst in Most Likely's tiers, a section for
-   the player-prop parlays and one for the scorer pairs, each ticket a card. */
+   the player-prop parlays and one for the scorer pairs, each ticket a card.
+   No hard lines (styles.css THE BLEND): a chip is a filled pill and a chosen
+   one a tint; a card's tier is light from its left edge (--grad-tone), and
+   the legs' dividers are a whisper (--border-soft). */
 .bp-lead { margin: 4px 0 10px; color: var(--text-mute); font-size: var(--fs-sm); max-width: var(--measure-wide); }
 .bp-size-row, .bp-chips-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
 .bp-size, .bp-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 14px;
-  border-radius: 999px; border: var(--hairline) solid color-mix(in oklab, var(--text) 18%, transparent);
-  background: none; color: var(--text-mute); font: inherit; font-weight: 600; cursor: pointer; }
+  border-radius: 999px; border: var(--hairline) solid transparent;
+  background: var(--fill-subtle); color: var(--text-mute); font: inherit; font-weight: 600; cursor: pointer; }
 .bp-size span, .bp-chip span { color: var(--text-dim); font-weight: 500; }
 .bp-size.on, .bp-chip.on { color: var(--text); border-color: transparent;
   background: color-mix(in oklab, var(--brand) 16%, transparent); }
@@ -18,10 +21,12 @@
 .bp-tier-sec.tier-top .bp-tier-h { color: var(--good); }
 .bp-tier-sec.tier-strong .bp-tier-h { color: var(--gold); }
 .bp-tier-words { margin: 2px 0 10px; color: var(--text-dim); font-size: var(--fs-sm); }
-.bp-card { margin: 0 0 10px; padding: 12px 14px; border-radius: var(--radius); background: var(--panel);
-  border-left: 3px solid color-mix(in oklab, var(--text) 12%, transparent); }
-.bp-card.tier-top { border-left-color: var(--good); }
-.bp-card.tier-strong { border-left-color: var(--gold); }
+.bp-card { margin: 0 0 10px; padding: 12px 14px; border-radius: var(--radius); background-color: var(--panel); }
+.bp-card.tier-top { --tone: var(--good); }
+.bp-card.tier-strong { --tone: var(--gold); }
+.bp-card.tier-top, .bp-card.tier-strong { border-left: 3px solid transparent;
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone); }
 .bp-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .bp-rank { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px; border-radius: 999px;
   background: color-mix(in oklab, var(--text) 10%, transparent); color: var(--text); font-weight: 800;
@@ -43,7 +48,7 @@
 .bp-fill { font-weight: 600; }
 .bp-legs { list-style: none; margin: 8px 0 6px; padding: 0; display: grid; gap: 6px; }
 .bp-legs li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 10px;
-  padding-top: 6px; border-top: var(--hairline) solid color-mix(in oklab, var(--text) 8%, transparent); }
+  padding-top: 6px; border-top: var(--hairline) solid var(--border-soft); }
 .bp-legs li:first-child { border-top: 0; padding-top: 0; }
 .bp-leg-what { min-width: 0; color: var(--text-dim); overflow-wrap: anywhere; }
 .bp-leg-what b { color: var(--text); }

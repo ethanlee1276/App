@@ -63,13 +63,22 @@ function bpPairWords(sport) {
     : sport === "nhl" ? ["Goal-scorer parlays", "goal-scorer pair", "Two players, each to score a goal"]
     : ["Scorer parlays", "scorer pair", "Two players, each to score"];
 }
-//: The board's game for "AWAY@HOME", and the game's entry among its parlays.
-function bpGame(d, key) {
-  const [away, home] = String(key || "").split("@");
-  return ((d && d.games) || []).find((g) => g && g.away === away && g.home === home) || null;
+//: A ranked ticket's game among the board's parlays: the entry the ranking names (`gi`), else the first
+//: with its clubs; and the board's game for it, by its clubs, then its date and kickoff when two games
+//: share them (a doubleheader).
+function bpEntry(d, e) {
+  const games = ((d || {}).game_parlays || {}).games || [];
+  const at = games[e.gi];
+  return at && `${at.away}@${at.home}` === e.game ? at
+    : games.find((x) => x && `${x.away}@${x.home}` === e.game) || null;
 }
-function bpEntry(d, key) {
-  return (((d || {}).game_parlays || {}).games || []).find((x) => x && `${x.away}@${x.home}` === key) || null;
+function bpGame(d, key, x) {
+  const [away, home] = String(key || "").split("@");
+  const same = ((d && d.games) || []).filter((g) => g && g.away === away && g.home === home);
+  const day = (v) => String(v || "").slice(0, 10);
+  const pick = same.length > 1 && x
+    ? same.find((g) => (!x.date || day(g.date) === day(x.date)) && (!x.kickoff || g.kickoff === x.kickoff)) : null;
+  return pick || same[0] || null;
 }
 const bpStarted = (g) => { const s = ((g || {}).live || {}).state; return s === "live" || s === "final"; };
 
@@ -78,9 +87,9 @@ function bpRows(d, kind) {
   const ranked = (((d || {}).game_parlays || {}).ranked || {})[kind] || [];
   const out = [];
   ranked.forEach((e) => {
-    const x = bpEntry(d, e.game);
+    const x = bpEntry(d, e);
     const t = x && (x[kind] || [])[e.i];
-    const g = bpGame(d, e.game);
+    const g = bpGame(d, e.game, x);
     if (!t || (t.legs || []).length < 2 || bpStarted(g)) return;
     out.push({ e, t, g, x });
   });
@@ -173,13 +182,13 @@ async function renderBestParlays() {
       escapeHtml(label)} <span>${n}</span></button>`).join("");
   const props = twos.length || threes.length
     ? `<div class="bp-size-row" role="group" aria-label="Parlay size">${sizeChips}</div>
-       <p class="bp-lead">Ranked by tier first, as on Most Likely, then by our chance of the whole ticket. The checks: its class, one book has every leg, every leg is the report’s own pick, a book’s price can pay it, and it wins in the same kind of game as the game’s other tickets.</p>
+       <p class="bp-lead">Tier first, as on Most Likely, then our chance of the whole ticket. The checks: its class, one book has every leg, every leg is the report’s pick, the price can pay it, and it needs the same game as the other tickets.</p>
        ${bpSectionHTML(size === "twos" ? twos : threes, size, sport, "props")}`
     : "";
   const scorers = pairs.length
-    ? `<p class="bp-lead">Ranked by tier first, then by ${
-        football ? "our research on the two scorers, then by " : ""}our chance both score. The checks: ${
-        football ? "each scorer at our 40% touchdown rule" : "the pair clears our bar together"}, no stand-in scorer, and it wins in the same kind of game as the game’s other tickets.</p>
+    ? `<p class="bp-lead">Tier first, then ${
+        football ? "our research on the two scorers, then " : ""}our chance both score. The checks: ${
+        football ? "each scorer at our 40% touchdown rule" : "the pair clears our bar together"}, no stand-in, and it needs the same game as the other tickets.</p>
        ${bpSectionHTML(pairs, "scorers", sport, "scorers")}`
     : "";
   const left = ranked.left_off || {};
