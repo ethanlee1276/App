@@ -99,10 +99,10 @@ settled. `QB_PRICE_GRADE=off` turns it off.
    does, to decide on). Since step AAE (21 November) the line reads only
    today's quotes, never a sharp book's, and a ticket with a leg whose number
    no book lists any more says it cannot be placed as written, which leg, and
-   the nearest number a book has: a posted pick keeps the number it went up
-   at while the books move (on the Friday before a Sunday, 35 of the NFL's
-   165 legs had no book at their number). A ticket not posted before takes no
-   such leg.
+   the nearest number a book has; a ticket not posted before takes no such
+   leg. The first NFL board to count them had none. Step AAF fixed one thing
+   that kept the line quiet on football: an under's price was lost wherever
+   its book also listed that number on its ladder.
 3. **The price grade on the NBA and NHL cards.** Answered yes, 20 November;
    done in step AAB (above).
 4. **Rungs well under the average.** Their Tier 1 is completions, attempts
@@ -112,14 +112,13 @@ settled. `QB_PRICE_GRADE=off` turns it off.
 5. **A cornerback matchup adds nothing.** Their testing gives a receiver's
    coverage matchup no points. Our board lets the scan's coverage read back a
    receiver's pick toward Top. Stop counting it?
-6. **A posted pick whose number the books have left** (new, 21 November). A
-   Most Likely pick keeps the number it went up at until its game, and a
-   parlay leg made from it keeps that number too. When no book lists the
-   number any more the ticket says it cannot be placed as written, and no new
-   ticket takes the leg (step AAE). Should the leg follow the books to today's
-   number instead, at today's chance and price, with the pick itself left
-   posted where it went up? On the Friday before a Sunday, 35 of the NFL's 165
-   parlay legs sat at a number no book listed.
+6. **A posted pick whose number the books have left.** Withdrawn the day it
+   was written (21 November). I asked whether a parlay leg should follow the
+   books to today's number when they leave the number its pick was posted at.
+   The count step AAE added read 0 such legs on the NFL's Friday board, two
+   days after Sunday's picks went up, so there is nothing to decide now. The
+   count stays on the heartbeat (`one_book_legs` `unlisted`), and a ticket
+   with such a leg says so.
 
 ## What their own messages add to the instructions
 

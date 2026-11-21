@@ -551,7 +551,7 @@
           ? parlayBet(t.bet_legs, `${t.title || "Parlay"} · ${(t.legs || []).map((l) => l.pick).filter(Boolean).join(" + ")}`) : ""}</div>
         ${odds(t)}
         ${t.cls_why ? `<p class="gr-parlay-classwhy">${escapeHtml(t.cls_why)}</p>` : ""}
-        ${t.one_book ? `<p class="gr-parlay-book${t.one_book_gone ? " gone" : ""}">${escapeHtml(t.one_book)}</p>` : ""}
+        ${t.one_book && !CLOSED ? `<p class="gr-parlay-book${t.one_book_gone ? " gone" : ""}">${escapeHtml(t.one_book)}</p>` : ""}
         <ol class="gr-parlay-legs">${(t.legs || []).map((l) => `<li${l.player
           ? ` data-open="player:${escapeAttr(slugify(l.player))}"` : ""}>
           <span class="gr-parlay-pick"><span class="gr-parlay-who">${face(l)}<b>${named(l.pick || "", b.names)}</b></span>${l.price

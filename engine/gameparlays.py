@@ -1788,15 +1788,10 @@ def ticket_class(sport: str, t: dict) -> dict:
 #: A PICK CARRIED AT ITS POSTED NUMBER (step AAE, 2026-11-21). A Most Likely
 #: pick stays up at the number, price and book it was posted at while the
 #: books move (engine/likely `lock`: "The number, the price and the book stay
-#: as posted"), and a leg made from it carries those. The first board that
-#: counted (20 November, the heartbeat's ``one_book_legs``) had 35 of the NFL's
-#: 165 legs with their prop on file and no book at their number, on the Friday
-#: before a Sunday whose picks had gone up from the Thursday; ``unlisted`` now
-#: counts how many such legs are carried picks (LEG_QUOTES). So:
+#: as posted"), and a leg made from it carries those. So:
 #:
 #:   * a carried pick's own book and price is the one it went up at, never a
-#:     quote today. Step AAD counted every leg's own book as a quote, which let
-#:     the line name a book at a price that book no longer showed;
+#:     quote today (step AAD counted every leg's own book as a quote);
 #:   * a ticket with a leg no book lists now says so in the line's place: it
 #:     cannot be placed as written, which leg, and the nearest number a book
 #:     has (`one_book` ``gone``), as the pick's own card does
@@ -1806,6 +1801,15 @@ def ticket_class(sport: str, t: dict) -> dict:
 #:
 #: A leg priced on this build still counts its own book and price: its row is
 #: this build's, so that quote is today's whatever else is on file.
+#:
+#: WHAT THE COUNTS SAID. The first board to count the legs (20 November, the
+#: heartbeat's ``one_book_legs``) had 35 of the NFL's 165 with their prop on
+#: file and no book at their number. AAE took those for carried picks; its own
+#: count (``unlisted``) read 0 on the live board with the same 35 unquoted. One
+#: cause was then found and fixed (step AAF): the quote index kept one quote a
+#: book and number, a ladder's rung replacing the main line, and a ladder is
+#: mostly the over alone, so an under's price was lost
+#: (engine/sliplive.quote_index). ``no_quote`` says what is left after it.
 _QUOTES: dict = {}
 #: The board's lists whose rows carry every book's quotes (`all_lines`, `alt_lines`); the matchup
 #: picks' rows sit a game deep (engine/matchpicks: ``{"game", "td": [...], "props": [...]}``).

@@ -1,11 +1,12 @@
 """A parlay says when a leg's number is on no book now, and the one-book line cites only today's quotes
 (step AAE, 2026-11-21).
 
-The first live counts of the one-book line (20 November, the heartbeat's ``one_book_legs``) had 35 of the
-NFL's 165 parlay legs with their prop on file and no book at their number. The cause found in the code is
-the Most Likely board's lock (engine/likely `lock`): a posted pick stays up at the number, price and book it
-was posted at while the books move ("The number, the price and the book stay as posted"), and a leg made
-from it carries those. Sunday's picks go up from the Thursday. What these hold:
+A Most Likely pick stays up at the number, price and book it was posted at while the books move
+(engine/likely `lock`: "The number, the price and the book stay as posted"), and a parlay leg made from it
+carries those. Sunday's picks go up from the Thursday. (This step took the 35 NFL legs the heartbeat
+counted with no book at their number for such picks; its own count read 0 on the live board. Step AAF
+then found the quote index losing an under's price: tests/test_a_books_main_line_and_its_ladder_are_two_quotes.py.)
+What these hold of a carried pick:
 
   * A CARRIED PICK'S POSTED PRICE IS NO QUOTE TODAY. Step AAD counted every leg's own book and price as a
     quote, so the line could name a book at a price it no longer showed. Only today's quotes speak for a
@@ -315,6 +316,8 @@ def test_the_card_and_the_page_mark_a_ticket_that_cannot_be_placed():
     assert "one_book_gone: !!(t.one_book || {}).gone," in report, "the page's own card carries it too"
     # No "Bet it" on a ticket that cannot be placed as written.
     assert "(t.bet_legs || []).length && !CLOSED && !t.one_book_gone" in report
+    # Where to place a ticket is said of a game still to play: not once it has started or finished.
+    assert '${t.one_book && !CLOSED ? `<p class="gr-parlay-book' in report
     css = (ROOT / "web" / "css" / "report.css").read_text(encoding="utf-8")
     assert ".gr-parlay-book.gone { color: var(--warn); }" in css
     # Ask reads the same words off the ticket.

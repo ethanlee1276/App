@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAF. An under's price was being lost, one thing that kept the one-book line quiet on football** (step 820; 21
+November). Nothing to run. Step AAE's own count corrected me. On the first NFL board after it the count of posted
+picks whose number no book lists any more (`unlisted`) read 0, and the same 35 of 165 legs still had no book at
+their number. So those 35 were not posted picks left behind by the books, which is what I had read into the code. I
+then read how the quotes are filed and reproduced a cause that fits. The site kept one quote for each book and
+number. A book quotes its main line both ways, and lists the same number again on its alternate ladder, mostly as
+the over alone ("5+ receptions"). The ladder was filed last and replaced the main line, so the under's price was
+gone. Two places read that list: the parlays' one-book line, which said nothing for a ticket with an under unless
+its legs' own books happened to match, and a bet slip's live prices, which showed no current price for an under at
+such a number. Both quotes are kept now: an under reads the main line's price, an over the better of the two, and
+the fair chance still comes from one book's own pair. The next NFL board's `no_quote` says how many of the 35 this
+was. Step AAE's rules stay, for the case they were written for, and its count stays on the heartbeat. I withdrew the
+decision I had listed with it (decision 6 in docs/NFL_BET_CHECKING_METHOD.md), since there is nothing to decide
+while the count is 0. One more change: the line saying where to place a ticket no longer shows on a game that has
+started or finished.
+
 **AAE. A parlay says when a leg's number is on no book now** (step 819; 21 November). Nothing to run. The first NFL
 board after step AAD named a book on 44 of its 67 parlays (33 before), said none had every leg on 3 and said nothing
 on 20. Leg by leg, 130 of the 165 had a book at their number and 35 had their prop on file with no book at that

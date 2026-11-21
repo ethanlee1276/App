@@ -131,7 +131,8 @@ def _sharp(book: str) -> bool:
 def quote_index(board: dict) -> dict:
     """``{(player key, market): {"quotes": [(line, book, over, under)],
     "line", "side"}}`` — every book's number on every prop row, main line
-    and ladder. Built once per write of a board (askbot.board_at), BEFORE
+    and ladder (a book that hangs one number on both is listed twice, once
+    for each). Built once per write of a board (askbot.board_at), BEFORE
     Ask's copy drops the ladders; small, because it keeps the numbers and
     nothing else. A scorer row on the touchdown field adds its own quote."""
     out: dict = {}
@@ -145,15 +146,30 @@ def quote_index(board: dict) -> dict:
         if not isinstance(r, dict) or not r.get("player") or not r.get("market"):
             continue
         e = entry(r)
-        for q in (r.get("all_lines") or []) + (r.get("alt_lines") or []):
-            if not isinstance(q, dict):
-                continue
-            book, line = str(q.get("book") or ""), _num(q.get("line"))
-            if not book or book.lower() == "proxy" or line is None:
-                continue
-            over, under = _odds(q.get("over_odds")), _odds(q.get("under_odds"))
-            if over or under:
-                e["quotes"][(book.lower(), line)] = (line, book, over, under)
+        # A BOOK'S MAIN LINE AND A RUNG OF ITS LADDER AT THE SAME NUMBER ARE TWO
+        # QUOTES (step AAF, 2026-11-21). They were filed under one key, the
+        # ladder's last, and a ladder is mostly the over alone ("5+ receptions"),
+        # so the main line's under was overwritten by nothing: an under at a
+        # number its book also laddered showed no book at all. Found while
+        # reading why 35 of the NFL's 165 parlay legs had no book at their
+        # number (the one-book line, 20 November); true of a slip's live
+        # prices too. Each is kept, and within one of them each side keeps its
+        # better price.
+        for ladder, lines in ((False, r.get("all_lines")), (True, r.get("alt_lines"))):
+            for q in lines or []:
+                if not isinstance(q, dict):
+                    continue
+                book, line = str(q.get("book") or ""), _num(q.get("line"))
+                if not book or book.lower() == "proxy" or line is None:
+                    continue
+                over, under = _odds(q.get("over_odds")), _odds(q.get("under_odds"))
+                if not (over or under):
+                    continue
+                k = (book.lower(), line, ladder)
+                was = e["quotes"].get(k)
+                if was:
+                    over, under = _keep(over, was[2]), _keep(under, was[3])
+                e["quotes"][k] = (line, book, over, under)
     for shelf in ("td_field", "longshot_watch", "long_shots"):
         for r in (board or {}).get(shelf) or []:
             if not isinstance(r, dict) or not r.get("player"):
@@ -162,7 +178,7 @@ def quote_index(board: dict) -> dict:
             if r["market"] not in SCORER_MARKETS or not _odds(r.get("odds")) or not r.get("book"):
                 continue
             e = entry(r)
-            e["quotes"].setdefault((str(r["book"]).lower(), 0.5), (0.5, str(r["book"]), _odds(r["odds"]), 0))
+            e["quotes"].setdefault((str(r["book"]).lower(), 0.5, False), (0.5, str(r["book"]), _odds(r["odds"]), 0))
     for e in out.values():
         e["quotes"] = list(e["quotes"].values())
     return out
@@ -182,6 +198,13 @@ def _better(a: int, b: int) -> bool:
     from .slipgrade import to_decimal
     da, db = to_decimal(a), to_decimal(b)
     return bool(da and db and da > db + 1e-9)
+
+
+def _keep(a: int, b: int) -> int:
+    """The better of two prices for one side, or the one there is (0: neither)."""
+    if not a or not b:
+        return a or b
+    return a if _better(a, b) else b
 
 
 def leg_prices(leg: dict, index: dict | None, board: dict | None = None) -> dict | None:
