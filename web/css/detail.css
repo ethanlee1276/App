@@ -413,20 +413,10 @@
   font-weight: 600; padding: 6px 12px; margin-right: 0; cursor: pointer; min-height: 44px; }
 .pbp-tab.active { color: var(--text); border-bottom-color: transparent; border-radius: 999px; background: color-mix(in oklab, var(--brand) 12%, transparent); }
 .pbp-panel { margin-top: 8px; }
-.pbp-tab-door { margin-left: auto; background: none; border: 0; color: var(--text-mute); font: inherit; cursor: pointer; }
-.pbp-tab-door:hover { color: var(--text); }
 /* The doors between the game page and the play-by-play, and the card's
    own hint that a live game opens it. */
 .gp-pbp-door { display: inline-flex; align-items: center; gap: 6px; color: var(--text-mute); font-weight: 600; }
 .gp-pbp-door:hover { color: var(--text); }
-.pbp-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-.pbp-info-card { display: flex; gap: 10px; align-items: center; background: var(--panel);
-  border: var(--hairline) solid transparent; border-radius: var(--radius-lg); padding: 10px 12px; }
-.pbp-info-ico { color: var(--gold); display: inline-flex; }
-/* The label above the value, small and quiet, so the tile reads as a
-   question and an answer rather than two facts of equal weight. */
-.pbp-info-k { font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase;
-  color: var(--text-mute); font-weight: 700; }
 /* THE PLAY FEED IS CUT OFF AND SCROLLS ITSELF.
    ---------------------------------------------------------------------
    Ethan, 2026-09-06, circling the rail: "we should just make this menu
