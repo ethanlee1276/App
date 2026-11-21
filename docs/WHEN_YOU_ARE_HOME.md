@@ -9338,6 +9338,32 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAM. A parlay leg needs the book to agree** (step 827; 21 November). Nothing to run. You asked to dial in the
+three-leg parlays and to look at all the data. I read every settled Most Likely pick the site's public record holds,
+the pool the parlay legs come from: 2,639 NFL picks since 10 September, 3,240 NBA since 20 October, 2,871 hockey
+since 6 October, and college football's. Two things stood out. First, where our chance sits well above the book's
+own, our number is wrong, not early: NFL legs we rated 60% or better at prices of -100 to -130 hit 40% (78 legs,
+where we said 75%), and at -130 to -160 they hit 51%; from about -160 and shorter they hit close to what we said.
+College football is the same, the NBA milder. So in the NFL, college football and the NBA a player-prop leg now
+counts at the lower of our chance and the book's fair chance (the board's own fair chance for it, else the price
+with an average 4.5% hold taken out). A leg reaches the 60% floor only when the market rates it that likely too, and
+a ticket's chance is built on numbers the market stands behind. Checked the honest way, rule chosen on the earlier
+weeks and then read on the newest 30% of days: NFL legs at the floor hit 66.4% instead of 62.9% early and 62.9%
+instead of 62.0% late, and the legs it removes hit 49% and 50%; NBA 69.3% instead of 66.8% and 67.1% instead of
+66.3%, removed legs 57% and 59%; college football 65.2% instead of 61.2% and 60.6% instead of 58.6%, removed legs
+56% and 55% where we said 71%. Ranked by the lower number, the top fifth of each NFL day's legs hit 66% against 60%.
+A ticket whose legs were held down says so on its card ("Each leg counts at the lower of our chance and the book's:
+Malik Nabers 68% (ours 72%)"). Your own Nabers, Skattebo and Daniels ticket is the example: at its prices the books
+say 68%, 64% and 64%, so it now prices at 28%, not the 33% we said. Hockey is left alone: the legs this would remove
+there hit 65% early and 60% late, and hockey's tickets are beating their numbers (22 of 43 three-leg tickets hit
+where we said 38%). Second, in the NBA three props a single play settles (over 1.5 or 0.5 rebounds, over 0.5 threes,
+under 0.5 blocks) hit 62% of the 337 we rated 60% or better, against 68% for every other leg, and the books price
+them as high as we do, so the first rule does not catch them; on the parlays' own record the NBA's blocks legs hit
+10 of 20 where we said 72%. They stay on the board as single picks and ride no ticket, and the heartbeat's
+report-pick count files them under "our rule". Expect fewer NFL and college tickets on some games (your answer to
+decision 1: fewer rather than forced) and NBA tickets without bench rebounds or zero-block legs. Switches:
+`QB_BOOK_AGREES=off`, `QB_ONE_PLAY_LEGS=off`.
+
 **AAL. Every report parlay ranked best to worst, on its own page** (step 826; 21 November). Nothing to run. You
 asked for each sport's best two-leg and three-leg parlays ranked the way the Most Likely picks are, best to worst,
 on a separate page, with the player-prop parlays and the touchdown parlays in sections of their own. The new **Best

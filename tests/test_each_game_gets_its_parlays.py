@@ -41,9 +41,12 @@ GAME = {"home": "NYG", "away": "WAS", "date": "2099-11-12", "kickoff": "20:15", 
 
 def _ml(player, team, pos, market, side, line, p, odds, label):
     opp = "WAS" if team == "NYG" else "NYG"
+    # The market's fair chance agrees with ours here (`implied_prob`), so these tickets are
+    # priced on our numbers; where it does not, a leg is the book's (gameparlays.book_capped,
+    # step AAM: tests/test_the_parlay_legs_need_the_book_to_agree.py).
     return {"player": player, "team": team, "opponent": opp, "home": "NYG", "away": "WAS", "position": pos,
             "market": market, "market_label": label, "side": side, "line": line, "odds": odds, "book": "DraftKings",
-            "model_prob": p, "game_date": "2099-11-12", "kickoff": "2099-11-12T20:15:00-05:00",
+            "model_prob": p, "implied_prob": p, "game_date": "2099-11-12", "kickoff": "2099-11-12T20:15:00-05:00",
             "reasons": [f"Projection clears {line} in most of our simulated games"]}
 
 
@@ -162,9 +165,10 @@ def test_his_own_ticket_is_built_and_priced():
 
 def _rec(player, team, pos, market, side, line, p, odds, book="DraftKings", **kw):
     opp = "WAS" if team == "NYG" else "NYG"
+    # The market's fair chance agrees with ours (`fair_prob`, as `_ml`'s `implied_prob`; step AAM).
     r = {"player": player, "team": team, "opponent": opp, "home": "NYG", "away": "WAS", "position": pos,
          "market": market, "side": side, "line": line, "odds": odds, "book": book, "hit_prob": p,
-         "has_market": True, "recommended": False, "game_date": "2099-11-12",
+         "fair_prob": p, "has_market": True, "recommended": False, "game_date": "2099-11-12",
          "kickoff": "2099-11-12T20:15:00-05:00", "reasons": [f"Projection clears {line}"]}
     r.update(kw)
     return r

@@ -42,10 +42,12 @@ THURSDAY = dt.datetime(2099, 11, 12, 14, 0)
 
 
 def _rec(player, market, p, line=2.5, team="PHI", book="DraftKings"):
+    # The market's fair chance agrees with ours (`fair_prob`): each pick's fate is its own number's
+    # (a leg the book rates lower is held to the book's since step AAM, gameparlays.book_capped).
     return {"player": player, "team": team, "opponent": "DAL" if team == "PHI" else "PHI", "home": "PHI",
             "away": "DAL", "position": "WR", "market": market, "side": "Over", "line": line, "odds": -150,
-            "book": book, "hit_prob": p, "has_market": True, "recommended": False, "game_date": "2099-11-15",
-            "kickoff": "2099-11-15T13:00:00-05:00", "reasons": [f"Projection clears {line}"]}
+            "book": book, "hit_prob": p, "fair_prob": p, "has_market": True, "recommended": False,
+            "game_date": "2099-11-15", "kickoff": "2099-11-15T13:00:00-05:00", "reasons": [f"Projection clears {line}"]}
 
 
 def _pick(player, market, line=2.5, side="OVER"):

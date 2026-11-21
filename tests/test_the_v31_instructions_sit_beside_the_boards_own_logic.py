@@ -149,12 +149,16 @@ def test_what_their_rules_keep_off_parlays():
     assert off(_leg("Amon-Ra St. Brown", "receptions", position="WR", _qb_unrated=True)) == "new_qb"
     assert off(_leg("Amon-Ra St. Brown", "receptions", position="WR")) == ""
     assert off(_leg("Jared Goff", "rush_yds", position="QB"), "nba") == "", "football's rules only"
-    assert set(G.OFF_PARLAY_WORDS) == {"qb_rush_over", "qb_rush_att_under", "backup_back", "new_qb"}
+    # …and since step AAM, in the NBA, a prop one play settles (gameparlays.ONE_PLAY_LEGS).
+    assert set(G.OFF_PARLAY_WORDS) == {"qb_rush_over", "qb_rush_att_under", "backup_back", "new_qb", "one_play"}
 
 
 def _row(player, market, side, prob, position, team="DET", **kw):
+    # The market's fair chance agrees with ours (`implied_prob`): these legs are held to their rules
+    # alone, not to the book's chance (gameparlays.book_capped, step AAM).
     return {"player": player, "team": team, "opponent": "NYG", "home": "DET", "away": "NYG", "market": market,
-            "side": side, "line": 40.5, "odds": -130, "book": "FanDuel", "model_prob": prob, "has_market": True,
+            "side": side, "line": 40.5, "odds": -130, "book": "FanDuel", "model_prob": prob, "implied_prob": prob,
+            "has_market": True,
             "position": position, "bettable": True, "game_date": "2099-01-01", "kickoff": "2099-01-01T18:00:00Z", **kw}
 
 

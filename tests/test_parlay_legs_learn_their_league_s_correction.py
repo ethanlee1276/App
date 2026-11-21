@@ -149,6 +149,9 @@ def test_the_legs_are_corrected_before_their_floor():
            "fair": 0.50, "pool": "likely"}
     sure = {"player": "Sure Leg", "team": "DET", "market": "rush_yds", "side": "Over", "line": 40.5, "p": 0.80,
             "fair": 0.76, "pool": "likely"}
+    # The pull alone: since step AAM a football leg is also held to the book's own chance
+    # (gameparlays.book_capped), its own test's (tests/test_the_parlay_legs_need_the_book_to_agree.py).
+    os.environ["QB_BOOK_AGREES"] = "off"
     try:
         T.likely_legs = lambda board, sport, now=None: [dict(hot), dict(sure)]
         T.edge_legs = GP.pool_legs = GP.priced_legs = lambda board, sport, now=None: []
@@ -159,6 +162,7 @@ def test_the_legs_are_corrected_before_their_floor():
         assert {l["player"] for l in GP.legs_for({}, "cfb")} == {"Hot Leg", "Sure Leg"}, "another league's own"
     finally:
         T.likely_legs, T.edge_legs, GP.pool_legs, GP.priced_legs, LF.w_for = keep
+        os.environ.pop("QB_BOOK_AGREES", None)
     assert {"p_raw", "fit_w"} <= set(GP.LEG_KEYS), "the ticket keeps our number and the share"
 
 

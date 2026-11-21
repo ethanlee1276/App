@@ -107,6 +107,7 @@ from __future__ import annotations
 
 import datetime as dt
 import itertools
+import os
 import re
 
 #: The leagues this runs for: every board with player props.
@@ -392,6 +393,104 @@ def credible_row(r: dict) -> bool:
         return False
 
 
+#: THE BOOK HAS TO AGREE (step AAM, 21 November 2026; Ethan: "dial in the 3-leg
+#: parlays ... look at all the data, figure out what we can use to our advantage").
+#: In football and the NBA a player-prop leg's chance is the LOWER of ours and the
+#: book's own fair chance (`book_capped`), so a leg clears its floor only when the
+#: market rates it that likely too, and a ticket's chance is never built on a number
+#: the market does not stand behind.
+#:
+#: WHY, ON THE RECORD (every settled Most Likely pick the public day records hold,
+#: read 21 November: the NFL 2,639 from 10 September, the NBA 3,240 from 20
+#: October, hockey 2,871 from 6 October, college football from 27 August). Our
+#: number ranks a game's legs well in the NBA and hockey, but where it sits far
+#: above the market it is our error, not an edge: the NFL's legs we rated 60% or
+#: better at prices of -100 to -130 hit 40% (78 legs, where we said 75%), and at
+#: -130 to -160 51% (65, where we said 67%); from -160 and shorter they hit close to
+#: what we said. Held out by time (the first 70% of days, then the newest 30%), the legs
+#: at the 60% floor once both agree:
+#:     NFL   62.9% → 66.4% early, 62.0% → 62.9% late; the legs it drops hit 49% and 50%
+#:     NBA   66.8% → 69.3% early, 66.3% → 67.1% late; the legs it drops hit 57% and 59%
+#:     CFB   61.2% → 65.2% early, 58.6% → 60.6% late; the legs it drops hit 56% and 55%
+#: and ranked by the lower number each day's top fifth of NFL legs hit 65.8%
+#: against 60.0%. Hockey is left alone: the legs it would drop hit 65% early and
+#: 60% late, and its tickets beat their numbers (22 of 43 three-leg tickets where
+#: we said 38%). Switch: QB_BOOK_AGREES=off.
+BOOK_AGREE_SPORTS = ("nfl", "cfb", "nba")
+#: An American price's implied chance with an average two-way hold taken out, for a
+#: leg that carries no fair chance of its own (the Most Likely board's own DEVIG).
+BOOK_DEVIG = 1.045
+
+
+def book_agrees_on() -> bool:
+    """The rule's switch (QB_BOOK_AGREES=off turns it off)."""
+    return os.environ.get("QB_BOOK_AGREES", "on").strip().lower() not in ("off", "0", "no", "false")
+
+
+def book_fair(leg: dict) -> float | None:
+    """The book's own fair chance for a leg: its de-vigged ``fair`` (the row's
+    fair or implied chance, twoleg._fair_of), else its price's implied chance with
+    BOOK_DEVIG taken out; None when it has neither. Never raises."""
+    try:
+        f = float(leg.get("fair")) if leg.get("fair") not in (None, "") else None
+    except (TypeError, ValueError):
+        f = None
+    if f is not None and 0.0 < f < 1.0:
+        return f
+    try:
+        o = float(leg.get("odds"))
+    except (TypeError, ValueError):
+        return None
+    q = -o / (-o + 100.0) if o <= -100 else 100.0 / (o + 100.0) if o >= 100 else None
+    return q / BOOK_DEVIG if q else None
+
+
+def book_capped(leg: dict, sport: str) -> dict:
+    """The leg at the lower of our chance and the book's (BOOK_AGREE_SPORTS): when
+    ours is higher the leg's ``p`` is the book's, ours kept as ``p_own``. The leg
+    itself otherwise, off the rule's leagues, with the switch off, or when no book
+    chance can be read. Never raises."""
+    try:
+        if str(sport or "").lower() not in BOOK_AGREE_SPORTS or not book_agrees_on():
+            return leg
+        fair = book_fair(leg)
+        p = float(leg.get("p"))
+        if fair is None or p <= fair:
+            return leg
+        # The journal keeps our own number as `p_raw` (parlayledger), so what the record
+        # learns (engine/legfit) is learned on ours, never on the book's.
+        return {**leg, "p": round(fair, 4), "p_own": round(p, 4),
+                **({"p_raw": round(p, 4)} if leg.get("p_raw") is None else {})}
+    except (TypeError, ValueError, AttributeError):
+        return leg
+
+
+#: ONE PLAY SETTLES THEM (step AAM). An NBA prop a single play decides is no
+#: parlay leg, where one miss loses the ticket: over 1.5 (or 0.5) rebounds, over
+#: 0.5 threes, under 0.5 blocks. Their price says 66-68%, ours about the same, and
+#: on the record they hit 62% (337 legs rated 60% or better: 65% in the first
+#: 60% of days, 58% since) while every other leg we rated as high hit 68% (66%
+#: early, 70% since); on the game parlays' own record the NBA's blocks legs hit 10
+#: of 20 where we said 72%. Kept as single picks on the board; off every ticket.
+#: (market, side, the line at or under which it is one play). Switch:
+#: QB_ONE_PLAY_LEGS=off.
+ONE_PLAY_LEGS = {"nba": (("reb", "OVER", 1.5), ("fg3m", "OVER", 0.5), ("blk", "UNDER", 0.5))}
+
+
+def one_play_leg(sport: str, leg: dict) -> bool:
+    """True for a leg ONE_PLAY_LEGS keeps off the tickets. Never raises."""
+    try:
+        if os.environ.get("QB_ONE_PLAY_LEGS", "on").strip().lower() in ("off", "0", "no", "false"):
+            return False
+        side = str(leg.get("side") or "").upper()
+        side = "OVER" if side in ("OVER",) + _YES else "UNDER" if side in ("UNDER", "NO", "N") else side
+        line = float(leg.get("line"))
+        return any(str(leg.get("market") or "") == m and side == s and line <= cap + 1e-9
+                   for m, s, cap in ONE_PLAY_LEGS.get(str(sport or "").lower(), ()))
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
 #: WHICH COPY OF A LEG SPEAKS for it when two sources price the same bet:
 #: the Most Likely board's (its 60-75% claims hit what they said on the
 #: record), then the Edge picks', then any other priced prop's. The higher
@@ -515,7 +614,8 @@ SCRAMBLE_SHARE = 0.5
 OFF_PARLAY_WORDS = {"qb_rush_over": "a quarterback's rushing over that leans on scrambles",
                     "qb_rush_att_under": "a quarterback's rush-attempt under",
                     "backup_back": "a backup running back's yardage",
-                    "new_qb": "a pass catcher behind a new starting quarterback with too few passes to rate"}
+                    "new_qb": "a pass catcher behind a new starting quarterback with too few passes to rate",
+                    "one_play": "a prop one play settles (over 1.5 rebounds, over 0.5 threes, under 0.5 blocks)"}
 
 
 def _lead_carry(reads: dict | None) -> dict:
@@ -560,7 +660,12 @@ def _scrambler(leg: dict, read: dict, scrambles: dict | None) -> bool:
 def off_parlays(sport: str, leg: dict, reads: dict | None = None, lead: dict | None = None,
                 scrambles: dict | None = None) -> str:
     """Why this leg is kept off every ticket (an OFF_PARLAY_WORDS key), or ""."""
-    if sport not in OFF_PARLAY_SPORTS or not isinstance(leg, dict):
+    if not isinstance(leg, dict):
+        return ""
+    # An NBA prop one play settles (ONE_PLAY_LEGS, step AAM).
+    if one_play_leg(sport, leg):
+        return "one_play"
+    if sport not in OFF_PARLAY_SPORTS:
         return ""
     read = (reads or {}).get((_key(leg.get("player")), leg.get("team") or "")) or {}
     pos = str(leg.get("position") or read.get("pos") or read.get("position") or "").upper()
@@ -613,6 +718,8 @@ def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> lis
             if leg:
                 # Its market's own shift rides on top (legfit._market_fits, GPWIN1).
                 leg = legfit.apply(leg, sport, "three", w, shift)
+                # …and in football and the NBA no higher than the book's own chance (step AAM).
+                leg = book_capped(leg, sport)
             # Player props only: a game line's leg journals and grades on
             # another path, and their reports' tickets are props.
             if not leg or leg.get("_game_leg") or float(leg.get("p") or 0) < floor:
@@ -1285,6 +1392,12 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
         st = str(l.get("injury_status") or l.get("own_status") or "").upper()
         if st in ("QUESTIONABLE", "GTD", "DAY-TO-DAY"):
             caveats.append(f"{l.get('player')} is listed questionable — confirm they play before you bet it")
+    # HELD TO THE BOOK'S CHANCE (step AAM, `book_capped`): each such leg said once, with ours beside it.
+    held = [l for l in legs if l.get("p_own") is not None and l.get("p") is not None]
+    if held:
+        caveats.append("Each leg counts at the lower of our chance and the book's: " + "; ".join(
+            f"{l.get('player')} {round(100 * float(l['p']))}% (ours {round(100 * float(l['p_own']))}%)"
+            for l in held))
     # CAN A BOOK PAY IT? The most generous same-game price a book plausibly
     # quotes is the legs' product less the doctrine's best-case cut
     # (parlays.BEST_CASE_SGP_TAX); a ticket that needs more than that is
@@ -1326,7 +1439,9 @@ LEG_KEYS = ("player", "team", "opponent", "home", "away", "position", "market", 
             # Our own chance before the league's learned correction and the
             # share it was pulled by (engine/legfit), journaled so the
             # correction is learned on our number, never on itself.
-            "p_raw", "fit_w", "fit_shift")
+            "p_raw", "fit_w", "fit_shift",
+            # Our chance where the book's, lower, is the leg's (`book_capped`, step AAM).
+            "p_own")
 
 
 def slim(leg: dict) -> dict:

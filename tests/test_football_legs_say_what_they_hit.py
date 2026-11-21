@@ -98,7 +98,10 @@ def test_the_most_trusted_copy_of_a_bet_speaks_for_it():
              "most_likely": [_ml("Theo Johnson", "NYG", "receptions", "Over", 2.5, 0.64, -150, 0.60)],
              "recommendations": [_rec("Theo Johnson", "NYG", "receptions", "Over", 2.5, 0.72, -150, 0.60, 0.70)]}
     legs = [l for l in GP.legs_for(board, "nfl") if l["player"] == "Theo Johnson"]
-    assert len(legs) == 1 and legs[0]["p"] == 0.64 and legs[0]["pool"] == "likely", legs
+    # Since step AAM a football leg is no likelier than the book's own chance (60% here):
+    # ours, 64%, rides along as `p_own` (gameparlays.book_capped).
+    assert len(legs) == 1 and legs[0]["p"] == 0.6 and legs[0]["p_own"] == 0.64, legs
+    assert legs[0]["pool"] == "likely", legs
     # Within one source the likelier copy still wins.
     a, b = {"pool": "priced", "p": 0.66}, {"pool": "priced", "p": 0.61}
     assert GP._speaks_first(a, b) and not GP._speaks_first(b, a)
