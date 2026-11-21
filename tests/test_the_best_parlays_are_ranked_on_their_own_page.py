@@ -56,8 +56,17 @@ def test_the_tiers_are_most_likelys_from_the_checks():
         "a check that cannot say is not against it"
     assert GP.rank_tier({"class2": True, "book": False, "own": True, "price": True, "together": True}) == "strong"
     assert GP.rank_tier({"class2": False, "book": False, "own": True, "price": True, "together": True}) == "look"
-    two = GP.rank_checks(_t(0.45), "twos", "nfl")
+    two = GP.rank_checks(_t(0.45), "twos", "nhl")
     assert two == {"class2": True, "book": True, "own": True, "price": True, "together": True}
+    # Where legs count at no more than the book's chance (step AAM's leagues) the price check cannot pass,
+    # and says nothing (step ABA); with that rule off it reads the ticket again.
+    assert GP.rank_checks(_t(0.45, playable=False), "twos", "nfl")["price"] is None
+    assert GP.rank_checks(_t(0.45, playable=False), "twos", "nhl")["price"] is False
+    os.environ["QB_BOOK_AGREES"] = "off"
+    try:
+        assert GP.rank_checks(_t(0.45, playable=False), "twos", "nfl")["price"] is False
+    finally:
+        os.environ.pop("QB_BOOK_AGREES", None)
     # A three-leg ticket is Pop by v3.1's own targets: the class check passes on Pop, not on a long shot.
     assert GP.rank_checks(_t(0.27, cls="pop", legs=3), "threes", "nfl")["class"] is True
     assert GP.rank_checks(_t(0.17, cls="long", legs=3), "threes", "nfl")["class"] is False
@@ -79,7 +88,10 @@ def test_the_ranking_is_tier_first_then_our_chance_across_every_game():
     r = GP.rank_parlays(gp, "nfl")
     got = [(e["game"], e["i"], e["tier"], e["rank"]) for e in r["twos"]]
     assert got == [("KC@BUF", 0, "top", 1), ("DAL@PHI", 1, "top", 2), ("DAL@PHI", 0, "strong", 3), ("KC@BUF", 1, "look", 4)], got
-    assert r["twos"][2]["against"] == ["book"] and set(r["twos"][3]["against"]) == {"class2", "book", "price"}
+    assert r["twos"][2]["against"] == ["book"] and set(r["twos"][3]["against"]) == {"class2", "book"}, \
+        "the NFL's legs are held to the book's chance: its price check says nothing (step ABA)"
+    hockey = GP.rank_parlays(dict(gp, sport="nhl"), "nhl")
+    assert set(hockey["twos"][3]["against"]) == {"class2", "book", "price"}
     # A three-leg ticket with a fill leg is Strong behind a Top one, whatever its chance.
     assert [(e["game"], e["tier"]) for e in r["threes"]] == [("DAL@PHI", "top"), ("KC@BUF", "strong")]
     assert r["threes"][1]["against"] == ["own"]

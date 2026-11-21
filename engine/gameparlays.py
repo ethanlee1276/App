@@ -2410,11 +2410,19 @@ def rank_checks(t: dict, kind: str, sport: str) -> dict:
                 "stand_in": not t.get("stand_ins"), "together": together}
     cls = t.get("class")
     ob = t.get("one_book") or {}
+    # WHERE A LEG COUNTS AT NO MORE THAN THE BOOK'S OWN CHANCE THE PRICE CHECK CANNOT PASS (step ABA, 21
+    # November 2026), and says nothing. `playable` asks whether a book's same-game price, the legs' own
+    # prices multiplied less its cut, pays the take: our fair price and 5%. Held to the book's chance
+    # (`book_tied`: step AAM), our fair price is the book's own less its hold, so no ticket passes but by a
+    # strong link between its legs, and on the day's heartbeat no NFL, college or NBA player-prop parlay
+    # made Top parlays (hockey's 13 did): one check every ticket fails ranks nothing and empties the top
+    # tier. The same side effect step AAR mended for the classes. The ticket's own caveat still says it.
+    price = None if t.get("playable") is None or book_tied(sport) else bool(t.get("playable"))
     out = {("class2" if kind == "twos" else "class"): (cls in ("safe", "balanced") if kind == "twos"
                                                        else cls in ("safe", "balanced", "pop")) if cls else None,
            "book": True if ob.get("book") else False if ob.get("none") else None,
            "own": not t.get("filled"),
-           "price": None if t.get("playable") is None else bool(t.get("playable")),
+           "price": price,
            "together": together}
     return out
 

@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABA. Best Parlays' Top tier fills again in the NFL, college football and the NBA** (step 841; 21 November).
+Nothing to run. Found on the heartbeat: the 3:20 PM ET boards ranked no NFL, college or NBA player-prop parlay as a
+Top parlay (NFL two-leg 4 Strong and 25 Worth a look, three-leg 1 and 22; hockey had 9 and 4 Top). One of the page's
+checks asks whether a book's same-game price (the legs' own prices multiplied, less its cut) pays our fair price
+plus 5%. Since step AAM each leg in those three leagues counts at no more than the book's own chance, so our fair
+price is the book's own less its hold, and no ticket can pass but by a strong link between its legs: a check every
+ticket fails ranks nothing and pushes every ticket down a tier. The same side effect step AAR mended for the Safe
+and Balanced labels. In those leagues that check now says nothing (as an unknown always has), so a ticket every
+other check backs is a Top parlay again; the ticket's own note that a book's same-game price likely pays less than
+it needs still shows. Hockey, whose legs keep our own number, is as it was. Which parlays are built does not change,
+only their tiers.
+
 **AAZ. Hockey's live game page draws the win chance line, as every sport's does** (step 840; 21 November). Nothing
 to run. You asked for every page to match. Read side by side on today's live games (college football, college
 basketball, hockey) and the Record page for each league, the Record pages already match: the same sections in the
