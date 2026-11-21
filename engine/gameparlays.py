@@ -1850,8 +1850,16 @@ def _board_reads(board: dict) -> dict:
                     carried.setdefault(_pick_key(r), r)
         except Exception as exc:                             # noqa: BLE001
             carried, error = {}, f"{type(exc).__name__}: {exc}"
+        # The props the build's own prop rows quote (`leg_gap`: a pick row carries no book's list).
+        props: set = set()
+        try:
+            from .sliplive import _key as name_key
+            props = {(name_key(r.get("player")), r.get("market")) for r in lists[0] if isinstance(r, dict)
+                     and (r.get("all_lines") or r.get("alt_lines"))}
+        except Exception:                                    # noqa: BLE001
+            props = set()
         _QUOTES.clear()
-        _QUOTES.update(key=key, board=board, index=idx, carried=carried, error=error)
+        _QUOTES.update(key=key, board=board, index=idx, carried=carried, error=error, props=props)
     return _QUOTES
 
 
@@ -1877,6 +1885,48 @@ def leg_quoted(leg: dict, index: dict, carried: dict | None = None) -> str:
     if book_prices(leg, index):
         return "quoted"
     return "unlisted" if carried and _pick_key(leg) in carried else "no_quote"
+
+
+#: WHY A LEG WITH ITS PROP ON FILE HAS NO BOOK AT ITS NUMBER (`leg_gap`), counted
+#: on the heartbeat so the cause is read, not guessed. Step AAE guessed picks
+#: carried at a posted number (its count read 0) and step AAF found an under's
+#: price lost to its book's ladder (3 of the NFL's 35 legs); 32 were left.
+LEG_GAPS = ("no_prop_row", "no_lines", "sharp_only", "other_side", "other_numbers", "side_unpriced", "error")
+
+
+def leg_gap(leg: dict, board: dict) -> dict | None:
+    """For a leg `leg_quoted` reads "no_quote": ``{"why", "near"}``. ``why`` (LEG_GAPS): the build's
+    own prop rows hold no quote list for its prop ("no_prop_row": only a pick row carries it); its
+    prop's rows list no price at all ("no_lines"); its number and side are priced by a sharp book
+    alone ("sharp_only"); its number is priced on the other side only ("other_side"); its side is
+    priced at other numbers only ("other_numbers", with ``near`` how far the nearest is); or no book a
+    reader can bet prices its side anywhere ("side_unpriced"). None for a leg a book quotes. Never
+    raises: a leg it cannot read is counted as "error", which no leg with a book reads as."""
+    try:
+        from .sliplive import _key as name_key
+        reads = _board_reads(board)
+        index = reads["index"]
+        key = (name_key((leg or {}).get("player")), (leg or {}).get("market"))
+        if key not in index or book_prices(leg, index):
+            return None
+        line = float(leg.get("line"))
+        if key not in (reads.get("props") or ()):
+            return {"why": "no_prop_row"}
+        quotes = index[key].get("quotes") or []
+        if not quotes:
+            return {"why": "no_lines"}
+        over = str(leg.get("side") or "").upper() in ("OVER", "YES")
+        here = [q for q in quotes if abs(float(q[0]) - line) < 1e-6]
+        if any((q[2] if over else q[3]) for q in here):
+            return {"why": "sharp_only"}                     # (a bettable book's would have been a quote)
+        if here:
+            return {"why": "other_side"}
+        side = _side_quotes(leg, index)
+        if not side:
+            return {"why": "side_unpriced"}
+        return {"why": "other_numbers", "near": round(min(abs(q[0] - line) for q in side), 2)}
+    except Exception:                                        # noqa: BLE001
+        return {"why": "error"}
 
 
 def _side_quotes(leg: dict, index: dict) -> list:

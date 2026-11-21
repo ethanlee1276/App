@@ -148,6 +148,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # failure prints once a process, is kept in UNLISTED_ERROR and rides the
         # build's counts (unlisted_error), which no quiet day does.
         "mark_unlisted",
+        # WHY A PARLAY LEG'S NUMBER HAS NO BOOK (engine/gameparlays.leg_gap, 2026-11-21):
+        # None is the leg a book quotes, so a failure returns {"why": "error"}, its
+        # own count on the heartbeat (one_book_gaps), which no quoted leg reads as.
+        "leg_gap",
         # A GAME'S REBUILD FROM ITS REPORT'S PICKS (engine/gamereport._parlays_from_picks,
         # 2026-11-19): None either way, but a failure prints, is kept on the game's
         # entry (rebuild_error) and the heartbeat counts it (threes_short_why), which

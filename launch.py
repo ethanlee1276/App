@@ -655,6 +655,19 @@ def _board_counts(path: str) -> dict:
         except Exception:                                    # noqa: BLE001
             _idx, _carried = {}, {}
         legs_seen = dict.fromkeys(_gp.LEG_QUOTES, 0)
+        # WHY A LEG'S NUMBER HAS NO BOOK where its prop is on file (gameparlays.leg_gap,
+        # LEG_GAPS), with what kind of leg it is: the source it came from, its side, its
+        # market, how far the nearest number a book has is, and whether the pick is one
+        # carried from an earlier build at any number. Counts only.
+        gaps: dict = {}
+        try:
+            _held = {k[:3] for k in _carried}
+        except Exception:                                    # noqa: BLE001
+            _held = set()
+
+        def _tally(name, key):
+            cell = gaps.setdefault(name, {})
+            cell[str(key)] = cell.get(str(key), 0) + 1
         for x in gp["games"]:
             if not isinstance(x, dict) or x.get("kept"):
                 continue
@@ -671,11 +684,28 @@ def _board_counts(path: str) -> dict:
                           else "unknown"] += 1
                     for l in t.get("legs") or []:
                         if isinstance(l, dict):
-                            legs_seen[_gp.leg_quoted(l, _idx, _carried)] += 1
+                            where = _gp.leg_quoted(l, _idx, _carried)
+                            legs_seen[where] += 1
+                            gap = _gp.leg_gap(l, b) if where == "no_quote" else None
+                            if gap:
+                                _tally("why", gap["why"])
+                                _tally("pool", l.get("pool") or "none")
+                                _tally("side", str(l.get("side") or "").lower() or "none")
+                                _tally("market", l.get("market") or "none")
+                                _own = str(l.get("book") or "").strip().lower()
+                                _tally("own_book", "none" if not _own else "proxy" if _own == "proxy" else "real")
+                                if gap.get("near") is not None:
+                                    _tally("near", "0.5" if gap["near"] <= 0.5 else "1" if gap["near"] <= 1.0 else "more")
+                                try:
+                                    _tally("carried", "yes" if _gp._pick_key(l)[:3] in _held else "no")
+                                except Exception:            # noqa: BLE001
+                                    pass
         if classes:
             out["ticket_classes"] = classes
             out["one_book"] = books
             out["one_book_legs"] = legs_seen
+            if gaps:
+                out["one_book_gaps"] = gaps
         # The build could not read which picks are carried (gameparlays.mark_unlisted): the kind of error only.
         if c.get("unlisted_error"):
             out["unlisted_error"] = str(c["unlisted_error"]).split(":")[0]

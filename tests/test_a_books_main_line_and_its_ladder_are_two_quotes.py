@@ -117,6 +117,85 @@ def test_a_scorer_off_the_touchdown_field_is_still_filed_once_a_book():
     assert got == [(0.5, "BetMGM", 140, 0), (0.5, "FanDuel", 130, 0)], got
 
 
+# --- why a leg's number has no book, counted (the cause is read off the heartbeat, not guessed) -----
+def _leg(player, market, side, line, **kw):
+    return dict({"player": player, "market": market, "side": side, "line": line}, **kw)
+
+
+def test_a_leg_with_no_book_at_its_number_says_which_kind_of_gap():
+    board = {"recommendations": [
+        _row(),
+        {"player": "Malik Nabers", "market": "receptions", "side": "OVER", "line": 4.5,
+         "all_lines": [_q("Pinnacle", 4.5, -120, 100), _q("DraftKings", 5.5, 120, -150)]},
+        {"player": "Cam Skattebo", "market": "rush_att", "side": "OVER", "line": 11.5,
+         "all_lines": [_q("proxy", 11.5, -110, -110)]},
+        {"player": "Chig Okonkwo", "market": "receptions", "side": "OVER", "line": 2.5,
+         "all_lines": [_q("DraftKings", 2.5, -160, 0)]}],
+        # A pick row carries no book's list: its prop is "on file" and the build's prop rows hold nothing for it.
+        "most_likely": [{"player": "Rachaad White", "market": "rush_yds", "side": "Over", "line": 29.5}]}
+    gap = lambda *a, **kw: GP.leg_gap(_leg(*a, **kw), board)                      # noqa: E731
+    assert gap("Jayden Daniels", "pass_cmp", "Under", 19.5) is None, "a book quotes it"
+    assert gap("Nobody", "receptions", "Over", 2.5) is None, "its prop is not on file: no_row, not a gap"
+    assert gap("Rachaad White", "rush_yds", "Over", 29.5) == {"why": "no_prop_row"}
+    assert gap("Cam Skattebo", "rush_att", "Over", 11.5) == {"why": "no_lines"}, "a proxy price is no book's"
+    assert gap("Malik Nabers", "receptions", "Over", 4.5) == {"why": "sharp_only"}
+    assert gap("Jayden Daniels", "pass_cmp", "Under", 17.5) == {"why": "other_side"}, "the ladder's over alone"
+    assert gap("Jayden Daniels", "pass_cmp", "Under", 20.5) == {"why": "other_numbers", "near": 1.0}
+    assert gap("Jayden Daniels", "pass_cmp", "Over", 18.5) == {"why": "other_numbers", "near": 1.0}
+    assert gap("Chig Okonkwo", "receptions", "Under", 3.5) == {"why": "side_unpriced"}
+    assert GP.LEG_GAPS == ("no_prop_row", "no_lines", "sharp_only", "other_side", "other_numbers", "side_unpriced",
+                           "error")
+    assert GP.leg_gap(None, board) is None, "nothing to read"
+    # A leg it cannot read is counted, never passed over as one a book quotes.
+    assert GP.leg_gap(_leg("Jayden Daniels", "pass_cmp", "Under", None), board) == {"why": "error"}
+
+
+def test_the_heartbeat_counts_each_gap_by_its_kind():
+    import json
+    import launch as L
+    sys.path.insert(0, str(ROOT / "tests"))
+    EG = __import__("test_each_game_gets_its_parlays")
+    b = EG.board()
+    # Every Most Likely row's own number at a book, but one prop's rows list another number only.
+    b["recommendations"] = [
+        {"player": r["player"], "market": r["market"], "side": r["side"],
+         "line": r["line"], "all_lines": [_q("DraftKings", r["line"] + (1.0 if r["player"] == "Malik Nabers" else 0.0),
+                                             -150, 120)]} for r in b["most_likely"]]
+    GP.attach(b, "nfl")
+    g = b["game_parlays"]["games"][0]
+    n = sum(l["player"] == "Malik Nabers" and l["market"] == "receptions" for t in g["twos"] + g["threes"] for l in t["legs"])
+    assert n >= 2
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(b, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert got["one_book_legs"]["no_quote"] == n and got["one_book_legs"]["unlisted"] == 0
+    assert got["one_book_gaps"] == {"why": {"other_numbers": n}, "pool": {"likely": n}, "side": {"over": n},
+                                    "market": {"receptions": n}, "own_book": {"real": n}, "near": {"1": n},
+                                    "carried": {"no": n}}, got["one_book_gaps"]
+    # A board with every leg quoted says nothing of gaps.
+    b2 = EG.board()
+    b2["recommendations"] = [{"player": r["player"], "market": r["market"], "side": r["side"], "line": r["line"],
+                              "all_lines": [_q("DraftKings", r["line"], -150, 120)]} for r in b2["most_likely"]]
+    GP.attach(b2, "nfl")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(b2, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            assert "one_book_gaps" not in L._board_counts(path)
+        finally:
+            L._full_copy = was
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]

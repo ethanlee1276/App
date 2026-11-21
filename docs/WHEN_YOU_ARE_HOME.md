@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAG. Counting why a parlay leg has no book at its number** (step 821; 21 November). Nothing to run. Step AAF's fix
+was real and small. On the next NFL board the legs with no book at their number went from 35 to 32 of 165, and the
+one-book line named a book on 46 of 67 tickets (44 before), said none had every leg on 4 and said nothing on 17. Two
+readings of the code had now been wrong, so I stopped reading and added a count. For each such leg the heartbeat
+says which kind of gap it is: its prop has no quote list among the build's prop rows, no price at all, a sharp book
+alone, the other side only, other numbers only (and how far the nearest is), or its side unpriced. Beside that it
+counts the source the leg came from, its side, its market, whether its own book is a real one, and whether it is a
+pick carried from an earlier build (`one_book_gaps`). Counts only, no names. The next board says where the gap is,
+and the fix follows from that.
+
 **AAF. An under's price was being lost, one thing that kept the one-book line quiet on football** (step 820; 21
 November). Nothing to run. Step AAE's own count corrected me. On the first NFL board after it the count of posted
 picks whose number no book lists any more (`unlisted`) read 0, and the same 35 of 165 legs still had no book at
