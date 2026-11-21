@@ -1615,8 +1615,16 @@ function emptySlate(mark, title, note) {
    a game that has begun is not a time to promise. */
 function firstStartOnCard() {
   const notStarted = (g) => g && (!g.live || ["scheduled", "pre", "upcoming"].includes(String(g.live.state || "scheduled")));
-  const kick = ((state.data || {}).games || []).filter(notStarted).map((g) => g.kickoff).filter(Boolean).sort()[0];
-  return kick ? formatKickoff(kick) : "";
+  return firstKickOf(((state.data || {}).games || []).filter(notStarted));
+}
+/* The earliest of these games' starts, said in the reader's zone (2026-11-21). Ordered by the instant,
+   not the text: a Thursday-night "20:15" sorted after Sunday's "13:00" and the card promised Sunday. */
+function firstKickOf(games) {
+  const withKick = (games || []).filter((g) => g && g.kickoff);
+  if (!withKick.length) return "";
+  const timed = withKick.map((g) => kickInstant(g)).filter(Number.isFinite).sort((a, b) => a - b);
+  if (timed.length) return tzTime(new Date(timed[0]));
+  return formatKickoff(withKick.map((g) => String(g.kickoff)).sort()[0]);
 }
 function boardEmptyFacts() {
   const d = state.data || {};
@@ -2003,12 +2011,45 @@ function formatKickoff(kick) {
   if (m) { let h = +m[1]; const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; return `${h}:${m[2]} ${ap} ET`; }
   return kick;
 }
+/* FOOTBALL'S KICKOFF IN THE READER'S OWN ZONE (Ethan's answer to decision 13, 2026-11-21: "yes"). The
+   NFL board carries a kickoff as the game's Eastern day ("2026-11-22") and an Eastern clock ("13:00"),
+   so it was printed "1:00 PM ET" everywhere while every other league's start read in the reader's zone.
+   The day and the clock together are one instant: Eastern is five hours behind UTC in winter and four
+   in summer, and New York's own clock says which. Without a day there is no instant, and the clock
+   keeps its "ET" (formatKickoff). */
+function etInstant(dateStr, kick) {
+  const d = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr || ""));
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(kick || "").trim());
+  if (!d || !m) return NaN;
+  const h = +m[1], mi = +m[2];
+  if (h > 23 || mi > 59) return NaN;
+  let t = Date.UTC(+d[1], +d[2] - 1, +d[3], h + 5, mi);          // standard time first
+  try {
+    const fmt = etInstant._fmt || (etInstant._fmt = new Intl.DateTimeFormat("en-US",
+      { timeZone: "America/New_York", hour: "numeric", hourCycle: "h23" }));
+    if (+fmt.format(new Date(t)) === (h + 1) % 24) t -= 3600e3;    // New York is on summer time
+  } catch (e) { /* no zone data in this browser: standard time stands */ }
+  return t;
+}
+/* A game's start as an instant: an ISO stamp as it is, a football day and clock through etInstant. */
+function kickInstant(g) {
+  const k = String((g && g.kickoff) || "");
+  if (!k) return NaN;
+  return k.includes("T") ? Date.parse(k) : etInstant(g.date, k);
+}
+/* The clock alone, in the reader's zone where the game's day lets it be said. */
+function kickClock(dateStr, kick) {
+  const t = kick && !String(kick).includes("T") ? etInstant(dateStr, kick) : NaN;
+  return Number.isFinite(t) ? tzTime(t) : formatKickoff(kick);
+}
 function whenLabel(dateStr, kick) {
   // AN INSTANT IS SAID WHOLE IN THE READER'S ZONE (2026-11-19): its day with its clock. The slate's own
   // date (the game's day in the East) stood beside the reader's clock, so tip-off at 8 PM Eastern read
   // "Thu, Nov 19 · 1:00 AM" in London, a day and a clock that never met. A bare "HH:MM" kickoff (football)
-  // is an Eastern clock reading and keeps the slate's date and its "ET".
-  const t = kick && String(kick).includes("T") ? Date.parse(kick) : NaN;
+  // is an Eastern clock reading: with the slate's date it is an instant too (etInstant, 2026-11-21), and
+  // only a clock without a day keeps its "ET".
+  let t = kick && String(kick).includes("T") ? Date.parse(kick) : NaN;
+  if (!Number.isFinite(t) && kick) t = etInstant(dateStr, kick);
   if (Number.isFinite(t)) {
     const opts = tzOpts({ weekday: "short", month: "short", day: "numeric" }), fk = JSON.stringify(opts);
     if (!whenLabel._fmt || whenLabel._fmt[0] !== fk) whenLabel._fmt = [fk, new Intl.DateTimeFormat(undefined, opts)];
@@ -21486,7 +21527,7 @@ function ffProfileHTML(p, info, bio) {
         <span class="gs-at">@</span>
         <span class="ffp-upteam">${marks(up.home_team)} <b>${escapeHtml(up.home_team)}</b></span>
       </div>
-      <p class="ffd-note">${escapeHtml(formatGameDate(up.date) || up.date)}${up.kickoff ? ` · ${escapeHtml(up.kickoff)} ET` : ""}</p>
+      <p class="ffd-note">${escapeHtml(whenLabel(up.date, up.kickoff) || up.date || "")}</p>
       ${up.spread != null || up.total != null ? `<div class="ffp-upnums">
         ${up.spread != null ? `<span class="ffp-bio"><span class="k">Spread</span>
           <b>${up.home_team === p.team ? (up.spread > 0 ? "+" : "") + up.spread
@@ -30762,10 +30803,7 @@ async function deckLiveHTML(riding, rows) {
     const next = fast.filter((x) => x.sport === state.sport && (x.g.live || {}).state === "scheduled")
       .map((x) => (x.g.live || {}).start_time).filter(Boolean).sort()[0];
     let first = next ? pbpTime(next) : "";
-    if (!first) {
-      const kick = ((state.data || {}).games || []).map((g) => g.kickoff).filter(Boolean).sort()[0];
-      first = kick ? formatKickoff(kick) : "";
-    }
+    if (!first) first = firstKickOf((state.data || {}).games);
     const queued = (rows || []).filter((r) => r.phase === "upcoming").length;
     /* The quiet card on an empty stadium under the lights (Ethan,
        2026-09-27: not the 50-yard line — his stadium photo, every league). */

@@ -61,7 +61,20 @@ def test_the_board_keeps_the_pick_and_no_ticket_takes_it():
     assert len(board["most_likely"]) == 3, "nothing is taken off the board"
     picks = [{"player": r["player"], "market": r["market"], "side": "OVER", "line": r["line"]} for r in rows]
     fates = GP._picks_census(board, "nfl", EG.GAME, picks, now=dt.datetime(2099, 11, 12, 12, 0))
-    assert fates.get("our_rule") == 1 and fates.get("strong") == 2, fates
+    # Since 21 November the market is benched from stakes (Ethan's answer to decision 16), and a benched
+    # market rides no ticket either: the census says the bench first. With the bench lifted (sixty picks
+    # graded at a profit, stakeplan.MARKET_RELEASE_N), this rule still keeps the over off.
+    assert fates.get("benched") == 1 and fates.get("strong") == 2, fates
+    from engine import stakeplan as SPL
+    kept = SPL.MARKET_BENCH
+    SPL.MARKET_BENCH = tuple(b for b in kept if b["market"] != "pass_att")
+    try:
+        legs = {(l["player"], l["market"]) for l in GP.legs_for(board, "nfl")}
+        assert legs == {("Jared Goff", "pass_yds"), ("Malik Nabers", "receptions")}, legs
+        fates = GP._picks_census(board, "nfl", EG.GAME, picks, now=dt.datetime(2099, 11, 12, 12, 0))
+        assert fates.get("our_rule") == 1 and fates.get("strong") == 2, fates
+    finally:
+        SPL.MARKET_BENCH = kept
 
 
 def _row(player, p, odds, market="receptions", side="OVER", line=3.5):

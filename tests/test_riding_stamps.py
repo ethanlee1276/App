@@ -79,7 +79,7 @@ def _node(js, tz="America/New_York"):
     if not node:
         return None
     src = "\n".join(_fn(n) for n in ("escapeHtml", "tzOpts", "tzTime", "placedStamp",
-                                     "formatGameDate", "formatKickoff", "whenLabel", "ridingWhen"))
+                                     "formatGameDate", "formatKickoff", "etInstant", "whenLabel", "ridingWhen"))
     prog = f"""
       const settings = () => ({{ tz: {json.dumps(tz)} }});
       {src}
@@ -117,19 +117,32 @@ def test_the_stamp_is_utc_read_in_the_chosen_zone_weekday_included():
 def test_a_tip_off_is_said_whole_in_the_readers_zone_day_and_clock_together():
     """A game's instant (an ISO kickoff) is its day and its clock in the one zone the reader chose: the
     slate's own date stood beside the reader's clock, so 8 PM Eastern read "Thu, Nov 19 · 1:00 AM" in
-    London. A bare "HH:MM" (football) is an Eastern clock reading: the slate's date and "ET"."""
+    London. A bare "HH:MM" (football) is an Eastern clock reading on the slate's date: one instant too,
+    said in the reader's zone (Ethan's answer to decision 13, 2026-11-21); only a clock with no day keeps "ET"."""
     got = _node("""
       const tip = "2026-11-20T01:00:00Z";                       // 8 PM Thursday in New York
       const east = whenLabel("2026-11-19", tip);
       return { east, football: whenLabel("2026-11-22", "13:00"), dateOnly: whenLabel("2026-11-22", ""),
-               junk: whenLabel("2026-11-19", "Tnot-a-time") };""")
+               junk: whenLabel("2026-11-19", "Tnot-a-time"), noDay: whenLabel("", "13:00") };""")
     if got is None:
         print("  SKIP node not installed"); return
     assert got["east"] == "Thu, Nov 19 · 8:00 PM", got
-    assert got["football"] == "Sun, Nov 22 · 1:00 PM ET" and got["dateOnly"] == "Sun, Nov 22", got
+    assert got["football"] == "Sun, Nov 22 · 1:00 PM" and got["dateOnly"] == "Sun, Nov 22", got
     assert got["junk"].startswith("Thu, Nov 19"), "an unreadable instant keeps the slate's date"
+    assert got["noDay"] == "1:00 PM ET", "a clock with no day is no instant: it keeps its ET"
     london = _node("""return whenLabel("2026-11-19", "2026-11-20T01:00:00Z");""", tz="Europe/London")
     assert london == "Fri, Nov 20 · 1:00 AM", london
+    # Football in other zones, winter and summer: 1 PM Eastern is 10 AM in Los Angeles and 6 PM in London
+    # in November (Eastern five hours behind UTC), and a September 3:30 PM is 8:30 PM in London (four).
+    # Monday night's 8:15 PM is past midnight in London: the day moves with the clock.
+    js = """return [whenLabel("2026-11-22", "13:00"), whenLabel("2026-09-05", "15:30"),
+                    whenLabel("2026-11-23", "20:15"), whenLabel("2026-03-08", "13:00")];"""
+    assert _node(js, tz="America/Los_Angeles") == ["Sun, Nov 22 · 10:00 AM", "Sat, Sep 5 · 12:30 PM",
+                                                   "Mon, Nov 23 · 5:15 PM", "Sun, Mar 8 · 10:00 AM"]
+    assert _node(js, tz="Europe/London") == ["Sun, Nov 22 · 6:00 PM", "Sat, Sep 5 · 8:30 PM",
+                                             "Tue, Nov 24 · 1:15 AM", "Sun, Mar 8 · 5:00 PM"]
+    assert _node(js) == ["Sun, Nov 22 · 1:00 PM", "Sat, Sep 5 · 3:30 PM", "Mon, Nov 23 · 8:15 PM",
+                         "Sun, Mar 8 · 1:00 PM"], "the day summer time starts, an afternoon kickoff is on it"
 
 
 def test_the_row_reads_placed_and_game_and_prefers_the_games_own_date():
@@ -144,7 +157,7 @@ def test_the_row_reads_placed_and_game_and_prefers_the_games_own_date():
       };""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got["both"] == "placed Thu 5:12 PM · game Sat, Sep 5 · 3:30 PM ET", got["both"]
+    assert got["both"] == "placed Thu 5:12 PM · game Sat, Sep 5 · 3:30 PM", got["both"]
     assert got["unmapped"] == "placed Thu 5:12 PM · game Fri, Sep 4", "the filing date stands in"
     assert got["gameOnly"] == "game Sat, Sep 5"
     assert got["nothing"] == "" and got["none"] == ""

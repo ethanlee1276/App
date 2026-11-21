@@ -183,6 +183,14 @@ def ensure_schema(conn) -> None:
             conn.execute("ALTER TABLE parlays ADD COLUMN fill TEXT")
         except sqlite3.OperationalError as exc:
             column_exists_or_raise(exc)
+    # THE BEST PARLAYS TIER A TICKET WORE WHEN ITS GAME STARTED (`tier`, step AAX,
+    # 21 November 2026: `mark_at_start`, TIER_KINDS); NULL for a version the
+    # board replaced, a ticket Best Parlays left off, or one not yet started.
+    if "tier" not in cols:
+        try:
+            conn.execute("ALTER TABLE parlays ADD COLUMN tier TEXT")
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     conn.commit()
 
 
@@ -391,6 +399,39 @@ PARLAY_LEG_CATEGORY = "parlay_leg"
 #: The lists a game's kept set holds its tickets in (engine/reportkeep keeps the
 #: game's `game_parlays` entry as the board had it): posted, and on paper.
 KEPT_LISTS = ("threes", "twos", "scorers", "paper_threes", "paper_twos")
+#: THE BEST PARLAYS TIERS ON THE RECORD (Ethan's answer to decision 15, 21 November 2026: "yes", to
+#: "Track Best Parlays' tiers on the Record, so we can see whether Top parlays really hit more often than
+#: Strong ones"). The page ranks a game's tickets in three tiers by how its checks agree
+#: (engine/gameparlays.rank_checks and rank_tier: Top parlays, Strong, Worth a look) and leaves a game
+#: off once it starts; the tier a ticket wore then is read off the set its report carried at the start
+#: (the one the record counts) by those same checks, and kept on its journal row. A ticket on paper
+#: and one with a leg no book listed any more were never on the page, and wear none. The games before
+#: the page went up (AAL, 21 November) are tiered the same way from their starting sets, from the
+#: archive (`mark_from_archive`), which the Record says.
+TIER_KINDS = ("threes", "twos", "scorers")
+TIER_ORDER = ("top", "strong", "look")
+
+
+def kept_tiers(kept: dict, sport: str) -> dict:
+    """``{legs_key: tier}`` for a game's kept set (TIER_KINDS). Never raises: a ticket it cannot read
+    wears no tier."""
+    out: dict = {}
+    if not isinstance(kept, dict):
+        return out
+    try:
+        from .gameparlays import rank_checks, rank_tier
+    except Exception:                                        # noqa: BLE001
+        return out
+    sp = str(sport or "").lower()
+    for kind in TIER_KINDS:
+        for t in kept.get(kind) or []:
+            if not isinstance(t, dict) or len(t.get("legs") or []) < 2 or (t.get("one_book") or {}).get("gone"):
+                continue
+            try:
+                out.setdefault(legs_key(t["legs"]), rank_tier(rank_checks(t, kind, sp)))
+            except (AttributeError, KeyError, TypeError, ValueError):
+                continue
+    return out
 
 
 def mark_at_start(conn, sport: str, dates, game: str, kept: dict) -> int:
@@ -422,7 +463,16 @@ def mark_at_start(conn, sport: str, dates, game: str, kept: dict) -> int:
         f"UPDATE parlays SET at_start = {mark} WHERE sport=? AND grade=? AND at_start IS NULL "
         f"AND source IN ({','.join('?' * len(srcs))}) AND date IN ({','.join('?' * len(days))})",
         (*keys, sport, game, *srcs, *days))
-    return cur.rowcount or 0
+    marked = cur.rowcount or 0
+    # Each counted ticket's Best Parlays tier (TIER_KINDS), the first reading standing; a set marked
+    # before the journal kept tiers is read again here from the archive, so it gains them. Not counted
+    # in what this returns, which is the tickets marked.
+    for key, tier in kept_tiers(kept, sport).items():
+        conn.execute(
+            f"UPDATE parlays SET tier=? WHERE sport=? AND grade=? AND legs_key=? AND at_start=1 AND tier IS NULL "
+            f"AND source IN ({','.join('?' * len(srcs))}) AND date IN ({','.join('?' * len(days))})",
+            (tier, sport, game, key, *srcs, *days))
+    return marked
 
 
 def mark_started_games(conn, gp: dict, sport: str, date: str) -> int:
@@ -431,7 +481,7 @@ def mark_started_games(conn, gp: dict, sport: str, date: str) -> int:
     built, before any filter: a kept ticket's legs may have no row under the
     board's date once the board has moved on to the next day."""
     ensure_schema(conn)
-    n = 0
+    n, before = 0, conn.total_changes
     for x in (gp or {}).get("games") or []:
         if not (isinstance(x, dict) and x.get("kept")):
             continue
@@ -443,7 +493,7 @@ def mark_started_games(conn, gp: dict, sport: str, date: str) -> int:
             # from the archive); it never stops the board's journal.
             print(f"  ⚠️ parlay journal: {sport} {x.get('game')} starting set not marked "
                   f"({type(exc).__name__}: {exc})")
-    if n:
+    if n or conn.total_changes != before:              # a tier read again marks no ticket
         conn.commit()
     return n
 
@@ -461,6 +511,7 @@ def mark_from_archive(conn, where=None, sports=None) -> int:
     n = 0
     try:
         ensure_schema(conn)
+        before = conn.total_changes
         for league in sorted(p.name for p in root.iterdir() if p.is_dir()) if root.exists() else []:
             if sports and league not in sports:
                 continue
@@ -473,7 +524,7 @@ def mark_from_archive(conn, where=None, sports=None) -> int:
                         n += mark_at_start(conn, league, (doc.get("label"), day_dir.name),
                                            kept.get("game") or f"{doc.get('away') or away}@{doc.get('home') or home}",
                                            kept)
-        if n:
+        if n or conn.total_changes != before:          # a tier read again marks no ticket
             conn.commit()
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ parlay journal: starting sets not marked from the archive ({type(exc).__name__}: {exc})")
@@ -834,6 +885,28 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                     out[sp][kind]["by_class"] = {
                         c: {"graded": v["graded"], "wins": v["wins"], "chance": round(v["_j"] / v["graded"], 3),
                             "net_units": round(v["_n"], 2)} for c in CLASSES if (v := classes.get(c))}
+            # HOW EACH BEST PARLAYS TIER HAS DONE (TIER_KINDS, step AAX): the tier each counted ticket wore
+            # when its game started, graded and open.
+            tiers: dict = {}
+            for t in rows:
+                tr = t["tier"] if t["tier"] in TIER_ORDER else None
+                if tr is None or t["status"] not in ("won", "lost", "open"):
+                    continue
+                cell = tiers.setdefault(tr, {"graded": 0, "wins": 0, "open": 0, "_j": [], "_n": 0.0})
+                if t["status"] == "open":
+                    cell["open"] += 1
+                    continue
+                cell["graded"] += 1
+                cell["wins"] += t["status"] == "won"
+                cell["_n"] += float(t["pnl_units"] or 0.0)
+                if t["modeled_joint"] is not None:
+                    cell["_j"].append(float(t["modeled_joint"]))
+            if tiers:
+                out[sp][kind]["by_tier"] = {
+                    tr: {"graded": v["graded"], "wins": v["wins"], "open": v["open"],
+                         "chance": round(sum(v["_j"]) / len(v["_j"]), 3) if v["_j"] else None,
+                         "net_units": round(v["_n"], 2)}
+                    for tr in TIER_ORDER if (v := tiers.get(tr))}
             # Since the rebuild (RULES_SINCE): how the new tickets have done, apart.
             new = [t for t in graded if since_rules(t)]
             new_open = sum(1 for t in rows if t["status"] == "open" and since_rules(t))

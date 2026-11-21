@@ -73,7 +73,16 @@
   };
   /* "Sun 4:25 PM" from the board's "YYYY-MM-DD HH:MM" (the board's own clock, Eastern). */
   const kick = (s) => {
+    // In the reader's own zone (decision 13, 2026-11-21): an ISO start as it is (college football's,
+    // which this read as nothing), a football day and clock through app.js etInstant; "ET" only where
+    // neither can be read.
+    const iso = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})/.exec(String(s || ""));
     const m = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})/.exec(String(s || ""));
+    const t = iso ? Date.parse(iso[0])
+      : m && typeof etInstant === "function" ? etInstant(`${m[1]}-${m[2]}-${m[3]}`, `${m[4]}:${m[5]}`) : NaN;
+    if (Number.isFinite(t) && typeof tzTime === "function" && typeof tzOpts === "function") {
+      return `${new Date(t).toLocaleDateString(undefined, tzOpts({ weekday: "short" }))} ${tzTime(t)}`;
+    }
     if (!m) return "";
     const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()];
     const h = +m[4];

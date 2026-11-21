@@ -9338,6 +9338,53 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAY. Football kickoff times read in your own time zone** (step 839; 21 November). Nothing to run. Your answer to
+decision 13 ("yes"). The NFL's board carries a kickoff as the game's Eastern day and an Eastern clock ("2026-11-22",
+"13:00"), so every NFL time on the site read "1:00 PM ET", even for a member who picked another zone in Settings,
+while every other league's start read in the reader's zone. The day and the clock together are now read as one
+moment (Eastern is five hours behind UTC in winter and four in summer) and shown in the reader's zone wherever a
+game's start appears: the game cards and game pages, the empty board's and the Live tab's next-kickoff line, a
+player's upcoming game, the NFL inactives note (90 minutes before kickoff) and the parlay grader's legs, which now
+show college football's start too (they showed none). The next-kickoff line also picks the earliest game by its real
+time now: on a Thursday it named Sunday's 1:00 PM, because the text "13:00" sorts before "20:15". For a reader on
+Eastern time only the "ET" goes. The reports' own written text ("kicks off Sun 1:00 PM ET") still says Eastern,
+since it is written once for every reader. Checked in a test under Los Angeles and London time, winter and summer,
+and on the Sunday summer time starts.
+
+**AAX. The Record grades Best Parlays by tier** (step 838; 21 November). Nothing to run. Your answer to decision 15
+("yes"). Best Parlays ranks each game's tickets in three tiers by how their checks agree (Top parlays: every check
+agrees; Strong: all but one; Worth a look: two or more against) and drops a game once it starts. Now, when a game
+starts, each ticket the record counts (the set its report carried at the start) keeps the tier those same checks
+give it, and each league's parlay cards on the Record say how each tier has done ("By Best Parlays tier: Top parlays
+3 of 8 hit (we gave 41%) · Strong ..."). Games from before the page went up today are tiered the same way from the
+starting sets the archive keeps (from 16 November), on tonight's archive pass, and the line says so. Tickets on
+paper and tickets with a leg no book listed any more were never on the page and have no tier. Your answer to
+decision 14 needed no change: the free Record's league tabs already list every finished game with each report pick
+and parlay marked hit or missed, under How our reports did (checked signed out on the live site); my note saying it
+was members-only was wrong.
+
+**AAW. College football's Thursday-night games are featured** (step 837; 21 November). Nothing to run. Your answer
+to decision 11 ("yes"). A featured game, until now the NFL's alone (Lions games, Thursday nights, Monday nights),
+gets a deeper report card (six picks where others get four), a badge at the top of its report with how games like it
+have done, and a record of its own on Report Picks and the Record. A college game kicking off at 6 PM Eastern or
+later on a Thursday is now featured the same way; Friday nights and Thursday afternoons are not, and college has no
+Lions or Monday kind. Its record counts the finished Thursday-night games already archived. Nothing about how the
+picks are made changes.
+
+**AAV. The NFL's quarterback pass attempts are benched from stakes, and its Most Likely picks far above their price
+are shown at most ten points over it** (step 836; 21 November). Nothing to run. Your answers to decisions 16 ("bench
+them") and 17 ("cap them"). Pass attempts: on the public record they lost on both sides. The Edge board's picks went
+21-26 (-4.0 units); the Most Likely overs hit 45 of 85 (53%) at prices that needed 64%, the unders 20 of 38 (53%) at
+55%; as parlay legs the overs hit 20 of 41 (step AAQ had already taken them off parlays). The market goes on the
+bench the way completions did on 18 November: its Edge picks carry no stake ("Tracked · no stake") and neither side
+rides a parlay. It comes off by itself once 60 of its picks graded since the bench have made money. The cap: NFL
+Most Likely picks shown more than ten points above their own price's chance (the book's cut taken out) hit 65 of 137
+(47%) where we said 79%, and 23 of 42 since 1 November where we said 89%; every other NFL pick hit 60% where we said
+62% (2,159 picks). The books' field only holds a pick that three books price on both sides at its number, so these,
+mostly alternate lines one book prices, kept their own chances. Now an NFL prop is shown at no more than its price's
+chance plus ten points, its note says why, and it moves down the board to where that puts it; a pick already posted
+says it was restated. Off without a deploy: `sudo ./deploy/setenv.sh QB_NFL_CAP off`.
+
 **AAU. The parlay record keeps each leg's own line's chance; the learned correction moves onto it only when its
 record says so** (step 835; 21 November). Nothing to run. You asked for this follow-up to step AAT. Every parlay leg
 is journaled with the book's fair chance beside ours, and on a Most Likely pick on an alternate line that was its

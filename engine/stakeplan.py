@@ -109,7 +109,12 @@ EDGE_MAX_ODDS = 130
 MARKET_BENCH = ({"sport": "nfl", "market": "pass_cmp", "since": "2026-11-18", "words": "quarterback completions",
                  "was": "44-53, -11.9 units"},
                 {"sport": "nba", "market": "pts", "since": "2026-11-18", "words": "points",
-                 "was": "63-71, -10.2 units"})
+                 "was": "63-71, -10.2 units"},
+                # Ethan's answer to decision 16 (21 November): "bench them". The NFL's quarterback
+                # pass attempts: its Edge picks 21-26, -4.0 units; its Most Likely overs hit 45 of 85
+                # at prices that needed 64%, its legs 20 of 41 (gameparlays.QB_VOLUME_LEGS, step AAQ).
+                {"sport": "nfl", "market": "pass_att", "since": "2026-11-21", "words": "quarterback pass attempts",
+                 "was": "21-26, -4.0 units"})
 #: A benched market is staked again once this many of its picks graded since
 #: the bench have made money at flat stakes.
 MARKET_RELEASE_N = 60

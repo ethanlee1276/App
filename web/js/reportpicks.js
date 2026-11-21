@@ -120,7 +120,8 @@ function rpGameHTML(d, key, bets, tix, open) {
   return `<details class="rpk-game" id="rpk-${escapeAttr(away)}-${escapeAttr(home)}"${open ? " open" : ""}>
     <summary class="rpk-head">
       <span class="rpk-title"><b>${escapeHtml(teamName(away))} at ${escapeHtml(teamName(home))}</b>${
-        // Ethan's featured games (engine/featured: the Lions, a Thursday or a Monday night), as on their cards.
+        // Ethan's featured games (engine/featured: the Lions, a Thursday or a Monday night; college's Thursday
+        // nights since step AAW), as on their cards.
         g && (g.featured || []).length ? ` <span class="rpk-fx-tag">Featured</span>` : ""}
         <span>${escapeHtml([when, counts.join(" · ")].filter(Boolean).join(" · "))}</span>${
         tally ? `<span class="rpk-tally">${escapeHtml(tally)}</span>` : ""}</span>
@@ -348,6 +349,13 @@ function rpFxLine(b, pairs) {
   if (open) parts.push(escapeHtml(`${open} still waiting on the box score`));
   return parts.length ? parts.join(" · ") : "Nothing of its report was on the record.";
 }
+/* Which games a league features, in its own words: the NFL's "Lions games, Thursday nights and Monday nights",
+   college's "Thursday nights" (engine/featured.SPORT_TAGS, step AAW). */
+function rpFxKinds(fx) {
+  const plurals = (fx && fx.plural) || {};
+  const ks = ((fx && fx.order) || []).map((k) => plurals[k] || k);
+  return ks.length > 1 ? `${ks.slice(0, -1).join(", ")} and ${ks[ks.length - 1]}` : ks[0] || "";
+}
 function rpFeaturedHTML(fx) {
   if (!fx || !fx.all || !fx.all.games) return "";
   const words = fx.words || {}, plurals = fx.plural || {};
@@ -366,7 +374,7 @@ function rpFeaturedHTML(fx) {
       escapeHtml(formatGameDate(g.date))}</span></div><div class="rpk-fx-tags">${tags}</div><p>${rpFxLine(one)}</p></li>`;
   }).join("");
   return `<section class="rpk-fx" data-rpk-fx>
-    <h4 class="rpk-fact-h"><span class="rpk-fx-star" aria-hidden="true">★</span>Featured games: Lions games, Thursday nights and Monday nights</h4>
+    <h4 class="rpk-fact-h"><span class="rpk-fx-star" aria-hidden="true">★</span>Featured games: ${escapeHtml(rpFxKinds(fx))}</h4>
     <p class="mini rpk-fact-span">Kept apart from the rest: each finished featured game’s report picks, at one unit
       a pick at the price posted, the parlays its report carried at kickoff, and who we said would win.</p>
     <div class="rpk-fx-kinds">${kind("Every featured game", fx.all)}${kinds.map((k) => kind(plurals[k] || k, fx.kinds[k])).join("")}</div>

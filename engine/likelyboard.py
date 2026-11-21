@@ -750,6 +750,65 @@ def hold_to_own_price(rows: list, sport: str, stats: dict | None = None) -> int:
     return moved
 
 
+#: THE NFL'S PICKS FAR ABOVE THEIR PRICE, CAPPED (step AAV, 21 November 2026;
+#: Ethan's answer to decision 17: "cap them"). On the public record of every
+#: settled NFL Most Likely pick, those shown more than NFL_CAP_ROOM over their
+#: own price's chance with the book's cut taken out hit 65 of 137 (47%) where
+#: we said 79%, and 23 of 42 since 1 November where we said 89%; every other
+#: NFL pick hit 60% where we said 62% (2,159). The books' field (`trust_price`)
+#: holds only a pick whose number at least three books quote on both sides, so
+#: these, mostly alternate numbers one book prices, kept their own. Now an NFL
+#: prop is shown at no more than its own price's chance less the book's cut
+#: (likelycal.price_chance) plus NFL_CAP_ROOM: it slides down the board and its
+#: tier, and stays on it. A prop the books' field holds keeps that number; a pick
+#: on paper is left as it is, as the college ceiling leaves them.
+#: Off without a deploy: ``sudo ./deploy/setenv.sh QB_NFL_CAP off``.
+NFL_CAP_SPORTS = ("nfl",)
+NFL_CAP_ROOM = 0.10
+NFL_CAP_ENV = "QB_NFL_CAP"
+
+
+def nfl_cap_on(sport: str) -> bool:
+    import os
+    if os.environ.get(NFL_CAP_ENV, "").strip().lower() in ("off", "0", "no", "false"):
+        return False
+    return str(sport or "").lower() in NFL_CAP_SPORTS
+
+
+def cap_far_over(rows: list, sport: str, stats: dict | None = None) -> int:
+    """NFL_CAP_ROOM on a league's props; returns how many moved. ``stats`` takes
+    ``capped`` (props moved) and ``capped_posted`` (of those, already posted)."""
+    if not nfl_cap_on(sport):
+        return 0
+    from .likelycal import price_chance
+    moved = 0
+    for r in rows:
+        if lane_of(r) != "prop" or r.get("model_prob") is None or r.get("paper_hold") or r.get("trust_rule"):
+            continue
+        if r.get("has_market") is False or str(r.get("book") or "").lower() == "proxy":
+            continue
+        fair = price_chance(r.get("odds"))
+        if fair is None:
+            continue
+        cap = round(fair + NFL_CAP_ROOM, 4)
+        ours = float(r["model_prob"])
+        if ours <= cap + 1e-9:
+            continue
+        r["nfl_cap"] = cap
+        r["ceiling_from"] = r["trust_from"] = round(ours, 4)
+        r.setdefault("board_raw_prob", ours)
+        r["model_prob"] = cap
+        r["trust_note"] = (f"we said {ours:.0%}; its price says {fair:.0%} once the book's cut is out, and NFL picks "
+                           f"this far above their price hit 47% on our record where we said 79%, so we show at most "
+                           f"{NFL_CAP_ROOM:.0%} over the price: {cap:.0%}")
+        restate_lock(r)
+        moved += 1
+        if stats is not None:
+            stats["capped"] = int(stats.get("capped") or 0) + 1
+            stats["capped_posted"] = int(stats.get("capped_posted") or 0) + bool(r.get("locked"))
+    return moved
+
+
 def one_sided_price(r: dict, quotes: dict):
     """True where books quote this pick's number and none of them quotes both
     sides (an over-only market: the book's whole cut sits on the side we
@@ -1337,6 +1396,9 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     ceiling_stats: dict = {}
     try:
         hold_to_own_price([pool[k] for k in order], sport, stats=ceiling_stats)
+        # …and the NFL's, at its own price's chance plus NFL_CAP_ROOM (step AAV, decision 17).
+        if cap_far_over([pool[k] for k in order], sport, stats=ceiling_stats):
+            ceiling_stats["nfl_cap"] = True
         mark_one_sided([pool[k] for k in order], result, sport, stats=ceiling_stats)
     except Exception as exc:                                 # noqa: BLE001
         ceiling_stats["error"] = f"{type(exc).__name__}: {exc}"
@@ -1451,7 +1513,7 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     rows.sort(key=lambda r: (rank[r["tier"]], -r["matchup_strength"], -float(r["model_prob"])))
     out = {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source,
            "capped": capped, "held": held, "price_trust": trust_stats, "paper_held": paper_held}
-    if ceiling_stats.get("on") or ceiling_stats.get("error"):
+    if ceiling_stats.get("on") or ceiling_stats.get("error") or ceiling_stats.get("nfl_cap"):
         out["price_ceiling"] = ceiling_stats
     if paper_error:
         out["paper_error"] = paper_error

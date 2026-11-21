@@ -79,7 +79,13 @@ def test_the_board_caps_a_rule_breaker_and_keeps_it():
     import test_the_nfl_board_is_tightened as T
     rows = [T._prop("A Back", 0.72, market="rush_yds", position="RB"),
             T._prop("B Catches", 0.70, market="receptions", position="WR")]
-    b = B.build(T._result([dict(r) for r in rows]), record={}, sport="nfl", tiers_seen={})
+    # The method's rule alone: the NFL cap of step AAV (its own test) is off here.
+    import os
+    os.environ[B.NFL_CAP_ENV] = "off"
+    try:
+        b = B.build(T._result([dict(r) for r in rows]), record={}, sport="nfl", tiers_seen={})
+    finally:
+        os.environ.pop(B.NFL_CAP_ENV, None)
     by = {r["player"]: r for r in b["rows"]}
     assert set(by) == {"A Back", "B Catches"}, "a rule breaker stays on the board"
     back = by["A Back"]

@@ -14,6 +14,9 @@ function inactivesNote(g) {
   if (state.sport !== "nfl" || !g || !g.kickoff) return "";
   const st = String((g.live || {}).state || "scheduled");
   if (!["scheduled", "pre", "upcoming"].includes(st)) return "";
+  // In the reader's own zone where the game's day makes the kickoff an instant (decision 13, 2026-11-21).
+  const t = typeof etInstant === "function" ? etInstant(g.date, g.kickoff) : NaN;
+  if (Number.isFinite(t)) return ` · <span class="gp-inactives">inactives ${escapeHtml(tzTime(t - 90 * 60e3))}</span>`;
   const m = /^(\d{1,2}):(\d{2})/.exec(String(g.kickoff));
   if (!m) return "";
   let mins = (+m[1]) * 60 + (+m[2]) - 90;

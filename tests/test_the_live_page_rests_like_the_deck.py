@@ -58,9 +58,12 @@ def _node(js):
       {_const("lgCode")}
       {_fn("deckFirstWord")}
       {_fn("formatKickoff")}
+      {_fn("etInstant")}
+      {_fn("kickInstant")}
       const tzTime = (d) => d.toISOString();
       const liveTrackerRows = (rows) => rows;
       {_fn("firstStartOnCard")}
+      {_fn("firstKickOf")}
       {_fn("liveQuietLine")}
       let state = {{ sport: "nfl", data: null }};
       console.log(JSON.stringify((() => {{ {js} }})()));

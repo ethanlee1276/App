@@ -56,9 +56,12 @@ def _node(js):
       {_fn("pluralWord")}
       {_fn("plural")}
       {_fn("formatKickoff")}
+      {_fn("etInstant")}
+      {_fn("kickInstant")}
       {_fn("deckFirstWord")}
       const tzTime = (d) => d.toISOString();
       {_fn("firstStartOnCard")}
+      {_fn("firstKickOf")}
       {_fn("boardEmptyFacts")}
       {_const("EMPTY_DOORS")}
       {_fn("emptyDoorOpen")}
@@ -92,15 +95,23 @@ def test_the_facts_are_the_cards_own_and_nothing_else():
       state.data = { games: games.map((g) => ({ ...g, live: { state: "live" } })) }; out.allLive = boardEmptyFacts();
       state.data = { games: [{ away: "A", home: "B" }] }; out.noClock = boardEmptyFacts();
       state.sport = "mlb"; state.data = { games: [{ away: "NYY", home: "BOS", kickoff: "2026-09-23T23:10:00Z" }] }; out.mlb = boardEmptyFacts();
+      // A dated football card (2026-11-21): the first start is the earliest instant, said in the reader's
+      // zone (here the stub's UTC), not the smallest clock text.
+      state.sport = "nfl";
+      state.data = { games: [{ away: "MIA", home: "BUF", date: "2026-11-22", kickoff: "13:00" },
+                             { away: "IND", home: "HOU", date: "2026-11-19", kickoff: "20:15" }] };
+      out.dated = boardEmptyFacts();
       return out;""")
     if got is None:
         print("  SKIP node not installed"); return
     assert _facts(got["three"]) == ["3 games on the card", "Kickoff 1:00 PM ET"], \
-        "the count is every game; the clock is the first game NOT yet started"
+        "the count is every game; the clock is the first game NOT yet started (no day: its ET stays)"
     assert got["none"] == "" and got["null"] == "", "no games, no facts"
     assert _facts(got["allLive"]) == ["3 games on the card"], "every game started: no kickoff to promise"
     assert _facts(got["noClock"]) == ["1 game on the card"]
     assert _facts(got["mlb"])[1].startswith("First pitch "), "the deck's own word for the sport"
+    assert _facts(got["dated"]) == ["2 games on the card", "Kickoff 2026-11-20T01:15:00.000Z"], \
+        "Thursday's 8:15 PM Eastern comes before Sunday's 1:00 PM, and is an instant the reader's zone can say"
 
 
 def test_the_doors_open_the_pages_that_are_never_empty_minus_this_one():

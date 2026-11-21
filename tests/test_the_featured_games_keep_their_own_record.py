@@ -52,9 +52,16 @@ def test_which_games_are_featured():
     assert F.tags("nfl", "2026-11-26", "12:30", "DET", "CHI") == ["lions"]
     assert F.tags("nfl", "2026-11-26", "16:30", "DAL", "KC") == []
     assert F.tags("nfl", "2026-11-26", "20:20", "BAL", "CIN") == ["thursday"]
-    # A Sunday afternoon, and another league's Thursday night, are not.
+    # A Sunday afternoon is not, nor another league's Thursday night.
     assert F.tags("nfl", "2026-11-22", "13:00", "BUF", "KC") == []
-    assert F.tags("cfb", "2026-11-19", "19:30", "Navy", "Memphis") == []
+    assert F.tags("nba", "2026-11-19", "19:30", "BOS", "NYK") == []
+    # College's Thursday nights are (step AAW, Ethan's answer to decision 11: "Yes"), from a board's ISO stamp
+    # too; its Monday nights, its afternoons and the Lions' code are not college's kinds.
+    assert F.tags("cfb", "2026-11-19", "19:30", "Navy", "Memphis") == ["thursday"]
+    assert F.tags("cfb", "2026-11-20", "2026-11-20T00:30:00Z", "Tulane", "UTSA") == ["thursday"]
+    assert F.tags("cfb", "2026-11-19", "12:00", "Navy", "Memphis") == []
+    assert F.tags("cfb", "2026-11-23", "20:00", "A", "B") == [] and F.tags("cfb", "2026-11-22", "19:30", "DET", "B") == []
+    assert F.SPORT_TAGS == {"nfl": ("lions", "thursday", "monday"), "cfb": ("thursday",)}
     # No kickoff on the row: the day alone says it.
     assert F.tags("nfl", "2026-11-23", "", "PHI", "DAL") == ["monday"]
     assert F.of_game({"date": "2026-11-19", "kickoff": "20:15", "home": "HOU", "away": "IND"}, "nfl") == ["thursday"]
@@ -243,7 +250,8 @@ def test_ask_says_how_the_featured_games_have_done():
 def test_the_pages_draw_the_featured_record_and_list_only_those_games():
     assert "function rpFeaturedHTML(fx)" in RP and "${rpFeaturedHTML(fx)}" in RP
     assert 'data-rpk-list="featured"' in RP and "fxKeys.has(" in RP, "the list's own chip: the featured games alone"
-    assert "Featured games: Lions games, Thursday nights and Monday nights" in RP
+    # Its heading reads the league's own kinds (step AAW): the NFL's three, college's Thursday nights.
+    assert "Featured games: ${escapeHtml(rpFxKinds(fx))}" in RP and "function rpFxKinds(fx)" in RP
     assert "function featuredHTML(f)" in REPORT_JS and "${featuredHTML(r.featured)}" in REPORT_JS
 
 

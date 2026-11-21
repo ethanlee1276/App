@@ -170,11 +170,15 @@ def test_the_counts_say_where_a_pick_without_a_field_fell():
 def test_switched_off_the_build_says_so():
     was = os.environ.get(LB.PRICE_TRUST_ENV)
     os.environ[LB.PRICE_TRUST_ENV] = "off"
+    # The NFL cap of step AAV (its own price's chance plus ten points) is its own rule, with its own
+    # switch and test (tests/test_the_nfl_board_caps_picks_far_above_their_price.py): off here too.
+    os.environ[LB.NFL_CAP_ENV] = "off"
     try:
         # 0.78 against the field's 0.65: above it, short of the fifteen
         # points that go on paper whatever the switch (engine/paperhold).
         board = LB.build(_result([_row(prob=0.78)]), sport="nfl", calibration={}, band_verdict=None)
     finally:
+        os.environ.pop(LB.NFL_CAP_ENV, None)
         if was is None:
             os.environ.pop(LB.PRICE_TRUST_ENV, None)
         else:

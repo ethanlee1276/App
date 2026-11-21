@@ -38,8 +38,11 @@ import datetime as _dt
 from pathlib import Path
 
 #: The leagues whose games can be featured: Thursday and Monday nights are the
-#: NFL's own nights, and the Lions are an NFL club.
-SPORTS = ("nfl",)
+#: NFL's own nights, and the Lions are an NFL club. COLLEGE'S THURSDAY NIGHTS
+#: TOO (step AAW, 21 November 2026; Ethan's answer to decision 11: "Yes"): a
+#: college game kicking off on a Thursday night is featured as the NFL's are,
+#: a deeper card, the badge at its top and a record of its own (`SPORT_TAGS`).
+SPORTS = ("nfl", "cfb")
 #: The Lions' code on the NFL's boards.
 TEAM = "DET"
 #: Night on the Eastern clock: a kickoff from 6 PM on. Thursday Night Football
@@ -48,6 +51,8 @@ TEAM = "DET"
 NIGHT_FROM = 18
 #: The kinds, in the order they are said.
 TAGS = ("lions", "thursday", "monday")
+#: The kinds each league's games can be, in TAGS order: college's Thursday nights alone.
+SPORT_TAGS = {"nfl": TAGS, "cfb": ("thursday",)}
 WORDS = {"lions": "Lions game", "thursday": "Thursday night", "monday": "Monday night"}
 PLURAL = {"lions": "Lions games", "thursday": "Thursday nights", "monday": "Monday nights"}
 _NIGHTS = {3: "thursday", 0: "monday"}
@@ -83,14 +88,16 @@ def _eastern(date, kickoff) -> tuple:
 
 def tags(sport, date="", kickoff="", home="", away="") -> list:
     """The kinds of featured game this is, in TAGS order; [] for any other."""
-    if str(sport or "").lower() not in SPORTS:
+    sp = str(sport or "").lower()
+    if sp not in SPORTS:
         return []
+    allowed = SPORT_TAGS.get(sp, TAGS)
     out = []
-    if TEAM in {str(home or "").upper(), str(away or "").upper()}:
+    if "lions" in allowed and TEAM in {str(home or "").upper(), str(away or "").upper()}:
         out.append("lions")
     day, hour = _eastern(date, kickoff)
     night = _NIGHTS.get(day.weekday()) if day else None
-    if night and (hour is None or hour >= NIGHT_FROM):
+    if night and night in allowed and (hour is None or hour >= NIGHT_FROM):
         out.append(night)
     return out
 
@@ -331,7 +338,8 @@ def _record(where, sport: str, path) -> dict:
             _add(by_kind[k], g)
     reportrecord.named(sport, games)
     return {"sport": sport, "all": every, "kinds": {k: v for k, v in by_kind.items() if v["games"]},
-            "games": games, "order": list(TAGS), "words": WORDS, "plural": PLURAL, "kind_words": KIND_WORDS}
+            "games": games, "order": list(SPORT_TAGS.get(sport, TAGS)), "words": WORDS, "plural": PLURAL,
+            "kind_words": KIND_WORDS}
 
 
 # --- the report's line ------------------------------------------------------------------------

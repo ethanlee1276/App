@@ -21,7 +21,9 @@ ACCT = (JS / "account.js").read_text(encoding="utf-8")
 
 
 def test_each_day_goes_through_the_sites_own_words():
-    for src, said in ((APP, "escapeHtml(formatGameDate(up.date) || up.date)"),
+    # A player's next game says its day with its kickoff, both in the reader's zone (whenLabel, which
+    # says a day through formatGameDate's words; decision 13, 2026-11-21).
+    for src, said in ((APP, 'escapeHtml(whenLabel(up.date, up.kickoff) || up.date || "")'),
                       (APP, "escapeHtml(formatGameDate(r.date) || r.date)"),
                       (APP, "`Last slate (${escapeHtml(formatGameDate(lastPt.date) || lastPt.date)})`"),
                       (REC, "escapeHtml(formatGameDate(era.since) || era.since)"),
