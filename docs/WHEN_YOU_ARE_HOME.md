@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAD. The first boards with classes and grades, and the one-book line made to speak for more tickets** (step 818;
+21 November). Nothing to run. The first builds after step AAB, Friday at about 7:25pm Eastern, read off the
+heartbeat. NFL: its 36 two-leg parlays are 12 Safe, 14 Balanced and 10 Pop; its 31 three-leg ones are 20 Pop and 11
+long shots. College football: 12 two-leg, 1 Safe, 2 Balanced and 9 Pop; 7 three-leg, 3 Pop and 4 long shots. NBA: 24
+two-leg, 16 Safe, 7 Balanced and 1 Pop; 24 three-leg, 22 Pop, 1 Safe and 1 Balanced; and 116 props graded on price,
+30 Green, 27 Yellow and 59 Red. The one-book line named a book on 35 of the NBA's 48 tickets, said none had every
+leg on 6 and said nothing on 7. In football it said nothing on about half (31 of the NFL's 67, 10 of college's 19),
+because it found no book's quote for one of the legs. Three changes: it reads the books' quotes off the pick rows as
+well as the prop rows; a leg's own book and price counts as a quote, so a ticket whose legs all show the same book
+names it; and "no one book has every leg" is said only when every leg's books are on file, so it is never said on
+missing data. The heartbeat's new `one_book_legs` counts, leg by leg, whether a book quoted its number (`quoted`),
+its prop was on file with no book at that number (`no_quote`) or its prop was not on file (`no_row`), which says
+what is left to fix on the next boards.
+
 **AAC. Why college basketball had no props on Friday** (step 817; 21 November). One read-only command, any time;
 paste it back. College basketball posted no pick and no parlay on Friday 20 November (40 games, 7 reports,
 `no_props_priced` on every game). What the public board shows: its five bought games were pulled at 2:30pm Eastern,

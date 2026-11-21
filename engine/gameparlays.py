@@ -1779,24 +1779,48 @@ def ticket_class(sport: str, t: dict) -> dict:
 #: legs each show the best price across the books, so a ticket says which one
 #: book has every leg at its number (the one that pays most on them), or that
 #: none in our pull does. Read off every book's quote on the board's prop rows
-#: (engine/sliplive.quote_index); a leg we hold no quote for says nothing.
+#: and on its pick rows, which carry their own (engine/sliplive.quote_index's
+#: shape), and off each leg's own book and price. "None does" is said only of
+#: a ticket whose every leg has its books' quotes on file; one with a leg we
+#: hold no quotes for says nothing unless its legs' own books agree.
+#:
+#: The first boards (20 November, the heartbeat's ``one_book``) could speak for
+#: half the tickets: 31 of the NFL's 67 and 10 of college's 19 had a leg with
+#: no quote found on the prop rows alone. ``one_book_legs`` now counts why,
+#: leg by leg (launch._board_counts).
 _QUOTES: dict = {}
+#: The board's lists whose rows carry every book's quotes (`all_lines`, `alt_lines`).
+QUOTE_LISTS = ("recommendations", "most_likely", "matchup_picks")
 
 
 def quote_index(board: dict) -> dict:
-    """Every book's number on every prop the board priced (sliplive.quote_index), read once a board."""
-    recs = (board or {}).get("recommendations")
-    if not isinstance(recs, list) or not recs:
+    """Every book's number on every prop the board priced: off its prop rows and its pick rows
+    (QUOTE_LISTS, the one board's rows), in sliplive.quote_index's shape, read once a board."""
+    if not isinstance(board, dict):
         return {}
-    if _QUOTES.get("recs") is not recs:
-        from . import sliplive
-        try:
-            idx = sliplive.quote_index(board)
-        except Exception:                                    # noqa: BLE001
-            idx = {}
+    if _QUOTES.get("board") is not board:
+        rows = [r for k in QUOTE_LISTS for r in board.get(k) or [] if isinstance(r, dict)]
+        lb = board.get("likely_board")
+        rows += [r for r in ((lb or {}).get("rows") or []) if isinstance(r, dict)] if isinstance(lb, dict) else []
+        idx: dict = {}
+        if rows:
+            from . import sliplive
+            try:
+                idx = sliplive.quote_index({"recommendations": rows})
+            except Exception:                                # noqa: BLE001
+                idx = {}
         _QUOTES.clear()
-        _QUOTES.update(recs=recs, index=idx)
+        _QUOTES.update(board=board, index=idx)
     return _QUOTES["index"]
+
+
+def leg_quoted(leg: dict, index: dict) -> str:
+    """Where a leg's books' quotes stand: "quoted" (a book quotes its number on its side), "no_quote"
+    (its prop is on file, no book at this number and side) or "no_row" (its prop is not on file)."""
+    from .sliplive import _key as name_key
+    if (name_key((leg or {}).get("player")), (leg or {}).get("market")) not in (index or {}):
+        return "no_row"
+    return "quoted" if book_prices(leg, index) else "no_quote"
 
 
 def book_prices(leg: dict, index: dict) -> dict:
@@ -1823,10 +1847,20 @@ def one_book(legs: list, index: dict) -> dict | None:
     "books", "words"}``; ``{"none": True, "words"}`` where no one book does; None where a leg has no
     book quote on file (nothing to say)."""
     per = [book_prices(l, index) for l in legs or []]
-    if len(per) < 2 or not all(per):
+    if len(per) < 2:
+        return None
+    whole = all(per)                                         # every leg's books are on file
+    # A leg's own book and price is a quote at its number whatever else is on file.
+    for l, p in zip(legs, per):
+        book, dec = str(l.get("book") or ""), _dec(l.get("odds"))
+        if book and book.lower() != "proxy" and dec and (book.lower() not in p or dec > (_dec(p[book.lower()][1]) or 0)):
+            p[book.lower()] = (book, int(float(l.get("odds"))))
+    if not all(per):
         return None
     common = set(per[0]).intersection(*per[1:])
     if not common:
+        if not whole:
+            return None                                      # a leg's other books are unknown: nothing to say
         n = len(per)
         most = max({k for p in per for k in p}, key=lambda k: (sum(k in p for p in per), k))
         got = sum(most in p for p in per)

@@ -644,6 +644,15 @@ def _board_counts(path: str) -> dict:
         # (`one_book`: a book has every leg, none does, or a leg has no quote on
         # file). Games still to play; counts only.
         classes, books = {}, {"one": 0, "none": 0, "unknown": 0}
+        # …and, leg by leg, where the books' quotes stood (gameparlays.leg_quoted):
+        # a book quotes its number, its prop is on file with none at this number,
+        # or its prop is not on file at all.
+        from engine import gameparlays as _gp
+        try:
+            _idx = _gp.quote_index(b)
+        except Exception:                                    # noqa: BLE001
+            _idx = {}
+        legs_seen = {"quoted": 0, "no_quote": 0, "no_row": 0}
         for x in gp["games"]:
             if not isinstance(x, dict) or x.get("kept"):
                 continue
@@ -656,9 +665,13 @@ def _board_counts(path: str) -> dict:
                         cell[str(t["class"])] = cell.get(str(t["class"]), 0) + 1
                     ob = t.get("one_book")
                     books["one" if isinstance(ob, dict) and ob.get("book") else "none" if ob else "unknown"] += 1
+                    for l in t.get("legs") or []:
+                        if isinstance(l, dict):
+                            legs_seen[_gp.leg_quoted(l, _idx)] += 1
         if classes:
             out["ticket_classes"] = classes
             out["one_book"] = books
+            out["one_book_legs"] = legs_seen
         # Games still to play short of their three scorer pairs (ZR), where the
         # league has a scorer market, and the pairs a stand-in scorer filled.
         if str(gp.get("sport") or "").lower() in SCORER_MARKETS:

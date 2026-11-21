@@ -20,7 +20,9 @@ one book that prices every leg (v3.1 sections 10 and 1); the third the Green / Y
     class says why it is not the class above. Football stands on the chances alone. A scorer pair is
     not classed.
   * THE ONE BOOK (`one_book`). The book quoting every leg at its own number and side, the one that pays
-    most on them; "no one book" where none does; nothing where a leg has no quote on file.
+    most on them, read off the board's prop rows, its pick rows and each leg's own book; "no one book"
+    only where every leg's books are on file and none has them all; nothing where a leg's books are
+    unknown and the legs' own books differ. The heartbeat counts, leg by leg, why a quote was missing.
   * Both ride on the server's card and the page's card; the record splits each league's tickets by
     class from the chances and prices they were journaled with; the heartbeat counts classes by size
     and one-book tickets.
@@ -343,6 +345,37 @@ def test_no_one_book_says_so_and_a_leg_with_no_quote_says_nothing():
     assert GP.one_book([a, _leg("Nobody", "receptions", "Over", 2.5)], idx) is None
     assert GP.one_book([a, _leg("Jayden Daniels", "rush_yds", "Over", 99.5)], idx) is None
     assert GP.one_book([a], idx) is None and GP.quote_index({}) == {} and GP.book_prices(a, {}) == {}
+    assert [GP.leg_quoted(l, idx) for l in (a, _leg("Jayden Daniels", "rush_yds", "Over", 99.5),
+                                            _leg("Nobody", "receptions", "Over", 2.5))] == ["quoted", "no_quote", "no_row"]
+
+
+def test_a_legs_own_book_counts_and_no_one_book_needs_every_legs_quotes():
+    idx = GP.quote_index(_priced_board())
+    nabers = dict(_leg("Malik Nabers", "receptions", "Over", 4.5), book="FanDuel", odds=-140)
+    # Two props with no quote list on file, each naming its own book and price.
+    x = dict(_leg("Chig Okonkwo", "receptions", "Over", 2.5), book="FanDuel", odds=-160)
+    y = dict(_leg("Rachaad White", "rush_yds", "Over", 29.5), book="BetMGM", odds=-150)
+    # Their own books agree with a book that has the other leg: that book has every leg, whatever else is unknown.
+    got = GP.one_book([nabers, x], idx)
+    assert got == {"book": "FanDuel", "odds": [-140, -160], "books": 1,
+                   "words": "One book has every leg: FanDuel (-140, -160)"}, got
+    assert GP.one_book([x, dict(y, book="FanDuel")], {})["book"] == "FanDuel", "with no quotes on file at all"
+    # They differ, and one leg's other books are unknown: nothing is said, never "no one book".
+    assert GP.one_book([nabers, y], idx) is None and GP.one_book([x, y], idx) is None
+    # A proxy price is no book.
+    assert GP.one_book([dict(x, book="proxy"), dict(y, book="proxy")], idx) is None
+
+
+def test_the_quotes_are_read_off_the_pick_rows_too():
+    row = {"player": "Chig Okonkwo", "market": "receptions", "side": "OVER", "line": 2.5,
+           "all_lines": _quotes(("DraftKings", 2.5, -165, 130), ("FanDuel", 2.5, -160, 125))}
+    for where in ("most_likely", "matchup_picks"):
+        idx = GP.quote_index({"recommendations": [], where: [row]})
+        assert GP.book_prices(_leg("Chig Okonkwo", "receptions", "Over", 2.5), idx) == \
+            {"draftkings": ("DraftKings", -165), "fanduel": ("FanDuel", -160)}, where
+    idx = GP.quote_index({"likely_board": {"rows": [row]}})
+    assert GP.leg_quoted(_leg("Chig Okonkwo", "receptions", "Over", 2.5), idx) == "quoted"
+    assert GP.QUOTE_LISTS == ("recommendations", "most_likely", "matchup_picks")
 
 
 def test_a_built_game_names_each_tickets_book():
@@ -357,9 +390,11 @@ def test_a_built_game_names_each_tickets_book():
         assert t["one_book"]["book"] == "DraftKings" and t["one_book"]["books"] == 2, t.get("one_book")
         assert t["one_book"]["odds"] == [-150] * len(t["legs"])
     assert not any("one_book" in t for t in g["scorers"])
-    # The fixture board prices no book row: no ticket claims a book, and none says "no one book".
+    # The fixture board files no book's quotes: its legs' own book (DraftKings on every one) is the
+    # one book, and none says "no one book".
     plain = GP.build(EG.board(), "nfl")["games"][0]
-    assert not any("one_book" in t for t in plain["twos"] + plain["threes"])
+    assert all(t["one_book"]["book"] == "DraftKings" for t in plain["twos"] + plain["threes"])
+    assert not any((t.get("one_book") or {}).get("none") for t in plain["twos"] + plain["threes"])
 
 
 # --- the cards, the record and the heartbeat ---------------------------------------------------
@@ -442,6 +477,8 @@ def test_the_heartbeat_counts_classes_by_size_and_one_book_tickets():
             L._full_copy = was
     assert got["ticket_classes"] == {"three": {"pop": 3}, "two": {"safe": 2, "balanced": 1}}, got.get("ticket_classes")
     assert got["one_book"] == {"one": 6, "none": 0, "unknown": 0}, got.get("one_book")
+    # Leg by leg: nine three-leg legs and six two-leg ones, every one with a book's quote on file.
+    assert got["one_book_legs"] == {"quoted": 15, "no_quote": 0, "no_row": 0}, got.get("one_book_legs")
 
 
 if __name__ == "__main__":
