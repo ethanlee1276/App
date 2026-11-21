@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAO. A report's card puts the picks the record backs first** (step 829; 21 November). Nothing to run. Each game
+report's card ranks its best picks (four, six on a featured game), and those are the picks the record grades and the
+parlays are built from first. The same record as step AAM says two kinds of pick do much worse than the rest: an NFL
+pick whose chance sits more than 10 points above the book's own fair chance hit 45% (92 picks, where we said 75%)
+and 53% since (45, where we said 87%), while every other NFL pick hit 58% both times; and an NBA prop one play
+settles (over 1.5 rebounds, over 0.5 threes, under 0.5 blocks) hit 62% as a single and lost 7.6% at its prices,
+where every other NBA pick hit 65% and made 3.3%. On a report's card those now go behind every other bet (reads
+still last), so a game shows them only when it has nothing better; nothing is taken off the board. College
+football's far-over picks hit what its others did (57% and 55%), so its card is left as it was. Switch:
+`QB_CARD_DOUBT=off`.
+
 **AAN. The two cleanups, and fantasy points back on football's game page** (step 828; 21 November). Nothing to run.
 The game page's code still carried two things nothing drew any more. The box score's old tables (football split into
 passing, rushing and receiving, every other league one table), drawn only by baseball's old Player stats tab, went:

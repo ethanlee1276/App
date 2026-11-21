@@ -3648,15 +3648,49 @@ def _card_pool(c: Ctx, key: str = "rows") -> list:
             and (key == "held" or r.get("tier") != "held")]
 
 
+#: THE CARD PUTS THE PICKS THE RECORD BACKS FIRST (step AAO, 21 November 2026; Ethan:
+#: "making good picks ... look at all the data"). On the record of every settled Most
+#: Likely pick (the public day records, read 21 November), an NFL pick whose chance sat
+#: more than CARD_BOOK_GAP over the book's own fair chance hit 45% (92 picks, where we
+#: said 75%) and 53% since (45, where we said 87%), while every other NFL pick hit 58%
+#: both times; and an NBA prop one play settles (gameparlays.ONE_PLAY_LEGS) hit 62% as a
+#: single (361, -7.6% at its prices) where every other NBA pick hit 65% (+3.3%). So on a
+#: report's card those go behind every other bet (reads stay last): a game shows them
+#: only when it has nothing better. College football's hit what the rest did (57% and
+#: 55%), so its card is left as it is. Switch: QB_CARD_DOUBT=off.
+CARD_BOOK_GAP = 0.10
+CARD_DOUBT_SPORTS = ("nfl",)
+
+
+def _card_doubted(sport: str, r: dict) -> bool:
+    """A bet the card puts behind the rest (CARD_BOOK_GAP, step AAO). Never raises."""
+    import os as _os
+    if not isinstance(r, dict) or _os.environ.get("QB_CARD_DOUBT", "on").strip().lower() in ("off", "0", "no", "false"):
+        return False
+    from . import gameparlays as _gp
+    from .twoleg import _fair_of
+    # Each reader below never raises (one_play_leg, book_fair, _fair_of, _f).
+    if _gp.one_play_leg(sport, r):
+        return True
+    if str(sport or "").lower() not in CARD_DOUBT_SPORTS:
+        return False
+    p = _f(r.get("model_prob"))
+    fair = _gp.book_fair({"fair": _fair_of(r), "odds": r.get("odds")})
+    return p is not None and fair is not None and p - fair > CARD_BOOK_GAP
+
+
 def _card_rows(c: Ctx) -> list:
     """The card's picks: one a player, at most CARD_MAX (a featured game's
     CARD_MAX_FEATURED), best first, every bet ahead of any read (READ_ONLY): a
     market we cannot price never takes a bet's place on the card, and so on
-    the record (ZT: 19 of the NFL's 47 report picks on 20 November were reads)."""
+    the record (ZT: 19 of the NFL's 47 report picks on 20 November were reads).
+    A bet the record doubts (`_card_doubted`, step AAO) goes behind the other bets."""
     most = CARD_MAX_FEATURED if c.featured else CARD_MAX
     pool = _card_pool(c)
     out, seen = [], set()
-    for r in [r for r in pool if not read_only(r)] + [r for r in pool if read_only(r)]:
+    bets = [r for r in pool if not read_only(r)]
+    doubted = [r for r in bets if _card_doubted(getattr(c, "sport", ""), r)]
+    for r in [r for r in bets if r not in doubted] + doubted + [r for r in pool if read_only(r)]:
         who = str(r.get("player") or "")
         if not who or who in seen:
             continue

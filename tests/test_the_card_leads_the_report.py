@@ -41,11 +41,13 @@ def _result(rows=None, held=None):
          "total": 47.5, "scan": {}}
     if rows is None:
         rows = [
+            # The market's own fair chance agrees with ours on these two (`implied_prob`): a pick far over
+            # it goes behind the card's other bets (gamereport._card_doubted, step AAO: its own test's).
             _row("Tucker Kraft", "GB", "DET", "receptions", "Receptions", "OVER", 3.5, 0.78, "top", odds=-190,
-                 record_seen={"n": 412, "need": 40, "rate": 0.66, "claimed": 0.65}),
+                 record_seen={"n": 412, "need": 40, "rate": 0.66, "claimed": 0.65}, implied_prob=0.74),
             _row("Bijan Robinson", "ATL", "SF", "rush_yds", "Rushing Yards", "OVER", 70.5, 0.80, "top"),
             _row("Jordan Love", "GB", "DET", "pass_cmp", "Pass Completions", "OVER", 21.5, 0.64, "strong",
-                 book="FanDuel", odds=-110, record_seen={"n": 12, "need": 40}),
+                 book="FanDuel", odds=-110, record_seen={"n": 12, "need": 40}, implied_prob=0.58),
             _row("Tucker Kraft", "GB", "DET", "rec_yds", "Receiving Yards", "OVER", 30.5, 0.70, "strong"),
             {"kind": "game", "player": "DET ML", "team": "DET", "opponent": "GB", "home": "DET", "away": "GB",
              "market": "moneyline", "market_label": "Moneyline", "side": "DET", "line": None,
