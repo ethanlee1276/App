@@ -368,7 +368,9 @@ def detail(ch: dict) -> str:
         return f"{out} — {shape}" if shape else out
     if ch.get("replacement"):
         n = ch.get("replacement_attempts") or 0
-        out = f"{ch['replacement']} has {n} pass attempt{'s' if n != 1 else ''} in our data — too few to rate"
+        # (College's count is his passes this season and last, `cfb/qbchange.attempts_of`: one past the bar is said plainly.)
+        out = (f"{ch['replacement']} has {n} pass attempt{'s' if n != 1 else ''} in our data"
+               + (" — too few to rate" if n < GREEN_ATTEMPTS else ""))
         return f"{out} — {shape}" if shape else out
     return ""
 

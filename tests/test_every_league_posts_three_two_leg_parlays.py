@@ -87,7 +87,7 @@ def test_they_are_made_of_the_legs_the_three_leg_tickets_are():
     # A pick the parlay rules keep off (a backup back's yards, tests/test_the_v31_...) is on no
     # ticket of either size: both are built from `legs_for`.
     src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
-    assert "made2 = tickets_of(sport, game, legs, memo, size=2)" in src
+    assert "made2 = tickets_of(sport, game, legs, memo, size=2, books=books)" in src
 
 
 def test_a_football_report_rebuilds_them_from_its_own_picks():

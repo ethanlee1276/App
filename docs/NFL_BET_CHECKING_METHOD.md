@@ -27,10 +27,10 @@ the site does differently, and why.
 | 2. How a leg gets its number | Comps base rate, spot and matchup adjustments (capped −10/+12), then a haircut: 30% toward the market's no-vig chance and never more than 6 points above it; a second number from Qellys; take-at price; minimum 64% (SAFE) or 60% (BALANCED) | Our projections and their measured steps make the number. The haircut here is stricter because the record asked for it: an NFL pick is never shown above three books' fair price (`trust_price`, picked on held-out weeks), and a college prop never above its own price (`PRICE_CEILING`). The take-at price is on every pick line. Parlay legs clear 60% (`gameparlays.LEG_FLOOR`; a short game's fill goes down to 50%) |
 | 3. Where legs come from | Rungs as a share of the season average (completions 0.82x hits 70%, and so on); Tier 1 volume markets, Tier 2 receptions, Tier 3 yardage as POP | The Most Likely list climbs the alternate ladder for the likeliest rung inside −250 (`likely._best_rung`). The tiers are not adopted as a ranking: on our graded record completions, attempts and carries at the lines we took are the weakest markets, so the record's own check decides (`record_check`) and completions stay benched from stakes. Their tables are about rungs well under the average, which the box can test (decision 4 below) |
 | 4. Spot rules | Lifts and cuts by total, spread and trend; no back's carries or rushing on a 7+ underdog; on a 10+ favorite, attempts drop and completions and yards hold | The scout raises each (`dog_run_over` at 7, `low_total_over` at 40, `blowout_over`, `wind_pass_over`). **Changed 2026-11-20**: the big-favorite rule caps pass attempts only (`METHOD_MARKETS["fav_pass_over"]`); it had capped a favorite's completions and yards too |
-| 5. Matchup scan | Who is guarding him, and how much each part may move the number; a cornerback matchup explains a receiver's leg and adds nothing; zero weight on touchdowns allowed to a position, streaks, revenge, primetime | The reports' rankings and "Who's guarding who". Our matchup step moves a number only by what was measured (`defensevs`, `hoopsdvp`). Not changed: the board's matchup check still lets a coverage read back a receiver's pick (decision 5 below) |
+| 5. Matchup scan | Who is guarding him, and how much each part may move the number; a cornerback matchup explains a receiver's leg and adds nothing; zero weight on touchdowns allowed to a position, streaks, revenge, primetime | The reports' rankings and "Who's guarding who". Our matchup step moves a number only by what was measured (`defensevs`, `hoopsdvp`). **Changed 2026-11-21** (decision 5, answered yes): in football a pass catcher's coverage read explains his catches and receiving yards and counts nothing toward Top; the projection's measured matchup step does (`likelyboard.COVERAGE_READ_SPORTS`, `QB_COVERAGE_READ=on` to undo) |
 | 6. Breakout candidates | Definitions and base rates; about a one-in-four shot at best; POP legs at plus money, never the anchor | "Players to watch" names them with the reasons. The framing line (how often even the best spot gets there) is not on the report yet |
 | 7. Game script | Four scripts with their chances; what each leg needs | Scripts A to D with their shares (`gamereport.script_blocks`); each ticket says what it needs and how likely (`gameparlays.script_need`) |
-| 8. Injuries, roles, weather | Same-day status and replacements; a new starting quarterback with too few attempts to rate: no pass-catcher legs; wind 12+ caution, 15+ major | The injury list, what each absence opens, the news watch. **Added 2026-11-20**: behind a replacement with under 50 passes (`qbchange.card` `unrated`) a catch or receiving-yards pick tops out at Worth a look (`likelyboard.METHOD_NEW_QB`) and is no parlay leg. 15+ mph caps passing overs (`scout.WIND`) |
+| 8. Injuries, roles, weather | Same-day status and replacements; a new starting quarterback with too few attempts to rate: no pass-catcher legs; wind 12+ caution, 15+ major | The injury list, what each absence opens, the news watch. **Added 2026-11-20**: behind a replacement with under 50 passes (`qbchange.card` `unrated`) a catch or receiving-yards pick tops out at Worth a look (`likelyboard.METHOD_NEW_QB`) and is no parlay leg. 15+ mph caps passing overs (`scout.WIND`). **Added 2026-11-21** ("6. Yes"): college's quarterback-change card counts the replacement's passes from college's logs and carries the same mark under 50 (`cfb/qbchange.attempts_of`) |
 | 10. Parlay builder | SAFE, BALANCED, POP; one anchor; no more than two tickets on a leg; fair price beside the book's | A leg rides on two tickets of a size at most (`gameparlays.MAX_USES`: two of a game's three-leg tickets and two of its two-leg ones); each ticket shows fair and take-it-at and says when the legs' prices multiplied fall short of it. Each two-leg and three-leg ticket says Safe, Balanced, Pop or a long shot by these bars and names the one book that has every leg (`gameparlays.ticket_class`, `one_book`, step AAB); the dollar stakes are theirs and stay off the site |
 | 11. Touchdown module | Base rates by team total; approve at 45% and at or above the price's break-even, or 40% at plus money with EV 6% and undeniable usage; never two pass catchers from one team | `likelyboard.td_rule`. **Changed 2026-11-20**: the fallback now needs a plus price paying 6% over our number (it had passed a red-zone role at any price), and two pass catchers from one team share no touchdown pair (`gameparlays.pair_link`). The 45% clause keeps no price test: see "The price grade" |
 | 12. Sides and totals | Stricter edges | The game-bet lanes keep their own bars |
@@ -109,9 +109,11 @@ settled. `QB_PRICE_GRADE=off` turns it off.
    and carries at 0.80x to 0.85x of the average. Ours lose at the lines we
    took. A box run can say how our picks did by rung-to-average, which would
    settle whether completions come off the bench at low rungs.
-5. **A cornerback matchup adds nothing.** Their testing gives a receiver's
-   coverage matchup no points. Our board lets the scan's coverage read back a
-   receiver's pick toward Top. Stop counting it?
+5. **A cornerback matchup adds nothing.** Answered yes, 21 November ("Yes only
+   shit that actually hold"); done in step AAJ. In the NFL and college a pass
+   catcher's coverage read no longer backs his catches or receiving yards toward
+   Top or ranks him; the projection's measured matchup step decides there, and
+   the card says the read explains the pick.
 6. **A posted pick whose number the books have left.** Withdrawn the day it
    was written (21 November). I asked whether a parlay leg should follow the
    books to today's number when they leave the number its pick was posted at.
@@ -125,7 +127,17 @@ settled. `QB_PRICE_GRADE=off` turns it off.
    says. Hockey's goal scorers can still ride its stat tickets beside its
    goal-scorer pairs. v3.1 is football's and hockey's tickets are winning
    (two-leg 14 of 20, three-leg 22 of 43), so I left them; the heartbeat counts
-   how many such legs there are (`scorer_legs_on_props`). Take them off too?
+   how many such legs there are (`scorer_legs_on_props`). Answered no, 21
+   November: they stay.
+
+Also answered 21 November (step AAJ): a game short of three three-leg tickets
+posts fewer rather than take a touchdown leg back ("Fewer so we don't force
+anything"); a parlay one book prices whole is chosen first
+(`gameparlays.book_ranker`); no college basketball prop is priced off a ladder
+alone until they say so; v3.1's parlay rules reach college football in full;
+college picks ask 60% (`likely.LANE_MIN_PROB`); the record may raise an NBA or
+NHL chance toward its price (`likelycal.RAISE_SPORTS`); and Saturday's college
+slate is bought from Friday (`oddsbudget.DAY_BEFORE_ON_TOP`).
 
 ## What their own messages add to the instructions
 

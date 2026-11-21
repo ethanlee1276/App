@@ -26,7 +26,9 @@ bold rows) and the same side — have earned in the journal:
 
 k = 1 leaves a group's number alone (its record backs it); k = 0 says its
 record is no better than the price. A chance is only ever lowered, never
-raised. The tiers, the ranking and the card then read the honest number, so
+raised, except in the NBA and the NHL since 21 November, where a pick priced
+above our number may rise toward the price (`RAISE_SPORTS`, Ethan: "8. Yes").
+The tiers, the ranking and the card then read the honest number, so
 a pick that hit 30% stops wearing "Top pick" and one that holds up rises.
 The price's chance is the American price's implied chance with an average
 4.5% two-way hold taken out (DEVIG).
@@ -119,9 +121,29 @@ def source_of_row(r: dict) -> str:
     return "list"
 
 
-def shrink(p: float, q: float, k: float) -> float:
-    adj = q + k * (p - q)
-    return min(p, max(0.02, min(0.98, adj)))
+#: WHERE THE RECORD MAY RAISE A CHANCE (Ethan, 21 November: "8. Yes"). Their
+#: rule since 3 October was that the record only ever lowers one. The NBA's and
+#: hockey's picks are where that cost: the NBA's picks priced above our number
+#: at 50-60% hit 66.9% where we said 57.3% (614 picks), so the price was right
+#: and our number low. In these leagues the correction may pull a chance UP to
+#: the price's own chance (never above it, and never past our number when ours
+#: is the higher), by as much as the group's record has earned on the same
+#: held-out folds and the same bar as a lowering. Everywhere else a chance is
+#: only lowered, as before. `QB_RECORD_RAISES=off` holds every league to lowering.
+RAISE_SPORTS = ("nba", "nhl")
+
+
+def raises(sport: str) -> bool:
+    """May the record raise a chance in ``sport`` (RAISE_SPORTS, unless switched off)?"""
+    return (str(sport or "").lower() in RAISE_SPORTS
+            and os.environ.get("QB_RECORD_RAISES", "").strip().lower() != "off")
+
+
+def shrink(p: float, q: float, k: float, up: bool = False) -> float:
+    """Our chance ``p`` pulled toward the price's ``q`` by ``1 - k``: only ever lowered, unless ``up``
+    (`raises`), when a pick priced above our number may rise toward the price."""
+    adj = max(0.02, min(0.98, q + k * (p - q)))
+    return adj if up else min(p, adj)
 
 
 def _ll(p: float, won: bool) -> float:
@@ -186,15 +208,15 @@ def k_for(groups: dict, group: str, market: str | None = None) -> dict | None:
             or groups.get(f"{group.split('|')[0]}|{BOTH}"))
 
 
-def _fit_one(rs: list[dict]) -> dict:
-    best = min(K_GRID, key=lambda k: sum(_ll(shrink(x["p"], x["q"], k), x["won"]) for x in rs))
+def _fit_one(rs: list[dict], up: bool = False) -> dict:
+    best = min(K_GRID, key=lambda k: sum(_ll(shrink(x["p"], x["q"], k, up), x["won"]) for x in rs))
     return {"k": best, "n": len(rs),
             "hit": round(sum(x["won"] for x in rs) / len(rs), 4),
             "claimed": round(sum(x["p"] for x in rs) / len(rs), 4),
             "price": round(sum(x["q"] for x in rs) / len(rs), 4)}
 
 
-def fit_groups(rows: list[dict], by_market: bool = False) -> dict:
+def fit_groups(rows: list[dict], by_market: bool = False, up: bool = False) -> dict:
     """{group: {"k", "n", "hit", "claimed", "price"}} for groups of
     MIN_GROUP or more; smaller groups are left alone (absent). Each maker
     is also fitted on both sides together (``maker|both``), read only where
@@ -214,7 +236,7 @@ def fit_groups(rows: list[dict], by_market: bool = False) -> dict:
         taken = set()
         for g, rs in mk.items():
             if len(rs) >= MIN_GROUP:
-                out[g] = _fit_one(rs)
+                out[g] = _fit_one(rs, up)
                 taken.update(id(x) for x in rs)
         rest = [r for r in rows if id(r) not in taken]
     by: dict = {}
@@ -223,11 +245,11 @@ def fit_groups(rows: list[dict], by_market: bool = False) -> dict:
         by.setdefault(f"{r['group'].split('|')[0]}|{BOTH}", []).append(r)
     for g, rs in by.items():
         if len(rs) >= MIN_GROUP:
-            out[g] = _fit_one(rs)
+            out[g] = _fit_one(rs, up)
     return out
 
 
-def held_out(rows: list[dict], folds=FOLDS, seed=SEED) -> dict:
+def held_out(rows: list[dict], folds=FOLDS, seed=SEED, up: bool = False) -> dict:
     """Out-of-fold log loss, raw against corrected, games kept whole."""
     games = sorted({r["game"] for r in rows})
     rng = random.Random(seed)
@@ -236,15 +258,15 @@ def held_out(rows: list[dict], folds=FOLDS, seed=SEED) -> dict:
     per_game: dict = {}
     for f in range(folds):
         train = [r for r in rows if fold_of[r["game"]] != f]
-        ks = fit_groups(train)
-        km = fit_groups(train, by_market=True)
+        ks = fit_groups(train, up=up)
+        km = fit_groups(train, by_market=True, up=up)
         for r in rows:
             if fold_of[r["game"]] != f:
                 continue
             k = (k_for(ks, r["group"]) or {}).get("k", 1.0)
             k2 = (k_for(km, r["group"], r.get("market")) or {}).get("k", 1.0)
-            raw, adj = _ll(r["p"], r["won"]), _ll(shrink(r["p"], r["q"], k), r["won"])
-            adj2 = _ll(shrink(r["p"], r["q"], k2), r["won"])
+            raw, adj = _ll(r["p"], r["won"]), _ll(shrink(r["p"], r["q"], k, up), r["won"])
+            adj2 = _ll(shrink(r["p"], r["q"], k2, up), r["won"])
             cell = per_game.setdefault(r["game"], [0.0, 0.0, 0, 0.0])
             cell[0] += raw
             cell[1] += adj
@@ -293,9 +315,10 @@ def choose_level(ho: dict) -> tuple[bool, bool]:
 
 def fit(conn, sport: str) -> dict:
     rows = journal_rows(conn, sport)
-    ho = held_out(rows) if rows else {"n": 0}
+    up = raises(sport)
+    ho = held_out(rows, up=up) if rows else {"n": 0}
     passed, by_market = choose_level(ho)
-    groups = fit_groups(rows, by_market=by_market)
+    groups = fit_groups(rows, by_market=by_market, up=up)
     return {"sport": sport, "n": len(rows), "held_out": ho, "groups": groups, "passed": passed,
             "by_market": by_market,
             "fitted_at": _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")}
@@ -328,6 +351,7 @@ def apply(rows: list[dict], sport: str, store: dict | None = None) -> int:
     how many moved. The raw chance rides along as ``board_raw_prob`` (the
     journal keeps it as ``raw_prob``) and the reason as ``cal_note``."""
     groups = ((store if store is not None else load()).get(sport) or {}).get("groups") or {}
+    up = raises(sport)
     moved = 0
     for r in rows:
         if r.get("model_prob") is None:
@@ -340,8 +364,9 @@ def apply(rows: list[dict], sport: str, store: dict | None = None) -> int:
         if not g or q is None or g["k"] >= 1.0:
             continue
         raw = float(r["model_prob"])
-        adj = round(shrink(raw, q, g["k"]), 4)
-        if adj >= raw:
+        adj = round(shrink(raw, q, g["k"], up), 4)
+        # Lowered, or in a league where the record may raise one (`raises`), raised; never moved by nothing.
+        if adj >= raw and not (up and adj > raw + 1e-9):
             continue
         r["board_raw_prob"] = raw
         r["model_prob"] = adj

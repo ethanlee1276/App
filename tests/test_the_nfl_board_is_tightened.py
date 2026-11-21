@@ -70,7 +70,8 @@ def _games(board):
 def test_the_nfl_bar_is_sixty_for_props_and_game_lines_only():
     with _Env(None):
         assert likely.lane_floors("nfl") == {"prop": 0.60, "game": 0.60}
-        assert likely.lane_floors("cfb") == {} and likely.lane_floors("mlb") == {}
+        # College asks the same 60% since 21 November (Ethan: "7. Yes"), on its own switch.
+        assert likely.lane_floors("cfb") == {"prop": 0.60, "game": 0.60} and likely.lane_floors("mlb") == {}
         assert "td" not in likely.lane_floors("nfl"), "a scorer keeps the shared bar"
     with _Env("off"):
         assert likely.lane_floors("nfl") == {} and not likely.tightened("nfl")
@@ -92,11 +93,22 @@ def test_a_58_percent_nfl_moneyline_is_no_longer_a_pick():
     assert "B2" in off and not off["B2"].get("reserve"), "QB_NFL_TIGHT=off puts it back"
 
 
-def test_college_keeps_the_shared_bar():
-    cards = [_card(1, 0.68), _card(2, 0.60)]
+def test_college_asks_sixty_too_since_21_november():
+    """Ethan, 21 November ("7. Yes"): college football's picks ask the NFL's 60%,
+    on college's own switch (QB_CFB_TIGHT)."""
+    import os
+    cards = [_card(1, 0.68), _card(2, 0.58)]
     with _Env(None):
         got = _games(likely.build([], [], [], sport="cfb", game_bets=cards))
-    assert "B2" in got and not got["B2"].get("reserve")
+    assert "B1" in got and not got["B1"].get("reserve")
+    assert "B2" not in got or got["B2"].get("reserve"), "a 56-58% college moneyline is no longer a pick"
+    os.environ["QB_CFB_TIGHT"] = "off"
+    try:
+        with _Env(None):
+            got = _games(likely.build([], [], [], sport="cfb", game_bets=cards))
+        assert "B2" in got and not got["B2"].get("reserve"), "college's switch off: the shared bar"
+    finally:
+        os.environ.pop("QB_CFB_TIGHT", None)
 
 
 # --- the board ------------------------------------------------------------------
@@ -127,8 +139,18 @@ def test_the_board_holds_a_prop_under_sixty_and_says_why():
     with _Env("off"):
         b = B.build(_result([dict(r) for r in rows]), record={}, sport="nfl", tiers_seen={})
     assert "B Fifty-seven" in {r["player"] for r in b["rows"]}, "off: the old board"
+    # College holds the same 57% pick since 21 November, and QB_CFB_TIGHT=off puts it back.
+    import os
     b = B.build(_result([dict(r) for r in rows]), record={}, sport="cfb", tiers_seen={})
-    assert "B Fifty-seven" in {r["player"] for r in b["rows"]}, "college is not tightened"
+    held = {r["player"]: r for r in b["held"]}
+    assert "B Fifty-seven" in held and "the college board asks 60% of a prop or a game line" in held["B Fifty-seven"]["held_note"]
+    os.environ["QB_CFB_TIGHT"] = "off"
+    try:
+        b = B.build(_result([dict(r) for r in rows]), record={}, sport="cfb", tiers_seen={})
+        assert "B Fifty-seven" in {r["player"] for r in b["rows"]}, "college's switch off: the old board"
+        assert likely.lane_floors("cfb") == {}
+    finally:
+        os.environ.pop("QB_CFB_TIGHT", None)
 
 
 def test_an_under_the_scout_cautions_against_comes_off():

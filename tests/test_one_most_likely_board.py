@@ -89,7 +89,20 @@ def test_a_prop_is_checked_against_the_matchup_read():
     against = {"kind": "prop", "player": "Garrett Wilson", "team": "NYJ", "opponent": "DET",
                "market": "rec_yds", "side": "OVER", "line": 60.5, "odds": -110, "model_prob": 0.60,
                "implied_prob": 0.52}
+    # Two pass catchers in football: since 21 November their coverage reads explain and count nothing
+    # (likelyboard.COVERAGE_READ_SPORTS); with no measured step on the row there is nothing to call.
     rows = {r["player"]: r for r in B.build(_result(most_likely=[over, against]))["rows"]}
+    for who, label in (("Amon-Ra St. Brown", "Good matchup"), ("Garrett Wilson", "Tough matchup")):
+        assert rows[who]["checks"]["matchup"] is None, (who, rows[who]["check_notes"])
+        assert f"the coverage read, {label}, explains the pick and is not counted" in rows[who]["check_notes"]["matchup"]
+    # The same reads on two backs' carries still decide, both ways.
+    backs = {"NYJ@DET": {"players": [
+        {"player": "Amon-Ra St. Brown", "team": "DET", "opp": "NYJ", "pos": "RB", "read": "good",
+         "label": "Good matchup", "lean": ["rush_att"]},
+        {"player": "Garrett Wilson", "team": "NYJ", "opp": "DET", "pos": "RB", "read": "tough",
+         "label": "Tough matchup", "lean": ["rush_yds"]}]}}
+    rows = {r["player"]: r for r in B.build(_result(most_likely=[dict(over, market="rush_att"), dict(against, market="rush_yds")],
+                                                    scan_reads=backs))["rows"]}
     assert rows["Amon-Ra St. Brown"]["checks"]["matchup"] is True
     assert rows["Garrett Wilson"]["checks"]["matchup"] is False
     assert "leans the other way" in rows["Garrett Wilson"]["check_notes"]["matchup"]
@@ -376,22 +389,29 @@ def test_a_losing_pick_comes_off_only_when_our_reads_also_say_no():
     alone keeps a pick; losing AND the matchup leaning the other way takes
     it off, into the held list with the reason; a posted pick never."""
     against = {"kind": "prop", "player": "Garrett Wilson", "team": "NYJ", "opponent": "DET", "sources": ["likely"],
-               "market": "rec_yds", "side": "OVER", "line": 60.5, "odds": -110, "model_prob": 0.66,
+               "market": "rush_yds", "side": "OVER", "line": 60.5, "odds": -110, "model_prob": 0.66,
                "implied_prob": 0.52}
+    backs = {"NYJ@DET": {"players": [
+        {"player": "Amon-Ra St. Brown", "team": "DET", "opp": "NYJ", "pos": "RB", "read": "good",
+         "label": "Good matchup", "lean": ["rush_att"]},
+        {"player": "Garrett Wilson", "team": "NYJ", "opp": "DET", "pos": "RB", "read": "tough",
+         "label": "Tough matchup", "lean": ["rush_yds"]}]}}
+    # Two backs' carries: a pass catcher's read is a coverage read and counts nothing in football
+    # since 21 November (likelyboard.COVERAGE_READ_SPORTS), so this rule is shown on backs.
     backed = {"kind": "prop", "player": "Amon-Ra St. Brown", "team": "DET", "opponent": "NYJ", "sources": ["likely"],
-              "market": "receptions", "side": "OVER", "line": 6.5, "odds": -130, "model_prob": 0.70,
+              "market": "rush_att", "side": "OVER", "line": 6.5, "odds": -130, "model_prob": 0.70,
               "implied_prob": 0.57}
     losing = {"nfl": {"groups": {"list|over": {"k": 0.5, "n": 80, "hit": 0.50, "claimed": 0.66}}}}
-    b = B.build(_result(most_likely=[dict(against), dict(backed)]), calibration=losing)
+    b = B.build(_result(most_likely=[dict(against), dict(backed)], scan_reads=backs), calibration=losing)
     shown = {r["player"] for r in b["rows"]}
     assert shown == {"Amon-Ra St. Brown"}, "losing, but the matchup backs him: he stays"
     assert [r["player"] for r in b["held"]] == ["Garrett Wilson"]
     assert "matchup read leans the other way" in b["held"][0]["held_note"]
     # The matchup against him, but no proven losing record: he stays.
-    b = B.build(_result(most_likely=[dict(against)]))
+    b = B.build(_result(most_likely=[dict(against)], scan_reads=backs))
     assert [r["player"] for r in b["rows"]] == ["Garrett Wilson"] and b["held"] == []
     # Already posted: never taken off.
-    b = B.build(_result(most_likely=[dict(against, locked=True)]), calibration=losing)
+    b = B.build(_result(most_likely=[dict(against, locked=True)], scan_reads=backs), calibration=losing)
     assert [r["player"] for r in b["rows"]] == ["Garrett Wilson"] and b["held"] == []
 
 def test_a_pick_corrected_under_even_comes_off_unless_the_matchup_backs_it():
@@ -405,9 +425,12 @@ def test_a_pick_corrected_under_even_comes_off_unless_the_matchup_backs_it():
     plain = {"kind": "prop", "player": "Nobody", "team": "NYJ", "opponent": "DET", "sources": ["likely"],
              "market": "rec_yds", "side": "OVER", "line": 40.5, "odds": 130, "model_prob": 0.60,
              "implied_prob": 0.43}
-    backed = dict(plain, player="Amon-Ra St. Brown", team="DET", opponent="NYJ", market="receptions", line=6.5)
+    # (Backed on a back's carries: a pass catcher's coverage read counts nothing in football since 21 November.)
+    backed = dict(plain, player="Amon-Ra St. Brown", team="DET", opponent="NYJ", market="rush_att", line=6.5)
+    reads = {"NYJ@DET": {"players": [{"player": "Amon-Ra St. Brown", "team": "DET", "opp": "NYJ", "pos": "RB",
+                                      "read": "good", "label": "Good matchup", "lean": ["rush_att"]}]}}
     losing = {"nfl": {"groups": {"list|over": {"k": 0.3, "n": 80, "hit": 0.45, "claimed": 0.62}}}}
-    b = B.build(_result(most_likely=[dict(plain), dict(backed)]), calibration=losing)
+    b = B.build(_result(most_likely=[dict(plain), dict(backed)], scan_reads=reads), calibration=losing)
     held = {r["player"]: r for r in b["held"]}
     assert set(held) == {"Nobody"}, [(r["player"], r["model_prob"]) for r in b["rows"] + b["held"]]
     assert float(held["Nobody"]["model_prob"]) < B.DROP_FLOOR

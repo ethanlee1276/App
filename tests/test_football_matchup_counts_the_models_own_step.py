@@ -84,13 +84,46 @@ def test_no_lean_a_step_against_the_side_says_no_and_a_small_one_says_nothing():
 
 
 def test_a_lean_still_decides_where_the_scan_has_one():
-    reads = {"NYJ@DET": {"players": [{"player": "Amon-Ra St. Brown", "team": "DET", "opp": "NYJ", "pos": "WR",
-                                      "read": "tough", "label": "Tough matchup", "lean": ["receptions"]}]}}
-    by, _ = _board("nfl", [_rec("Amon-Ra St. Brown", "receptions", 1.09)],
-                   [_ml("Amon-Ra St. Brown", "receptions", side="over")], reads=reads)
-    r = by["Amon-Ra St. Brown"]
+    # A back's carries: the scan's read on him is not a coverage read, so it still decides.
+    reads = {"NYJ@DET": {"players": [{"player": "Jahmyr Gibbs", "team": "DET", "opp": "NYJ", "pos": "RB",
+                                      "read": "tough", "label": "Tough matchup", "lean": ["rush_att"]}]}}
+    by, _ = _board("nfl", [_rec("Jahmyr Gibbs", "rush_att", 1.09)],
+                   [_ml("Jahmyr Gibbs", "rush_att", side="over")], reads=reads)
+    r = by["Jahmyr Gibbs"]
     assert r["checks"]["matchup"] is False and "Tough matchup" in r["check_notes"]["matchup"], \
         "the scan leans under; the model's +9% is not asked"
+
+
+def test_a_pass_catchers_coverage_read_explains_and_counts_nothing():
+    """Ethan, 21 November, decision 5 ("Yes only shit that actually hold"): v3.1 gives a
+    receiver's cornerback matchup no points. In football the scan's read on a pass catcher's
+    catches or receiving yards no longer decides his matchup check; the projection's measured
+    step does, and the card says the read explains the pick. QB_COVERAGE_READ=on puts it back."""
+    import os
+    reads = {"NYJ@DET": {"players": [{"player": "Amon-Ra St. Brown", "team": "DET", "opp": "NYJ", "pos": "WR",
+                                      "read": "tough", "label": "Tough matchup", "lean": ["receptions"]}]}}
+    for sport in ("nfl", "cfb"):
+        by, _ = _board(sport, [_rec("Amon-Ra St. Brown", "receptions", 1.09)],
+                       [_ml("Amon-Ra St. Brown", "receptions", side="over")], reads=reads)
+        r = by["Amon-Ra St. Brown"]
+        assert r["checks"]["matchup"] is True, (sport, r["check_notes"])
+        assert r["check_notes"]["matchup"].startswith("matchup moved our number +9%"), r["check_notes"]
+        assert "the coverage read, Tough matchup, explains the pick and is not counted" in r["check_notes"]["matchup"]
+        assert r["matchup_strength"] == 1, "a coverage read ranks nothing either"
+    # A good read with no measured step behind it: nothing to count, so no Top pick on it.
+    good = {"NYJ@DET": {"players": [{"player": "Amon-Ra St. Brown", "team": "DET", "opp": "NYJ", "pos": "WR",
+                                     "read": "breakout", "label": "Breakout candidate", "lean": ["receptions"]}]}}
+    by, _ = _board("nfl", [_rec("Amon-Ra St. Brown", "receptions", 1.01)],
+                   [_ml("Amon-Ra St. Brown", "receptions", side="over")], reads=good)
+    assert by["Amon-Ra St. Brown"]["checks"]["matchup"] is None
+    assert by["Amon-Ra St. Brown"]["tier"] != "top"
+    os.environ["QB_COVERAGE_READ"] = "on"
+    try:
+        by, _ = _board("nfl", [_rec("Amon-Ra St. Brown", "receptions", 1.09)],
+                       [_ml("Amon-Ra St. Brown", "receptions", side="over")], reads=reads)
+        assert by["Amon-Ra St. Brown"]["checks"]["matchup"] is False, "switched on, the read decides again"
+    finally:
+        os.environ.pop("QB_COVERAGE_READ", None)
 
 
 def test_no_step_at_all_is_said_and_stays_under_top():

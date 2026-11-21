@@ -1201,6 +1201,30 @@ DAY_BEFORE_LEAGUES = ("nfl", "cfb")
 DAY_BEFORE_PULLS = 2
 DAY_BEFORE_SHARE_CAP = 0.25
 
+#: SATURDAY'S COLLEGE SLATE FROM FRIDAY (Ethan, 21 November: "9. Yes" to
+#: building Saturday's college reports on Friday). The day-before rule above
+#: brings a slate its own pulls only on a day with no game of the league's
+#: tonight, and a college Friday nearly always has one, so Saturday's sixty
+#: games waited for Saturday's own pulls: at 5 AM on 21 November no college
+#: report had a parlay, and at 9:20 AM 33 of 58 games still had no prop
+#: priced. On the day before a Saturday slate, college's tomorrow brings its
+#: DAY_BEFORE_PULLS pulls ON TOP of tonight's share, at most DAY_BEFORE_SHARE_CAP
+#: more of the day's allowance (`launch._odds_affordable`), so Friday's pulls
+#: buy Saturday's games too (each pull up to cfb_build.PLAYER_EVENT_CAP of them,
+#: the most-watched first). Only before a Saturday: a weeknight's college games
+#: are priced on their own day as before. `QB_CFB_FRIDAY=off` turns it off.
+DAY_BEFORE_ON_TOP = ("cfb",)
+
+
+def day_before_saturday(sport: str | None, now: float | None = None) -> bool:
+    """Is tomorrow's slate a Saturday, for a league that buys it on top of tonight's
+    (DAY_BEFORE_ON_TOP)? False off its switch."""
+    import os
+    if budget_sport(sport) not in DAY_BEFORE_ON_TOP or os.environ.get("QB_CFB_FRIDAY", "").strip().lower() == "off":
+        return False
+    day = _dt.date.fromisoformat(slate_day(time.time() if now is None else now))
+    return (day + _dt.timedelta(days=1)).weekday() == 5
+
 #: THREE DAYS AHEAD, THE NFL'S (EARLYPROPS1). Ethan, 2026-11-19, asked whether
 #: to buy Sunday's NFL props from Thursday: "Yes ... That means buying
 #: Sunday's props 2 to 3 days early. Yes to all that. I want parlays for today

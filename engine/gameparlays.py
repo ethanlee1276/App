@@ -2067,6 +2067,38 @@ def one_book(legs: list, index: dict, carried: dict | None = None) -> dict | Non
             "words": f"One book has every leg: {name} ({', '.join(_odds_words(o) for o in odds)})"}
 
 
+#: A PARLAY ONE BOOK PRICES WHOLE IS CHOSEN FIRST (Ethan, 21 November, "3. Yes"
+#: to preferring one). A same-game parlay is placed at one sportsbook, so a
+#: ticket no single book has at every leg's number cannot be bet as written,
+#: however likely it is. Among the tickets a game could post, those a book has
+#: whole rank ahead (`book_rank` 0), then those whose books are not all on file
+#: (1: nothing to say either way), then those no one book has (2); our chance
+#: orders each. The report's own picks still come first in a fill, and a posted
+#: ticket stays until a leg breaks (`choose`). `QB_ONE_BOOK_FIRST=off` turns it off.
+def one_book_first() -> bool:
+    import os
+    return os.environ.get("QB_ONE_BOOK_FIRST", "").strip().lower() != "off"
+
+
+def book_ranker(index: dict | None, carried: dict | None = None):
+    """``rank(ticket) -> 0 | 1 | 2`` by `one_book` (above), memoized by the ticket's legs; None when the
+    board has no quotes or the rule is off (every ticket the same)."""
+    if not index or not one_book_first():
+        return None
+    memo: dict = {}
+
+    def rank(t: dict) -> int:
+        k = tuple(sorted(_leg_id(l) for l in t.get("legs") or []))
+        if k not in memo:
+            try:
+                ob = one_book(t.get("legs") or [], index, carried)
+            except Exception:                                # noqa: BLE001
+                ob = None
+            memo[k] = 1 if not ob else 0 if ob.get("book") else 2
+        return memo[k]
+    return rank
+
+
 #: Why a board's carried picks could not be read, in this process; None when
 #: they were. The build's counts carry it (`build` ``unlisted_error``).
 UNLISTED_ERROR: str | None = None
@@ -2202,7 +2234,7 @@ def _size_spec(size: int) -> dict:
 
 def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = None,
                extra: list[dict] | None = None, picks: set | None = None, posted: dict | None = None,
-               size: int = 3) -> dict:
+               size: int = 3, books=None) -> dict:
     """A game's three-leg tickets (``threes``) from ``legs``, each with its
     backups from the same legs; those that clear THREE_FLOOR first. Beside them
     what the notes count: the legs tried (``pool``), the trios without a
@@ -2227,8 +2259,10 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     ``extra``: the fill takes the picks first and names every other leg.
     ``posted``: the game's tickets as the last build posted them ({kind:
     [identity]}, `posted_for`), each posted again while it is still one of
-    these (`choose`)."""
+    these (`choose`). ``books``: `book_ranker`, so a ticket one book prices
+    whole is chosen ahead of one no book does."""
     spec = _size_spec(size)
+    br = books or (lambda t: 0)
     floor, long_floor, n_min, shared = spec["floor"], spec["long"], spec["min"], spec["shared"]
     pool = sorted(legs, key=lambda l: -float(l["p"]))[:MAX_POOL]
     memo = {} if memo is None else memo
@@ -2244,7 +2278,8 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     threes = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(pool, size))
               if t and placeable(t)]
     strong3 = [t for t in threes if float(t["joint"]) >= floor]
-    chosen = choose(strong3, spec["n"], keep=keep, shared=shared)
+    first = lambda t: (br(t), -float(t["joint"]), -(t.get("ev_at_naive") or -9))   # noqa: E731
+    chosen = choose(strong3, spec["n"], rank=first, keep=keep, shared=shared)
     in_pool = {_leg_id(l) for l in pool}
     own = set(picks) if picks is not None else in_pool
     # THE REPORT'S OWN PICKS FIRST INTO THE FILL'S POOL (PARLAYWIN1, 2026-11-19).
@@ -2271,7 +2306,7 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
         # those at LONG_FLOOR.
         fill_fit = len(every)
         fill_clear = sum(1 for t in every if float(t["joint"]) >= long_floor)
-        rank = lambda t: (outside(t), -float(t["joint"]), -(t.get("ev_at_naive") or -9))  # noqa: E731
+        rank = lambda t: (outside(t), br(t), -float(t["joint"]), -(t.get("ev_at_naive") or -9))  # noqa: E731
         got = choose(cands, n_min, rank=rank, keep=keep, shared=shared)
         # Each wider level adds to what the one before it made, never in its
         # place: a ticket of the report's picks stays while the places it leaves
@@ -2421,7 +2456,8 @@ def _threes_note(made: dict, whose: str = "this game's priced props") -> str:
 
 
 def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
-               priced: int | None = None, pairs_out: dict | None = None, spare: list | None = None) -> dict:
+               priced: int | None = None, pairs_out: dict | None = None, spare: list | None = None,
+               books=None) -> dict:
     """A game's three three-leg tickets and three scorer pairs (basketball's
     three two-leg tickets in their place, TWO_SPORTS), and why there are fewer
     when there are. ``priced`` is how many priced scorers the game
@@ -2430,7 +2466,7 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
     pair the game could post, under its label, so the report stage can choose
     them again with the posted ones first (`report_only`)."""
     memo: dict = {}
-    made = tickets_of(sport, game, legs, memo)
+    made = tickets_of(sport, game, legs, memo, books=books)
     chosen, n_threes, n_pool = made["threes"], made["threes_fit"], made["pool"]
     out = {"game": game_label(game), "home": game.get("home"), "away": game.get("away"),
            "date": game.get("date") or "", "kickoff": game.get("kickoff") or "",
@@ -2440,7 +2476,7 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
     if sport in TWO_SPORTS:
         # THREE TWO-LEG TICKETS (TWO_SPORTS: every league), player props built
         # as the three-leg ones are.
-        made2 = tickets_of(sport, game, legs, memo, size=2)
+        made2 = tickets_of(sport, game, legs, memo, size=2, books=books)
         out["twos"] = made2["twos"]
         if len(out["twos"]) < TWO_MIN:
             out["twos_note"] = _threes_note(made2)
@@ -2652,6 +2688,8 @@ def build(board: dict, sport: str, now=None) -> dict:
     out_games = []
     priced_n = _priced_counts(board, games)
     scorer_pairs: dict = {}
+    index, carried = quote_index(board), carried_picks(board)
+    books = book_ranker(index, carried)
     for g in games:
         x = by_game.get(game_label(g))
         if not x:
@@ -2661,7 +2699,7 @@ def build(board: dict, sport: str, now=None) -> dict:
                 continue
             x = slot(g)
         e = build_game(sp, x["g"], x["legs"], x["scorers"], priced=x["priced"], pairs_out=scorer_pairs,
-                       spare=x["spare"])
+                       spare=x["spare"], books=books)
         why, words = props_note(sp, g, now)
         n_priced = priced_n.get(game_label(g), 0)
         if not (x["legs"] or x["priced"]) and not n_priced:
@@ -2682,7 +2720,6 @@ def build(board: dict, sport: str, now=None) -> dict:
     else:
         board.pop(SCORER_PAIRS_KEY, None)
     # Each player-prop ticket's class, and the one book that prices it (`label_tickets`).
-    index, carried = quote_index(board), carried_picks(board)
     for e in out_games:
         if not e.get("kept"):
             label_tickets(e, sp, index, carried)
@@ -3171,7 +3208,8 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     extra = [l for l in mine if _leg_id(l) not in strong
              and (_leg_id(l) in picked or float(l.get("p") or 0) >= FILL_OTHER_FLOOR)]
     # The tickets it posted last build first, each while it is still one of these (ZQ, `choose`).
-    made = tickets_of(sp, game, legs, extra=extra, picks=picked, posted=posted_for(board, game))
+    books = book_ranker(quote_index(board), carried_picks(board))
+    made = tickets_of(sp, game, legs, extra=extra, picks=picked, posted=posted_for(board, game), books=books)
     chosen, n_threes, n_pool = made["threes"], made["threes_fit"], made["pool"]
     x["threes"] = chosen
     x.pop("paper_threes", None)
@@ -3235,7 +3273,8 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
         # THE TWO-LEG TICKETS (TWO_SPORTS): from the same picks and props, to
         # their own bars, the posted ones first; a game waiting on its props
         # says so once, under its three-leg tickets.
-        made2 = tickets_of(sp, game, legs, extra=extra, picks=picked, posted=posted_for(board, game), size=2)
+        made2 = tickets_of(sp, game, legs, extra=extra, picks=picked, posted=posted_for(board, game), size=2,
+                           books=books)
         x["twos"] = made2["twos"]
         if made2["filled"]:
             x["twos_filled"] = made2["filled"]

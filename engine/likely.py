@@ -798,17 +798,26 @@ SPORT_MIN_PROB: dict = {}
 #: Off without a deploy: ``sudo ./deploy/setenv.sh QB_NFL_TIGHT off`` then
 #: ``sudo systemctl restart qellys`` (the board's NFL holds go with it —
 #: engine/likelyboard.tightened_reason).
-LANE_MIN_PROB: dict = {"nfl": {"prop": 0.60, "game": 0.60}}
+#:
+#: COLLEGE FOOTBALL ASKS THE SAME 60% (Ethan, 21 November: "7. Yes" to a 60%
+#: bar on college football's picks). Its props and game lines under 60% on
+#: the number the page shows are no longer posted as picks; touchdowns keep
+#: the shared bar, as the NFL's do. Off on its own switch, QB_CFB_TIGHT=off
+#: (which also lifts college's held-under markets, likelyboard).
+LANE_MIN_PROB: dict = {"nfl": {"prop": 0.60, "game": 0.60}, "cfb": {"prop": 0.60, "game": 0.60}}
 TIGHT_ENV = "QB_NFL_TIGHT"
+#: A league's own switch, where it has one (TIGHT_ENV otherwise).
+TIGHT_ENVS = {"cfb": "QB_CFB_TIGHT"}
 
 
 def tightened(sport: str) -> bool:
-    """Whether ``sport``'s tightened bars are in force (QB_NFL_TIGHT=off
-    turns them off; read at call time, so a restart is all it takes)."""
+    """Whether ``sport``'s tightened bars are in force (QB_NFL_TIGHT=off, or
+    college's QB_CFB_TIGHT=off, turns them off; read at call time, so a
+    restart is all it takes)."""
     import os
     if sport not in LANE_MIN_PROB:
         return False
-    return os.environ.get(TIGHT_ENV, "").strip().lower() not in ("off", "0", "no", "false")
+    return os.environ.get(TIGHT_ENVS.get(sport, TIGHT_ENV), "").strip().lower() not in ("off", "0", "no", "false")
 
 
 def lane_floors(sport: str) -> dict:

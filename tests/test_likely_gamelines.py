@@ -485,8 +485,19 @@ def test_the_college_moneyline_reaches_the_likely_board_from_a_refusal():
     counted, because `build`'s loop is a no-op on an empty list.
     """
     _result, rows = _cfb_g5_slate()
+    # COLLEGE ASKS 60% SINCE 21 NOVEMBER (Ethan, "7. Yes"; likely.LANE_MIN_PROB): this card's
+    # 59.6% moneyline is under it and comes back only as a labelled reserve row. The rest of
+    # this test is about the shared bar's census and labels, read with college's switch off.
+    import os
     census: dict = {}
-    board = K.build([], [], [], sport="cfb", game_bets=rows, census=census)
+    board = K.build([], [], [], sport="cfb", game_bets=rows, census=dict())
+    tight = {r["market"]: r for r in board}
+    assert tight["moneyline"].get("reserve") is True, tight["moneyline"]
+    os.environ["QB_CFB_TIGHT"] = "off"
+    try:
+        board = K.build([], [], [], sport="cfb", game_bets=rows, census=census)
+    finally:
+        os.environ.pop("QB_CFB_TIGHT", None)
     kinds = {r["market"]: r for r in board}
     assert kinds["moneyline"]["ranked"] is True, \
         "the college moneyline ranks and must say so"

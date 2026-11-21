@@ -9338,6 +9338,38 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAJ. Your nine answers, built** (step 824; 21 November). Nothing to run. (1) A game short of three three-leg
+parlays posts fewer; no touchdown leg comes back to fill it. The site already worked that way since step AAH, so
+nothing changed. (2) Hockey's goal scorers stay on its stat parlays: no change. (3) A parlay one sportsbook prices
+whole is now chosen ahead of one no single book has. A same-game parlay is placed at one book, so a ticket without
+such a book can't be bet as written. The report's own picks still come first when a game fills its tickets, and a
+posted ticket stays until a leg breaks. This matters most in college: Saturday morning's board had 30 of its 65
+tickets with no one book. Switch: `QB_ONE_BOOK_FIRST=off`. (4) No college basketball prop is priced off a ladder
+alone: no change. (5) In the NFL and college football, the matchup scan's read on a pass catcher (good, breakout,
+tough, avoid) no longer counts toward his catches or receiving yards reaching Top, and no longer ranks him. It still
+shows on the card and in the report, where it explains the pick. What counts there now is the projection's own
+matchup step, the defence-vs-position effect that was measured to hold, when it moved his number 3% or more toward
+the pick. A back's and a quarterback's reads count as before, and Ask's slip grader reads it the same way. Switch:
+`QB_COVERAGE_READ=on` puts the old way back. (6) v3.1's parlay rules already covered college football but one: no
+pass-catcher legs behind a new starting quarterback too green to rate. College's quarterback-change card never
+counted the replacement's passes, so that rule never fired there. It counts them now, from college's own game logs
+(this season and last), and a replacement under 50 passes marks the card as the NFL's does: a catch or
+receiving-yards pick behind him tops out at Worth a look and is no parlay leg. The card no longer says "too few to
+rate" about a replacement with more passes than that. (7) College football's picks ask 60%, as the NFL's do. A prop
+or game line under 60% on the number the page shows is held back and says so ("the college board asks 60%");
+touchdowns keep the shared bar. Switch: `QB_CFB_TIGHT=off`, which also lifts college's held receiving-yards unders.
+(8) In the NBA and the NHL the record's correction may now raise a chance, where it only ever lowered one. A pick
+priced above our number can rise toward the price's own chance, never past it; a pick we rate above its price still
+only comes down. It is fitted and checked on held-out games by the same bar as before, so it takes effect after the
+next nightly board-learning run (about 4 AM Eastern) if that check passes. Switch: `QB_RECORD_RAISES=off`. (9)
+Saturday's college slate is bought from Friday. College already bought tomorrow's games the day before, but only on
+a day with no college game that night, and Fridays nearly always have one: at 5 AM today no college report had a
+parlay, and at 9:20 AM 33 of the 58 games still had no prop priced. Now, on the day before a Saturday slate, college
+gets its two day-before pulls on top of Friday's own, at most a quarter more of that day's odds allowance, each
+buying up to 12 games, the most-watched first. Next Friday night's heartbeat says how many of Saturday's games had
+props (cfb `threes_short_why` `no_props_priced`). Switch: `QB_CFB_FRIDAY=off`. Still open from the list: (10) to
+(14). Baseball's live page is moving onto the one game page next.
+
 **AAI. Every sport's live game page is the NFL's page** (step 823; 21 November). Nothing to run. You asked for the
 NBA, college and every other sport's live page to match the NFL's, and for that to be automatic. It could not be,
 the way the pages were built: football drew one page, and basketball and hockey each drew a whole page of their own,

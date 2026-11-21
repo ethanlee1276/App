@@ -44,8 +44,10 @@ def _board(sport, home, away, rows, reads):
 
 
 def test_a_breakout_ranks_above_a_likelier_good_matchup_in_every_scanned_sport():
-    for sport, home, away, market in (("nfl", "MIA", "BUF", "receptions"),
-                                      ("cfb", "Georgia", "Tennessee", "receptions"),
+    # (A back's carries in football: a pass catcher's read is a coverage read, which counts nothing
+    # there since 21 November — likelyboard.COVERAGE_READ_SPORTS.)
+    for sport, home, away, market in (("nfl", "MIA", "BUF", "rush_att"),
+                                      ("cfb", "Georgia", "Tennessee", "rush_att"),
                                       ("mlb", "NYY", "BOS", "hits")):
         rows = _board(sport, home, away,
                       [_prop("Dalton Kincaid", away, home, market, 0.70),
@@ -59,10 +61,10 @@ def test_a_breakout_ranks_above_a_likelier_good_matchup_in_every_scanned_sport()
 
 def test_the_tier_still_comes_first_and_chance_breaks_ties():
     rows = _board("nfl", "MIA", "BUF",
-                  [_prop("A", "BUF", "MIA", "receptions", 0.66), _prop("B", "BUF", "MIA", "receptions", 0.72),
-                   _prop("C", "MIA", "BUF", "receptions", 0.80)],
-                  [_read("A", "BUF", "MIA", "good", "Good matchup", "receptions"),
-                   _read("B", "BUF", "MIA", "good", "Good matchup", "receptions")])
+                  [_prop("A", "BUF", "MIA", "rush_att", 0.66), _prop("B", "BUF", "MIA", "rush_att", 0.72),
+                   _prop("C", "MIA", "BUF", "rush_att", 0.80)],
+                  [_read("A", "BUF", "MIA", "good", "Good matchup", "rush_att"),
+                   _read("B", "BUF", "MIA", "good", "Good matchup", "rush_att")])
     assert [r["player"] for r in rows] == ["B", "A", "C"], "C has no read: Strong, below both Top picks"
     assert rows[2]["matchup_strength"] == 0
 

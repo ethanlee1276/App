@@ -1415,7 +1415,16 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
             pass
         return False
     share = _budget_share(sport)
-    if (tonight == 0 and ahead) or far_n:
+    # SATURDAY'S COLLEGE SLATE FROM FRIDAY (oddsbudget.DAY_BEFORE_ON_TOP): with
+    # games tonight too, tomorrow's slate brings its own pulls on top.
+    on_top = False
+    if tonight and ahead and not far_n:
+        try:
+            from engine.oddsbudget import day_before_saturday
+            on_top = day_before_saturday(sport)
+        except Exception:                                    # noqa: BLE001
+            on_top = False
+    if (tonight == 0 and ahead) or far_n or on_top:
         # A day-before slate, with nothing tonight: the month's plan owes
         # this league nothing today (it funds tonight's leagues), so the
         # slate brings its own DAY_BEFORE_PULLS pulls, never more than
@@ -1429,6 +1438,8 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
             pull = refresh_credits(cost if cost is not None else priced + 1, credits)
             if allowance > 0 and far_n:
                 share = share + min(FAR_SHARE_CAP, FAR_PULLS * pull / allowance)
+            elif allowance > 0 and on_top:
+                share = share + min(DAY_BEFORE_SHARE_CAP, DAY_BEFORE_PULLS * pull / allowance)
             elif allowance > 0:
                 share = max(share, min(DAY_BEFORE_SHARE_CAP, DAY_BEFORE_PULLS * pull / allowance))
         except Exception:                                    # noqa: BLE001

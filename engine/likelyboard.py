@@ -252,6 +252,8 @@ TIER_LABEL = dict(TIERS)
 #: A posted pick (`locked`) keeps its seat, as every posted pick does, and
 #: a reserve row (labelled, never staked) is the reserve's to show.
 NFL_TIGHT_BAR = 0.60
+#: College football's, the same (Ethan, 21 November; likely.LANE_MIN_PROB).
+CFB_TIGHT_BAR = 0.60
 NFL_UNDER_CAUTIONS = ("dog_pass_under", "long_trip_under", "body_clock_under",
                       "new_coach_under", "shootout_under")
 #: Positions whose unders the board holds, and the reason each pick says.
@@ -428,8 +430,15 @@ def tightened_reason(r: dict, sport: str) -> str | None:
     if r.get("locked") or r.get("reserve"):
         return None
     if sport == "cfb":
+        if not _cfb_tight():
+            return None
+        # The 60% bar (likely.LANE_MIN_PROB, 21 November), on every college pick but a touchdown.
+        prob = r.get("model_prob")
+        if lane_of(r) != "td" and prob is not None and float(prob) < CFB_TIGHT_BAR:
+            return (f"held back: our chance is {_below(float(prob), CFB_TIGHT_BAR)} — the college board asks "
+                    f"{CFB_TIGHT_BAR:.0%} of a prop or a game line")
         held = UNDER_MARKETS_HELD["cfb"].get(str(r.get("market") or ""))
-        if held and _cfb_tight() and _side(r) == "under" and lane_of(r) == "prop":
+        if held and _side(r) == "under" and lane_of(r) == "prop":
             return f"held back: {held}"
         return None
     if sport != "nfl" or not tightened(sport):
@@ -1004,13 +1013,39 @@ def _model_matchup(r: dict, steps: dict):
     return None, words + " — not enough to call"
 
 
+#: A COVERAGE READ EXPLAINS A RECEIVER'S PICK AND ADDS NOTHING (Ethan, 21
+#: November, decision 5 of v3.1's list: "Yes only shit that actually hold").
+#: v3.1 §5 gives a receiver's cornerback matchup no points, and its testing
+#: found none. The scan's read on a pass catcher (good, breakout, tough,
+#: avoid) is a coverage read, so in football it no longer backs his catches or
+#: his receiving yards toward Top. What counts there is the projection's own
+#: matchup step, the defence-vs-position transfer measured to hold
+#: (engine/defensevs), when it moved his number MODEL_MATCHUP_STEP toward this
+#: side. The read still shows on the card and the report: it explains the
+#: pick. `QB_COVERAGE_READ=on` puts it back.
+COVERAGE_READ_SPORTS = ("nfl", "cfb")
+COVERAGE_READ_MARKETS = ("receptions", "rec_yds", "targets")
+
+
+def coverage_read_counts() -> bool:
+    import os
+    return os.environ.get("QB_COVERAGE_READ", "").strip().lower() == "on"
+
+
 def matchup_check(r: dict, leans: dict, td_scores: dict, steps: dict | None = None,
-                  source: str = "scan"):
+                  source: str = "scan", sport: str = ""):
     lane = lane_of(r)
     if source == "none" and lane != "game":
         return None, "no matchup read for this sport yet"
     if source == "model" and lane == "prop":
         return _model_matchup(r, steps or {})
+    if (sport in COVERAGE_READ_SPORTS and lane == "prop" and r.get("market") in COVERAGE_READ_MARKETS
+            and not coverage_read_counts()):
+        backed, words = _model_matchup(r, steps or {})
+        lean = leans.get((r.get("player") or "", r.get("team") or "", r.get("market")))
+        if lean:
+            words += f" (the coverage read, {lean.get('label') or lean.get('read')}, explains the pick and is not counted)"
+        return backed, words
     if source == "scan+model" and lane == "prop" \
             and not leans.get((r.get("player") or "", r.get("team") or "", r.get("market"))):
         return _model_matchup(r, steps or {})
@@ -1046,13 +1081,16 @@ STRONG_READS = ("breakout", "avoid")
 STRONG_TD = 6
 
 
-def matchup_strength(r: dict, leans: dict, td_scores: dict, backed) -> int:
-    """2 strongly backed, 1 backed, 0 not (or no read)."""
+def matchup_strength(r: dict, leans: dict, td_scores: dict, backed, sport: str = "") -> int:
+    """2 strongly backed, 1 backed, 0 not (or no read). A pass catcher's
+    coverage read in football ranks nothing (COVERAGE_READ_SPORTS)."""
     if backed is not True:
         return 0
     lane = lane_of(r)
     if lane == "td":
         return 2 if (td_scores.get(r.get("player") or "") or 0) >= STRONG_TD else 1
+    if sport in COVERAGE_READ_SPORTS and r.get("market") in COVERAGE_READ_MARKETS and not coverage_read_counts():
+        return 1
     lean = leans.get((r.get("player") or "", r.get("team") or "", r.get("market")))
     return 2 if lean and lean.get("read") in STRONG_READS else 1
 
@@ -1315,7 +1353,7 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
                           + (f" — {r['ctx_note']}" if r.get("ctx_note") else "")
                           + (f" — {r['idea_note']}" if r.get("idea_note") else "")
                           + (f" — {r['trust_note']}" if r.get("trust_note") else ""))
-        checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores, steps, source)
+        checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores, steps, source, sport)
         # NOT A SECOND OPINION ON ITSELF (Ethan, 2026-10-03, "yeah make the
         # tier change"). A pick only the matchup picks or the touchdown
         # scenarios made was made BY the matchup read, so that read agreeing
@@ -1396,7 +1434,7 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         r.update({"lane": lane, "tier": tier, "tier_label": TIER_LABEL[tier],
                   "checks": checks, "check_notes": notes,
                   "record_seen": record_seen(record, r.get("market"), _side(r), prob),
-                  "matchup_strength": matchup_strength(r, leans, td_scores, checks["matchup"]),
+                  "matchup_strength": matchup_strength(r, leans, td_scores, checks["matchup"], sport),
                   "matchup_score": td_scores.get(r.get("player") or "") if lane == "td" else r.get("matchup_score")})
         # THE TIER'S REAL HIT RATE, on the tiers that claim more than they
         # hit (REAL_RATE_TIERS): the card shows it in place of our chance.

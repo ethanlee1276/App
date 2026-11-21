@@ -38,7 +38,9 @@ RULED_OUT = {"OUT", "IR", "DOUBTFUL"}
 
 def passers(conn, season: int, teams) -> dict:
     """{team: {"season": n, "usual": name, "last": name, "by": {name: yards},
-    "attempts": {name: games}}} from the college logs' passing yards."""
+    "games": {name: games}, "attempts": {name: passes}}} from the college
+    logs' passing yards, and each passer's attempts over this season and the
+    last (`attempts_of`)."""
     teams = [t for t in teams if t]
     if not teams:
         return {}
@@ -65,6 +67,27 @@ def passers(conn, season: int, teams) -> dict:
             last = max(t["periods"][newest], key=lambda p: t["periods"][newest][p])
             out[team] = {"season": yr, "usual": usual, "last": last,
                          "by": t["by"], "games": t["games"]}
+    try:
+        tried = attempts_of(conn, season, teams)
+    except Exception:                                        # noqa: BLE001
+        tried = {}
+    for team, q in out.items():
+        q["attempts"] = tried.get(team) or {}
+    return out
+
+
+def attempts_of(conn, season: int, teams) -> dict:
+    """{team: {name: passes}}: each passer's attempts in the college logs over
+    this season and the last (the NFL's replacement counts his own passes the
+    same way, engine/qbchange.quarterbacks)."""
+    teams = [t for t in teams if t]
+    if not teams:
+        return {}
+    q = ("SELECT team, player, SUM(value) FROM player_game_logs WHERE sport='cfb' AND market='pass_att' "
+         "AND season IN (?, ?) AND team IN (%s) GROUP BY team, player" % ",".join("?" * len(teams)))
+    out: dict = {}
+    for team, player, n in conn.execute(q, [int(season), int(season) - 1, *teams]).fetchall():
+        out.setdefault(team, {})[player] = int(float(n or 0))
     return out
 
 
@@ -83,13 +106,16 @@ def changes(qb: dict, injuries: list, priced_qbs: dict) -> dict:
                         key=lambda p: -q["by"][p])
         base = {"team": team, "starter": usual, "tier": "unmeasured",
                 "starter_games": q["games"].get(usual, 0)}
+        tried = q.get("attempts") or {}
+        # His own passes this season and last, where the logs count them (None where they do not).
+        passes = lambda name: (int(tried.get(name) or 0) if tried and name else None)   # noqa: E731
         if st in RULED_OUT:
             rep = this_week if this_week and this_week != usual else (others[0] if others else None)
             out[team] = {**base, "status": st, "replacement": rep,
-                         "replacement_attempts": None}
+                         "replacement_attempts": passes(rep)}
         elif this_week and this_week != usual:
             out[team] = {**base, "status": "BENCHED", "replacement": this_week,
-                         "replacement_attempts": None}
+                         "replacement_attempts": passes(this_week)}
         elif this_week == usual and last != usual:
             # The usual starter back: `starter` is who filled in, as the
             # NFL's RETURNS reads (qbchange.headline).
@@ -119,9 +145,20 @@ def card(ch: dict, own: bool = False, mult: float = 1.0) -> dict:
     words = headline(ch)
     if ch.get("status") == "BENCHED":
         words = f"{ch['replacement']} is the quarterback the books priced this week, not {ch['starter']}"
-    return {"team": ch["team"], "starter": ch["starter"], "status": ch["status"],
-            "replacement": ch.get("replacement"), "tier": ch.get("tier") or "unmeasured",
-            "headline": words, "detail": detail(ch), "applied": round(float(mult), 3), "note": note}
+    out = {"team": ch["team"], "starter": ch["starter"], "status": ch["status"],
+           "replacement": ch.get("replacement"), "tier": ch.get("tier") or "unmeasured",
+           "headline": words, "detail": detail(ch), "applied": round(float(mult), 3), "note": note}
+    # TOO FEW PASSES TO RATE, AS THE NFL'S CARD SAYS IT (v3.1 §8: "no pass-catcher
+    # legs on that team"; Ethan, 21 November, "6. Yes": v3.1's parlay rules for
+    # college too). A replacement with under GREEN_ATTEMPTS passes in the college
+    # logs this season and last: a catch or receiving-yards pick behind him tops
+    # out at Worth a look and is no parlay leg (likelyboard.METHOD_NEW_QB). Only
+    # where the logs counted his passes: a count they never took says nothing.
+    from ..qbchange import GREEN_ATTEMPTS
+    if (ch.get("status") != "RETURNS" and ch.get("replacement") and ch.get("replacement_attempts") is not None
+            and int(ch["replacement_attempts"]) < GREEN_ATTEMPTS):
+        out["unrated"] = True
+    return out
 
 
 def _measured() -> bool:

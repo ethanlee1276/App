@@ -1270,12 +1270,13 @@ def checks(row: dict, board: dict | None, league: str, prob: float | None) -> di
         leans = {}
     source = LB.MATCHUP_SOURCE.get(league, "none")
     lean = leans.get((row.get("player") or "", row.get("team") or "", row.get("market")))
+    steps = {(row.get("player") or "", row.get("market")): (s["mult"], s.get("why") or "")
+             for s in ((row.get("chain") or {}).get("steps") or [])
+             if isinstance(s, dict) and s.get("key") == "matchup" and s.get("mult") is not None}
     if lean:
-        c, n = LB.matchup_check(r, leans, {}, {}, "scan")
+        # (A pass catcher's coverage read in football is not counted: LB.COVERAGE_READ_SPORTS.)
+        c, n = LB.matchup_check(r, leans, {}, steps, "scan", league)
     elif source in ("scan+model", "model") or league in ("nba", "wnba", "nhl", "cbb"):
-        steps = {(row.get("player") or "", row.get("market")): (s["mult"], s.get("why") or "")
-                 for s in ((row.get("chain") or {}).get("steps") or [])
-                 if isinstance(s, dict) and s.get("key") == "matchup" and s.get("mult") is not None}
         c, n = LB._model_matchup(r, steps)
     else:
         c, n = None, "the matchup scan has no read on this market"
