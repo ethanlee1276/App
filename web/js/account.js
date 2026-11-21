@@ -2281,6 +2281,7 @@ const PW_WHY = {
   futures: ["Futures are for members", "Season-long prices, with our number against the book’s."],
   alerts: ["Alerts are for members", "Line moves, injuries and your players on tonight’s board, on your phone."],
   reportpicks: ["Game reports are for members", "A full report before every game, its picks and the parlays made of them — and how every one did, free on the Record."],
+  bestparlays: ["Best Parlays is for members", "Every parlay our game reports post, ranked best to worst — and how every one did, free on the Record."],
 };
 
 /* TWO WAYS IN, BEFORE ANYTHING ELSE (Ethan, 2026-10-26: "the paywall page

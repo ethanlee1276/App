@@ -874,7 +874,7 @@ def test_the_parlays_page_left_every_league():
         "Parlay Mode's plumbing outlived it"
     order = APP[APP.index("const VIEW_ORDER = ["):APP.index("];", APP.index("const VIEW_ORDER = ["))]
     assert '"parlays"' not in order and '"reportpicks"' in order
-    assert 'const MOVED_VIEWS = { parlays: "reportpicks" };' in APP, "#parlays lands on Report Picks"
+    assert 'const MOVED_VIEWS = { parlays: "bestparlays" };' in APP, "#parlays lands on the Best Parlays page (21 November)"
 
 
 def test_no_league_lists_a_parlays_tab_to_hide():

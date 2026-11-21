@@ -152,6 +152,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # None is the leg a book quotes, so a failure returns {"why": "error"}, its
         # own count on the heartbeat (one_book_gaps), which no quoted leg reads as.
         "leg_gap",
+        # THE BEST PARLAYS' RANKING (engine/gameparlays.rank_parlays, 2026-11-21),
+        # caught by this sweep the hour it was written: empty lists are also the
+        # quiet day with no parlays, so a failure prints once a process, is kept in
+        # RANK_ERROR and rides the ranking itself (`error`), which the Best Parlays
+        # page says out loud ("the ranking did not build") and no quiet day carries.
+        "rank_parlays",
         # A GAME'S REBUILD FROM ITS REPORT'S PICKS (engine/gamereport._parlays_from_picks,
         # 2026-11-19): None either way, but a failure prints, is kept on the game's
         # entry (rebuild_error) and the heartbeat counts it (threes_short_why), which

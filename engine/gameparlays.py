@@ -2152,6 +2152,139 @@ def label_tickets(x: dict, sport: str, index: dict | None = None, carried: dict 
     return x
 
 
+# --- the best parlays, ranked ----------------------------------------------------------------------
+#: THE BEST PARLAYS, BEST TO WORST (Ethan, 21 November 2026: "Add a feature where
+#: it takes the best two leg and three leg parlays for each sport and ranks them
+#: like how we rank the most likely picks for the best parlays to the worst
+#: parlays to pick. I want that on a separate page and I want player prop
+#: parlays and touchdown parlays to have their own separate sections").
+#:
+#: Every ticket a league's game reports posted, ranked across its games, a
+#: list a kind: the two-leg player-prop tickets, the three-leg ones, and the
+#: scorer pairs (football's touchdown pairs, hockey's goal scorers). Ranked the
+#: way the Most Likely board ranks a pick (engine/likelyboard `tier_of`): a set
+#: of checks, each for, against or unable to say, and a tier from how they
+#: agree, then our chance inside the tier. Top: every check agrees. Strong: one
+#: is against. Worth a look: the rest. A ticket's checks:
+#:   class     its class by v3.1's bars (`ticket_class`): a two-leg ticket Safe
+#:             or Balanced, a three-leg one Pop or better (25%+ together, what
+#:             three legs are by v3.1's own targets); not a long shot;
+#:   book      one sportsbook has every leg at its number (`one_book`), so it
+#:             can be placed as written; unknown says nothing;
+#:   own       every leg is the game report's own pick, none a fill;
+#:   price     a book's same-game price can plausibly pay what it needs
+#:             (`ticket` ``playable``);
+#:   together  it wins with the game's other tickets (no APART_NOTE).
+#: A scorer pair's: each scorer at our touchdown rule (TD_RULE_PAIR, football;
+#: hockey's pair at its own floor, SCORER_FLOOR), no stand-in scorer, and
+#: together; inside a tier, football's pairs by their research (`_research_of`),
+#: then our chance, as each game chooses them (`scorer_rank`).
+#: A ticket with a leg no book lists now (`one_book` ``gone``) cannot be placed
+#: as written and is left off, counted; so is a started game's kept entry.
+RANK_TIERS = (("top", "Top parlays", "Every check agrees."),
+              ("strong", "Strong", "All but one check agrees."),
+              ("look", "Worth a look", "Two checks or more are against it."))
+RANK_KINDS = ("twos", "threes", "scorers")
+RANK_AGAINST = {"class": "a long shot by the classes (under 25% together)",
+                "class2": "not Safe or Balanced (every leg 60%+ and 36%+ together)",
+                "book": "no one book has every leg at its number",
+                "own": "a leg is one of the game's other props, not a report pick",
+                "price": "a book's same-game price likely pays less than it needs",
+                "together": "it needs the game to go another way from this game's other tickets",
+                "rule": "a scorer is under our touchdown rule (40%)",
+                "floor": "under the pair's bar together",
+                "stand_in": "a stand-in scorer fills a place"}
+
+
+def rank_checks(t: dict, kind: str, sport: str) -> dict:
+    """One ticket's checks for the ranking (RANK_TIERS): {check: True | False | None}."""
+    caveats = t.get("caveats") or []
+    together = APART_NOTE not in caveats
+    if kind == "scorers":
+        legs = t.get("legs") or []
+        if sport in TD_RULE_SPORTS:
+            rule = bool(legs) and all(float(l.get("p") or 0) >= TD_RULE_PAIR for l in legs)
+            return {"rule": rule, "stand_in": not t.get("stand_ins"), "together": together}
+        return {"floor": float(t.get("joint") or 0) >= SCORER_FLOOR.get(sport, LONG_FLOOR),
+                "stand_in": not t.get("stand_ins"), "together": together}
+    cls = t.get("class")
+    ob = t.get("one_book") or {}
+    out = {("class2" if kind == "twos" else "class"): (cls in ("safe", "balanced") if kind == "twos"
+                                                       else cls in ("safe", "balanced", "pop")) if cls else None,
+           "book": True if ob.get("book") else False if ob.get("none") else None,
+           "own": not t.get("filled"),
+           "price": None if t.get("playable") is None else bool(t.get("playable")),
+           "together": together}
+    return out
+
+
+def rank_tier(checks: dict) -> str:
+    """Top: no check against. Strong: one against. Worth a look: two or more."""
+    against = sum(1 for v in checks.values() if v is False)
+    return "top" if not against else "strong" if against == 1 else "look"
+
+
+#: The ranking's last failure in this process (`rank_parlays`), None while it works.
+RANK_ERROR: str | None = None
+
+
+def rank_parlays(gp: dict, sport: str) -> dict:
+    """``{kind: [entry]}`` for RANK_KINDS, each list best to worst, and what was left off. An entry is
+    ``{"game", "i", "tier", "against", "joint", "rank"}``: the game ("AWAY@HOME"), the ticket's place in
+    that game's list, its tier, the checks against it (RANK_AGAINST's keys), our chance, and its place
+    in the list. Never raises: a board it cannot read ranks nothing, and says so (``error``, printed once
+    a process and kept in RANK_ERROR), since empty lists are also the quiet day with no parlays."""
+    global RANK_ERROR
+    out: dict = {k: [] for k in RANK_KINDS}
+    out["left_off"] = {"gone": 0, "started": 0}
+    try:
+        sp = str(sport or (gp or {}).get("sport") or "").lower()
+        order = {t: i for i, (t, _w, _x) in enumerate(RANK_TIERS)}
+        for kind in RANK_KINDS:
+            rows = []
+            for x in (gp or {}).get("games") or []:
+                if not isinstance(x, dict) or not x.get("away") or not x.get("home"):
+                    continue
+                for i, t in enumerate(x.get(kind) or []):
+                    if not isinstance(t, dict) or not t.get("legs"):
+                        continue
+                    if x.get("kept"):
+                        out["left_off"]["started"] += 1
+                        continue
+                    if (t.get("one_book") or {}).get("gone"):
+                        out["left_off"]["gone"] += 1
+                        continue
+                    checks = rank_checks(t, kind, sp)
+                    tier = rank_tier(checks)
+                    research = _research_of(t) if kind == "scorers" and sp in RESEARCH_SPORTS else 0
+                    key = (order[tier], -research, -float(t.get("joint") or 0), -float(t.get("ev_at_naive") or -9))
+                    rows.append((key, {"game": f"{x['away']}@{x['home']}", "i": i, "tier": tier,
+                                       "against": [k for k, v in checks.items() if v is False],
+                                       "joint": round(float(t.get("joint") or 0), 4)}))
+            rows.sort(key=lambda r: r[0])
+            for n, (_k, e) in enumerate(rows, 1):
+                e["rank"] = n
+                out[kind].append(e)
+        RANK_ERROR = None
+    except Exception as exc:                                 # noqa: BLE001
+        why = f"{type(exc).__name__}: {exc}"
+        if RANK_ERROR != why:
+            print(f"  ⚠️ the best parlays were not ranked ({why}); the page says so")
+        RANK_ERROR = why
+        out = {k: [] for k in RANK_KINDS}
+        out["left_off"] = {"gone": 0, "started": 0}
+        out["error"] = why
+    return out
+
+
+def attach_ranked(board: dict, sport: str) -> None:
+    """The board's ranked parlays (`rank_parlays`) on its `game_parlays` (a paid key, as the tickets are).
+    Never raises."""
+    gp = (board or {}).get("game_parlays")
+    if isinstance(gp, dict):
+        gp["ranked"] = rank_parlays(gp, sport)
+
+
 # --- one game ---------------------------------------------------------------------------------
 def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
     """One ticket as the report and the Parlays page draw it: a title, the
@@ -2787,6 +2920,7 @@ def attach(board: dict, sport: str) -> dict:
             board["game_parlays"]["pooled"] = True
     except Exception as exc:                                 # noqa: BLE001
         board["game_parlays"] = {"sport": sport, "games": [], "note": f"the game parlays did not build: {exc}"}
+    attach_ranked(board, sport)
     return board
 
 
@@ -3340,6 +3474,8 @@ def report_only(board: dict) -> int:
         x["posted_kept"], x["posted_replaced"] = _turnover(x, mine)
     board.pop(POSTED_KEY, None)
     gp["from_reports"] = True
+    # The best parlays ranked again, on the tickets the reports posted (RANK_TIERS).
+    attach_ranked(board, str(gp.get("sport") or ""))
     c = gp.get("counts")
     if isinstance(c, dict):
         live = [x for x in gp.get("games") or [] if isinstance(x, dict)]

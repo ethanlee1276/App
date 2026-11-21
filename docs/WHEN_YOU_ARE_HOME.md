@@ -9338,6 +9338,33 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAL. Every report parlay ranked best to worst, on its own page** (step 826; 21 November). Nothing to run. You
+asked for each sport's best two-leg and three-leg parlays ranked the way the Most Likely picks are, best to worst,
+on a separate page, with the player-prop parlays and the touchdown parlays in sections of their own. The new **Best
+Parlays** page sits in the menu right under Report Picks (on the phone, in the menu's Picks group), and an old
+#parlays link now opens it. It shows the league on the sport row: every parlay that league's game reports posted,
+ranked across all of its games. Two sections, each its own tab: **Player prop parlays**, with a Two-leg / Three-leg
+switch (each size ranked on its own), and **Touchdown parlays** (Goal-scorer parlays in hockey; a league with no
+scorer pairs shows only the first). The ranking works the way Most Likely ranks a pick: each ticket goes through a
+set of checks, its tier comes from how many it fails, and our chance of the whole ticket orders it inside the tier.
+**Top parlays** pass every check, **Strong** fail one, **Worth a look** fail two or more. A player-prop parlay's
+checks: its class (a two-leg ticket Safe or Balanced; a three-leg ticket Pop or better, 25% or better together), one
+sportsbook has every leg at its number, every leg is the report's own pick (no fill leg), a book's same-game price
+can plausibly pay what the ticket needs, and it does not need the game to go a different way from the game's other
+tickets. A touchdown pair's: each scorer at our 40% touchdown rule (in hockey, the pair at 25% together), no
+stand-in scorer, and the same together check; inside a tier, football's pairs go by their research score first, then
+our chance. Each card shows its place, the game and kickoff, our chance, the tier and class, each leg with its
+price, book and our chance, the price to take it at and the fair price, the one book that has it whole, and which
+checks are against it; its button opens the game and its report. Chips above each section filter by tier, with
+counts; a tier shows 20 cards, then a Show all button. A game that has started drops off the list (the page is for
+picking), and so does a ticket with a leg no book lists any more; a line at the bottom counts both. Members only, as
+the reports' parlays are: a visitor without a plan sees the lock, and the plans page says what the page holds. The
+server makes the ranking when each board builds and again after the reports post their own tickets, so the page
+ranks exactly the tickets the reports show. If the ranking ever fails, the page says so rather than looking like a
+quiet day. The page's two files are served whole until the Caddy reinstall already waiting under Commands waiting
+for you (00k) is run; the same command now serves them trimmed too. Checked here on a made-up NFL board, at phone
+width and on a 1280px desktop, both sections, and by a new browser test.
+
 **AAK. Baseball's live game page is the one game page too** (step 825; 21 November). Nothing to run. Step AAI left
 baseball on four rooms of its own (Game info, Our picks, Injuries, Player stats) under its ballpark card. Now every
 sport is drawn by the same page, baseball included, so a change to the NFL's page reaches it as it reaches the
@@ -18351,10 +18378,11 @@ cd /srv/qellys && sudo -u qellys python3 tools/parlay_study.py
 ```
 
 After the box picks this up, the page is live. (It left every league on 16
-November, step TQ, and this check now finds where its old links land.)
+November, step TQ, and this check now finds where its old links land: Report Picks,
+and the Best Parlays page since 21 November, step AAL.)
 
 ```
-curl -s https://qellysbook.com/js/app.js | grep -c 'const MOVED_VIEWS = { parlays: "reportpicks" };'
+curl -s https://qellysbook.com/js/app.js | grep -c 'const MOVED_VIEWS = { parlays: "bestparlays" };'
 ```
 
 The check in one go:

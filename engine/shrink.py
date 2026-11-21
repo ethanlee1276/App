@@ -59,6 +59,8 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          "js/potd.js", "css/potd.css",
          # Every bet and parlay the game reports posted (2026-11-16).
          "js/reportpicks.js", "css/reportpicks.css",
+         # Every report parlay, ranked best to worst (2026-11-21).
+         "js/bestparlays.js", "css/bestparlays.css",
          # Every player's game log (2026-11-16).
          "js/gamelog.js", "css/gamelog.css",
          # Every player's own page (2026-11-16).

@@ -48,7 +48,8 @@ def test_the_nightly_six_lead_and_nothing_else_does():
     # Parlays joined it after Long Shots on 2026-10-31 — Ethan: "make the parlay feature an actual button".
     # Report Picks joined it after Parlays on 2026-11-16 — Ethan: "we should have a page like the most likely bets page but all game report parlays and bets".
     # Parlays left it the same day — Ethan: "get rid of these parlays and the parlay page for all sports since we have replaced it with the game report picks and parlays".
-    assert _labels(TIER1) == ["Dashboard", "Most Likely", "Ask Qellys", "Long Shots", "Report Picks",
+    # Best Parlays joined it after Report Picks on 2026-11-21 — Ethan: "ranks them like how we rank the most likely picks ... I want that on a separate page".
+    assert _labels(TIER1) == ["Dashboard", "Most Likely", "Ask Qellys", "Long Shots", "Report Picks", "Best Parlays",
                               "Edge Picks", "Live Now", "My Bets", "Record"], _labels(TIER1)
 
 

@@ -493,9 +493,9 @@ const HIDDEN_VIEWS = {
   // The Parlays page left every league 2026-11-16 (Ethan: "get rid of these
   // parlays and the parlay page for all sports since we have replaced it with
   // the game report picks and parlays"), so no league lists it here.
-  ufc: ["reportpicks", "futures", "injuries", "weather", "race"],
-  polymarket: ["reportpicks", "futures", "weather", "race"],
-  fantasy: ["reportpicks", "futures", "weather", "race"],
+  ufc: ["reportpicks", "bestparlays", "futures", "injuries", "weather", "race"],
+  polymarket: ["reportpicks", "bestparlays", "futures", "weather", "race"],
+  fantasy: ["reportpicks", "bestparlays", "futures", "weather", "race"],
   // Players and Rosters OPENED 2026-08-24: the "no free player-level
   // feed" claim was stale — ESPN's keyless box scores (the same API
   // family the CFB scoreboard reads) now feed player_game_logs, so both
@@ -912,14 +912,17 @@ const HIDDEN_WHY = {
   cbb: { longshots: "no first-basket market is bought for college games",
          weather: "played indoors" },
   ufc: { reportpicks: "each fight’s written report sits under its card on the UFC tab",
+         bestparlays: "a fight card posts no game parlays",
          futures: "a fight card has no season-long market",
          injuries: "no commission publishes an MMA injury report",
          weather: "fights are indoors", race: RACE_WHY },
   polymarket: { futures: "not a season-long market",
                 reportpicks: "a contract has no game report",
+                bestparlays: "a contract has no game report",
                 weather: "not a sporting venue", race: RACE_WHY },
   fantasy: { futures: "not a betting market",
              reportpicks: "not a betting market",
+             bestparlays: "not a betting market",
              weather: "no single venue to report", race: RACE_WHY },
   // Long Shots LEFT this list 2026-08-25: "full-game markets only" went
   // stale when engine/cfb/tds.py shipped — anytime-TD quotes are pulled
@@ -3457,7 +3460,7 @@ addEventListener("online", refreshStaleBar);
    THAT DRAW THE BOARD: the plans page, the Record, My Bets and the
    reference pages show none of its games, and a demo warning over
    the plans page was noise (seen in the first render). */
-const BOARD_VIEWS = ["recommended", "tonight", "likely", "props", "edge", "longshots", "reportpicks", "live",
+const BOARD_VIEWS = ["recommended", "tonight", "likely", "props", "edge", "longshots", "reportpicks", "bestparlays", "live",
   "scanner", "game", "prop", "pbp", "trending", "players", "futures"];
 function boardViewNow() { return BOARD_VIEWS.includes(state.view); }
 function slateNotice(d) {
@@ -4620,6 +4623,7 @@ const OFFSCREEN_PAGES = [
   ["scanner-body", () => renderScanner(), true],
   ["longshots-board", () => renderLongShots()],
   ["reportpicks-body", () => renderReportPicks(), true],
+  ["bestparlays-body", () => renderBestParlays(), true],
   ["likely-board", () => renderLikely(), true],
   ["trending-board", () => renderTrending()],
   ["players-board", () => renderPlayers()],
@@ -22946,6 +22950,8 @@ function renderRace(...a) { return roomCall(renderRace, "renderRace", "js/race.j
 function renderPotdPage(...a) { return roomCall(renderPotdPage, "renderPotdPage", "js/potd.js", "css/potd.css", a); }
 // …and every bet and parlay the game reports posted (js/reportpicks.js; Ethan, 2026-11-16).
 function renderReportPicks(...a) { return roomCall(renderReportPicks, "renderReportPicks", "js/reportpicks.js", "css/reportpicks.css", a); }
+// …and the best of those parlays, every one ranked best to worst (js/bestparlays.js; Ethan, 2026-11-21).
+function renderBestParlays(...a) { return roomCall(renderBestParlays, "renderBestParlays", "js/bestparlays.js", "css/bestparlays.css", a); }
 // …and how our reports did, the same section, on the Record page (js/reportpicks.js rpFactsInto).
 function rpFactsInto(...a) { return roomCall(rpFactsInto, "rpFactsInto", "js/reportpicks.js", "css/reportpicks.css", a); }
 // The reports' picks and parlays record, drawn on the Report Picks page's Record tab (record.js).
@@ -23503,7 +23509,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "reportpicks", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "owner", "discord", "feed", "signup", "reset", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "reportpicks", "bestparlays", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "owner", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -24296,6 +24302,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "likely") renderLikely();
   if (name === "tonight") renderTonight();
   if (name === "reportpicks") renderReportPicks();
+  if (name === "bestparlays") renderBestParlays();
   if (name === "rosters") renderRosters();
   if (name === "injuries") renderInjuries();
   if (name === "standings") renderStandings();
@@ -25695,7 +25702,7 @@ function urlBackToView() {
    picks and parlays"): a bookmark or a shared #parlays opens Report Picks,
    which carries each game's parlays, and the address says so. Both routers
    ask, so a cold load and a click agree (the #parlays lesson upstairs). */
-const MOVED_VIEWS = { parlays: "reportpicks" };
+const MOVED_VIEWS = { parlays: "bestparlays" };
 function movedView(h) {
   const to = MOVED_VIEWS[h];
   if (!to) return h;
@@ -30297,7 +30304,7 @@ function tourOpen(step) {
 const SWIPE_MIN_X = 70, SWIPE_MAX_Y = 40, PTR_MIN = 72;
 //: The views that follow the sport chips. A detail page, the chat, the
 //: account page and the standalone modes are not boards.
-const SWIPE_VIEWS = ["recommended", "tonight", "live", "likely", "longshots", "reportpicks", "edge", "scanner",
+const SWIPE_VIEWS = ["recommended", "tonight", "live", "likely", "longshots", "reportpicks", "bestparlays", "edge", "scanner",
                      "futures", "injuries", "weather", "trending", "rosters", "players", "standings"];
 const BUZZ = { tap: [12], win: [30, 40, 30], loss: [70] };
 
@@ -30432,7 +30439,7 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
 const MORE_GROUPS = [
   // Report Picks after Long Shots, as in the sidebar; the Parlays page that
   // sat between them left 2026-11-16 (the game report parlays replaced it).
-  ["Picks", ["view:likely", "view:longshots", "view:reportpicks", "view:zeno", "view:feed"]],
+  ["Picks", ["view:likely", "view:longshots", "view:reportpicks", "view:bestparlays", "view:zeno", "view:feed"]],
   ["Odds", ["view:props", "view:edge", "subtab:gamebets", "view:scanner", "view:futures", "view:race"]],
   ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",

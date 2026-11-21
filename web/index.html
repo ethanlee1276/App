@@ -413,6 +413,12 @@
         <button class="nav-btn sb-item" data-view="reportpicks" id="reportpicks-tab" data-hint="every bet and parlay from the game reports">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 10h6M9 14h6M9 18h4"/></svg>
           Report Picks</button>
+        <!-- BEST PARLAYS (Ethan, 2026-11-21): every two-leg, three-leg and touchdown parlay
+             the game reports posted, ranked best to worst the way Most Likely ranks a pick
+             (js/bestparlays.js, engine/gameparlays.rank_parlays). An old #parlays link opens it. -->
+        <button class="nav-btn sb-item" data-view="bestparlays" id="bestparlays-tab" data-hint="the reports' parlays, ranked best to worst">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>
+          Best Parlays</button>
         <button class="nav-btn sb-item" data-view="edge" data-hint="where our number beats the price — the picks we stake">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
           Edge Picks</button>
@@ -1327,6 +1333,14 @@
         <span class="sub" id="reportpicks-sub">— every bet and parlay from our game reports</span>
       </div>
       <div id="reportpicks-body"></div>
+    </section>
+
+    <!-- Best Parlays: the reports' parlays ranked best to worst (renderBestParlays). -->
+    <section class="view" id="view-bestparlays">
+      <div class="section-title">Best Parlays
+        <span class="sub" id="bestparlays-sub">— every report parlay, ranked best to worst</span>
+      </div>
+      <div id="bestparlays-body"></div>
     </section>
 
     <!-- Futures. The one page here that is about months rather than tonight,

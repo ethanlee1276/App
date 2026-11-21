@@ -12,8 +12,8 @@ What the page showed lives on, or goes, like this:
 * the Edge and Most Likely two-leg tickets (engine/twoleg) are no longer
   built: no board carries `two_leg`, nothing new is journaled, and their
   record stays on the Record page, marked retired;
-* an old #parlays link opens Report Picks, and Ask answers "parlays" from
-  each game's report parlays.
+* an old #parlays link opens Report Picks (the Best Parlays page since 21
+  November), and Ask answers "parlays" from each game's report parlays.
 
 Run directly: `python3 tests/test_the_parlays_page_is_gone.py`
 """
@@ -52,10 +52,13 @@ def test_no_menu_has_a_door_to_it():
 def test_every_list_of_pages_forgot_it():
     for start in ("const VIEW_ORDER = [", "const BOARD_VIEWS = [", "const SWIPE_VIEWS = [",
                   "const OFFSCREEN_PAGES = ["):
-        assert "parlays" not in _block(start), start
+        # Quoted: the old page's name, not Best Parlays' ("bestparlays", 21 November).
+        assert '"parlays"' not in _block(start), start
     assert '"parlays"' not in _block("const EMPTY_DOOR_VIEWS = new Set([", "]);")
     assert '"parlays"' not in _block("const HIDDEN_VIEWS = {", "};")
-    assert "parlays:" not in _block("const HIDDEN_WHY = {", "};")
+    # A key of its own, not Best Parlays' ("bestparlays:", 21 November).
+    import re
+    assert not re.search(r"(?<![a-z])parlays:", _block("const HIDDEN_WHY = {", "};"))
     for gone in ("function renderParlayPage(", "function fillGameParlays(", "const TL_POOLS", "function tlTicketHTML(",
                  'if (name === "parlays")'):
         assert gone not in APP, gone
@@ -67,10 +70,12 @@ def test_every_list_of_pages_forgot_it():
     assert ".tl-card" not in _read("web", "css", "styles.css")
 
 
-def test_an_old_link_opens_report_picks():
-    """A bookmark or a shared #parlays opens the page that carries each game's
-    parlays, and the address says so, on a cold load and on a click alike."""
-    assert 'const MOVED_VIEWS = { parlays: "reportpicks" };' in APP
+def test_an_old_link_opens_the_best_parlays():
+    """A bookmark or a shared #parlays opens the page that carries every game's
+    parlays, and the address says so, on a cold load and on a click alike: Report
+    Picks until 21 November 2026, the ranked Best Parlays page since (Ethan: "takes
+    the best two leg and three leg parlays for each sport and ranks them")."""
+    assert 'const MOVED_VIEWS = { parlays: "bestparlays" };' in APP
     assert APP.count('const h = movedView((location.hash || "").replace("#", ""));') == 2, "both routers ask"
     fn = APP[APP.index("function movedView(h) {"):APP.index("function initialView() {")]
     assert 'history.replaceState(history.state, "", `#${to}`)' in fn
@@ -150,13 +155,19 @@ def _browser(run):
         srv.shutdown()
 
 
-def test_in_a_browser_the_menu_has_no_parlays_and_an_old_link_lands_on_report_picks():
+def test_in_a_browser_the_menu_has_no_parlays_and_an_old_link_lands_on_the_best_parlays():
+    leg = lambda who, m, line, p: {"player": who, "team": "BUF", "market": m, "side": "Over", "line": line,  # noqa: E731
+                                   "odds": -115, "p": p}
     board = {"sport": "nfl", "date": "2026-11-16", "recommendations": [], "most_likely": [],
              "games": [{"home": "BUF", "away": "LAC", "date": "2026-11-16", "kickoff": "13:00"}],
              "game_parlays": {"games": [{"game": "LAC @ BUF", "home": "BUF", "away": "LAC", "threes": [
-                 {"joint": 0.3, "independent": 0.25, "fair_words": "+233", "take_words": "+270", "legs": [
-                     {"player": "Josh Allen", "team": "BUF", "market": "pass_yds", "side": "Over", "line": 249.5,
-                      "odds": -115, "p": 0.6}]}], "scorers": []}]}}
+                 {"joint": 0.3, "independent": 0.25, "fair_words": "+233", "take_words": "+270", "class": "pop", "legs": [
+                     leg("Josh Allen", "pass_yds", 249.5, 0.6), leg("James Cook", "rush_yds", 59.5, 0.62),
+                     leg("Dalton Kincaid", "receptions", 3.5, 0.66)]}], "scorers": []}],
+                 # The ranking the build puts on it (engine/gameparlays.rank_parlays), since 21 November.
+                 "ranked": {"twos": [], "threes": [{"game": "LAC@BUF", "i": 0, "tier": "strong", "against": ["book"],
+                                                    "joint": 0.3, "rank": 1}],
+                            "scorers": [], "left_off": {"gone": 0, "started": 0}}}}
 
     def run(browser, port):
         ctx = browser.new_context(viewport={"width": 412, "height": 823}, is_mobile=True, has_touch=True,
@@ -171,16 +182,16 @@ def test_in_a_browser_the_menu_has_no_parlays_and_an_old_link_lands_on_report_pi
         page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');}"
                              "catch(e){}")
         page.goto(f"{local}index.html?sport=nfl#parlays", wait_until="load")
-        page.wait_for_function("() => typeof state !== 'undefined' && state.view === 'reportpicks'", timeout=30000)
-        page.wait_for_selector("#view-reportpicks .rpk-game", timeout=30000)
+        page.wait_for_function("() => typeof state !== 'undefined' && state.view === 'bestparlays'", timeout=30000)
+        page.wait_for_selector("#view-bestparlays .bp-card", timeout=30000)
         out = {"hash": page.evaluate("location.hash"),
                "menu": page.evaluate("[...document.querySelectorAll('.nav-btn')].map((b) => b.textContent.trim())"),
-               "game": page.inner_text("#view-reportpicks .rpk-game summary")}
+               "game": page.inner_text("#view-bestparlays .bp-card .bp-game")}
         # And a click on an old link inside the app, not only a cold load.
         page.evaluate("location.hash = '#recommended'")
         page.wait_for_function("() => state.view === 'recommended'", timeout=10000)
         page.evaluate("location.hash = '#parlays'")
-        page.wait_for_function("() => state.view === 'reportpicks'", timeout=10000)
+        page.wait_for_function("() => state.view === 'bestparlays'", timeout=10000)
         out["hash2"] = page.evaluate("location.hash")
         out["errors"] = errors
         ctx.close()
@@ -188,8 +199,8 @@ def test_in_a_browser_the_menu_has_no_parlays_and_an_old_link_lands_on_report_pi
     got = _browser(run)
     if got is None:
         return
-    assert got["hash"] == "#reportpicks" and got["hash2"] == "#reportpicks", got
-    assert "Parlays" not in got["menu"] and "Report Picks" in got["menu"], got["menu"]
+    assert got["hash"] == "#bestparlays" and got["hash2"] == "#bestparlays", got
+    assert "Parlays" not in got["menu"] and "Report Picks" in got["menu"] and "Best Parlays" in got["menu"], got["menu"]
     assert "BUF" in got["game"] or "Bills" in got["game"], got["game"]
     assert not got["errors"], got["errors"]
 

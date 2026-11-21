@@ -114,7 +114,8 @@ const FEATURES = [
     ["Game Lines", "Moneylines, spreads and totals with the model’s number beside the book’s — and the book actually posting each side named on the card.", "futures"],
     ["Best price per book", "Odds shopping on every card: the best number available for the side taken, book by book, so you never bet a worse price than exists.", null],
     ["Reserve tier", "A thin shelf fills from a labelled reserve rather than publishing empty. The tier says it is a reserve; it is never dressed up as a recommendation.", null],
-    ["Report Picks", "Every bet our game reports post, game by game: each report’s picks, its matchup reads’ picks, its breakout candidates and fades, with the price and our chance, then the game’s three-leg parlays and pairs. It opens with how the last slate’s reports did, in one line. All of it graded under Report bets on the Record page.", "reportpicks"]]],
+    ["Report Picks", "Every bet our game reports post, game by game: each report’s picks, its matchup reads’ picks, its breakout candidates and fades, with the price and our chance, then the game’s three-leg parlays and pairs. It opens with how the last slate’s reports did, in one line. All of it graded under Report bets on the Record page.", "reportpicks"],
+    ["Best Parlays", "Every parlay our game reports post, ranked best to worst across the league’s games, the way Most Likely ranks a pick: Top parlays, Strong and Worth a look, then our chance of the whole ticket. The two-leg and three-leg player-prop parlays are one section, the touchdown pairs (goal scorers in hockey) another. Each card shows its legs with their prices, our chance, the one book that has it whole and what keeps it out of the tier above.", "bestparlays"]]],
 
   ["Live", "While the games are actually on",
    [["Live Now", "Every game in progress across every league we model, with the score, the clock, and your open bets on each one.", "live"],
