@@ -613,7 +613,8 @@ def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> lis
             k = (leg.get("player"), leg.get("market"), str(leg.get("side") or "").upper(), leg.get("line"))
             if k not in got or _speaks_first(leg, got[k]):
                 got[k] = leg
-    return still_to_play(list(got.values()), board, now)
+    # …each carried pick whose number no book lists now marked, for `tickets_of` (step AAE).
+    return mark_unlisted(still_to_play(list(got.values()), board, now), board)
 
 
 def scorer_legs(board: dict, sport: str, now=None, floor: float | None = None) -> list[dict]:
@@ -1780,28 +1781,56 @@ def ticket_class(sport: str, t: dict) -> dict:
 #: book has every leg at its number (the one that pays most on them), or that
 #: none in our pull does. Read off every book's quote on the board's prop rows
 #: and on its pick rows, which carry their own (engine/sliplive.quote_index's
-#: shape), and off each leg's own book and price. "None does" is said only of
-#: a ticket whose every leg has its books' quotes on file; one with a leg we
-#: hold no quotes for says nothing unless its legs' own books agree.
+#: shape); never a sharp book's, which nobody here can bet (odds.is_sharp_book).
+#: "None does" is said only of a ticket whose every leg has its books' quotes
+#: on file.
 #:
-#: The first boards (20 November, the heartbeat's ``one_book``) could speak for
-#: half the tickets: 31 of the NFL's 67 and 10 of college's 19 had a leg with
-#: no quote found on the prop rows alone. ``one_book_legs`` now counts why,
-#: leg by leg (launch._board_counts).
+#: A PICK CARRIED AT ITS POSTED NUMBER (step AAE, 2026-11-21). A Most Likely
+#: pick stays up at the number, price and book it was posted at while the
+#: books move (engine/likely `lock`: "The number, the price and the book stay
+#: as posted"), and a leg made from it carries those. The first board that
+#: counted (20 November, the heartbeat's ``one_book_legs``) had 35 of the NFL's
+#: 165 legs with their prop on file and no book at their number, on the Friday
+#: before a Sunday whose picks had gone up from the Thursday; ``unlisted`` now
+#: counts how many such legs are carried picks (LEG_QUOTES). So:
+#:
+#:   * a carried pick's own book and price is the one it went up at, never a
+#:     quote today. Step AAD counted every leg's own book as a quote, which let
+#:     the line name a book at a price that book no longer showed;
+#:   * a ticket with a leg no book lists now says so in the line's place: it
+#:     cannot be placed as written, which leg, and the nearest number a book
+#:     has (`one_book` ``gone``), as the pick's own card does
+#:     (web/js/app.js likelyNowHTML);
+#:   * a ticket not posted before takes no such leg, nor does a backup
+#:     (`tickets_of`); one already posted stays, as `choose` keeps it.
+#:
+#: A leg priced on this build still counts its own book and price: its row is
+#: this build's, so that quote is today's whatever else is on file.
 _QUOTES: dict = {}
-#: The board's lists whose rows carry every book's quotes (`all_lines`, `alt_lines`).
+#: The board's lists whose rows carry every book's quotes (`all_lines`, `alt_lines`); the matchup
+#: picks' rows sit a game deep (engine/matchpicks: ``{"game", "td": [...], "props": [...]}``).
 QUOTE_LISTS = ("recommendations", "most_likely", "matchup_picks")
+#: Where a leg's books stand (`leg_quoted`), in the heartbeat's order.
+LEG_QUOTES = ("quoted", "unlisted", "no_quote", "no_row")
 
 
-def quote_index(board: dict) -> dict:
-    """Every book's number on every prop the board priced: off its prop rows and its pick rows
-    (QUOTE_LISTS, the one board's rows), in sliplive.quote_index's shape, read once a board."""
+def _board_reads(board: dict) -> dict:
+    """The board's quotes and its carried picks, read once a board (and again when its lists change).
+    Never raises: a list it cannot read is left empty, and the carried picks' failure is kept under
+    ``error`` for `mark_unlisted` to say."""
     if not isinstance(board, dict):
-        return {}
-    if _QUOTES.get("board") is not board:
-        rows = [r for k in QUOTE_LISTS for r in board.get(k) or [] if isinstance(r, dict)]
-        lb = board.get("likely_board")
-        rows += [r for r in ((lb or {}).get("rows") or []) if isinstance(r, dict)] if isinstance(lb, dict) else []
+        return {"index": {}, "carried": {}}
+    lb = board.get("likely_board")
+    lists = [board.get(k) if isinstance(board.get(k), list) else [] for k in QUOTE_LISTS]
+    lists.append(lb.get("rows") if isinstance(lb, dict) and isinstance(lb.get("rows"), list) else [])
+    # Read again when a list is another list, grows, or has a row swapped for another (the rows' own
+    # identities, summed: a build replaces a posted pick's row in place, engine/likely `lock`).
+    key = (id(board),) + tuple((id(x) if x else 0, len(x), sum(map(id, x))) for x in lists)
+    if _QUOTES.get("key") != key:
+        rows = [r for x in lists for r in x if isinstance(r, dict)]
+        # (The matchup picks are listed a game at a time: its touchdown rows and its prop rows.)
+        rows += [r for g in lists[QUOTE_LISTS.index("matchup_picks")] if isinstance(g, dict)
+                 for k in ("td", "props") for r in g.get(k) or [] if isinstance(r, dict)]
         idx: dict = {}
         if rows:
             from . import sliplive
@@ -1809,51 +1838,120 @@ def quote_index(board: dict) -> dict:
                 idx = sliplive.quote_index({"recommendations": rows})
             except Exception:                                # noqa: BLE001
                 idx = {}
+        carried: dict = {}
+        error = None
+        try:
+            for r in rows:
+                if r.get("locked") and r.get("player") and (r.get("kind") or "prop") == "prop":
+                    carried.setdefault(_pick_key(r), r)
+        except Exception as exc:                             # noqa: BLE001
+            carried, error = {}, f"{type(exc).__name__}: {exc}"
         _QUOTES.clear()
-        _QUOTES.update(board=board, index=idx)
-    return _QUOTES["index"]
+        _QUOTES.update(key=key, board=board, index=idx, carried=carried, error=error)
+    return _QUOTES
 
 
-def leg_quoted(leg: dict, index: dict) -> str:
-    """Where a leg's books' quotes stand: "quoted" (a book quotes its number on its side), "no_quote"
-    (its prop is on file, no book at this number and side) or "no_row" (its prop is not on file)."""
+def quote_index(board: dict) -> dict:
+    """Every book's number on every prop the board priced: off its prop rows and its pick rows
+    (QUOTE_LISTS, the one board's rows), in sliplive.quote_index's shape."""
+    return _board_reads(board)["index"]
+
+
+def carried_picks(board: dict) -> dict:
+    """``{pick key: row}``: the Most Likely picks posted on an earlier build and carried at the number
+    they went up at (engine/likely `lock`, a row's ``locked``)."""
+    return _board_reads(board)["carried"]
+
+
+def leg_quoted(leg: dict, index: dict, carried: dict | None = None) -> str:
+    """Where a leg's books stand (LEG_QUOTES): "quoted" (a book quotes its number on its side now),
+    "unlisted" (a pick carried at its posted number, which no book lists now), "no_quote" (its prop is
+    on file, no book at this number and side) or "no_row" (its prop is not on file)."""
     from .sliplive import _key as name_key
     if (name_key((leg or {}).get("player")), (leg or {}).get("market")) not in (index or {}):
         return "no_row"
-    return "quoted" if book_prices(leg, index) else "no_quote"
+    if book_prices(leg, index):
+        return "quoted"
+    return "unlisted" if carried and _pick_key(leg) in carried else "no_quote"
+
+
+def _side_quotes(leg: dict, index: dict) -> list:
+    """Every bettable book's quote on this leg's prop and side: ``[(line, book, American price)]``."""
+    from .odds import is_sharp_book
+    from .sliplive import _key as name_key
+    e = (index or {}).get((name_key((leg or {}).get("player")), (leg or {}).get("market")))
+    over = str((leg or {}).get("side") or "").upper() in ("OVER", "YES")
+    out = []
+    for q_line, book, o, u in (e or {}).get("quotes") or []:
+        price = o if over else u
+        if price and book and str(book).lower() != "proxy" and not is_sharp_book(str(book)):
+            out.append((float(q_line), str(book), int(price)))
+    return out
 
 
 def book_prices(leg: dict, index: dict) -> dict:
-    """``{book key: (book, American price)}``: each book quoting this leg's own number on its side."""
-    from .sliplive import _key as name_key
-    e = (index or {}).get((name_key(leg.get("player")), leg.get("market")))
+    """``{book key: (book, American price)}``: each book a reader can bet quoting this leg's own
+    number on its side."""
     try:
         line = float(leg.get("line"))
     except (TypeError, ValueError):
         return {}
-    over = str(leg.get("side") or "").upper() in ("OVER", "YES")
     out: dict = {}
-    for q_line, book, o, u in (e or {}).get("quotes") or []:
-        price = o if over else u
-        if price and abs(float(q_line) - line) < 1e-6:
-            k = str(book).lower()
+    for q_line, book, price in _side_quotes(leg, index):
+        if abs(q_line - line) < 1e-6:
+            k = book.lower()
             if k not in out or _dec(price) > _dec(out[k][1]):
-                out[k] = (str(book), int(price))
+                out[k] = (book, price)
     return out
 
 
-def one_book(legs: list, index: dict) -> dict | None:
+def _gone_words(gone: list, index: dict) -> str:
+    """A ticket's line when a leg's number is on no book now: that it cannot be placed as written,
+    which leg, and the nearest number a book has for it."""
+    said = []
+    for l in gone:
+        words = pick_words(l)
+        try:
+            line = float(l.get("line"))
+            near = min(_side_quotes(l, index), key=lambda q: (abs(q[0] - line), -(_dec(q[2]) or 0)), default=None)
+        except (TypeError, ValueError):
+            near = None
+        if near:
+            words += f" (the nearest number a book has is {near[0]:g}, {near[1]} {_odds_words(near[2])})"
+        said.append(words)
+    return (f"Can't be placed as written now: no book in our latest pull lists {_and_or(said)}. "
+            f"{'It was' if len(gone) == 1 else 'They were'} listed when the pick{'' if len(gone) == 1 else 's'} went up")
+
+
+def _and_or(words: list) -> str:
+    words = [w for w in words if w]
+    return " or ".join(words) if len(words) < 3 else ", ".join(words[:-1]) + f" or {words[-1]}"
+
+
+def one_book(legs: list, index: dict, carried: dict | None = None) -> dict | None:
     """The book that has every leg at its number, the one paying most on them: ``{"book", "odds",
-    "books", "words"}``; ``{"none": True, "words"}`` where no one book does; None where a leg has no
-    book quote on file (nothing to say)."""
-    per = [book_prices(l, index) for l in legs or []]
+    "books", "words"}``; ``{"none": True, "words"}`` where no one book does; ``{"gone": True, "legs",
+    "words"}`` where a leg is a carried pick whose number no book lists now (``carried``:
+    `carried_picks`); None where a leg has no book quote on file (nothing to say)."""
+    legs = [l for l in legs or [] if isinstance(l, dict)]
+    per = [book_prices(l, index) for l in legs]
     if len(per) < 2:
         return None
+    held = [bool(carried) and _pick_key(l) in carried for l in legs]
+    # (A pick posted at a real book's price: a proxy price was never a book's listing.)
+    gone = [l for l, p, h in zip(legs, per, held)
+            if h and not p and str(l.get("book") or "").strip().lower() not in ("", "proxy")]
+    if gone:
+        return {"gone": True, "legs": len(gone), "words": _gone_words(gone, index)}
     whole = all(per)                                         # every leg's books are on file
-    # A leg's own book and price is a quote at its number whatever else is on file.
-    for l, p in zip(legs, per):
+    # A leg priced on this build: its own book and price is a quote at its number whatever else is
+    # on file. A carried pick's is the price it went up at, so only today's quotes speak for it.
+    from .odds import is_sharp_book
+    for l, p, h in zip(legs, per, held):
         book, dec = str(l.get("book") or ""), _dec(l.get("odds"))
-        if book and book.lower() != "proxy" and dec and (book.lower() not in p or dec > (_dec(p[book.lower()][1]) or 0)):
+        if h or not book or book.lower() == "proxy" or is_sharp_book(book) or not dec:
+            continue
+        if book.lower() not in p or dec > (_dec(p[book.lower()][1]) or 0):
             p[book.lower()] = (book, int(float(l.get("odds"))))
     if not all(per):
         return None
@@ -1881,9 +1979,41 @@ def one_book(legs: list, index: dict) -> dict | None:
             "words": f"One book has every leg: {name} ({', '.join(_odds_words(o) for o in odds)})"}
 
 
-def label_tickets(x: dict, sport: str, index: dict | None = None) -> dict:
+#: Why a board's carried picks could not be read, in this process; None when
+#: they were. The build's counts carry it (`build` ``unlisted_error``).
+UNLISTED_ERROR: str | None = None
+
+
+def mark_unlisted(legs: list, board: dict) -> list:
+    """Each leg that is a carried pick whose number no book lists now, marked (``_unlisted``: working
+    state, never published), so a ticket not posted before takes none (`tickets_of`). Never raises. A
+    board it cannot read marks nothing, which is also the quiet day with no pick carried, so the
+    failure is SAID: printed once a process and kept in UNLISTED_ERROR, which the build's counts show."""
+    global UNLISTED_ERROR
+    try:
+        reads = _board_reads(board)
+        if reads.get("error"):
+            raise RuntimeError(reads["error"])
+        index, carried = reads["index"], reads["carried"]
+        for l in legs or []:
+            if isinstance(l, dict):
+                if carried and leg_quoted(l, index, carried) == "unlisted":
+                    l["_unlisted"] = True
+                else:
+                    l.pop("_unlisted", None)
+        UNLISTED_ERROR = None
+    except Exception as exc:                                 # noqa: BLE001
+        why = f"{type(exc).__name__}: {exc}"
+        if UNLISTED_ERROR != why:
+            print(f"  ⚠️ the parlays could not read which picks' numbers a book still lists ({why}); none is marked")
+        UNLISTED_ERROR = why
+    return legs
+
+
+def label_tickets(x: dict, sport: str, index: dict | None = None, carried: dict | None = None) -> dict:
     """A game's player-prop tickets, each with its class (`ticket_class`) and the one book that prices
-    it (`one_book`). Never raises: a ticket it cannot label is left as it was built."""
+    it, or the leg no book lists now (`one_book`; ``carried``: `carried_picks`). Never raises: a ticket
+    it cannot label is left as it was built."""
     for key in CLASS_LISTS:
         for t in (x or {}).get(key) or []:
             if not isinstance(t, dict):
@@ -1892,7 +2022,7 @@ def label_tickets(x: dict, sport: str, index: dict | None = None) -> dict:
                 c = ticket_class(sport, t)
                 if c:
                     t["class"], t["class_why"] = c["class"], c["why"]
-                ob = one_book(t.get("legs") or [], index) if index else None
+                ob = one_book(t.get("legs") or [], index, carried) if index else None
             except Exception:                                # noqa: BLE001
                 continue
             if ob:
@@ -1944,7 +2074,9 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
            # Safe, Balanced, Pop or a long shot, and the one book that has every leg (`label_tickets`).
            **({"cls": t["class"], "cls_label": CLASS_WORDS[t["class"]], "cls_why": t.get("class_why") or ""}
               if t.get("class") in CLASS_WORDS else {}),
-           **({"one_book": t["one_book"]["words"]} if (t.get("one_book") or {}).get("words") else {})}
+           **({"one_book": t["one_book"]["words"]} if (t.get("one_book") or {}).get("words") else {}),
+           # …or that a leg's number is on no book now (`one_book` ``gone``): the card marks it.
+           **({"one_book_gone": True} if (t.get("one_book") or {}).get("gone") else {})}
     # THE TOUCHDOWN RULE ON A PAIR (decision 1 under RUN_NEXT 00f, Ethan's
     # NFL Bet checking method: an anytime touchdown at 45%, or 40% with a
     # red-zone role). The floor stays where it is; a pair whose two scorers
@@ -2013,7 +2145,16 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     pool = sorted(legs, key=lambda l: -float(l["p"]))[:MAX_POOL]
     memo = {} if memo is None else memo
     keep = (posted or {}).get(spec["key"])
-    threes = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(pool, size)) if t]
+    # A PICK WHOSE NUMBER NO BOOK LISTS NOW RIDES ONLY ON A TICKET ALREADY POSTED
+    # (step AAE, 2026-11-21; `mark_unlisted`). A Most Likely pick stays up at the
+    # number it was posted at while the books move (engine/likely `lock`), and a
+    # ticket made today from one whose number is gone is a ticket nobody can
+    # place. A posted ticket stays, as `choose` keeps it, and says which leg
+    # (`one_book`).
+    kept = {tuple(tuple(x) for x in k) for k in keep or []}
+    placeable = lambda t: ident(t) in kept or not any(l.get("_unlisted") for l in t["legs"])   # noqa: E731
+    threes = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(pool, size))
+              if t and placeable(t)]
     strong3 = [t for t in threes if float(t["joint"]) >= floor]
     chosen = choose(strong3, spec["n"], keep=keep, shared=shared)
     in_pool = {_leg_id(l) for l in pool}
@@ -2031,7 +2172,8 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     fill_fit = fill_clear = None
     if len(chosen) < n_min:
         outside = lambda t: sum(_leg_id(l) not in own for l in t["legs"])            # noqa: E731
-        every = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(wider, size)) if t]
+        every = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(wider, size))
+                 if t and placeable(t)]
         # No more than FILL_OUTSIDE_MAX legs the report did not pick on a ticket.
         trios = [t for t in every if outside(t) <= FILL_OUTSIDE_MAX]
         cands = [t for t in trios if float(t["joint"]) >= long_floor]
@@ -2094,7 +2236,9 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
                     elif outside(t):
                         t["fill"] = "one"
     for t in chosen:
-        t["backups"] = [{"for": b["for"], "leg": slim(b["leg"])} for b in backups(sport, t, wider, game)]
+        # A backup is a leg to take in another's place: one a book lists now.
+        t["backups"] = [{"for": b["for"], "leg": slim(b["leg"])}
+                        for b in backups(sport, t, [l for l in wider if not l.get("_unlisted")], game)]
         t["legs"] = [slim(l) for l in t["legs"]]
     return {spec["key"]: chosen, "pool": len(pool), "threes_fit": len(threes), "threes_clear": len(strong3),
             "size": size, "wider": len(wider), "filled": filled,
@@ -2450,10 +2594,10 @@ def build(board: dict, sport: str, now=None) -> dict:
     else:
         board.pop(SCORER_PAIRS_KEY, None)
     # Each player-prop ticket's class, and the one book that prices it (`label_tickets`).
-    index = quote_index(board)
+    index, carried = quote_index(board), carried_picks(board)
     for e in out_games:
         if not e.get("kept"):
-            label_tickets(e, sp, index)
+            label_tickets(e, sp, index, carried)
     return {"sport": sp, "date": board.get("date") or "", "games": out_games,
             "take_edge": TAKE_EDGE, "leg_floor": LEG_FLOOR, "three_floor": THREE_FLOOR,
             **({"two_floor": TWO_FLOOR} if sp in TWO_SPORTS else {}),
@@ -2480,7 +2624,9 @@ def build(board: dict, sport: str, now=None) -> dict:
                        # The weight a positive link between legs carries (`link_weight`).
                        "link_weight": dict({"weight": link_weight()}, **({"error": LINK_ERROR} if LINK_ERROR else {})),
                        # The legs' learned correction in force (engine/legfit), each kind.
-                       "leg_fit": _leg_fit_census(sp)},
+                       "leg_fit": _leg_fit_census(sp),
+                       # The carried picks could not be read (`mark_unlisted`): none was kept off a new ticket.
+                       **({"unlisted_error": UNLISTED_ERROR} if UNLISTED_ERROR else {})},
             # WHY A PRICED SCORER WAS NO LEG (`research_scorers`), football only.
             **({"research_census": dict(sorted(census.items(), key=lambda kv: -kv[1])),
                 "scorers_priced": len(priced), "scorers_researched": len(scorers)}
@@ -2675,7 +2821,8 @@ def _picks_priced(board: dict, sport: str, game: dict, want: set, now=None) -> i
 
 
 #: What became of a report's player pick as a parlay leg (`_picks_census`).
-PICK_FATES = ("read", "strong", "fill", "low", "no_parlay", "benched", "our_rule", "other_line", "matchup_only",
+PICK_FATES = ("read", "strong", "fill", "low", "unlisted", "no_parlay", "benched", "our_rule", "other_line",
+              "matchup_only",
               "scorer_only",
               "refused_out", "refused_unreliable", "refused_book", "refused_price", "refused_edge", "refused",
               PROPS_WAIT, "absent")
@@ -2762,6 +2909,9 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
       strong        a leg at LEG_FLOOR or better, what a ticket is made of;
       fill          a leg the fill may take (FILL_LEG_FLOOR up to LEG_FLOOR);
       low           priced as a leg, under FILL_LEG_FLOOR once corrected (legfit);
+      unlisted      a leg at a number no book lists now (a pick carried at its
+                    posted number, `mark_unlisted`): only a ticket already
+                    posted keeps it (step AAE);
       no_parlay     a market no parlay carries (tackles, sacks, kicking);
       benched       a market benched from stakes (stakeplan.MARKET_BENCH);
       our_rule      a pick their rules keep off parlays (`off_parlays`, v3.1: a
@@ -2799,11 +2949,13 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
         reads = {_pick_key(b) for b in picks or [] if _player_pick(b) and b.get("read_only")}
         if not want:
             return {}
-        legs = {}
+        legs, off = {}, set()
         for l in _board_legs(board, sport, now, floor=0.0):
             if _game_of(l, [game]):
                 k = _pick_key(l)
                 legs[k] = max(float(l.get("p") or 0), legs.get(k, 0.0))
+                if l.get("_unlisted"):
+                    off.add(k)
         loose = {k[:3] for k in legs}
 
         def keys(rows):
@@ -2835,7 +2987,8 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
             if k in reads:
                 fate = "read"
             elif k in legs:
-                fate = "strong" if legs[k] >= LEG_FLOOR else "fill" if legs[k] >= FILL_LEG_FLOOR else "low"
+                fate = ("unlisted" if k in off else "strong" if legs[k] >= LEG_FLOOR
+                        else "fill" if legs[k] >= FILL_LEG_FLOOR else "low")
             elif not parlay_market(k[1]):
                 fate = "no_parlay"
             elif market_benched(sport, k[1]):
@@ -3000,7 +3153,7 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
         else:
             x["twos_note"] = _report_note(n_pool, len(want), made2)
     # Each ticket's class, and the one book that prices it (`label_tickets`).
-    label_tickets(x, sp, quote_index(board))
+    label_tickets(x, sp, quote_index(board), carried_picks(board))
     return x
 
 

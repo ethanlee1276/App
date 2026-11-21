@@ -23,6 +23,7 @@ one book that prices every leg (v3.1 sections 10 and 1); the third the Green / Y
     most on them, read off the board's prop rows, its pick rows and each leg's own book; "no one book"
     only where every leg's books are on file and none has them all; nothing where a leg's books are
     unknown and the legs' own books differ. The heartbeat counts, leg by leg, why a quote was missing.
+    (A pick carried at its posted number is held in tests/test_a_parlay_says_when_a_legs_number_is_gone.py.)
   * Both ride on the server's card and the page's card; the record splits each league's tickets by
     class from the chances and prices they were journaled with; the heartbeat counts classes by size
     and one-book tickets.
@@ -372,8 +373,9 @@ def test_a_legs_own_book_counts_and_no_one_book_needs_every_legs_quotes():
 def test_the_quotes_are_read_off_the_pick_rows_too():
     row = {"player": "Chig Okonkwo", "market": "receptions", "side": "OVER", "line": 2.5,
            "all_lines": _quotes(("DraftKings", 2.5, -165, 130), ("FanDuel", 2.5, -160, 125))}
-    for where in ("most_likely", "matchup_picks"):
-        idx = GP.quote_index({"recommendations": [], where: [row]})
+    # (The matchup picks are listed a game at a time, engine/matchpicks: its touchdown rows and its prop rows.)
+    for where, rows in (("most_likely", [row]), ("matchup_picks", [{"game": "WAS@NYG", "td": [], "props": [row]}])):
+        idx = GP.quote_index({"recommendations": [], where: rows})
         assert GP.book_prices(_leg("Chig Okonkwo", "receptions", "Over", 2.5), idx) == \
             {"draftkings": ("DraftKings", -165), "fanduel": ("FanDuel", -160)}, where
     idx = GP.quote_index({"likely_board": {"rows": [row]}})
@@ -417,7 +419,7 @@ def test_the_cards_carry_the_class_and_the_book():
     assert 'const CLASS_WORDS = { safe: "Safe", balanced: "Balanced", pop: "Pop", long: "Long shot" };' in report
     assert '<span class="gr-parlay-class ${escapeAttr(t.cls)}">${escapeHtml(t.cls_label || "")}</span>' in report
     assert '<p class="gr-parlay-classwhy">${escapeHtml(t.cls_why)}</p>' in report
-    assert '<p class="gr-parlay-book">${escapeHtml(t.one_book)}</p>' in report
+    assert '<p class="gr-parlay-book${t.one_book_gone ? " gone" : ""}">${escapeHtml(t.one_book)}</p>' in report
     assert "one_book: (t.one_book || {}).words || \"\"," in report, "the page's own card carries it too"
     css = (ROOT / "web" / "css" / "report.css").read_text(encoding="utf-8")
     for cls in (".gr-parlay-class.safe", ".gr-parlay-class.balanced", ".gr-parlay-class.pop", ".gr-parlay-class.long"):
@@ -479,9 +481,9 @@ def test_the_heartbeat_counts_classes_by_size_and_one_book_tickets():
         finally:
             L._full_copy = was
     assert got["ticket_classes"] == {"three": {"pop": 3}, "two": {"safe": 2, "balanced": 1}}, got.get("ticket_classes")
-    assert got["one_book"] == {"one": 6, "none": 0, "unknown": 0}, got.get("one_book")
+    assert got["one_book"] == {"one": 6, "none": 0, "gone": 0, "unknown": 0}, got.get("one_book")
     # Leg by leg: nine three-leg legs and six two-leg ones, every one with a book's quote on file.
-    assert got["one_book_legs"] == {"quoted": 15, "no_quote": 0, "no_row": 0}, got.get("one_book_legs")
+    assert got["one_book_legs"] == {"quoted": 15, "unlisted": 0, "no_quote": 0, "no_row": 0}, got.get("one_book_legs")
 
 
 if __name__ == "__main__":

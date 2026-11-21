@@ -75,7 +75,7 @@ def test_hockey_s_scorer_legs_of_a_started_game_are_dropped():
         _row("Clayton Keller", "UTA", "VAN", "UTA", "VAN")]}
     got = GP.scorer_legs(board, "nhl", now=NOW)
     assert [l["player"] for l in got] == ["Jordan Kyrou"], got
-    assert "return still_to_play(list(got.values()), board, now)" in (ROOT / "engine" / "gameparlays.py").read_text(
+    assert "mark_unlisted(still_to_play(list(got.values()), board, now), board)" in (ROOT / "engine" / "gameparlays.py").read_text(
         encoding="utf-8"), "every priced leg passes the same check"
 
 

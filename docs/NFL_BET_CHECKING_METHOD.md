@@ -96,7 +96,13 @@ settled. `QB_PRICE_GRADE=off` turns it off.
    (25-30%). A touchdown pair is not classed. Each ticket names the one book
    that has every leg at its number, or says none in our pull does; it is not
    yet a rule that one must (the heartbeat's `one_book` counts how often one
-   does, to decide on).
+   does, to decide on). Since step AAE (21 November) the line reads only
+   today's quotes, never a sharp book's, and a ticket with a leg whose number
+   no book lists any more says it cannot be placed as written, which leg, and
+   the nearest number a book has: a posted pick keeps the number it went up
+   at while the books move (on the Friday before a Sunday, 35 of the NFL's
+   165 legs had no book at their number). A ticket not posted before takes no
+   such leg.
 3. **The price grade on the NBA and NHL cards.** Answered yes, 20 November;
    done in step AAB (above).
 4. **Rungs well under the average.** Their Tier 1 is completions, attempts
@@ -106,6 +112,14 @@ settled. `QB_PRICE_GRADE=off` turns it off.
 5. **A cornerback matchup adds nothing.** Their testing gives a receiver's
    coverage matchup no points. Our board lets the scan's coverage read back a
    receiver's pick toward Top. Stop counting it?
+6. **A posted pick whose number the books have left** (new, 21 November). A
+   Most Likely pick keeps the number it went up at until its game, and a
+   parlay leg made from it keeps that number too. When no book lists the
+   number any more the ticket says it cannot be placed as written, and no new
+   ticket takes the leg (step AAE). Should the leg follow the books to today's
+   number instead, at today's chance and price, with the pick itself left
+   posted where it went up? On the Friday before a Sunday, 35 of the NFL's 165
+   parlay legs sat at a number no book listed.
 
 ## What their own messages add to the instructions
 

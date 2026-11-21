@@ -142,8 +142,9 @@ function rpGameHTML(d, key, bets, tix, open) {
    ticket by our numbers, and the three likeliest of those are a line each: the game and how many legs,
    the legs in words, our chance and the price to take it at. A line is a door to its game, where the
    ticket is drawn in full (said once). Scorer pairs are long by design, and a ticket our own card says
-   to pass on (`playable` false: no book likely pays enough for it) is not offered. Fewer than two games
-   to choose from is no ranking, and draws nothing. */
+   to pass on (`playable` false: no book likely pays enough for it) is not offered, nor is one with a leg
+   whose number no book lists any more (`one_book.gone`, engine/gameparlays: it cannot be placed as
+   written). Fewer than two games to choose from is no ranking, and draws nothing. */
 const RP_TOP_MAX = 3;
 function rpTopTickets(d, byGame, keys) {
   const best = [];
@@ -152,7 +153,8 @@ function rpTopTickets(d, byGame, keys) {
     const x = (byGame.get(k) || {}).tix;
     if (!g || !x || rpPhase(g) !== "next") return;
     const pick = [...(x.twos || []).map((t) => ["two", t]), ...(x.threes || []).map((t) => ["three", t])]
-      .filter(([, t]) => t && (t.legs || []).length && Number(t.joint) > 0 && t.playable !== false)
+      .filter(([, t]) => t && (t.legs || []).length && Number(t.joint) > 0 && t.playable !== false
+        && !(t.one_book || {}).gone)
       .sort((a, b) => Number(b[1].joint) - Number(a[1].joint))[0];
     if (pick) best.push({ key: k, kind: pick[0], t: pick[1] });
   });

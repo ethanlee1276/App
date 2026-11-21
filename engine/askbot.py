@@ -600,7 +600,8 @@ TOOLS = [
           "likeliest first; each player-prop ticket says its class (safe: every leg 64%+ and 40%+ together; "
           "balanced: every leg 60%+ and 36%+ together; pop: 25%+ together; long: under that) and the one book "
           "that has every leg; one marked playable false is a ticket its own card "
-          "says to pass on, and game_started true is a game already under way), pick_of_the_day (each "
+          "says to pass on, one marked cannot_be_placed_now has a leg whose number no book lists any more, "
+          "and game_started true is a game already under way), pick_of_the_day (each "
           "league's) or top_pick_today (the one best pick across every league, with the ones it beat) — on "
           "one league's board or all of them, best first.",
           {"kind": {"type": "string", "enum": list(PICK_KINDS)}, "sport": _ANY_SPORT,
@@ -2305,13 +2306,17 @@ def _game_ticket(t: dict, league: str, pool: str, g: dict) -> dict:
     if g.get("kept"):
         out["game_started"] = True
     # Its class, with why (gameparlays.ticket_class: safe, balanced, pop or a long shot), and the one
-    # book that has every leg at its number, or that none does (gameparlays.one_book).
+    # book that has every leg at its number, that none does, or that a leg's number is on no book now
+    # and the ticket cannot be placed as written (gameparlays.one_book).
     if t.get("class"):
         out["class"] = t["class"]
         if t.get("class_why"):
             out["class_why"] = t["class_why"]
     if (t.get("one_book") or {}).get("words"):
         out["one_book"] = t["one_book"]["words"]
+    # …which Report Picks leaves out of "the likeliest tickets today" too (rpTopTickets).
+    if (t.get("one_book") or {}).get("gone"):
+        out["cannot_be_placed_now"] = True
     return out
 
 

@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAE. A parlay says when a leg's number is on no book now** (step 819; 21 November). Nothing to run. The first NFL
+board after step AAD named a book on 44 of its 67 parlays (33 before), said none had every leg on 3 and said nothing
+on 20. Leg by leg, 130 of the 165 had a book at their number and 35 had their prop on file with no book at that
+number. The cause I found in the code: a Most Likely pick stays up at the number, price and book it was posted at
+while the books move, and a parlay leg made from it carries those. Sunday's picks went up on Thursday. The new count
+below says how many of the 35 that explains. Six changes. A posted price no longer counts as a quote today: step AAD
+let a leg's own book and price count, which for a pick posted days ago could name a book at a price it no longer
+showed, so now only a leg priced on this build counts its own. A ticket with a leg no book lists now says so where
+the one-book line goes, in the warning colour: that it can't be placed as written, which leg, and the nearest number
+a book has (the pick's own card on Most Likely already said this). A ticket not posted before takes no such leg, and
+neither does a backup; one already posted stays, as posted parlays do until a leg breaks. A sharp book nobody here
+can bet (Pinnacle) is never named as the one book. Report Picks does not lead with a ticket that can't be placed,
+and Ask is told which those are. The heartbeat counts them: `one_book` has `gone` (tickets with such a leg) and
+`one_book_legs` has `unlisted` (the legs). Its count of what became of each report pick (`pick_fates`) has
+`unlisted` too, where such a pick had counted as `strong`. One decision is new (decision 6 in
+docs/NFL_BET_CHECKING_METHOD.md): when the books move off a posted pick's number, should its parlay legs follow them
+to today's number.
+
 **AAD. The first boards with classes and grades, and the one-book line made to speak for more tickets** (step 818;
 21 November). Nothing to run. The first builds after step AAB, Friday at about 7:25pm Eastern, read off the
 heartbeat. NFL: its 36 two-leg parlays are 12 Safe, 14 Balanced and 10 Pop; its 31 three-leg ones are 20 Pop and 11

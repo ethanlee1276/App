@@ -547,11 +547,11 @@
       return `<div class="gr-parlays">${(b.items || []).map((t) => `<div class="gr-parlay">
         <div class="gr-parlay-head"><span class="gr-parlay-title"><b>${escapeHtml(t.title || "")}</b>${t.cls
           ? ` <span class="gr-parlay-class ${escapeAttr(t.cls)}">${escapeHtml(t.cls_label || "")}</span>` : ""}</span>${
-          ticketTag(t.legs)}${(t.bet_legs || []).length && !CLOSED
+          ticketTag(t.legs)}${(t.bet_legs || []).length && !CLOSED && !t.one_book_gone
           ? parlayBet(t.bet_legs, `${t.title || "Parlay"} · ${(t.legs || []).map((l) => l.pick).filter(Boolean).join(" + ")}`) : ""}</div>
         ${odds(t)}
         ${t.cls_why ? `<p class="gr-parlay-classwhy">${escapeHtml(t.cls_why)}</p>` : ""}
-        ${t.one_book ? `<p class="gr-parlay-book">${escapeHtml(t.one_book)}</p>` : ""}
+        ${t.one_book ? `<p class="gr-parlay-book${t.one_book_gone ? " gone" : ""}">${escapeHtml(t.one_book)}</p>` : ""}
         <ol class="gr-parlay-legs">${(t.legs || []).map((l) => `<li${l.player
           ? ` data-open="player:${escapeAttr(slugify(l.player))}"` : ""}>
           <span class="gr-parlay-pick"><span class="gr-parlay-who">${face(l)}<b>${named(l.pick || "", b.names)}</b></span>${l.price
@@ -934,7 +934,7 @@
       ? { cls: t.class, cls_label: CLASS_WORDS[t.class], cls_why: t.class_why || "" } : {};
     return {
       title, price_line: price, script, links: t.links || [], caveats: t.caveats || [], ...rule, ...klass,
-      one_book: (t.one_book || {}).words || "",
+      one_book: (t.one_book || {}).words || "", one_book_gone: !!(t.one_book || {}).gone,
       legs: (t.legs || []).map((l) => ({ pick: pickWords(l), player: l.player, team: l.team, headshot: l.headshot,
         price: [oddsWords(l.odds), l.book || ""].filter(Boolean).join(" "), chance: l.p, why: l.why || [],
         research: l.research, research_of: l.research_of, bet: l })),

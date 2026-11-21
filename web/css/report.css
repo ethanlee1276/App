@@ -207,6 +207,8 @@
 .gr-parlay-class.long { background: color-mix(in srgb, var(--text-mute) 16%, transparent); color: var(--text-mute); }
 .gr-parlay-classwhy, .gr-parlay-book { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--text-mute);
   font-variant-numeric: tabular-nums; }
+/* A leg's number is on no book now (one_book_gone): the ticket cannot be placed as written. */
+.gr-parlay-book.gone { color: var(--warn); }
 /* The ticket's chance, drawn (js/report.js odds): the number, a bar filled to it, toned by how likely. */
 .gr-parlay-odds { --tone: var(--good); display: flex; align-items: center; gap: 8px; margin: 6px 0 2px;
   font-size: .86em; color: var(--text-mute); }

@@ -142,6 +142,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # 2026-11-16): {} is also the quiet day before the first fit, so a
         # file it cannot read is printed once and kept in legfit.ERROR.
         "fits",
+        # THE PARLAYS' CARRIED PICKS (engine/gameparlays.mark_unlisted, 2026-11-21),
+        # caught by this sweep the hour it was written: a board it cannot read
+        # marks no leg, which is also the quiet day with no pick carried, so the
+        # failure prints once a process, is kept in UNLISTED_ERROR and rides the
+        # build's counts (unlisted_error), which no quiet day does.
+        "mark_unlisted",
         # A GAME'S REBUILD FROM ITS REPORT'S PICKS (engine/gamereport._parlays_from_picks,
         # 2026-11-19): None either way, but a failure prints, is kept on the game's
         # entry (rebuild_error) and the heartbeat counts it (threes_short_why), which
