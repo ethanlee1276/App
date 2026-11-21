@@ -192,13 +192,16 @@ def test_tapping_the_leagues_in_a_browser():
 
                 LIT = """(() => [...document.querySelectorAll('.sportbar-in .sport-btn.active[data-sport]')]
                           .map((b) => b.dataset.sport))()"""
-                until(f"location.hash === '#pbp/nba/{nba['event_id']}' && !!document.querySelector('.hc-score')",
-                      "the basketball game page")
+                # Every sport is drawn on the one game page (2026-11-21): a
+                # basketball game is that page with basketball's arena in it,
+                # so the arena is what says whose game is on the screen.
+                until(f"location.hash === '#pbp/nba/{nba['event_id']}' && !!document.querySelector('.gp .pbp-hero')"
+                      " && !!document.querySelector('.gp .hc-stage')", "the basketball game page")
                 assert page.evaluate(LIT) == ["nba"], "the game's own league is lit, not the college board's"
                 tap = lambda lg: page.click(f'.sportbar-in .sport-btn[data-sport="{lg}"]')  # noqa: E731
                 tap("nfl")
-                until(f"location.hash === '#pbp/nfl/{nfl['event_id']}' && !!document.querySelector('.pbp-hero')",
-                      "NFL: its game in progress")
+                until(f"location.hash === '#pbp/nfl/{nfl['event_id']}' && !!document.querySelector('.gp .pbp-hero')"
+                      " && !document.querySelector('.hc-stage')", "NFL: its game in progress")
                 assert page.evaluate(LIT) == ["nfl"]
                 tap("mlb")
                 until("location.hash === '#pbp/mlb/776655'", "MLB: none on, its final")
