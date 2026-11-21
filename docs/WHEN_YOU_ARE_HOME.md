@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABE. The heartbeat counts the NFL's capped picks, and why the NBA's Top two-leg parlays lost** (step 845; 21
+November). Nothing to run. The NFL board now says its cap (step AAV: a pick shown at no more than its own price's
+chance plus ten points) is on even on a build where it moved nothing, and the heartbeat counts what it moved
+(`price_ceiling.capped`, and of those already posted, `capped_posted`); on the day's boards it moved none, since the
+standing paper hold (step BK) already keeps NFL picks 15 points or more over their price off the board, so the cap
+only acts between 10 and 15 points over. The Record's NBA two-leg tiers (Top 1 of 11 where we said 52%, Strong 18 of
+27 where we said 47%) are tickets from games of 17 to 21 November, 42 of the 45 before 21 November's NBA fixes; 20
+November's slate alone went 8 of 26. Before those fixes a ticket's price check passed only where we rated its legs
+together above the book's own price, and step AAM found legs we rated above the book overrated; Safe two-leg tickets
+went 12 of 34 (we said 50%) and Balanced 9 of 11 (we said 43%), as step AAR found. Since then an NBA leg counts at
+no more than the book's chance, the price check says nothing for the NBA (step ABA), and Safe and Balanced stand on
+the chances alone, so nothing further changes. Watched, too few to act on: NBA tickets with one leg from outside the
+report's picks went 1 of 12 since 20 November (college's went 7 of 13).
+
 **ABD. A game's parlays post late, when the news is in, and then never change** (step 844; 21 November). Nothing to
 run. You said, the same evening: "Clearly the parlays posted the latest are doing the best ... I just want whatever
 parlays are on the record page doing good. We are reporting we are doing good on all the game reports yet I'm not

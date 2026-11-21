@@ -74,6 +74,32 @@ def test_it_runs_with_the_ceilings_on_the_number_the_page_shows():
         assert words in SRC, words
 
 
+
+def test_the_board_says_the_cap_is_on_and_the_heartbeat_counts_it():
+    """A board whose cap moved nothing says so (capped 0), and the heartbeat reads the counts (step ABE)."""
+    body = SRC[SRC.index("    ceiling_stats: dict = {}"):SRC.index("    rows, tiers, lanes, held = [], {t: 0 for t, _ in TIERS}, {}, []")]
+    assert "if nfl_cap_on(sport):\n            ceiling_stats[\"nfl_cap\"] = True" in body, "on, even when it moves none"
+    import json
+    import launch as L
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = []
+            for pc in ({"nfl_cap": True, "capped": 2, "capped_posted": 1}, {"nfl_cap": True},
+                       {"on": True, "rows": 3, "moved": 1}):
+                with open(path, "w") as fh:
+                    json.dump({"most_likely": [], "recommendations": [], "game_bets": [],
+                               "likely_board": {"rows": [], "price_ceiling": pc}}, fh)
+                got.append(L._board_counts(path).get("price_ceiling"))
+        finally:
+            L._full_copy = was
+    assert got[0]["capped"] == 2 and got[0]["capped_posted"] == 1, got[0]
+    assert got[1]["capped"] == 0 and got[1]["capped_posted"] == 0, "on and moving none reads 0, not missing"
+    assert "capped" not in got[2] and got[2]["moved"] == 1, "college's ceiling alone has no NFL count"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     fails = 0

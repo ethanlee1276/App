@@ -841,6 +841,9 @@ def _board_counts(path: str) -> dict:
     if isinstance(pc, dict):
         out["price_ceiling"] = {k: int(pc.get(k) or 0)
                                 for k in ("rows", "priced", "above", "moved", "posted", "one_sided")}
+        # …and the NFL's picks held to their price plus ten points (likelyboard.cap_far_over, step AAV).
+        if pc.get("nfl_cap"):
+            out["price_ceiling"].update(capped=int(pc.get("capped") or 0), capped_posted=int(pc.get("capped_posted") or 0))
         if pc.get("error"):
             out["price_ceiling"]["error"] = str(pc["error"]).split(":")[0]
         tiers = (b.get("likely_board") or {}).get("tiers")

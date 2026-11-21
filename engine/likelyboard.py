@@ -1397,8 +1397,10 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     try:
         hold_to_own_price([pool[k] for k in order], sport, stats=ceiling_stats)
         # …and the NFL's, at its own price's chance plus NFL_CAP_ROOM (step AAV, decision 17).
-        if cap_far_over([pool[k] for k in order], sport, stats=ceiling_stats):
+        # It says it is on, moving none or some, so the heartbeat can count it (capped, capped_posted).
+        if nfl_cap_on(sport):
             ceiling_stats["nfl_cap"] = True
+            cap_far_over([pool[k] for k in order], sport, stats=ceiling_stats)
         mark_one_sided([pool[k] for k in order], result, sport, stats=ceiling_stats)
     except Exception as exc:                                 # noqa: BLE001
         ceiling_stats["error"] = f"{type(exc).__name__}: {exc}"
