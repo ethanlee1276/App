@@ -1,0 +1,198 @@
+/* Qellys Book — hockey's parts of the game page (css/rinkcast.css), loaded
+   with js/rinkcast.js the first time a hockey game with the league's events
+   opens. The page is every sport's (css/detail.css, "THE GAME PAGE IN THE
+   CLUBS' COLOURS"; detail.js gpPageHTML): its score, the goal flashed on it,
+   its tabs, its cards and its play rows are styled there, once, for every
+   sport. These are the rules for what only hockey draws: the arena under the
+   score with its five views (Ethan's render, 2026-10-15), and the shot chart
+   and the trends in the Stats room.
+
+   THE CROP, as on basketball's arena: `.rc-art` shows a window of the
+   1672 × 941 render — (--crop-x, --crop-y) its corner and (--crop-w,
+   --crop-h) its size, in the render's own pixels — and `.rc-frame` is the
+   whole render, scaled and shifted so that window fills the box. The page's
+   column sees the building as the render has it, the scoreboard over the
+   rink and the views in a bar under it; a phone sees the rink, or the half
+   the newest event happened in, so the ice is big enough to read. */
+
+/* ---------------- the arena ---------------- */
+.rc-stage {
+  --ca: var(--brand);
+  --ch: var(--text-mute);
+  padding: 0; overflow: hidden; position: relative;
+  /* What gives way on a narrow stage is asked of its own width (the rules at the foot of this sheet). */
+  container: rcstage / inline-size; }
+.rc-scene { position: relative; }
+.rc-art { --crop-x: 0; --crop-y: 20; --crop-w: 1672; --crop-h: 900; position: relative; overflow: hidden; aspect-ratio: 1672 / 900;
+  background: var(--bg); }
+.rc-frame { position: absolute; left: calc(var(--crop-x) / var(--crop-w) * -100%); top: calc(var(--crop-y) / var(--crop-h) * -100%);
+  width: calc(1672 / var(--crop-w) * 100%); height: calc(941 / var(--crop-h) * 100%); }
+.rc-photo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.rc-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rc-shot.made { stroke: var(--bg); stroke-width: 4; }
+.rc-shot.miss { fill: none; stroke-width: 4.5; }
+.rc-shot.block { fill: none; stroke-width: 5; stroke-linecap: round; }
+/* The dark edge under every mark, so a club in a light colour reads on
+   white ice. */
+.rc-halo { fill: none; stroke: var(--bg); stroke-width: 10; stroke-linecap: round; opacity: .7; }
+.rc-goal-ring { fill: none; stroke: var(--brand); stroke-width: 5; }
+.rc-ice { stroke: var(--bg); stroke-width: 3; }
+.rc-step { stroke: var(--bg); stroke-width: 3; }
+/* The puck's run (js/rinkcast.js liveMarks): solid legs, so the line can
+   draw itself behind the puck (its dash length is the leg's own). */
+.rc-trail-halo { fill: none; stroke: var(--bg); stroke-width: 13; stroke-linecap: round; opacity: .5; }
+.rc-trail { fill: none; stroke: var(--brand); stroke-width: 6; stroke-linecap: round; }
+.rc-ring { fill: none; stroke: var(--brand); stroke-width: 4;
+  animation: rc-ring var(--dur-slow) var(--ease-out) infinite alternate; transform-box: fill-box; transform-origin: center; }
+.rc-flight { fill: none; stroke: var(--brand); stroke-width: 6; stroke-linecap: round; }
+.rc-flight.goal { stroke: var(--bad); }
+.rc-puck { fill: var(--bg); stroke: var(--text); stroke-width: 3.5; }
+/* Replay sits in the views bar beside full screen, never over the ice. */
+.rc-replay { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  border-radius: var(--radius-sm); font: 700 var(--fs-sm) / 1.2 var(--font-sans); color: var(--text); cursor: pointer;
+  background: var(--panel-2); border: var(--hairline) solid transparent;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.rc-replay + .rc-full { margin-left: 0; }
+.rc-replay:hover { background: var(--brand); color: var(--brand-ink); }
+.rc-lamp { fill: none; stroke: var(--bad); stroke-width: 5; opacity: .9; }
+.rc-arrow { opacity: .9; stroke: var(--bg); stroke-width: 3; }
+@keyframes rc-ring { from { opacity: .35; } to { opacity: .95; } }
+@media (prefers-reduced-motion: reduce) { .rc-ring { animation: none; } }
+/* Nothing moves for a reader who asked for less motion, so nothing replays. */
+@media (prefers-reduced-motion: reduce) { .rc-replay { display: none; } }
+
+.rc-venue { position: absolute; top: var(--sp-3); right: var(--sp-3); display: flex; flex-direction: column; align-items: flex-end;
+  padding: 6px 10px; border-radius: var(--radius-sm); background: color-mix(in oklab, var(--bg) 68%, transparent);
+  border: var(--hairline) solid transparent; }
+.rc-venue b { font: 800 var(--fs-md) / 1.2 var(--font-display); text-transform: uppercase; letter-spacing: .04em; color: var(--text); }
+.rc-venue span { font: 500 var(--fs-xs) / 1.3 var(--font-sans); color: var(--text-dim); }
+.rc-ppbadge { --pc: var(--brand); position: absolute; top: calc(var(--sp-3) + 52px); right: var(--sp-3); padding: 4px 10px; border-radius: 999px;
+  font: 700 var(--fs-xs) / 1.3 var(--font-sans); color: var(--text);
+  background: color-mix(in oklab, var(--pc) 55%, var(--bg)); border: var(--hairline) solid transparent; }
+.rc-face { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: var(--panel-3); color: var(--text-faint); }
+.rc-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 12%; }
+.rc-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: var(--sp-2) var(--sp-3) 0; }
+.rc-chip { padding: 4px 10px; border-radius: 999px; font: 700 var(--fs-xs) / 1.3 var(--font-sans); color: var(--text-dim);
+  background: color-mix(in oklab, var(--bg) 72%, transparent); border: var(--hairline) solid transparent; cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.rc-chip.on { color: var(--brand-ink); background: var(--brand); border-color: transparent; }
+.rc-key-note { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; font: 600 var(--fs-xs) / 1.3 var(--font-sans);
+  color: var(--text-dim); background: color-mix(in oklab, var(--bg) 72%, transparent); }
+.rc-key-note i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.rc-key-note i.goal { background: var(--text); box-shadow: 0 0 0 2px var(--brand); }
+.rc-key-note i.sog { background: var(--text); }
+.rc-key-note i.miss { border: 2px solid var(--text-mute); }
+.rc-key-note i.block { border-radius: 2px; border: 2px solid var(--text-mute); transform: rotate(45deg); width: 8px; height: 8px; }
+
+.rc-pane { margin: var(--sp-2) var(--sp-3) 0; overflow: auto; padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius); background: color-mix(in oklab, var(--bg) 84%, transparent); border: var(--hairline) solid transparent; }
+.rc-pane-head { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-2); }
+.rc-pane-head b { font: 800 var(--fs-lg) / 1.2 var(--font-display); text-transform: uppercase; letter-spacing: .04em; color: var(--text); }
+.rc-trk { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.rc-trk-head { display: flex; align-items: center; gap: var(--sp-2); font: 700 var(--fs-sm) / 1.3 var(--font-sans); color: var(--text-dim);
+  padding-bottom: var(--sp-1); border-bottom: var(--hairline) solid var(--border); margin-bottom: var(--sp-1); }
+.rc-trk-row { display: flex; align-items: center; gap: var(--sp-2); padding: 4px 0; }
+.rc-trk-row .rc-face { width: 30px; height: 30px; }
+.rc-trk-row.goalie { border-top: var(--hairline) solid var(--border-soft); margin-top: 2px; padding-top: 6px; }
+.rc-trk-t { display: flex; flex-direction: column; min-width: 0; line-height: var(--lh-tight); }
+.rc-trk-t b { font: 700 var(--fs-sm) / 1.25 var(--font-sans); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-trk-t span { font: 500 var(--fs-xs) / 1.35 var(--font-mono); color: var(--text-dim); }
+.rc-toi { margin-left: auto; font: 700 var(--fs-xs) / 1.3 var(--font-mono); color: var(--text-mute); }
+.rc-flow { width: 100%; height: 190px; display: block; }
+.rc-flow-line { fill: none; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.rc-flow-line.away { stroke: var(--ca); }
+.rc-flow-line.home { stroke: var(--ch); }
+.rc-flow-goal { stroke: var(--bg); stroke-width: 2; }
+.rc-flow-best { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--text-dim); }
+.rc-flow-best b { color: var(--text); }
+.rc-q-line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.rc-flow-stats { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-2); font: 500 var(--fs-sm) / 1.4 var(--font-sans); color: var(--text-dim); }
+.rc-flow-stats b { color: var(--text); }
+.rc-key { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text); }
+.rc-key::before { content: ""; width: 14px; height: 3px; border-radius: 2px; background: var(--ca); }
+.rc-key.home::before { background: var(--ch); }
+
+.rc-views { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-top: var(--hairline) solid var(--border);
+  overflow-x: auto; scrollbar-width: none; }
+.rc-view { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm);
+  font: 700 var(--fs-sm) / 1.2 var(--font-sans); color: var(--text); cursor: pointer;
+  background: var(--panel-2); border: var(--hairline) solid transparent;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.rc-view.on { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
+.rc-vs { display: none; }
+.rc-full { margin-left: auto; flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-sm);
+  color: var(--text); background: var(--panel-2); border: var(--hairline) solid transparent; cursor: pointer; }
+.rc-stage:fullscreen { display: flex; flex-direction: column; justify-content: center; background: var(--bg); }
+.rc-stage:fullscreen .rc-scene { width: min(100vw, calc((100vh - 72px) * 1672 / 900)); margin: 0 auto; }
+
+/* ---------------- in the Stats room ----------------
+   The shot chart and the trends (js/rinkcast.js statsExtraHTML), each one of
+   the page's cards (gp-card) with the clubs' two colours on it. */
+.rc-icecard {
+  --ca: var(--brand);
+  --ch: var(--text-mute); }
+.rc-mini-k { margin: var(--sp-2) 0 var(--sp-1); font: 700 var(--fs-2xs) / 1.3 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); }
+.rc-ls { width: 100%; border-collapse: collapse; font: 600 var(--fs-sm) / 1.3 var(--font-mono); margin-bottom: var(--sp-2); }
+.rc-ls th, .rc-ls td { padding: 5px; text-align: center; border-bottom: var(--hairline) solid var(--border-soft); color: var(--text-dim); }
+.rc-ls th[scope="row"] { text-align: left; color: var(--text); font-family: var(--font-sans); }
+.rc-ls td.t { color: var(--text); font-weight: 800; }
+.rc-facts { display: grid; gap: var(--sp-2); }
+.rc-fact { display: flex; align-items: flex-start; gap: var(--sp-2); font: 500 var(--fs-sm) / 1.45 var(--font-sans); color: var(--text-dim); }
+.rc-fact b { color: var(--text); }
+.rc-fact .ic { flex: none; margin-top: 3px; color: var(--brand); }
+
+.rc-flat { width: 100%; height: auto; display: block; }
+.rc-fl-ice { fill: var(--panel-3); stroke: var(--text-faint); stroke-width: 3; }
+.rc-fl-red { stroke: color-mix(in oklab, var(--bad) 70%, transparent); stroke-width: 4; }
+.rc-fl-red.thin { stroke-width: 2; }
+.rc-fl-blue { stroke: color-mix(in oklab, var(--cyan) 70%, transparent); stroke-width: 5; }
+.rc-fl-ring { fill: none; stroke: color-mix(in oklab, var(--bad) 45%, transparent); stroke-width: 2; }
+.rc-fl-crease { fill: color-mix(in oklab, var(--cyan) 18%, transparent); stroke: color-mix(in oklab, var(--bad) 60%, transparent); stroke-width: 2; }
+.rc-fs { stroke: var(--bg); stroke-width: 1.5; }
+.rc-fs.goal { stroke: var(--brand); stroke-width: 3; }
+.rc-fs.miss { fill: none; stroke-width: 2.5; }
+.rc-fs.block { fill: none; stroke-width: 2.5; stroke-linecap: round; }
+/* (Named apart from the playoff race page's own cards and notes, css/race.css: both sheets can be loaded at once.) */
+.rc-flat-note { margin: var(--sp-2) 0 0; color: var(--text-faint); }
+/* ---------------- a narrow stage ----------------
+   The stage sits in the page's column (detail.js gpStageHTML): never wider
+   than the field football draws there, as narrow as a phone, with the plays
+   beside it or without. So what gives way is asked of the stage's own width
+   (a container query, .rc-stage above), not the screen's: the bar fits on a
+   desktop whose column is a phone's width as it does on a phone. */
+@container rcstage (max-width: 800px) {
+  /* The five views in their short words, Replay as its mark. */
+  .rc-vl { display: none; }
+  .rc-vs { display: inline; }
+  .rc-views { gap: 6px; }
+  .rc-view { padding: 8px 9px; gap: 5px; }
+  .rc-replay { padding: 0 9px; }
+  .rc-replay span { display: none; }
+}
+@container rcstage (max-width: 520px) {
+  /* A phone: the picture closes in on the ice, the views keep their five words and lose the marks beside them. */
+  .rc-art { --crop-x: 60; --crop-y: 470; --crop-w: 1552; --crop-h: 430; aspect-ratio: 1552 / 430; }
+  .rc-art[data-half="left"] { --crop-x: 60; --crop-y: 500; --crop-w: 860; --crop-h: 400; aspect-ratio: 860 / 400; }
+  .rc-art[data-half="right"] { --crop-x: 752; --crop-y: 500; --crop-w: 860; --crop-h: 400; aspect-ratio: 860 / 400; }
+  .rc-venue { top: var(--sp-2); right: var(--sp-2); padding: 4px 8px; }
+  .rc-venue b { font-size: var(--fs-xs); }
+  .rc-venue span { display: none; }
+  .rc-ppbadge { top: auto; bottom: var(--sp-2); right: var(--sp-2); }
+  .rc-trk { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+  .rc-views { padding: var(--sp-2) var(--sp-3) var(--sp-3); border-top: 0; }
+  .rc-view .ic { display: none; }
+}
+@container rcstage (max-width: 380px) {
+  /* The narrowest close the views up, */
+  .rc-views { gap: 5px; }
+  .rc-view { padding: 8px 7px; }
+}
+@container rcstage (max-width: 350px) {
+  .rc-views { gap: 4px; }
+  .rc-view { padding: 8px 5px; }
+}
+@container rcstage (max-width: 310px) {
+  /* and the smallest phone gives up the full-screen button for the five views. */
+  .rc-full { display: none; }
+}

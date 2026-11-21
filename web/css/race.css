@@ -1,0 +1,201 @@
+/* The races (js/race.js), loaded with it: college football's playoff race
+   and the NBA Cup. The numbers sit in fixed columns and the team takes the
+   rest, the standings table's idiom, so nothing clips its own figures. */
+.rc-wait { padding: 24px 0; color: var(--text-mute); font-size: var(--fs-sm); }
+.rc-note { margin: 8px 0 0; color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.rc-lede { margin: 0 0 6px; }
+.rc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; align-items: start; }
+.rc-card { padding: 12px 14px; border-radius: var(--radius); background: var(--panel); min-width: 0; margin-bottom: 12px; }
+.rc-grid > .rc-card { margin-bottom: 0; }
+.rc-flush { padding: 0; overflow: hidden; }
+.rc-row { display: grid; grid-auto-flow: column; grid-template-columns: minmax(0, 1fr); grid-auto-columns: 48px;
+  align-items: center; gap: 6px; padding: 8px 14px; border-bottom: var(--hairline) solid var(--border-soft); }
+.rc-row:last-child { border-bottom: none; }
+.rc-row.rc-cup { grid-auto-columns: 42px; }
+.rc-head { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.rc-head > span:not(:first-child) { text-align: right; }
+.rc-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rc-who > span { min-width: 0; overflow-wrap: anywhere; }
+.rc-who small { display: block; color: var(--text-mute); font-size: var(--fs-2xs); }
+.rc-who small.pos { color: var(--good); }
+.rc-p { text-align: right; font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.rc-lead { color: var(--text); font-weight: 800; }
+.rc-pd { font-weight: 800; }
+.rc-p.pos, .rc-game .pos { color: var(--good); }
+.rc-p.neg, .rc-game .neg { color: var(--bad); }
+.rc-team > summary, .rc-conf > summary, .rc-left > summary { cursor: pointer; list-style: none; }
+.rc-team > summary::-webkit-details-marker, .rc-conf > summary::-webkit-details-marker,
+.rc-left > summary::-webkit-details-marker { display: none; }
+.rc-team[open] > summary { background: var(--panel-2); }
+.rc-games { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 12px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.rc-games .rc-note { flex: 1 1 100%; margin: 4px 0 0; }
+.rc-game { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; padding: 4px 10px; border-radius: 999px;
+  background: var(--panel-2); font-size: var(--fs-xs); color: var(--text-dim); }
+.rc-game small { color: var(--text-mute); }
+/* If it started today: the byes in one column, the first round in the next. */
+.rc-brk { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.rc-col { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.rc-col-h { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.rc-match { display: grid; gap: 2px; padding: 6px 0 8px; border-radius: var(--radius-sm); background: var(--panel); min-width: 0; }
+.rc-side { display: grid; grid-template-columns: 22px 20px minmax(0, 1fr); column-gap: 8px; align-items: center; padding: 4px 12px; }
+.rc-side .rc-meta { grid-column: 3; color: var(--text-mute); font-size: var(--fs-2xs); }
+.rc-seed { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.rc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--fs-sm); }
+.rc-empty { color: var(--text-mute); }
+.rc-host { padding: 0 12px 0 62px; color: var(--text-mute); font-size: var(--fs-2xs); }
+/* A swing game: the matchup, then each team's chance either way it goes. */
+.rc-sw-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text); }
+.rc-row.rc-sw { grid-auto-columns: 86px; padding: 6px 0; }
+.rc-sw.rc-head > span { white-space: normal; text-transform: none; letter-spacing: 0; }
+.rc-sw .rc-p.pos { color: var(--good); }
+.rc-sw .rc-p.neg { color: var(--text-dim); }
+.rc-conf { margin-bottom: 8px; }
+.rc-conf-h { padding: 10px 14px 8px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text); background: var(--panel-2); }
+.rc-row.rc-crow { grid-auto-columns: 54px; }
+.rc-lead-row { background: color-mix(in oklab, var(--good) 8%, transparent); }
+.rc-left { padding: 8px 14px 12px; }
+.rc-left > summary { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; }
+.rc-left .rc-game { margin: 6px 6px 0 0; }
+.rc-tb { margin: 8px 0 0; padding-left: 20px; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+/* A phone: the numbers narrow; the team's name wraps everywhere rather
+   than ellipsing to "#1 …", which said nothing. */
+@media (max-width: 560px) {
+  .rc-row { grid-auto-columns: 40px; gap: 4px; padding: 8px 10px; }
+  .rc-row.rc-cup { grid-auto-columns: 36px; }
+  .rc-row.rc-crow { grid-auto-columns: 46px; }
+  .rc-row.rc-sw { grid-auto-columns: 74px; padding: 6px 0; }
+  .rc-p { font-size: var(--fs-xs); }
+}
+/* The Cup's knockout rounds (cupBracketHTML): the score at each side's end,
+   the winner bold and the loser quieter, the champion on a card of its own. */
+.rc-ko .rc-side { grid-template-columns: 22px 20px minmax(0, 1fr) auto; }
+.rc-score { color: var(--text); font-size: var(--fs-sm); font-weight: 800; font-variant-numeric: tabular-nums; }
+.rc-won .rc-name, .rc-won .rc-score { color: var(--text); font-weight: 800; }
+.rc-lost .rc-name, .rc-lost .rc-score { color: var(--text-mute); font-weight: 600; }
+.rc-host b { color: var(--text); }
+.rc-conf-k { margin: 12px 0 6px; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; }
+.rc-champ { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; box-shadow: var(--glow-gold); }
+.rc-champ b { color: var(--text); font-size: var(--fs-lg); }
+/* The College Football Playoff's twelve (cfpPlayoffHTML): two columns where there is room. */
+.rc-twelve { columns: 2 220px; column-gap: 24px; }
+.rc-twelve li { break-inside: avoid; }
+.rc-twelve small { color: var(--text-mute); }
+/* The NCAA tournament's projected regions (ncFieldHTML): one line a school,
+   a hairline between first-round games; "auto" marks today's automatic bid. */
+.rc-reg { display: grid; padding: 2px 0 6px; }
+.rc-reg-m { display: grid; padding: 3px 0; border-bottom: 1px solid color-mix(in oklab, var(--text) 8%, transparent); }
+.rc-reg-m:last-child { border-bottom: none; }
+.rc-reg-l { display: grid; grid-template-columns: 20px 20px minmax(0, 1fr) auto; column-gap: 8px; align-items: center;
+  padding: 2px 12px; font-size: var(--fs-sm); }
+.rc-reg-l .rc-name small { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; }
+.rc-reg-l > small { color: var(--text-mute); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.rc-tag { margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--panel-2); color: var(--text-mute);
+  font-size: var(--fs-2xs); font-weight: 700; vertical-align: 1px; }
+.rc-rec { white-space: nowrap; }
+.rc-more > summary { cursor: pointer; list-style: none; padding: 10px 14px; color: var(--text-mute); font-size: var(--fs-xs);
+  font-weight: 700; border-top: 1px solid color-mix(in oklab, var(--text) 8%, transparent); }
+.rc-more > summary::-webkit-details-marker { display: none; }
+/* A BRACKET, DRAWN AS ONE (race.js rcBkRoundsHTML; BRACKET1, 2026-11-17; Ethan: "the playoff page should be
+   layed out as a bracket and not this chart"). The rounds left to right; every column as tall as the first,
+   each group of games sharing it equally, so a game sits level with the middle of the two that feed it. The
+   lines are drawn as thin bars, not borders: a stub out of each game, a stub into the next, and an upright
+   joining a pair, all in the gap's middle, placed by the inline axis so a mirrored bracket turns them with it.
+   On a phone a bracket keeps its rounds readable and swipes sideways, the first round in full and the next
+   peeking in; only where there is room for the whole thing does the NFC mirror the AFC across the Super Bowl
+   (a right-to-left bracket in a narrow box would overflow to the side no one can scroll to). */
+.rc-bk-wrap { container-type: inline-size; margin-bottom: 8px; }
+.rc-bk { --bk-gap: 18px; --bk-line: color-mix(in oklab, var(--text) 18%, transparent);
+  display: grid; gap: 20px; grid-template-areas: "l" "r" "c"; }
+.rc-bk-l { grid-area: l; }
+.rc-bk-r { grid-area: r; }
+.rc-bk-c { grid-area: c; }
+.rc-bk-conf, .rc-bk-c { display: flex; flex-direction: column; min-width: 0; }
+.rc-bk-k { margin: 0 0 6px; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; }
+.rc-bk-scroll { flex: 1; display: flex; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
+  scrollbar-width: thin; }
+.rc-bk-rounds { flex: 1; display: flex; gap: var(--bk-gap); min-width: min-content; }
+.rc-bk-col { display: flex; flex-direction: column; flex: 1 1 0; min-width: 150px; scroll-snap-align: start; }
+.rc-bk-col:first-child { flex-grow: 1.15; min-width: 176px; }
+.rc-bk-colh { margin: 0 0 4px; overflow: hidden; color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .05em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.rc-bk-games { flex: 1; display: flex; flex-direction: column; }
+.rc-bk-pair { position: relative; flex: 1; display: flex; flex-direction: column; justify-content: space-around; }
+.rc-bk-game { position: relative; margin: 5px 0; padding: 3px 0; border-radius: var(--radius-sm); background: var(--panel); }
+.rc-bk-side { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; column-gap: 7px; align-items: center;
+  min-height: 38px; padding: 3px 8px; direction: ltr; }
+.rc-bk-side + .rc-bk-side { border-top: 1px solid var(--border-soft); }
+.rc-bk-who { display: grid; min-width: 0; }
+.rc-bk-who b { overflow: hidden; color: var(--text); font-size: var(--fs-sm); text-overflow: ellipsis; white-space: nowrap; }
+.rc-bk-who small { overflow: hidden; color: var(--text-mute); font-size: var(--fs-2xs); text-overflow: ellipsis; white-space: nowrap; }
+.rc-bk-seed { margin-right: 5px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 800; font-variant-numeric: tabular-nums; }
+/* Who is not known yet is said in words; they wrap rather than lose their end. */
+.rc-bk-tbd b { color: var(--text-mute); font-weight: 600; line-height: var(--lh-tight); white-space: normal; }
+.rc-bk-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--fill-tone); }
+/* A team you follow, lit wherever the bracket draws it. */
+.rc-bk-mine { border-radius: var(--radius-sm); background: color-mix(in oklab, var(--gold) 13%, transparent); }
+.rc-bk-star { margin-left: 5px; color: var(--gold); font-size: var(--fs-xs); }
+/* Where each of your teams stands, above the NFL's bracket. */
+.rc-mine-list { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.rc-mine-list li { display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: 8px; align-items: center;
+  color: var(--text-dim); font-size: var(--fs-sm); }
+.rc-mine-list b { color: var(--text); }
+/* A game played: the score at the side's end, the winner bright and the loser faded. */
+.rc-bk-score { color: var(--text-dim); font-size: var(--fs-sm); font-weight: 800; font-variant-numeric: tabular-nums; }
+.rc-bk-won .rc-bk-score, .rc-bk-won .rc-bk-who b { color: var(--text); }
+.rc-bk-won .rc-bk-score { color: var(--gold); }
+.rc-bk-lost { opacity: .55; }
+/* Under the sides: the night, the site, the final, our line. */
+.rc-bk-note { padding: 3px 8px 2px; overflow: hidden; color: var(--text-mute); font-size: var(--fs-2xs); text-overflow: ellipsis;
+  white-space: nowrap; direction: ltr; }
+.rc-bk-note b { color: var(--text-dim); }
+/* The lines. */
+.rc-bk-col:not(:last-child) .rc-bk-game::after, .rc-bk-col:not(:first-child) .rc-bk-game::before {
+  content: ""; position: absolute; top: calc(50% - 1px); width: calc(var(--bk-gap) / 2); height: 2px;
+  background: var(--bk-line); pointer-events: none; }
+.rc-bk-col:not(:last-child) .rc-bk-game::after { inset-inline-start: 100%; }
+.rc-bk-col:not(:first-child) .rc-bk-game::before { inset-inline-end: 100%; }
+.rc-bk-col:not(:last-child) .rc-bk-pair:not(.rc-bk-one)::after {
+  content: ""; position: absolute; top: calc(25% - 1px); bottom: calc(25% - 1px); width: 2px;
+  inset-inline-start: calc(100% + var(--bk-gap) / 2 - 1px); background: var(--bk-line); pointer-events: none; }
+/* A bracket of its own (college football's twelve): the whole width. */
+.rc-bk-solo { grid-template-areas: none; }
+/* Where there is room: the AFC on the left, the Super Bowl between, the NFC mirrored on the right, every round
+   the same width, and the line from each title game running on into the Super Bowl. */
+@container (min-width: 980px) {
+  .rc-bk:not(.rc-bk-solo) { grid-template-columns: minmax(0, 1fr) minmax(140px, .32fr) minmax(0, 1fr);
+    grid-template-areas: "l c r"; }
+  .rc-bk:not(.rc-bk-solo) .rc-bk-scroll { overflow: visible; }
+  .rc-bk:not(.rc-bk-solo) .rc-bk-col { flex-grow: 1; min-width: 0; }
+  .rc-bk-mirror { direction: rtl; }
+  .rc-bk-mirror .rc-bk-colh { direction: ltr; text-align: right; }
+  .rc-bk:not(.rc-bk-solo) .rc-bk-r .rc-bk-k { text-align: right; }
+  .rc-bk:not(.rc-bk-solo) .rc-bk-c .rc-bk-k, .rc-bk:not(.rc-bk-solo) .rc-bk-c .rc-bk-colh { text-align: center; }
+  .rc-bk:not(.rc-bk-solo) .rc-bk-conf .rc-bk-col:last-child .rc-bk-game::after,
+  .rc-bk:not(.rc-bk-solo) .rc-bk-c .rc-bk-game::before, .rc-bk:not(.rc-bk-solo) .rc-bk-c .rc-bk-game::after {
+    content: ""; position: absolute; top: calc(50% - 1px); width: 10px; height: 2px; background: var(--bk-line);
+    pointer-events: none; }
+  .rc-bk:not(.rc-bk-solo) .rc-bk-conf .rc-bk-col:last-child .rc-bk-game::after { inset-inline-start: 100%; }
+  .rc-bk:not(.rc-bk-solo) .rc-bk-c .rc-bk-game::before { right: 100%; }
+  .rc-bk:not(.rc-bk-solo) .rc-bk-c .rc-bk-game::after { left: 100%; }
+}
+
+/* THE NBA'S TWO RACES ON ONE PAGE (RACE2, 2026-11-17): the Cup and the
+   playoffs, a pressable pair in the look of the site's section tabs. */
+.rc-modes { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.rc-mode {
+  cursor: pointer; border-radius: var(--radius-sm);
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 600;
+  background: var(--fill-subtle); border: var(--hairline) solid transparent;
+  color: var(--text-dim); padding: 9px 14px;
+  transition: color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
+}
+.rc-mode:hover { color: var(--text); background: var(--fill-hover); }
+.rc-mode.active { background: var(--brand); color: var(--brand-ink); font-weight: 700; }
+.rc-mode:focus-visible { outline-offset: 2px; }
+/* The last place in, ruled off: the NBA's 6 and 10 seeds, a division's third. */
+.rc-row.rc-cut { border-bottom-color: var(--border); }
+.rc-seedno { color: var(--text-mute); font-variant-numeric: tabular-nums; }

@@ -1,0 +1,36 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One version's failure no longer cancels the others mid-run, so a red
+      # tick names the version that failed and the rest still report.
+      fail-fast: false
+      matrix:
+        include:
+          # PYTHON 3.9 RUNS ON UBUNTU 24.04. ubuntu-latest became Ubuntu 26.04,
+          # which has no 3.9 build ("The version '3.9' with architecture 'x64'
+          # was not found for Ubuntu 26.04"), so from 3 November every run
+          # failed at setup and cancelled 3.11 and 3.12 before they finished:
+          # the tick deploy/README.md says to check before --no-tests was red
+          # for a reason that had nothing to do with the code.
+          - python-version: "3.9"
+            os: ubuntu-24.04
+          - python-version: "3.11"
+            os: ubuntu-latest
+          - python-version: "3.12"
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run test suite (stdlib only, no dependencies)
+        run: python3 run_tests.py

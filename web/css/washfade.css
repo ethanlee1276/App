@@ -1,0 +1,10 @@
+/* THE COLOURS CHANGE WITHOUT A SNAP (WASHFADE1; js/washfade.js wfFade): a copy of what a surface painted a
+   moment ago, laid over it and faded away. Under every page, as the layer it copies is; inside the
+   bar, over its ground and under its words; over the strip under the clock, with the strip's own foot. */
+.wf-copy { position: fixed; inset: 0; z-index: -1; pointer-events: none; contain: strict; will-change: opacity; }
+.wf-copy[hidden] { display: none; }
+.wf-copy.wf-bar { position: absolute; }
+.wf-copy.wf-strip { inset: 0 0 auto 0; z-index: 42; height: calc(env(safe-area-inset-top, 0px) + 8px);
+  -webkit-mask-image: var(--mask-strip-foot); mask-image: var(--mask-strip-foot); }
+@media (prefers-reduced-motion: reduce) { .wf-copy { display: none; } }
+@media print { .wf-copy { display: none; } }

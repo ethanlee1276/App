@@ -1,0 +1,492 @@
+"""The exchange's own number, hung on the rows that can use it.
+
+Ethan, 2026-09-15: "I want to make sure that we're using every single
+piece of data. If there's any data that we're not pulling that we need
+to pull ... we need to start doing that."
+
+WE WERE ALREADY PULLING THE BEST ONE AND NOT USING IT. `engine/sources
+/kalshi` fetches a CFTC-regulated exchange, keyless, in all fifty
+states. It already parses the order book, already matches a market to
+one of our games (`match_game`), and already knows which side the YES
+contract is (`yes_team`). It fed the Prediction Desk and nothing else —
+so the Pick of the Day, a feature built entirely around finding a
+trustworthy fair and comparing it to a soft price, never saw it.
+
+WHY AN EXCHANGE MID BEATS A SHARP BOOK'S DE-VIG, which is the whole
+argument for ranking it first. `kalshi.parse_markets` says it plainly:
+
+    an exchange's mid IS the market's probability, where a sportsbook's
+    line has the book's margin baked in and has to be de-vigged on an
+    assumption.
+
+De-vigging Pinnacle means assuming HOW its margin is spread across the
+two sides — `odds.devig_two_way` divides it proportionally, and the
+favourite-longshot literature says books do not actually price that way.
+An exchange has no margin to strip: two people take opposite sides at a
+price they both chose. There is nothing to assume.
+
+HOW BIG THAT ASSUMPTION IS, MEASURED. This paragraph used to say the
+assumption was "small in the even-money band this feature lives in",
+which was true and carried no number, so it could neither be checked nor
+argued with. `bookvig.assumption_points` is the number: the gap between
+the three standard de-vigs — proportional, additive and power — on one
+real pair. Worst case anywhere in this feature's price band (a price
+implying 0.345 at +190 up to 0.587 at -142):
+
+    Pinnacle's ~3% hold       0.70 points     a third of `potd.MIN_EV`
+    a soft book's ~5%         1.18 points     three fifths of it
+    an exchange's 0%          0.00 points
+
+Nearer even money it is half that — 0.39 and 0.66 over the narrower
+range the side actually taken sits in. `engine/bookvig` carries the full
+table and the note on why quoting only that narrower one was misleading.
+
+AND IT IS SMALLER THAN THE ARGUMENT NEEDED. Seven tenths of a point of
+arithmetic certainty does not justify ranking a venue above a sharp book
+on its own, so the ladder's ordering does NOT rest on this paragraph.
+What it rests on is the second sentence up top: an exchange mid is a
+price two people chose, where a book's line is one firm's opinion with a
+business model attached. That is a claim about whose number it is, not
+about how the margin comes off, and `booksharp` is where it gets tested.
+
+WHY THE GAP IS SO SMALL HERE and would not be elsewhere: all three
+methods must return two numbers summing to one, so at a true 50/50 they
+cannot disagree at all, whatever the margin. The disagreement grows with
+DISTANCE FROM EVEN MONEY, and `potd.MIN_ODDS`/`MAX_ODDS` pin this board
+near even money by construction. On a +900 touchdown longshot the same
+arithmetic moves 3.66 points, which is why `engine/devig` exists and
+takes the question seriously one board over.
+
+THREE GUARDS, AND THEY MATTER MORE THAN THE SOURCE DOES. A number from
+an exchange is only better than a book's if the book behind it is real:
+
+  A TWO-SIDED BOOK, never a last trade. `parse_markets` already reports
+  which it is (`price_basis`), and says why: "a fair value with no book
+  behind it is a weaker claim". One stale print at 62c on a market
+  nobody has touched since Tuesday is not the market's opinion.
+
+  A TIGHT BOOK. The mid of a quote 10 cents wide carries five points of
+  slop in either direction, and `potd.MIN_EV` is two. A wide book cannot
+  settle a question this fine, so it does not get to.
+
+  LIQUIDITY, because a two-sided book with four contracts behind it is
+  two people, not a market.
+
+NOTHING HERE PRICES A BET. It hangs `exchange_fair` on rows it can
+match, with the evidence of its own quality beside it, and
+`potd.evidence` decides what to do with that. A row it cannot match is
+left exactly as it was.
+"""
+
+from __future__ import annotations
+
+#: The widest two-sided book whose mid is still worth trusting, in cents
+#: of probability. Read this against `potd.MIN_EV` (0.02): a book 10
+#: cents wide puts the true number anywhere in a five-point range on
+#: either side of the mid, which is more slop than the entire edge this
+#: feature asks for. Four cents leaves two, which is the most that can
+#: be tolerated before the guard stops meaning anything.
+MAX_SPREAD_CENTS = 4.0
+
+#: A two-sided book with almost nothing behind it is two people, not a
+#: market. NOT A MEASURED FIGURE — it is a floor against the obviously
+#: thin, chosen before there was any tape to fit it on, and the honest
+#: thing is to say so on the constant rather than to imply it was
+#: derived. `kalshi.price_series` is the store that will eventually
+#: answer what this should be.
+MIN_LIQUIDITY = 250.0
+
+#: Markets this can speak to. A game-winner contract is a moneyline and
+#: nothing else — Kalshi does not list our spread or total, and pretending
+#: a win probability settles a run line is the kind of silent coercion
+#: this codebase keeps finding in its own history.
+MARKETS = ("moneyline",)
+
+
+def quality(row: dict) -> str:
+    """"" if this exchange market's price is worth using, else why not."""
+    if str(row.get("price_basis") or "") != "book":
+        return "no two-sided book — only a last trade"
+    spread = row.get("spread_cents")
+    if spread is None:
+        return "no quoted spread"
+    try:
+        if float(spread) > MAX_SPREAD_CENTS:
+            return f"book is {float(spread):.0f}c wide"
+    except (TypeError, ValueError):
+        return "unreadable spread"
+    liq = max(float(row.get("volume_24h") or 0.0),
+              float(row.get("open_interest") or 0.0))
+    if liq < MIN_LIQUIDITY:
+        return f"thin — {liq:.0f} against a {MIN_LIQUIDITY:.0f} floor"
+    return ""
+
+
+def fair_for_team(market: dict, team: str, game: dict) -> float | None:
+    """P(this team wins) off the exchange, or None.
+
+    The YES side is one team; the other team's probability is one minus
+    it. `kalshi.yes_team` is what knows which, and it is asked rather
+    than guessed at — a side error here would not look like a bug, it
+    would look like a confident pick on the wrong team.
+    """
+    from .sources import kalshi
+    prob = market.get("prob")
+    if prob is None:
+        return None
+    try:
+        p = float(prob)
+    except (TypeError, ValueError):
+        return None
+    if not (0.0 < p < 1.0):
+        return None
+    # `yes_team` NAMES A ROLE, NOT A CLUB — it returns "home" or "away"
+    # (see its docstring: four deciders, each resolving to a side of the
+    # matched game). The first draft here compared that string to a team
+    # ABBREVIATION, which never matches, so BOTH teams fell through to
+    # the 1-p branch and each side of every game was priced at the other
+    # side's number. Caught by
+    # `test_the_yes_side_and_the_other_side_are_not_confused`, which is
+    # the test written precisely because this failure does not look like
+    # a bug — it looks like a confident pick on the wrong team.
+    yes = kalshi.yes_team(market, game)
+    if yes not in ("home", "away"):
+        return None
+    t = str(team or "").strip().upper()
+    if not t:
+        return None
+    yes_code = str(game.get(yes) or "").strip().upper()
+    other = "away" if yes == "home" else "home"
+    other_code = str(game.get(other) or "").strip().upper()
+    if not yes_code or not other_code:
+        return None
+    if t == yes_code:
+        return round(p, 4)
+    if t == other_code:
+        # The other side of a two-outcome market. Only safe BECAUSE the
+        # market is two-outcome: a game-winner contract has no draw.
+        return round(1.0 - p, 4)
+    # NOT A SIDE OF THIS GAME AT ALL. Returning either number here would
+    # be inventing a price for a team the contract says nothing about.
+    return None
+
+
+#: The census key for a ROW that found no market, as opposed to a MARKET
+#: refused on quality. One derivation, because `potd_report` has to tell
+#: the two apart to say anything useful: markets refused is the venue's
+#: problem and nothing to do about it, rows unmatched is our own name
+#: matching and is fixable. Printing them in one list, as the first cut
+#: of that report did, hides the difference under a heading that names
+#: the wrong one.
+NO_MATCH = "no exchange market for this game"
+
+#: The row's game WAS on the exchange and the row's side still could not
+#: be priced. A different failure with a different fix: `fair_for_team`
+#: refused, which means `kalshi.yes_team` could not say which club the
+#: YES pays on, or the row's team is not a side of the matched game.
+#:
+#: SPLIT OUT ON 2026-09-16, after the NFL board reported nine rows, 58
+#: usable markets and zero matches, and `NO_MATCH` could not say whether
+#: that was our name matching, an empty games list, or a side we could
+#: not resolve. Three causes, three fixes, one bucket — which is the
+#: failure `SharpAnchorReport.diagnosis` was dragged out of, in another
+#: module, for the same reason.
+NO_SIDE = "the exchange priced this game but not this side"
+
+#: How many unmatched market titles to carry back for the log line. Two
+#: is enough to see a shape ("Chiefs at Bills" against a board saying
+#: "KC @ BUF") and few enough that a bad night does not print a page.
+SAMPLE = 2
+
+
+def names_for(sport: str) -> dict:
+    """``{abbr: "every full name this club goes by"}`` for one league.
+
+    EVERY name, joined, not one of them. `oddsapi.SPORT_CONFIG[sport]
+    ["teams"]` maps name to abbreviation and more than one name can map
+    to the same club — MLB carries both "Oakland Athletics" and
+    "Athletics" for OAK. Inverting it to a single winner would throw away
+    whichever spelling the exchange happens to use. `_name_tokens` splits
+    on non-alphanumerics, so joining them costs nothing and matches
+    either.
+
+    College has no such map (188 teams, and its own builder already
+    stamps `home_name` on the game), so this returns {} for cfb and the
+    board's own names are used instead.
+    """
+    try:
+        from .sources.oddsapi import SPORT_CONFIG
+        teams = (SPORT_CONFIG.get(sport) or {}).get("teams") or {}
+    except Exception:                                         # noqa: BLE001
+        return {}
+    out: dict = {}
+    for name, abbr in teams.items():
+        a = str(abbr or "").strip().upper()
+        if a and name:
+            out.setdefault(a, []).append(str(name))
+    return {a: " ".join(v) for a, v in out.items()}
+
+
+def with_names(games, sport: str = "") -> list:
+    """``games`` with full team names filled in. New dicts; no mutation.
+
+    THE CONTRACT `kalshi.match_game` WAS WRITTEN AGAINST AND NEVER GOT.
+    Its docstring says "games rows carry home/away abbreviations plus
+    full names", and it matches on the names first — but `pipeline.
+    _game_to_dict`, the function that writes the board's `games`, has
+    only ever written the abbreviations. So the primary path had no data
+    from the day it shipped and everything fell through to the fallback:
+    the abbreviation itself appearing as a whole token in the exchange's
+    text.
+
+    THAT FALLBACK CANNOT MATCH HALF THE LEAGUE. `_name_tokens` drops
+    anything under three characters, so SD, SF, LA, KC, TB, NY and NE can
+    never be tokens at all, and both teams must hit for a match. On
+    2026-09-15 the MLB board reported 62 usable exchange markets, 4
+    moneyline rows, and zero matches — the guards were fine, the venue was
+    fine, the names were simply not there.
+
+    A board that DOES carry names keeps them: college stamps its own, and
+    a real name beats one looked up from an abbreviation.
+    """
+    lookup = names_for(sport)
+    out = []
+    for g in games or []:
+        if not isinstance(g, dict):
+            continue
+        row = dict(g)
+        for side in ("home", "away"):
+            key = f"{side}_name"
+            if not str(row.get(key) or "").strip():
+                abbr = str(row.get(side) or "").strip().upper()
+                if abbr and lookup.get(abbr):
+                    row[key] = lookup[abbr]
+        out.append(row)
+    return out
+
+
+def attach(rows, markets, games, sport: str = "") -> dict:
+    """Hang `exchange_fair` on every row an exchange market can price.
+
+    Returns a census of what happened, in the shape every other funnel in
+    this codebase keeps: a day where nothing attached should say which
+    step lost the rows rather than leaving a caller to guess.
+    """
+    from .sources import kalshi
+    census: dict = {"rows": 0, "attached": 0}
+
+    def _tally(why: str) -> None:
+        census[why] = census.get(why, 0) + 1
+
+    usable = []
+    for m in markets or []:
+        if sport and kalshi.sport_of(m) not in (None, sport):
+            continue
+        why = quality(m)
+        if why:
+            _tally(why)
+            continue
+        usable.append(m)
+    census["usable markets"] = len(usable)
+    # HOW MANY BOARD ROWS WERE ELIGIBLE, COUNTED BEFORE ANY EARLY EXIT.
+    #
+    # This was tallied inside the row loop below, which never runs when
+    # the exchange sent nothing usable — so `rows` came back 0 and the
+    # caller's `if not seen` branch printed "no moneyline rows on the
+    # board to price" on a board that was full of them. The sentence
+    # blamed the board for the exchange's silence and sent a reader to
+    # look in the wrong place, which is the same fault as the census
+    # mislabelling fixed on 2026-09-16 one function over.
+    #
+    # `rows` now means "eligible rows on the board" whatever the feed
+    # did, and `attached` means "rows that got a number". A zero in the
+    # first is a board fact; a zero in the second with markets present is
+    # a matching fact; a zero in the second with no markets is a feed
+    # fact, and `attach_to_board` can now tell the three apart.
+    census["rows"] = sum(1 for row in rows or []
+                         if isinstance(row, dict)
+                         and str(row.get("market") or "") in MARKETS)
+    if not usable:
+        return census
+    # THE NAMES `match_game` MATCHES ON — see `with_names`. Built once
+    # here rather than inside the row loop, which walks every market for
+    # every row.
+    games = with_names(games, sport)
+    census["games on the board"] = len(games)
+
+    # MARKETS ARE MATCHED TO GAMES ONCE, BEFORE ANY ROW IS PRICED. The
+    # first draft did it inside the row loop, so a 9-row board against 58
+    # markets ran `match_game` 522 times to answer 58 questions — and,
+    # worse, could not say afterwards whether the markets had failed to
+    # match or the ROWS had, because the two were computed together.
+    # Separating them is what lets the census below name a cause.
+    pairs, unmatched = [], []
+    # WHY EACH MARKET FAILED, not just how many did. `match_game_verbose`
+    # separates "nothing on the board names both clubs" from "the ticker
+    # names two of tonight's games and I will not guess" — the second is
+    # a matcher problem and the first is usually a stale board, and they
+    # were one number until 2026-09-16.
+    why_counts: dict = {}
+    for m in usable:
+        g, why = kalshi.match_game_verbose(m, games or [])
+        if g is None:
+            why_counts[why] = why_counts.get(why, 0) + 1
+            if len(unmatched) < SAMPLE:
+                unmatched.append(str(m.get("title") or m.get("ticker") or "?"))
+            continue
+        pairs.append((m, g))
+    census["markets matched to a game"] = len(pairs)
+    for why, n in why_counts.items():
+        census[why] = census.get(why, 0) + n
+
+    # WHAT DID NOT LINE UP, in both parties' own words. A reader with
+    # this line does not have to guess whether the exchange is naming
+    # clubs differently from us or whether the board is a day stale —
+    # the two strings sit next to each other and say which.
+    if unmatched:
+        census["unmatched market titles"] = unmatched
+        census["board matchups"] = [
+            f"{g.get('away', '?')} @ {g.get('home', '?')}"
+            for g in (games or [])[:SAMPLE]]
+
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("market") or "") not in MARKETS:
+            continue
+        # `census["rows"]` is counted above, before the early exit.
+        team = row.get("team") or row.get("player") or ""
+        hit = None
+        on_the_exchange = False
+        for m, g in pairs:
+            # Did the exchange price this row's GAME at all? Asked
+            # separately from whether it priced this row's SIDE, because
+            # those two have different fixes.
+            if row.get("home") and row.get("away"):
+                same = ({str(g.get("home") or "").upper(),
+                         str(g.get("away") or "").upper()}
+                        == {str(row.get("home") or "").upper(),
+                            str(row.get("away") or "").upper()})
+                on_the_exchange = on_the_exchange or same
+            fair = fair_for_team(m, team, g)
+            if fair is not None:
+                hit = (fair, m)
+                break
+        if hit is None:
+            _tally(NO_SIDE if on_the_exchange else NO_MATCH)
+            continue
+        fair, m = hit
+        row["exchange_fair"] = fair
+        row["exchange_ticker"] = m.get("ticker", "")
+        row["exchange_spread_cents"] = m.get("spread_cents")
+        census["attached"] += 1
+    return census
+
+
+def attach_to_board(result: dict, sport: str) -> str:
+    """Hang the exchange's fair on a finished board. Returns a log line.
+
+    ONE HOOK, CALLED FROM EVERY BUILD, for the reason `potd.attach` and
+    `livepicks.attach_tracker` each exist: four builds assembling this
+    inline is four chances for one to drift, and the drift shows up as a
+    sport whose Pick of the Day quietly has a worse fair than the others.
+
+    NEVER RAISES, and it fetches from a live venue, so that promise is
+    doing real work: an exchange having a bad morning must cost us the
+    exchange tier for one build and nothing else. The failure lands in
+    the JSON where the page and `potd_report` can see it, rather than
+    only in a log the launcher swallows.
+
+    ORDERED BEFORE `potd.attach` BY THE CALLER, necessarily — the fair
+    has to be on the row before the selector reads the row. A build that
+    calls them the other way round gets a board with exchange fairs on
+    it and a pick chosen without them, which would look like nothing at
+    all going wrong.
+    """
+    rows = result.get("most_likely") or []
+    if not rows:
+        return f"  {sport.upper()} exchange fair: no board rows to price"
+    try:
+        from .sources import kalshi
+        markets, series = kalshi.fetch_sports_markets(kalshi.parse_markets)
+    except Exception as exc:                                  # noqa: BLE001
+        result["exchange_fair_error"] = f"{type(exc).__name__}: {exc}"
+        return f"  ⚠️  {sport.upper()} exchange fair: feed unavailable — {exc}"
+    # THE FEED'S OWN VERDICT, BEFORE THE BOARD'S.
+    #
+    # This report was FETCHED AND THROWN AWAY — `markets, meta = ...` and
+    # `meta` never read again. It is the one thing that separates three
+    # situations the log otherwise renders identically, and
+    # `fetch_sports_markets` says so in its own docstring: "A missing
+    # series is simply absent from the exchange's catalog under that name
+    # — recorded as 0 so the report distinguishes 'wrong name' from
+    # 'feed down'."
+    #
+    # AND THE `except` ABOVE CANNOT COVER IT. `fetch_sports_markets`
+    # catches per-series failures internally and records "error"; it does
+    # not raise. So an exchange that is entirely unreachable returns
+    # `([], {every series: "error"})` — no exception — and everything
+    # below reported it as a MATCHING problem: "0 of 30 rows priced — 30
+    # neither the title nor the ticker names both clubs". A feed that is
+    # down looked exactly like a naming bug, which is the same failure
+    # that cost #256 its diagnosis for weeks.
+    errored = sorted(k for k, v in (series or {}).items() if v == "error")
+    result["exchange_series"] = dict(series or {})
+    if series and len(errored) == len(series):
+        result["exchange_fair_error"] = (
+            "every Kalshi series failed to fetch: " + ", ".join(errored))
+        return (f"  ⚠️  {sport.upper()} exchange fair: THE FEED IS DOWN — all "
+                f"{len(errored)} series errored ({', '.join(errored)}). "
+                f"Nothing below is a matching problem.")
+    try:
+        census = attach(rows, markets, result.get("games") or [], sport)
+    except Exception as exc:                                  # noqa: BLE001
+        result["exchange_fair_error"] = f"{type(exc).__name__}: {exc}"
+        return f"  ⚠️  {sport.upper()} exchange fair: {type(exc).__name__} — {exc}"
+    result["exchange_fair_census"] = census
+    got, seen = census.get("attached", 0), census.get("rows", 0)
+    if not seen:
+        return (f"  {sport.upper()} exchange fair: no moneyline rows on the "
+                f"board to price")
+    if not got:
+        # WHY NOTHING LANDED, not just that nothing did. The census keys
+        # are the quality reasons from `quality()`, so this names the
+        # book that was too wide or too thin rather than shrugging.
+        #
+        # THE COUNTS ONLY, and the two sample lists are printed after
+        # them rather than summed into them — "2 unmatched market titles"
+        # would be a number about our own logging.
+        shown = {k: v for k, v in census.items() if isinstance(v, int)}
+        why = ", ".join(f"{n} {k}" for k, n in sorted(shown.items())
+                        if k not in ("rows", "attached", "usable markets",
+                                     "games on the board",
+                                     "markets matched to a game"))
+        line = (f"  {sport.upper()} exchange fair: 0 of {seen} row(s) priced"
+                + (f" — {why}" if why else ""))
+        # WHICH SERIES ANSWERED, on the one path where it decides what to
+        # go and look at. An empty catalog under every name is a ticker
+        # problem (`SPORT_SERIES`); some series erroring is a partial
+        # outage; both are invisible in a count of unmatched titles.
+        if errored:
+            line += (f"\n      {len(errored)} of {len(series)} series errored: "
+                     f"{', '.join(errored)} — a partial outage, not a match")
+        elif series and not any(v for v in series.values()):
+            line += (f"\n      every series came back EMPTY "
+                     f"({', '.join(sorted(series))}) — the exchange lists no "
+                     f"open events under these tickers, so there was nothing "
+                     f"to match against")
+        # AND WHAT DID NOT LINE UP, side by side. `NO_MATCH` on every row
+        # with markets present is a naming problem or a stale board, and
+        # the only way to tell from a log is to print both parties'
+        # spellings — see `attach`.
+        titles = census.get("unmatched market titles") or []
+        mine = census.get("board matchups") or []
+        if titles:
+            line += (f"\n      exchange says: {'; '.join(titles)}"
+                     f"\n      the board says: {'; '.join(mine) or '(no games)'}"
+                     f"  [{census.get('games on the board', 0)} game(s), "
+                     f"{census.get('markets matched to a game', 0)} matched]")
+        return line
+    return (f"  {sport.upper()} exchange fair: {got} of {seen} moneyline "
+            f"row(s) carry an exchange number "
+            f"({census.get('usable markets', 0)} usable market(s))")

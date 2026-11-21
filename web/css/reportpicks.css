@@ -1,0 +1,161 @@
+/* Report Picks (js/reportpicks.js), loaded with it: every bet and parlay the
+   game reports posted, one game after another, each game's picks in the
+   Tonight tab's rows and its tickets as the report draws them. */
+.rpk-lead { margin: 0 0 6px; max-width: var(--measure-wide); }
+/* In three tabs (2026-11-16): today's picks, the record, how our reports did.
+   Today opens on what the day carries and how its finished games went, a chip
+   a game, then the games by where they stand, each a card folded to its line. */
+.rpk-summary { display: grid; gap: 3px; margin: 2px 0 12px; }
+.rpk-summary b { font-size: var(--fs-md); color: var(--text); }
+.rpk-summary span { color: var(--text-mute); font-size: var(--fs-sm); }
+button.rpk-rec { justify-self: start; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
+  font: inherit; font-size: var(--fs-sm); color: var(--brand); }
+button.rpk-rec:empty { display: none; }
+.rpk-jump { margin-bottom: 6px; }
+.rpk-group { margin: 18px 0 8px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-mute); }
+.rpk-group span { margin-left: 4px; color: var(--text-dim); }
+.rpk-game { margin: 0 0 10px; border-radius: var(--radius); background: var(--panel); scroll-margin-top: 72px; }
+.rpk-game > summary { list-style: none; cursor: pointer; display: flex; align-items: center;
+  justify-content: space-between; gap: 10px; padding: 12px 14px; }
+.rpk-game > summary::-webkit-details-marker { display: none; }
+.rpk-game > summary .row-fold-chev { flex: 0 0 auto; color: var(--text-mute); }
+.rpk-game[open] > summary .row-fold-chev { transform: rotate(135deg) translateY(2px); }
+.rpk-title { min-width: 0; }
+.rpk-title b { display: block; font-size: var(--fs-lg); color: var(--text); }
+.rpk-title span { display: block; margin-top: 2px; color: var(--text-mute); font-size: var(--fs-sm); }
+.rpk-title .rpk-tally { margin-top: 3px; color: var(--text); font-weight: 600; }
+.rpk-body { padding: 0 14px 14px; }
+/* A read, not a bet (js/reportpicks.js RP_READ): its chance muted, not the green of a pick we stake. */
+/* A pick's price grade (engine/pricegrade): the words in the grade's own colour. */
+.rpk-grade { font-weight: 600; }
+.rpk-grade.green { color: var(--good); }
+.rpk-grade.yellow { color: var(--warn); }
+.rpk-grade.red { color: var(--bad); }
+.rpk-read .hd-p { color: var(--text-mute); border-color: transparent; background: transparent;
+  background-color: var(--fill-tone); }
+.rpk-sub { margin: 10px 0 6px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-mute); }
+.rpk-open { margin-top: 12px; font-size: var(--fs-sm); }
+.rpk-tix:empty { display: none; }
+/* The Record tab: the Record page's own section (record.js recReportBook), its styles with it. */
+.rpk-book { min-height: 40px; }
+.subgroup > .rpk-facts { margin-top: 4px; }
+/* How our reports did (js/reportpicks.js rpFactsHTML, engine/reportrecord):
+   the totals as tiles, each kind of read's share, then every finished game
+   with its checks as tinted chips (green right, red wrong, plain the rest)
+   and its own graded report a tap under it. */
+.rpk-facts { margin: 28px 0 10px; scroll-margin-top: 72px; }
+.rpk-fact-span-chips { margin: 8px 0 12px; }
+.rpk-fact-tiles { display: grid; gap: 10px; margin-top: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.rpk-fact-tile { display: grid; gap: 2px; padding: 12px 14px; border-radius: var(--radius-sm);
+  background: var(--fill-subtle); }
+.rpk-fact-k { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; }
+.rpk-fact-v { font: 700 var(--fs-xl) / 1.1 var(--font-display); font-variant-numeric: tabular-nums; color: var(--text); }
+.rpk-fact-sub { color: var(--text-mute); font-size: var(--fs-xs); }
+.rpk-fact-kinds { margin: 12px 0 0; padding-left: 18px; display: grid; gap: 3px; font-size: var(--fs-sm); }
+.rpk-fact-span { margin: 8px 0 0; color: var(--text-mute); font-size: var(--fs-sm); }
+.rpk-fact-h { margin: 20px 0 8px; font-size: var(--fs-md); }
+.rpk-fact-list { display: grid; gap: 14px; }
+.rpk-fact-row { display: grid; gap: 6px; }
+.rpk-fact-game b { display: block; color: var(--text); }
+.rpk-fact-game span { display: block; margin-top: 2px; color: var(--text-mute); font-size: var(--fs-xs); }
+.rpk-fact-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rpk-fact-chip { padding: 2px 9px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 600;
+  background: var(--fill-subtle); color: var(--text-mute); }
+.rpk-fact-chip.won { color: var(--good); background: color-mix(in oklab, var(--good) 14%, transparent); }
+.rpk-fact-chip.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 14%, transparent); }
+.rpk-fact-open { justify-self: start; font-size: var(--fs-sm); }
+.rpk-fact-report:empty { display: none; }
+/* How sure we were, and how often it held (reportpicks.js rpCalibHTML). */
+.rpk-fact-calib { margin-top: 6px; }
+.rpk-fact-table { width: 100%; max-width: 560px; font-size: var(--fs-sm); }
+
+/* EVERY PICK AND PARLAY, A CHECK OR AN X (reportpicks.js rpBetsHTML, 2026-11-17; Ethan: "x or
+   checkmark if the whole parlay hit and if the individual picks hit"). Under a finished game's
+   checks, a strip of marks a kind, the count that hit beside it; open, every pick by name and
+   every ticket with each of its legs, each with its mark and the number it finished with. */
+.rpk-fact-bets:empty { display: none; }
+.rpk-bets { border-radius: var(--radius-sm); background: var(--fill-subtle); }
+.rpk-bets-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 9px 12px;
+  list-style: none; cursor: pointer; font-size: var(--fs-sm); }
+.rpk-bets-sum::-webkit-details-marker { display: none; }
+.rpk-bets-sum .row-fold-chev { margin-left: auto; color: var(--text-mute); }
+.rpk-bets[open] > summary .row-fold-chev { transform: rotate(135deg) translateY(2px); }
+.rpk-bets-part { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rpk-bets-k { color: var(--text-mute); font-weight: 600; }
+.rpk-bets-part b { font-variant-numeric: tabular-nums; color: var(--text); }
+.rpk-bets-part b.won { color: var(--good); }
+.rpk-bets-part b.lost { color: var(--bad); }
+.rpk-marks { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+/* A check, an X, or a dash for a push, a void or one still waiting. */
+.rpk-mk { display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 50%;
+  font-style: normal; color: var(--text-mute); background: color-mix(in oklab, var(--text-mute) 16%, transparent); }
+.rpk-mk.won { color: var(--good); background: color-mix(in oklab, var(--good) 18%, transparent); }
+.rpk-mk.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 18%, transparent); }
+.rpk-bets-body { padding: 0 12px 12px; }
+.rpk-bets-h { margin: 10px 0 6px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; }
+.rpk-bet-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.rpk-bet { display: flex; align-items: flex-start; gap: 8px; color: var(--text-dim); }
+.rpk-bet.won, .rpk-bet.lost { color: var(--text); }
+.rpk-bet-did { color: var(--text-mute); }
+.rpk-bet-tix { display: grid; gap: 5px; }
+.rpk-bet-tix-h { display: flex; align-items: center; gap: 8px; }
+.rpk-bet-tix-h span { color: var(--text-mute); }
+.rpk-bet-tix.won .rpk-bet-tix-h span { color: var(--good); }
+.rpk-bet-tix.lost .rpk-bet-tix-h span { color: var(--bad); }
+.rpk-bet-legs { display: grid; gap: 4px; margin: 0 0 4px 26px; padding: 0; list-style: none; }
+.rpk-bets-held { margin: 6px 0 0; color: var(--text-mute); }
+.rpk-bets-note { margin: 8px 0 2px; color: var(--text-mute); font-size: var(--fs-sm); }
+.rpk-marks-more { align-self: center; margin-left: 2px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; }
+.rpk-fact-more { margin-top: 14px; }
+.rpk-fact-h + .rpk-fact-span { margin: 0 0 14px; }
+.rpk-fact-more[hidden] { display: none; }
+
+/* The last slate at a glance (engine/reportrecord.last_slate, LASTNIGHT1): one card above today's picks. */
+.rpk-slate { margin: 0 0 14px; padding: 10px 12px; border-radius: var(--radius);
+  background: color-mix(in oklab, var(--gold) 8%, transparent); }
+.rpk-slate-h { margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font-size: var(--fs-sm); letter-spacing: .04em; text-transform: uppercase; color: var(--gold); }
+.rpk-slate-h span { color: var(--text-mute); font-weight: 500; letter-spacing: 0; text-transform: none; }
+.rpk-slate-line { margin: 4px 0 6px; font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.rpk-slate-go { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none;
+  color: var(--text-mute); font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; }
+.rpk-slate-go:hover, .rpk-slate-go:focus-visible { color: var(--gold); }
+
+/* The likeliest tickets today (reportpicks.js rpTopHTML, ZM): one card, a line a ticket, each a door to its game. */
+.rpk-top { margin: 0 0 12px; padding: 8px 12px 4px; border-radius: var(--radius);
+  background: color-mix(in oklab, var(--good) 7%, var(--panel)); }
+.rpk-top-h { margin: 0 0 2px; display: grid; gap: 1px;
+  font-size: var(--fs-sm); letter-spacing: .04em; text-transform: uppercase; color: var(--good); }
+.rpk-top-h span { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0;
+  text-transform: none; }
+.rpk-top-row { display: grid; gap: 2px; width: 100%; padding: 8px 0; border: 0; background: none; text-align: left;
+  font: inherit; color: var(--text); cursor: pointer; }
+.rpk-top-row + .rpk-top-row { border-top: 1px solid var(--border-soft); }
+.rpk-top-game { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 600; }
+.rpk-top-legs { font-size: var(--fs-sm); line-height: var(--lh-snug); transition: color .15s ease; }
+.rpk-top-p { color: var(--text-mute); font-size: var(--fs-xs); }
+.rpk-top-p b { color: var(--good); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.rpk-top-row:hover .rpk-top-legs, .rpk-top-row:focus-visible .rpk-top-legs { color: var(--gold); }
+
+/* Ethan's featured games, apart (engine/featured, FEATURED1): each kind's line, then each game's. */
+.rpk-fx { margin: 14px 0 6px; padding: 10px 12px 4px; border-radius: var(--radius);
+  background: color-mix(in oklab, var(--gold) 8%, transparent); }
+.rpk-fx .rpk-fact-h { display: flex; align-items: center; gap: 6px; margin-top: 0; }
+.rpk-fx-star { color: var(--gold); }
+.rpk-fx-kinds { display: grid; gap: 8px; margin: 8px 0; }
+.rpk-fx-kind h5 { margin: 0; font-size: var(--fs-sm); display: flex; justify-content: space-between; gap: 8px; }
+.rpk-fx-kind h5 span { color: var(--text-mute); font-weight: 500; }
+.rpk-fx-kind p, .rpk-fx-game p { margin: 2px 0 0; font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.rpk-fx-u.won { color: var(--good); }
+.rpk-fx-u.lost { color: var(--bad); }
+.rpk-fx-games { list-style: none; margin: 8px 0 0; padding: 0; }
+.rpk-fx-game { padding: 8px 0; border-top: 1px solid var(--border-soft); }
+.rpk-fx-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; }
+.rpk-fx-tag { padding: 1px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 600; color: var(--gold);
+  background: color-mix(in oklab, var(--gold) 14%, transparent); }
+.rpk-fx-each > summary { cursor: pointer; font-weight: 600; font-size: var(--fs-sm); padding: 6px 0; color: var(--gold); }
