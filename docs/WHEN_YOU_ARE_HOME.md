@@ -9349,7 +9349,9 @@ is one, and where the report posted it (Our picks, Matchup read, Breakout candid
 fold under it until the overnight settle, as the others do. Each game's own page lists them too, as Game report
 picks on its picks rail above its report's tickets. A report's card pick is a Most Likely pick as well, so it shows
 in both panels, once in each; it is counted once in each book on the Record. Members only, as the reports are
-(`live_report` is a paid key).
+(`live_report` is a paid key). Because the rows are a member's, the public heartbeat counts them for each league
+(`live_report`: how many picks, and how many of their games are under way), so anyone can see the tracker found
+them.
 
 **AAR. The NBA's tickets keep their classes under the book cap** (step 832; 21 November). Nothing to run. Step AAM
 put each NBA leg at the lower of our chance and the book's fair one, which sits under the price's own break-even by

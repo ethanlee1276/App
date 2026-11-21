@@ -570,6 +570,13 @@ def _board_counts(path: str) -> dict:
     # only when true, so an in-season board's counts read as they did.
     if b.get("status") == "offseason":
         out["offseason"] = True
+    # THE GAME REPORTS' OWN PICKS ON THE LIVE TAB (step AAS, livepicks.
+    # REPORT_TRACKER_CATEGORIES): a paid key, so the heartbeat is where anyone
+    # can see the tracker found them. How many, and how many of their games are
+    # under way; counts only, present only when the board carries some.
+    rep = [r for r in b.get("live_report") or [] if isinstance(r, dict)]
+    if rep:
+        out["live_report"] = {"picks": len(rep), "live": sum(1 for r in rep if r.get("phase") == "live")}
     # THE GAME PARLAYS AND THE REPORTS, COUNTED (2026-11-14). Both are paid
     # keys, stripped from the public copy, so the heartbeat is where anyone
     # can see a league built them: three three-leg tickets and three scorer

@@ -82,6 +82,32 @@ def test_a_row_the_journal_cannot_name_is_left_as_it_is():
     assert livepicks.report_sources(conn, "nfl", rows) == rows, "a closed journal: the rows as they are"
 
 
+def test_the_heartbeat_counts_them_and_names_no_pick():
+    """The rows are a member's, so the public heartbeat is where anyone can see the tracker found them:
+    how many, and how many of their games are under way."""
+    import json
+    import tempfile
+    import launch as L
+    board = {"date": "2099-W12", "live_report": [dict(phase="live", player="Malik Nabers"),
+                                                 dict(phase="upcoming", player="Cam Skattebo")]}
+    was = L._full_copy
+    L._full_copy = lambda p: p
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.json")
+            with open(path, "w") as fh:
+                json.dump(board, fh)
+            got = L._board_counts(path)
+            with open(path, "w") as fh:
+                json.dump({"date": "2099-W12", "live_report": []}, fh)
+            none = L._board_counts(path)
+    finally:
+        L._full_copy = was
+    assert got["live_report"] == {"picks": 2, "live": 1}, got
+    assert "Malik Nabers" not in json.dumps(got), "counts only"
+    assert "live_report" not in none, "present only when the board carries some"
+
+
 def test_following_them_is_a_members():
     assert "live_report" in gate.PAID_KEYS
     out = gate.redact({"date": "2099-W12", "live_report": [{"player": "Malik Nabers"}], "games": [{"home": "NYG"}]},
