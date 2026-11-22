@@ -86,9 +86,10 @@ def test_under_the_floor_the_rest_folds_behind_three_summaries():
     assert body.count("foldOpen(") == 3 and body.count("foldClose") == 3
     assert "+ verdict + ridingNote + unstaked + small + monthCard" in body
     assert body.index("${foldClose}\n    ${recRecentSection(") < body.index("recRecentSection(") + 1
-    assert "const underFloor = (o.settled || 0) < recNeed;" in APP
+    # The count of the record the page leads with (recPageCurve: a league staking nothing yet, its Most Likely).
+    assert "const underFloor = (pc.o.settled || 0) < recNeed;" in APP
     assert 'const foldOpen = (what) => !underFloor ? "" :' in APP
-    assert "recordWindowHTML(avail, rk, recRangesClosed(src.curve))" in APP
+    assert "recordWindowHTML(avail, rk, recRangesClosed(pc.curve))" in APP
 
 
 if __name__ == "__main__":

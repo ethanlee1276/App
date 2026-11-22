@@ -80,11 +80,11 @@ def test_the_verdict_leaves_out_what_the_same_room_already_says():
     it is cut to a window with rows in it, and the section is drawn
     whenever the book has a settled or open row."""
     body = REC[REC.index("async function renderRecord("):]
-    assert "lkHere, { combinedShown: !(winFrom && recRangeTotals(src.curve, winFrom))," in body
-    assert "likelySaid: !!(lkHere && (lkHere.settled || lkHere.open)) });" in body
+    assert "lkHere, { combinedShown: !(winFrom && recRangeTotals(pc.curve, winFrom))," in body
+    assert "likelySaid: !!(lkHere && (lkHere.settled || lkHere.open)), likelyLed: pc.likely });" in body
     # The same window test the ribbon makes, and the same draw test the
     # section makes — so neither copy can go missing on its own.
-    assert "const winO = from ? recRangeTotals(src.curve, from) : null;" in body
+    assert "const winO = from ? recRangeTotals(pc.curve, from) : null;" in body
     assert "pooled_overall: winO ? null : src.pooled_overall," in body
     assert "if (!lk || (!lk.settled && !lk.open)) return \"\";" in _fn(REC, "recLikelySection")
     books = _fn(APP, "verdictBooksHTML")

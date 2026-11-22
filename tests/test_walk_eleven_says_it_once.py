@@ -198,8 +198,11 @@ def test_the_verdict_lives_with_the_record_and_says_whose_claim():
         assert f"function {name}(" not in APP, f"{name} is first-visit bytes again"
         assert f"function {name}(" in REC, name
     v = _fn(REC, "recordVerdictHTML")
-    assert "pooled ? `the Edge picks’ chance, ${calN} graded` : \"what the model said\"" in v
-    assert 'pooled ? "how often those Edge picks hit" : "what happened"' in v
+    assert "pooled ? `the Edge picks’ chance, ${calN} graded`" in v
+    assert 'pooled ? "how often those Edge picks hit"' in v
+    # …and a league led by its Most Likely record says whose its claim is too (22 November 2026).
+    assert "likelyLed && calN ? `the Most Likely list’s chance, ${calN} graded` : \"what the model said\"" in v
+    assert 'likelyLed && calN ? "how often those picks hit" : "what happened"' in v
 
 
 if __name__ == "__main__":

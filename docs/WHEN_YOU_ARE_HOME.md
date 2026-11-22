@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABN. Hockey's and college basketball's Record pages read like the NFL's** (step 854; 22 November). Nothing to run.
+You said: "the record pages to match each other. Not numbers wise but visual wise." Hockey and college basketball
+stake nothing yet (their edge picks wait on paper and their Most Likely picks are tracked for their hit rate), so
+their Record leads with the Most Likely record: hockey's top card read 1958-1024 over 2,982 graded picks. Everything
+under that card read the empty staked record instead: the 90, 30 and 7-day buttons were greyed out with "Not enough
+settled days for a window yet", the verdict card said "0-0-0 ... Too early to call. 0 graded picks", the running
+profit chart, the books and the splits were folded away as "too early to read (0 of the 30 settled bets the record
+needs)", and the running chart drew nothing. Now every one of those reads the record the page leads with: the window
+buttons work (hockey's 90-day one says the record covers 39 days so far, as the NFL's says of its own), the verdict
+shows that record with its own claimed-versus-landed chart, and the panels unfold as the NFL's do. College
+basketball has 13 graded picks, so its page still says "too early", now with its real count (13 of 30) instead of 0.
+Leagues with a staked record (NFL, college football, NBA, baseball) read exactly as before; the profit calendar
+keeps its own Edge and Most Likely switch.
+
 **ABM. Baseball's game page and play files work like every other league's** (step 853; 22 November). Nothing to run;
 baseball is in its offseason, so this shows in the spring. Step ABL fixed finished games that kept reading LIVE in
 every league the main live loop serves; baseball's play files come from a loop of their own that had the same gap,

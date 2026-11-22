@@ -153,10 +153,14 @@ def test_the_bar_lights_one_chip_and_hides_when_there_is_no_choice():
 
 def test_the_headline_reads_the_window_from_the_scopes_own_curve():
     body = _fn("renderRecord")
-    assert "const avail = recRangesFor(src.curve);" in body, "the scope in view's curve, not the pooled one"
+    # The scope in view's own days (recPageCurve: its staked curve, or, for a league staking nothing yet, its
+    # Most Likely record's days, 22 November 2026).
+    assert "const pc = recPageCurve(src);" in body
+    assert "const avail = recRangesFor(pc.curve);" in body, "the scope in view's curve, not the pooled one"
     assert "const rk = recRangeKey(avail);" in body and "const from = recRangeFrom(avail, rk);" in body
-    assert "const winO = from ? recRangeTotals(src.curve, from) : null;" in body
-    assert ('recordRibbonsHTML(dAll, { ...winO, label: `${(src.overall || {}).rule ? "Our record"\n'
+    assert "const winO = from ? recRangeTotals(pc.curve, from) : null;" in body
+    assert ('recordRibbonsHTML(dAll, { ...winO, label: `${pc.likely ? "Most Likely · every pick once"\n'
+            '        : (src.overall || {}).rule ? "Our record"\n'
             '        : String((src.overall || {}).label || "Edge picks").split(" · ")[0]} · last ${winDays} days` },') in body, \
         "a window names the book in view — the edge picks, or a league's own (UFC's fights)"
     assert '(src.recent || []).filter((r) => String((r || {}).date || "") >= from), { parts: true })' in body, \

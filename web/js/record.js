@@ -282,6 +282,20 @@ function recRangesFor(curve) {
   return all.filter(([k, d]) => k === "all" || spanDays > d);
 }
 
+/* THE DAYS THE PAGE'S WINDOW AND RUNNING P&L READ (22 November 2026). A league that stakes nothing yet (hockey
+   and college basketball, whose edge picks wait on paper) leads its Record with its Most Likely record, each pick
+   once (recordRibbonsHTML), and its own curve, the staked one, is empty: its 90, 30 and 7-day windows sat greyed,
+   "Not enough settled days for a window yet", over hockey's 40 days and 2,982 graded picks, and it drew no running
+   P&L where the NFL's page does. Such a league's window and running P&L read the pooled journal's days, which are
+   that record's own: the pooled tally is the Most Likely one, nothing else is in it. `o` is the record they cut. */
+function recPageCurve(src) {
+  const own = (src && src.curve) || [];
+  const lo = (src || {}).likely_overall, p = (src || {}).pooled || {};
+  const likely = !own.length && !((src || {}).overall || {}).settled && !!(lo && lo.settled)
+    && sameTally(p.overall, lo) && (p.curve || []).length > 0;
+  return { curve: likely ? p.curve : own, likely, o: likely ? lo : ((src || {}).overall || {}) };
+}
+
 function recRangeKey(avail) {
   return avail.some(([k]) => k === _recRange) ? _recRange : "all";
 }
@@ -3597,6 +3611,8 @@ async function renderRecord() {
   // quietly keep showing the combined number next to a per-sport one.
   const src = scoped || d;
   const o = src.overall;
+  // The record the page leads with, and its days (recPageCurve): a league that stakes nothing yet, its Most Likely.
+  const pc = recPageCurve(src);
   _recCalScope = scope;                       // the day panel fetches in this scope
   if (scope === "intel") {
     host.innerHTML = scopeBar + (pmv
@@ -3681,11 +3697,11 @@ async function renderRecord() {
   // sentence whenever it is drawn at all (recLikelySection). Either one
   // absent, the verdict keeps its copy.
   const lkHere = scoped ? (d.likely_by_sport || {})[scope] : d.likely;
-  const winAvail = recRangesFor(src.curve), winFrom = recRangeFrom(winAvail, recRangeKey(winAvail));
-  const verdict = recordVerdictHTML(src, scope === "all"
+  const winAvail = recRangesFor(pc.curve), winFrom = recRangeFrom(winAvail, recRangeKey(winAvail));
+  const verdict = recordVerdictHTML(pc.likely ? { ...src, overall: pc.o } : src, scope === "all"
     ? "all sports" : recLg(scope),
-    lkHere, { combinedShown: !(winFrom && recRangeTotals(src.curve, winFrom)),
-              likelySaid: !!(lkHere && (lkHere.settled || lkHere.open)) });
+    lkHere, { combinedShown: !(winFrom && recRangeTotals(pc.curve, winFrom)),
+              likelySaid: !!(lkHere && (lkHere.settled || lkHere.open)), likelyLed: pc.likely });
   // The page's lead — what happened, in units. Built as a string so it can
   // be handed to the first room rather than rendered above the tab bar,
   // which would leave the tabs floating in the middle of the page.
@@ -3729,10 +3745,10 @@ async function renderRecord() {
      says too early), this month's card and the settled bets, and folds
      everything else under one line that says why it is folded. */
   const recNeed = src.min_graded || _recMinGraded;
-  const underFloor = (o.settled || 0) < recNeed;
+  const underFloor = (pc.o.settled || 0) < recNeed;
   const scopeName = scope === "all" ? "all sports" : recLg(scope);
   const foldOpen = (what) => !underFloor ? "" : `<details class="rec-fold"><summary>${what} — too early
-      to read (${o.settled || 0} of the ${recNeed} settled bets the record needs)</summary>`;
+      to read (${pc.o.settled || 0} of the ${recNeed} settled bets the record needs)</summary>`;
   const foldClose = underFloor ? "</details>" : "";
   const monthCard = underFloor ? recMonthCard(src, scopeName) : "";
   /* THE GAME REPORTS' OWN RECORDS COME FIRST, ABOVE THE FOLDS (2026-11-16): "The
@@ -3762,8 +3778,8 @@ async function renderRecord() {
     + foldOpen("By book, the running P&amp;L and the splits")
     + recBenchNote(d.staked, scope)
     + recBookSections(d.book_records, scope) + `
-    ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
-    ${recSplitsSection(o, !!scoped)}
+    ${recAnalytics(pc.curve, pc.o, ((d.model_eras || {}).eras) || [])}
+    ${recSplitsSection(pc.o, !!scoped)}
     ${foldClose}
     ${recRecentSection(src.recent || [], o.settled)}
     ${foldOpen("The method behind the record, and the edge test")}
@@ -3837,11 +3853,11 @@ async function renderRecord() {
      same state; every other room stays the whole record, and the
      note under the ribbon says so. A window with nothing settled
      keeps the whole record on the ribbon and says that instead. */
-  const avail = recRangesFor(src.curve);
+  const avail = recRangesFor(pc.curve);
   const rk = recRangeKey(avail);
   const from = recRangeFrom(avail, rk);
   const winDays = (avail.find(([k]) => k === rk) || [])[1];
-  const winO = from ? recRangeTotals(src.curve, from) : null;
+  const winO = from ? recRangeTotals(pc.curve, from) : null;
   /* The combined line is the WHOLE record's (engine/zeno.combined): it
      shows only on the whole, unscoped record, never beside a sport, a
      book or a window it was not added up over. ZENO'S TILE TOO: his is
@@ -3854,12 +3870,14 @@ async function renderRecord() {
         pooled_overall: winO ? null : src.pooled_overall,
         likely_overall: winO ? null : src.likely_overall,
         edge_board: winO ? null : src.edge_board } : d;
+  // A window of a league led by its Most Likely record says so, as its tile does (recPageCurve).
   const ribbons = winO
-    ? recordRibbonsHTML(dAll, { ...winO, label: `${(src.overall || {}).rule ? "Our record"
+    ? recordRibbonsHTML(dAll, { ...winO, label: `${pc.likely ? "Most Likely · every pick once"
+        : (src.overall || {}).rule ? "Our record"
         : String((src.overall || {}).label || "Edge picks").split(" · ")[0]} · last ${winDays} days` },
-        (src.recent || []).filter((r) => String((r || {}).date || "") >= from), { parts: true })
+        pc.likely ? [] : (src.recent || []).filter((r) => String((r || {}).date || "") >= from), { parts: true })
     : recordRibbonsHTML(dAll, o, src.recent, { parts: true });
-  const winBar = recordWindowHTML(avail, rk, recRangesClosed(src.curve));
+  const winBar = recordWindowHTML(avail, rk, recRangesClosed(pc.curve));
   const winNote = !from ? "" : winO
     ? `<p class="rec-win-note">The headline, the running P&amp;L and the settled bets are the last ${winDays} days,
         from ${escapeHtml(recWinDate(from))}. Everything else here is the whole record.</p>`
@@ -4416,8 +4434,12 @@ function moneySplitHTML(o) {
    total; `opts.likelySaid`: the Most Likely section on the same page prints
    that book's verdict sentence (2026-10-25, the real NFL record: both were
    said twice, word for word). */
+/* `opts.likelyLed` (22 November 2026): a league that stakes nothing yet hands its Most Likely record as `overall`
+   (recPageCurve). Hockey's verdict read "0-0-0 ... Too early to call. 0 graded picks" under a headline of 1958-1024:
+   it reads that record now, its claimed and landed off the Most Likely book's own bands. */
 function recordVerdictHTML(src, scopeLabel, lk, opts) {
   opts = opts || {};
+  const likelyLed = !!opts.likelyLed;
   const o = (src && src.overall) || {};
   /* v5: ONE NUMBER, TWO BOOKS. When the record is pooled (adoptPooledRecord)
      `o` is the whole journal and `edge` the edge board alone (EDGE_BOOKS —
@@ -4425,10 +4447,10 @@ function recordVerdictHTML(src, scopeLabel, lk, opts) {
      and would count them twice beside `lk`); `lk` is the Most Likely
      board's own report. The tiles are the one number; the two books read
      side by side beneath it, and they add up to it. */
-  const pooled = !!(src && src.edge && src.edge.overall);
+  const pooled = !likelyLed && !!(src && src.edge && src.edge.overall);
   const edge = pooled ? (src.edge_board || src.edge.overall) : o;
-  const cal = src && src.calibration;
-  const buckets = ((cal || {}).buckets || []).filter((b) => b.n > 0);
+  const cal = likelyLed ? null : src && src.calibration;
+  const buckets = (likelyLed ? recLikelyBuckets(lk) : ((cal || {}).buckets || [])).filter((b) => b.n > 0);
   const need = src.min_graded || 30;
   const settled = o.settled || 0;
 
@@ -4501,7 +4523,7 @@ function recordVerdictHTML(src, scopeLabel, lk, opts) {
          on average over ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}.`);
   }
 
-  const chart = buckets.length >= 2 ? reliabilityDiagram(cal.buckets) : "";
+  const chart = buckets.length >= 2 ? reliabilityDiagram(likelyLed ? buckets : cal.buckets) : "";
   const graded = (o.wins || 0) + (o.losses || 0);
   /* ONE SUMMARY, NOT THREE. Ethan, 2026-09-06: "everything seems
      cluttered." Under this card sat a strip of five stat cards — ROI,
@@ -4521,7 +4543,7 @@ function recordVerdictHTML(src, scopeLabel, lk, opts) {
   return `<section class="card rv-card">
     <div class="section-title">The verdict
       <span class="sub">— ${escapeHtml(scopeLabel)}, ${pooled
-        ? "the model’s edge board, " : ""}everything
+        ? "the model’s edge board, " : likelyLed ? "its Most Likely picks, each counted once (none staked here yet), " : ""}everything
       journaled at its real price and graded in public</span></div>
     <div class="rv-tiles">
       ${tile("record", `${o.wins || 0}\u2011${o.losses || 0}\u2011${o.pushes || 0}`,
@@ -4547,9 +4569,10 @@ function recordVerdictHTML(src, scopeLabel, lk, opts) {
             these two are the edge board's calibration alone, so "claimed 52.2% · landed 48.8%" sat beside a
             62.4% win rate unexplained. They say whose they are. */ ""}
       ${tile("claimed", claimed == null ? "—" : (claimed * 100).toFixed(1) + "%",
-             pooled ? `the Edge picks’ chance, ${calN} graded` : "what the model said")}
+             pooled ? `the Edge picks’ chance, ${calN} graded`
+               : likelyLed && calN ? `the Most Likely list’s chance, ${calN} graded` : "what the model said")}
       ${tile("landed", landed == null ? "—" : (landed * 100).toFixed(1) + "%",
-             pooled ? "how often those Edge picks hit" : "what happened",
+             pooled ? "how often those Edge picks hit" : likelyLed && calN ? "how often those picks hit" : "what happened",
              claimed == null ? "" : (landed >= claimed ? "good" : "warn"))}
     </div>
     ${moneySplitHTML(o)}
@@ -4590,6 +4613,16 @@ function combinedLineHTML(po, need, o) {
    report's claimed-probability bands, with the same two-standard-error
    band the edge diagram carries, so the two pictures are read the same
    way. Nothing here is a number the page did not already hold. */
+/* The Most Likely book's claimed-probability bands as the diagram's buckets, with the two-standard-error band the
+   edge diagram carries, so the two pictures are read the same way. */
+function recLikelyBuckets(lk) {
+  return ((lk || {}).bands || []).map((b) => {
+    const ci = b.n ? 2 * Math.sqrt(Math.max(0, b.actual * (1 - b.actual)) / b.n) : 0;
+    return { predicted: b.claimed, actual: b.actual, n: b.n, ci,
+             in_band: Math.abs(b.actual - b.claimed) <= ci };
+  });
+}
+
 function verdictBooksHTML(edge, lk, chart, lines, o, opts) {
   opts = opts || {};
   const sign = (x, d = 1) => (x >= 0 ? "+" : "") + x.toFixed(d);
@@ -4599,11 +4632,7 @@ function verdictBooksHTML(edge, lk, chart, lines, o, opts) {
       · ${sign(b.net_units || 0, 2)}u · ${fmtRoi(b.roi)} ROI`
       : "nothing settled yet";
   };
-  const likelyBuckets = ((lk || {}).bands || []).map((b) => {
-    const ci = b.n ? 2 * Math.sqrt(Math.max(0, b.actual * (1 - b.actual)) / b.n) : 0;
-    return { predicted: b.claimed, actual: b.actual, n: b.n, ci,
-             in_band: Math.abs(b.actual - b.claimed) <= ci };
-  });
+  const likelyBuckets = recLikelyBuckets(lk);
   const likelyChart = likelyBuckets.length >= 2 ? reliabilityDiagram(likelyBuckets) : "";
   return `<div class="rv-books">
     <div class="rv-book"><span class="hd-eyebrow">Edge bets</span>

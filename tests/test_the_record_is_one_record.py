@@ -184,7 +184,7 @@ def test_the_site_seats_the_pooled_book_where_the_edge_book_sat():
     assert "adoptPooledRecord(await res.json())" in load, "every surface reading the record file gets the pooled book"
     rr = _fn("renderRecord")
     assert "if (res.ok) d = adoptPooledRecord(await res.json());" in rr, "the Record page reads the file on its own"
-    assert 'recordVerdictHTML(src, scope === "all"' in rr
+    assert 'recordVerdictHTML(pc.likely ? { ...src, overall: pc.o } : src, scope === "all"' in rr
     # The scope's own Most Likely report, read once and handed on
     # (tests/test_the_record_says_each_number_once.py for the options).
     assert "const lkHere = scoped ? (d.likely_by_sport || {})[scope] : d.likely;" in rr
@@ -209,7 +209,7 @@ def test_every_reader_of_the_record_file_seats_the_pooled_book():
 def test_the_verdict_is_one_number_with_the_two_books_beneath_it():
     v = _fn("recordVerdictHTML")
     assert "function recordVerdictHTML(src, scopeLabel, lk, opts)" in v
-    assert "const pooled = !!(src && src.edge && src.edge.overall);" in v
+    assert "const pooled = !likelyLed && !!(src && src.edge && src.edge.overall);" in v
     assert "const edge = pooled ? (src.edge_board || src.edge.overall) : o;" in v, \
         "the edge card is the edge board alone, so the two cards add up to the number above them"
     assert "the model’s edge board, " in v, "the sub-line says whose number it is"
@@ -226,9 +226,13 @@ def test_the_verdict_is_one_number_with_the_two_books_beneath_it():
     # The Most Likely book's record is the page's top tile, said once (2026-11-19);
     # here only "nothing staked yet" when there is none.
     assert "line(lk)" not in b and 'lk ? "" : `<div class="rv-book-line">nothing staked yet' in b
-    assert "reliabilityDiagram(likelyBuckets)" in b and "predicted: b.claimed, actual: b.actual, n: b.n, ci," in b, \
+    # Its buckets read once (recLikelyBuckets, 22 November 2026), here and in the verdict of a league led by its
+    # Most Likely record.
+    lb = _fn("recLikelyBuckets")
+    assert "const likelyBuckets = recLikelyBuckets(lk);" in b and "reliabilityDiagram(likelyBuckets)" in b
+    assert "predicted: b.claimed, actual: b.actual, n: b.n, ci," in lb, \
         "the Most Likely diagram is drawn from its bands, in the edge diagram's shape"
-    assert "2 * Math.sqrt(Math.max(0, b.actual * (1 - b.actual)) / b.n)" in b, "the same two-standard-error band"
+    assert "2 * Math.sqrt(Math.max(0, b.actual * (1 - b.actual)) / b.n)" in lb, "the same two-standard-error band"
     # The book's sentence, unless its own section on the page says it.
     assert 'lk && lk.verdict && !opts.likelySaid ? `<p>${escapeHtml(String(lk.verdict))}</p>` : ""' in b
     assert ".rv-books { display: grid; gap: 14px; margin-top: 18px; }" in CSS

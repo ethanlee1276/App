@@ -64,7 +64,7 @@ def test_the_small_sample_note_speaks_only_where_the_verdict_does_not():
 
 def test_the_splits_do_not_redraw_the_edge_table_on_a_sport_scope():
     rr = _fn("renderRecord")
-    assert "${recSplitsSection(o, !!scoped)}" in rr
+    assert "${recSplitsSection(pc.o, !!scoped)}" in rr
     sp = _fn("recSplitsSection")
     assert 'booksDrawn ? null : o.by_market' in sp
     assert 'cur[0] === "market"' in sp, "the market split is still the only one translated"

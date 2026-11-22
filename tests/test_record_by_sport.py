@@ -212,7 +212,9 @@ def test_panels_read_one_source_rather_than_being_filtered_each_time():
     assert "const src = scoped || d;" in fn
     # recAnalytics wraps recCurveChart since Ethan's analytics render
     # (2026-08-11) — same scoping contract, now with range chips.
-    for panel in ("recAnalytics(src.curve", "recCalibrationSection(src.calibration"):
+    # The running P&L reads the scoped source's own days (recPageCurve(src), 22 November 2026).
+    assert "const pc = recPageCurve(src);" in fn
+    for panel in ("recAnalytics(pc.curve", "recCalibrationSection(src.calibration"):
         assert panel in fn, f"{panel} still reads the combined payload"
 
 
@@ -344,7 +346,7 @@ def test_the_chart_is_handed_the_eras_it_draws():
     was never given them."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     app = app_js()
-    assert "recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])" in app
+    assert "recAnalytics(pc.curve, pc.o, ((d.model_eras || {}).eras) || [])" in app
     assert "recCurveChart(sliced, { head: false, eras })" in app
 
 
