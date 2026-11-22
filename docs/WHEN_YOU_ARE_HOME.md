@@ -9349,7 +9349,8 @@ touchdown parlays), so the record will say whether the early legs cost anything.
 now ranks the ones a single sportsbook prices at every leg's number first, since an SGPX is one bet at one book, and
 its card names that book and its prices. On Report Picks, Today's picks now lists every posted SGPX ticket in rows
 beside the game report picks, like the likeliest tickets above them; a tap opens the SGPX tab, where each is drawn
-whole. A night game alone in its window now shows the day's tickets on its report.
+whole. Best Parlays, the same switch's ranked page, has an SGPX tab too, one book's whole tickets first and then our
+chance. A night game alone in its window now shows the day's tickets on its report.
 
 **ACL. The chemistry measurement runs on the box every Wednesday, with two new tests** (step 877; 22 November).
 Nothing to run. ABZ's measurement (`python3 chemfit.py`) needs the box's ten seasons of play-by-play, so it only ran

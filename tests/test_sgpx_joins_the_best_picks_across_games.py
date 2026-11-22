@@ -239,6 +239,10 @@ def test_a_report_and_report_picks_show_them():
     # …and on Today's picks, beside the game report picks, each row opening the tab (Ethan: "on the same page").
     assert "${rpTopHTML(rpTopTickets(d, byGame, keys))}${rpSgpxTodayHTML(d)}${jump}${groups}" in js
     assert 'class="rpk-top-row" data-rpk-tab="sgpx"' in js
+    # …and on Best Parlays, the same switch's ranked page, its own tab (one book whole first, then our chance).
+    bp = (ROOT / "web" / "js" / "bestparlays.js").read_text(encoding="utf-8")
+    assert '["sgpx", "SGPX parlays", "Our strongest picks from different games, combined", sgpx]]);' in bp
+    assert "return rows.sort((a, b) => whole(a) - whole(b) || Number(b.t.joint) - Number(a.t.joint));" in bp
     rjs = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert 'const cross = b.kind === "sgpx";' in rjs and "(!cross && settled(t))" in rjs, \
         "an SGPX card is never graded by one game's result"

@@ -53,6 +53,8 @@
 .bp-leg-what { min-width: 0; color: var(--text-dim); overflow-wrap: anywhere; }
 .bp-leg-what b { color: var(--text); }
 .bp-leg-price { color: var(--text-mute); font-size: var(--fs-sm); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* An SGPX leg's game, under the leg (js/bestparlays.js bpSgpxCardHTML). */
+.bp-leg-game { display: block; color: var(--text-mute); font-size: var(--fs-sm); }
 .bp-leg-p { color: var(--text); font-weight: 700; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .bp-line, .bp-book, .bp-why { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--text-mute); }
 .bp-line b { color: var(--text); }

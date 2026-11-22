@@ -151,6 +151,41 @@ function bpCardHTML(row, n, kind, sport) {
   </article>`;
 }
 
+/* SGPX ON THE RANKED PAGE (engine/sgpx, steps ACI and ACM; Ethan, 22 November: "make sure the spgx are layed out on
+   the same page with the game report picks"): every posted SGPX ticket, a window's and the day's, as the cards
+   above, each leg with its game; one book that has every leg first, then our chance. */
+function bpSgpxRows(d) {
+  const rows = [];
+  (((d || {}).sgpx || {}).slots || []).filter((e) => e && e.posted_at).forEach((e) => ["props", "tds"].forEach((k) =>
+    (e[k] || []).forEach((t, i) => { if ((t.legs || []).length >= 2) rows.push({ e, k, t, n: i + 1 }); })));
+  const whole = (r) => ((r.t.one_book || {}).book ? 0 : 1);
+  return rows.sort((a, b) => whole(a) - whole(b) || Number(b.t.joint) - Number(a.t.joint));
+}
+function bpSgpxCardHTML(row, n) {
+  const { e, k, t } = row;
+  const title = `SGPX ${e.day ? "day " : ""}${k === "tds" ? "touchdown parlay" : "parlay"} ${row.n}`;
+  const where = e.day ? `${e.label}’s games` : `Kickoff ${e.label}`;
+  const ob = t.one_book || {};
+  return `<article class="bp-card">
+    <div class="bp-head">
+      <span class="bp-rank" aria-label="Number ${n}">${n}</span>
+      <div class="bp-game"><b>${escapeHtml(title)}</b><span>${escapeHtml(where)}</span></div>
+      <div class="bp-p"><b>${bpPct(t.joint)}</b><span>by our numbers</span></div>
+    </div>
+    <ol class="bp-legs">${(t.legs || []).map((l) => `<li>
+      <span class="bp-leg-what">${bpLegWords(l)}<span class="bp-leg-game">${escapeHtml(
+        String(l.sgpx_game || "").replace("@", " at "))}${l.sgpx_early ? " · picked before its inactives" : ""}</span></span>
+      <span class="bp-leg-price">${escapeHtml([bpOdds(l.odds), l.book || ""].filter(Boolean).join(" "))}</span>
+      <span class="bp-leg-p">${bpPct(l.p)}</span></li>`).join("")}</ol>
+    <p class="bp-line">${t.take_words ? `Take it at <b>${escapeHtml(t.take_words)}</b> or better` : ""}${
+      t.fair_words ? `${t.take_words ? " · " : ""}fair ${escapeHtml(t.fair_words)}` : ""}</p>
+    ${ob.words ? `<p class="bp-book${ob.book ? " has" : ""}">${escapeHtml(ob.words)}</p>` : ""}
+    ${(t.caveats || []).length ? `<p class="bp-why">${escapeHtml(String(t.caveats[0]))}.</p>` : ""}
+    <div class="bp-acts"><span class="bp-bet" data-bp-bet="${_bpBet.push({ legs: t.legs || [],
+      what: `${title} · ${(t.legs || []).map(bpLegText).join(" + ")}` }) - 1}"></span></div>
+  </article>`;
+}
+
 /* One section: its tier chips, then each tier's tickets best to worst, numbered down the whole list. */
 function bpSectionHTML(rows, kind, sport, section) {
   if (!rows.length) return "";
@@ -227,9 +262,15 @@ async function renderBestParlays() {
                 left.gone ? `${plural(left.gone, "ticket")} with a leg no book lists now ${left.gone === 1 ? "is" : "are"} left off` : ""]
     .filter(Boolean).join(" · ");
   if (sub) sub.textContent = "— every report parlay, ranked best to worst";
+  const sg = bpSgpxRows(d);
+  const sgpx = sg.length
+    ? `<p class="bp-lead">Our strongest picks from different games, combined: a kickoff window’s tickets post once its games have posted their picks, the day’s with its first games. One book that has every leg first, then our chance of the whole ticket.</p>
+       ${sg.map((r, i) => bpSgpxCardHTML(r, i + 1)).join("")}`
+    : "";
   const body = subtabbedHTML("bestparlays", [
     ["props", "Player prop parlays", "Two-leg and three-leg tickets", props],
-    ["scorers", pairTitle, pairHint, scorers]]);
+    ["scorers", pairTitle, pairHint, scorers],
+    ["sgpx", "SGPX parlays", "Our strongest picks from different games, combined", sgpx]]);
   // A ranking that failed says so (engine/gameparlays RANK_ERROR): its empty lists are not a quiet day.
   host.innerHTML = body.trim()
     ? `${body}${foot ? `<p class="set-note bp-foot">${escapeHtml(foot)}.</p>` : ""}`
