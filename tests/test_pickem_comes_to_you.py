@@ -118,13 +118,21 @@ def test_the_push_before_picks_lock_reaches_players_with_a_game_left():
         thu_gid = "2026-10-29|CAR@GB"
         assert PK.pick(c, 2, "nfl", thu_gid, "GB", now=_t(2026, 10, 29, 16), data_dir=d)[0] == 200   # bob has Thursday
         assert PK.set_remind(c, 3, False)[1]["remind"] is False                                        # cal said no
-        for uid in (1, 2, 3, 4):
-            code, out = PA.subscribe(c, f"{uid:064x}", "apns", user_id=uid, topics=("posted", "pickem"))
-            assert code == 200, out
-        topics = {uid: PM.asked(c, uid, "pickem") for uid in (1, 2, 3, 4)}
-        assert topics == {1: True, 2: True, 3: False, 4: False}, ("a player's phone carries it, unless off", topics)
-        assert PK.reminds(c, 1) and not PK.reminds(c, 3) and not PK.reminds(c, 4)
-        assert PK.reminds(c, 4, switch_only=True), "the page's switch reads on until turned off"
+        # "A player" is one who played in the last PLAYER_DAYS of the clock, so the clock is the fixture's own week:
+        # on the real one this test failed from 17:00 UTC on 22 November, 28 days after its plays (2026-11-22).
+        import types
+        real_time = PK.time
+        PK.time = types.SimpleNamespace(time=lambda: _t(2026, 10, 29, 16))
+        try:
+            for uid in (1, 2, 3, 4):
+                code, out = PA.subscribe(c, f"{uid:064x}", "apns", user_id=uid, topics=("posted", "pickem"))
+                assert code == 200, out
+            topics = {uid: PM.asked(c, uid, "pickem") for uid in (1, 2, 3, 4)}
+            assert topics == {1: True, 2: True, 3: False, 4: False}, ("a player's phone carries it, unless off", topics)
+            assert PK.reminds(c, 1) and not PK.reminds(c, 3) and not PK.reminds(c, 4)
+            assert PK.reminds(c, 4, switch_only=True), "the page's switch reads on until turned off"
+        finally:
+            PK.time = real_time
 
         thu = _t(2026, 10, 29, 21, 30)                               # 5:30 p.m. EDT, 2h45 before kickoff
         assert PK.alerts_pass(c, now=thu, data_dir=d) == 1
