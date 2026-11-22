@@ -106,10 +106,10 @@ def test_one_drawing_says_each_leg_and_the_ticket():
     # Each leg in its box: the bet as the screenshot says it, then what he did, the clubs and the final, the day.
     assert '<li class="st-leg won" data-open="player:joe-burrow">' in won
     assert '<b class="st-leg-bet">Over 249.5 · Joe Burrow Passing Yards</b>' in won
-    assert ('<span class="st-did">409</span><span class="st-dot" aria-hidden="true">·</span><span class="st-game">'
+    assert ('<span class="st-did">409</span><span class="st-game"><span class="st-dot" aria-hidden="true">·</span>'
             '<span class="st-club">PIT</span><i class="tm">PIT</i><b class="st-score">18 – 38</b><i class="tm">CIN</i>'
-            '<span class="st-club">CIN</span></span><span class="st-dot" aria-hidden="true">·</span>'
-            '<span class="st-when">Final 11/15</span>') in won, won
+            '<span class="st-club">CIN</span></span><span class="st-when"><span class="st-dot" aria-hidden="true">·</span>'
+            'Final 11/15</span>') in won, won
     assert "Under 4.5 · DK Metcalf Receptions" in won and "Over 59.5 · Chase Brown Rush + Rec Yards" in won
     assert won.count('<span class="st-leg-mark won"><span class="st-sr">Won</span>[check]</span>') == 3
     # A lost ticket: red, its legs each their own colour; a game bet in its caller's words, a scorer as he scored.
@@ -126,7 +126,7 @@ def test_one_drawing_says_each_leg_and_the_ticket():
     assert "Didn’t play" in wait and "Waiting on the box score" in wait and wait.count("[dash]") == 2
     # No final on hand: the clubs and the day alone.
     assert unscored == ('<span class="st-game"><span class="st-club">IND</span><span>at</span><span class="st-club">HOU'
-                        '</span></span><span class="st-dot" aria-hidden="true">·</span><span class="st-when">11/16</span>')
+                        '</span></span><span class="st-when"><span class="st-dot" aria-hidden="true">·</span>11/16</span>')
 
 
 JB = {"market": "assists", "side": "over", "line": 2.5, "player": "Jaylen Brown", "team": "PHI"}
@@ -167,7 +167,7 @@ def test_the_finished_report_draws_its_tickets_settled():
     # A leg the report wrote names its market in the reader's words, off its own words.
     assert "Over 1.5 · Kentavious Caldwell-Pope Rebounds" in t and "Over 2.5 · Jaylen Brown Assists" in t
     assert '<span class="st-club">IND</span><i class="tm">IND</i><b class="st-score">124 – 131</b>' in t
-    assert '<span class="st-when">Final 11/16</span>' in t
+    assert '<span class="st-dot" aria-hidden="true">·</span>Final 11/16</span>' in t
     # What the card said before the game, one tap under it.
     more = t[t.index('<details class="st-tix-more"><summary>How we built it</summary>'):]
     assert "What it needs: a close game" in more and "Both legs are short lines." in more and "He rebounds." in more

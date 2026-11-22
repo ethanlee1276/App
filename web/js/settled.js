@@ -44,8 +44,8 @@ function settledDid(b, res) {
   return settledNum(a);
 }
 //: "PIT [logo] 18 – 38 [logo] CIN · Final 11/15" (g: {sport, home, away, final, date}); without a final,
-//: "PIT at CIN" and the day.
-function settledGameHTML(g) {
+//: "PIT at CIN" and the day. ``lead``: after what he did, its own dot first, so it wraps whole on a phone.
+function settledGameHTML(g, lead) {
   if (!g || !g.home || !g.away) return "";
   const sport = g.sport || state.sport;
   const map = typeof teamsForSport === "function" ? teamsForSport(sport) : null;
@@ -59,16 +59,19 @@ function settledGameHTML(g) {
     ? `${club(g.away)}${mark(g.away)}<b class="st-score">${settledNum(f.away)} – ${settledNum(f.home)}</b>${mark(g.home)}${club(g.home)}`
     : `${club(g.away)}<span>at</span>${club(g.home)}`;
   const when = [fin ? "Final" : "", day].filter(Boolean).join(" ");
-  return `<span class="st-game">${game}</span>${when ? `<span class="st-dot" aria-hidden="true">·</span><span class="st-when">${when}</span>` : ""}`;
+  // The day keeps its dot: on a phone it wraps whole onto the next line, never leaving a dot behind.
+  return `<span class="st-game">${lead ? '<span class="st-dot" aria-hidden="true">·</span>' : ""}${game}</span>${when
+    ? `<span class="st-when"><span class="st-dot" aria-hidden="true">·</span>${when}</span>` : ""}`;
 }
 //: One leg or one pick in its box: {bet, res (pickResult's verdict), words (a game bet's), open, note}.
 function settledLegHTML(l, g) {
   const b = l.bet || {}, res = l.res || null, st = (res && res.status) || "pending";
   const tone = st === "won" ? "won" : st === "lost" ? "lost" : "even";
   const did = settledDid(b, res);
+  // Each part after the first carries its own dot, so a line that wraps never ends on one.
   const dot = '<span class="st-dot" aria-hidden="true">·</span>';
-  const sub = [did ? `<span class="st-did">${escapeHtml(did)}</span>` : "", settledGameHTML(g),
-               l.note ? `<span class="st-note">${escapeHtml(l.note)}</span>` : ""].filter(Boolean).join(dot);
+  const sub = [did ? `<span class="st-did">${escapeHtml(did)}</span>` : "", settledGameHTML(g, !!did),
+               l.note ? `<span class="st-note">${dot}${escapeHtml(l.note)}</span>` : ""].filter(Boolean).join("");
   const mark = icon(st === "won" ? "check" : st === "lost" ? "cross" : "dash", 13);
   const door = l.open && b.player && !settledGameBet(b) ? ` data-open="player:${escapeAttr(slugify(b.player))}"` : "";
   return `<li class="st-leg ${tone}"${door}><span class="st-leg-text"><b class="st-leg-bet">${
