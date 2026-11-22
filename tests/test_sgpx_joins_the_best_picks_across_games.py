@@ -180,7 +180,7 @@ def test_a_slot_posts_once_all_its_games_have_and_never_changes():
         assert "post_note" in late and "props" not in late, "a game in it still to post"
         assert all(e["key"] != "2030-11-25T01:20Z" for e in sg["slots"]), "one game: no SGPX"
         kept = json.loads((Path(root) / "data" / "built" / "sgpx_nfl.json").read_text(encoding="utf-8"))
-        assert list(kept["slots"]) == ["2030-11-24T18:00Z"]
+        assert sorted(kept["slots"]) == ["2030-11-24T18:00Z", "day:2030-11-24"], "the window's and the day's"
         # The next build: the legs' chances moved, and the posted tickets stand as posted.
         r2 = _result()
         for g in r2["game_parlays"]["games"]:
@@ -218,21 +218,27 @@ def test_a_report_and_report_picks_show_them():
         R._sgpx(r, reports, "nfl", None, now=dt.datetime(2030, 11, 24, 16, 50, tzinfo=UTC))
         keys = [s["key"] for s in reports[0]["sections"]]
         assert keys == ["card", "parlays", "sgpx", "news"], keys
-        assert [s["key"] for s in reports[1]["sections"]] == ["parlays"], "a game in no SGPX slot"
+        assert [s["key"] for s in reports[1]["sections"]] == ["parlays", "sgpx"], \
+            "a night game alone in its window has the day's tickets"
         sec = reports[0]["sections"][2]
         assert sec["title"] == "SGPX parlays"
         cards = [b for b in sec["blocks"] if b.get("type") == "parlays"]
-        assert [b["kind"] for b in cards] == ["sgpx", "sgpx"]
-        first = cards[0]["items"][0]
-        assert first["title"] == "SGPX parlay 1" and all(l["game"] for l in first["legs"])
-        assert cards[1]["items"][0]["title"] == "SGPX touchdown parlay 1"
+        assert [b["kind"] for b in cards] == ["sgpx"] * 4, "the day's two kinds, then the window's"
+        titles = [b["items"][0]["title"] for b in cards]
+        assert titles == ["SGPX day parlay 1", "SGPX day touchdown parlay 1", "SGPX parlay 1",
+                          "SGPX touchdown parlay 1"], titles
+        first = cards[2]["items"][0]
+        assert all(l["game"] for l in first["legs"])
         assert first["price_line"].startswith(f"{first['joint']:.0%} by our numbers · fair ")
-        early = next(e for e in r["sgpx"]["slots"] if e.get("posted"))
-        assert early["blocks"] == sec["blocks"], "the Report Picks tab draws what the report draws"
+        early = next(e for e in r["sgpx"]["slots"] if e.get("posted") and not e.get("day"))
+        assert all(b in sec["blocks"] for b in early["blocks"]), "the Report Picks tab draws what the report draws"
     finally:
         GP.ticket = was
     js = (ROOT / "web" / "js" / "reportpicks.js").read_text(encoding="utf-8")
     assert '["sgpx", "SGPX parlays", "Our strongest picks from different games, combined",' in js
+    # …and on Today's picks, beside the game report picks, each row opening the tab (Ethan: "on the same page").
+    assert "${rpTopHTML(rpTopTickets(d, byGame, keys))}${rpSgpxTodayHTML(d)}${jump}${groups}" in js
+    assert 'class="rpk-top-row" data-rpk-tab="sgpx"' in js
     rjs = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert 'const cross = b.kind === "sgpx";' in rjs and "(!cross && settled(t))" in rjs, \
         "an SGPX card is never graded by one game's result"
@@ -250,7 +256,10 @@ def test_the_heartbeat_counts_them():
         path = Path(tempfile.mkdtemp()) / "recommendations.json"
         path.write_text(_json.dumps(r), encoding="utf-8")
         got = LA._board_counts(str(path)).get("sgpx")
-        assert got == {"posted": 1, "waiting": 1, "props": 3, "tds": len(r["sgpx"]["slots"][0]["tds"])}, got
+        early = next(e for e in r["sgpx"]["slots"] if e["key"] == "2030-11-24T18:00Z")
+        day = next(e for e in r["sgpx"]["slots"] if e.get("day"))
+        assert got == {"posted": 1, "waiting": 1, "props": 3, "tds": len(early["tds"]),
+                       "day": {"posted": 1, "waiting": 0, "props": len(day["props"]), "tds": len(day["tds"])}}, got
     finally:
         GP.ticket = was
 
@@ -263,21 +272,117 @@ def test_the_record_journals_and_counts_them():
         ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
         r = _result()
         S.attach(r, "nfl", None, now=dt.datetime(2030, 11, 24, 16, 50, tzinfo=UTC))
-        made = {k: sum(len(e.get(k) or []) for e in r["sgpx"]["slots"] if e.get("posted_at")) for k in S.KINDS}
+        made = {(k, bool(e.get("day"))): len(e.get(k) or []) for e in r["sgpx"]["slots"] if e.get("posted_at")
+                for k in S.KINDS}
         n = PL.log_sgpx(conn, r["sgpx"], "nfl", r["date"], r["games"])
-        assert n == made["props"] + made["tds"] and made["props"] == 3 and made["tds"] >= 1, (n, made)
+        assert n == sum(made.values()) and made[("props", False)] == 3 and made[("tds", False)] >= 1, (n, made)
         assert PL.log_sgpx(conn, r["sgpx"], "nfl", r["date"], r["games"]) == 0, "journaled once"
         rows = conn.execute("SELECT source, parlay_type, at_start, n_legs, grade FROM parlays").fetchall()
-        assert sorted({x[0] for x in rows}) == ["sgpx_props", "sgpx_td"] and {x[1] for x in rows} == {"sgpx"}
+        assert sorted({x[0] for x in rows}) == ["sgpx_day_props", "sgpx_day_td", "sgpx_props", "sgpx_td"]
+        assert {x[1] for x in rows} == {"sgpx"}
         assert {x[2] for x in rows} == {1} and {x[3] for x in rows} == {3}
         assert all(x[4].startswith("SGPX ") for x in rows)
         rec = PL.game_parlay_record(conn, sources=PL.SGPX_SOURCES)
-        assert rec["nfl"]["sgpx_props"]["open"] == 3 and rec["nfl"]["sgpx_td"]["open"] == made["tds"]
+        assert rec["nfl"]["sgpx_props"]["open"] == 3 and rec["nfl"]["sgpx_td"]["open"] == made[("tds", False)]
+        assert rec["nfl"]["sgpx_day_props"]["open"] == made[("props", True)]
+        assert {x[4].split(" ")[1] for x in rows if x[0].startswith("sgpx_day")} == {"day"}
         assert "sgpx_props" in PL.NO_ROW_VOID_SOURCES
         src = (ROOT / "engine" / "parlayledger.py").read_text(encoding="utf-8")
         assert "wrote += log_sgpx(conn, sg, sport, board.get(\"date\") or \"\", board.get(\"games\"))" in src
     finally:
         GP.ticket = was
+
+
+def _with_held(r):
+    """The two held games' tickets as each would post them now (gameparlays.HELD_KEY), set aside the way
+    hold_until_post sets them."""
+    g = {f"{x['away']}@{x['home']}": x for x in _slate()}
+    r[GP.HELD_KEY] = {k: {"threes": g[k]["threes"], "scorers": g[k]["scorers"]} for k in ("PIT@PHI", "MIN@SF")}
+    return r
+
+
+def test_the_day_posts_with_its_first_window_across_the_later_ones():
+    was = _stub_pairs()
+    try:
+        noon = dt.datetime(2030, 11, 24, 16, 50, tzinfo=UTC)
+        out = _public(tempfile.mkdtemp())
+        r = _with_held(_result())
+        S.attach(r, "nfl", out, now=noon)
+        assert GP.HELD_KEY not in r, "the held legs are working state, never the board's"
+        day = next(e for e in r["sgpx"]["slots"] if e.get("day"))
+        assert day["key"] == "day:2030-11-24" and day["label"] == "Sunday" and day["posted"]
+        assert r["sgpx"]["slots"][0] is day or r["sgpx"]["slots"][0]["key"] == day["key"], "the day's first"
+        windows = {g: i for i, gs in enumerate([["TB@DET", "CLE@BAL", "LV@KC"], ["NYJ@LAC", "PIT@PHI"], ["MIN@SF"]])
+                   for g in gs}
+        for k in S.KINDS:
+            assert day[k], k
+            for t in day[k]:
+                assert len({windows[l["sgpx_game"]] for l in t["legs"]}) >= 2, "two windows or more"
+        early = [l for k in S.KINDS for t in day[k] for l in t["legs"] if l.get("sgpx_early")]
+        assert early and {l["sgpx_game"] for l in early} <= {"PIT@PHI", "MIN@SF"}, "a held game's legs, marked"
+        late = [t for k in S.KINDS for t in day[k] if any(l.get("sgpx_early") for l in t["legs"])]
+        assert all(t["caveats"][0].startswith("Picked before the inactives of ") for t in late)
+        assert not any(l.get("sgpx_early") for k in S.KINDS for t in day[k] for l in t["legs"]
+                       if l["sgpx_game"] == "NYJ@LAC"), "a later game that posted is no early leg"
+        # Kept as posted: the next build reads the same day, whatever the legs do.
+        r2 = _with_held(_result())
+        S.attach(r2, "nfl", out, now=noon + dt.timedelta(minutes=30))
+        day2 = next(e for e in r2["sgpx"]["slots"] if e.get("day"))
+        assert [t["joint"] for t in day2["props"]] == [t["joint"] for t in day["props"]]
+        # Before the first window posted: when it posts. After the first kickoff, unposted: nothing.
+        r3 = _result()
+        r3["game_parlays"]["games"][0]["post_at"] = "2030-11-24T16:45:00Z"
+        S.attach(r3, "nfl", None, now=noon)
+        wait = next(e for e in r3["sgpx"]["slots"] if e.get("day"))
+        assert "post_note" in wait and "props" not in wait and "Sunday's SGPX day parlays post once" in wait["post_note"]
+        r4 = _result()
+        S.attach(r4, "nfl", None, now=dt.datetime(2030, 11, 24, 18, 5, tzinfo=UTC))
+        assert not any(e.get("day") for e in r4["sgpx"]["slots"])
+    finally:
+        GP.ticket = was
+
+
+def test_a_held_game_sets_its_tickets_aside_and_the_snf_report_shows_the_day():
+    x = {"away": "MIN", "home": "SF", "kickoff": "20:20", "date": DAY, "threes": [{"legs": [1]}], "scorers": [{"legs": [2]}]}
+    stash = {}
+    at = GP.hold_until_post(x, "nfl", dt.datetime(2030, 11, 24, 16, 50, tzinfo=UTC), stash=stash)
+    assert at and x["threes"] == [] and stash == {"MIN@SF": {"threes": [{"legs": [1]}], "scorers": [{"legs": [2]}]}}
+    GP.hold_until_post(x, "nfl", dt.datetime(2030, 11, 24, 16, 55, tzinfo=UTC), stash=stash)
+    assert stash["MIN@SF"]["threes"] == [{"legs": [1]}], "set aside once, never with the emptied lists"
+    src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
+    assert src.count("stash=board.setdefault(HELD_KEY, {})") == 2, "both callers set them aside"
+    was = _stub_pairs()
+    try:
+        from engine import gamereport as R
+        r = _with_held(_result())
+        reports = [{"away": "MIN", "home": "SF", "date": DAY, "sections": [{"key": "parlays", "blocks": []}]},
+                   {"away": "TB", "home": "DET", "date": DAY, "sections": [{"key": "parlays", "blocks": []}]}]
+        R._sgpx(r, reports, "nfl", None, now=dt.datetime(2030, 11, 24, 16, 50, tzinfo=UTC))
+        snf = reports[0]["sections"][1]
+        assert snf["key"] == "sgpx", "a night game alone in its window still has the day's"
+        heads = [b["text"] for b in snf["blocks"] if b.get("type") == "h"]
+        assert heads[0].startswith("Sunday's games: "), heads
+        titles = [i["title"] for b in snf["blocks"] if b.get("type") == "parlays" for i in b["items"]]
+        assert titles[0] == "SGPX day parlay 1" and "SGPX day touchdown parlay 1" in titles
+        det = [b["text"] for b in reports[1]["sections"][1]["blocks"] if b.get("type") == "h"]
+        assert det[0].startswith("Sunday's games: ") and "Player props from different games" in det, \
+            "the day's first, then the window's"
+    finally:
+        GP.ticket = was
+
+
+def test_one_book_first_and_its_price_on_the_card():
+    def t(ids, p, book):
+        return {"joint": p, "legs": [{"player": i, "market": "m", "side": "OVER", "line": 1} for i in ids],
+                "one_book": {"words": f"One book has every leg: {book}"} if book else None}
+    made = [t("abc", 0.40, None), t("def", 0.30, "DraftKings"), t("ghi", 0.35, None)]
+    rank = lambda x: 0 if x.get("one_book") else 2                                  # noqa: E731
+    got = [x["legs"][0]["player"] for x in S.choose(made, rank=rank)]
+    assert got == ["d", "a", "g"], "one book's whole ticket first, then by our chance"
+    c = S.card(dict(made[1], fair_words="+200", take_words="+215", games=["A@B", "C@D"]), 1, "props")
+    assert c["one_book"] == "One book has every leg: DraftKings"
+    rj = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
+    assert 'sgpx_day_props: "SGPX day parlays", sgpx_day_td: "SGPX day touchdown parlays" };' in rj
 
 
 if __name__ == "__main__":

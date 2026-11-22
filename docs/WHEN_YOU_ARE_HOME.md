@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACM. Day-wide SGPX, one book first, and SGPX on Today's picks** (step 878; 22 November). Nothing to run. You said
+yes to day-wide SGPX. A day with two kickoff windows or more (a Sunday, or Thanksgiving's three games) now also gets
+three player-prop and three touchdown day tickets, each with legs from at least two windows. They post with the
+day's first window, once its games have posted their picks and before its first kickoff, and never change. A later
+game has not posted by then, so its legs are the ones it would post as built at that moment, picked before its
+inactives were out. Each such ticket says so on its card, each such leg is marked, and a leg on a player who ends up
+not playing is void, as a book voids it. They count on the Record as their own kinds (SGPX day parlays, SGPX day
+touchdown parlays), so the record will say whether the early legs cost anything. Every SGPX ticket, window or day,
+now ranks the ones a single sportsbook prices at every leg's number first, since an SGPX is one bet at one book, and
+its card names that book and its prices. On Report Picks, Today's picks now lists every posted SGPX ticket in rows
+beside the game report picks, like the likeliest tickets above them; a tap opens the SGPX tab, where each is drawn
+whole. A night game alone in its window now shows the day's tickets on its report.
+
 **ACL. The chemistry measurement runs on the box every Wednesday, with two new tests** (step 877; 22 November).
 Nothing to run. ABZ's measurement (`python3 chemfit.py`) needs the box's ten seasons of play-by-play, so it only ran
 when someone ran it by hand. It now runs with the Wednesday refit, and its last line, every test's verdict, shows on

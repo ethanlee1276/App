@@ -1055,9 +1055,11 @@ const tlUnits = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x || 0).toFixed(2)}u`);
    report as well"); basketball's books post no scorer, so it has no pairs. */
 const GP_KIND = { three: "Three-leg parlays", two: "Two-leg parlays",
   // The SGPX parlays (engine/sgpx, step ACI): our strongest picks from different games, combined.
-  sgpx_props: "SGPX parlays", sgpx_td: "SGPX touchdown parlays" };
+  sgpx_props: "SGPX parlays", sgpx_td: "SGPX touchdown parlays",
+  // …and the day's (step ACM), whose later legs were picked before their games' inactives.
+  sgpx_day_props: "SGPX day parlays", sgpx_day_td: "SGPX day touchdown parlays" };
 //: A league's kinds in the page's order: the three-leg tickets, the two-leg ones, the scorer pairs, then SGPX.
-const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx_td"];
+const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx_td", "sgpx_day_props", "sgpx_day_td"];
 // How a game's ticket was made up (engine/gameparlays.FILL_KINDS; "report": its own picks), in words, by kind.
 //: A ticket's class in the page's order (engine/gameparlays.CLASSES).
 const GP_CLASSES = [["safe", "Safe"], ["balanced", "Balanced"], ["pop", "Pop"], ["long", "Long shots"]];
@@ -1188,8 +1190,9 @@ function gpBlockHTML(b, kind, sport) {
     // An SGPX ticket's legs are from several games ("SGPX CLE@BAL, TB@DET"): it is titled by them, over no one final.
     const cross = /^SGPX /.test(String(t.game || ""));
     const [away, home] = cross ? [] : String(t.game || "").split("@");
+    const games = String(t.game || "").replace(/^SGPX (day )?/, "");
     const day = t.day || (/^\d{4}-\d{2}-\d{2}$/.test(String(t.date || "")) ? t.date : "");
-    const title = cross ? `${gpKindWord(kind, sport)} · ${String(t.game).slice(5).split(", ").map((g) => {
+    const title = cross ? `${gpKindWord(kind, sport)} · ${games.split(", ").map((g) => {
       const [a, h] = g.split("@");
       return a && h ? `${teamName(a)} at ${teamName(h)}` : g;
     }).join(", ")}` : away && home ? `${teamName(away)} at ${teamName(home)}` : gpKindWord(kind, sport);

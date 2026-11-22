@@ -198,6 +198,29 @@ function rpTopHTML(items) {
   </section>`;
 }
 
+/* SGPX ON THE DAY'S PAGE (Ethan, 22 November: "make sure the spgx are layed out on the same page with the game
+   report picks"): every posted SGPX ticket, the day's first, in a row like the likeliest tickets above it, its
+   legs, our chance and the price to take it at; a tap opens the SGPX tab, where each is drawn whole. */
+function rpSgpxTitle(e, kind, n) {
+  return `SGPX ${e.day ? "day " : ""}${kind === "tds" ? "touchdown parlay" : "parlay"} ${n}`;
+}
+function rpSgpxTodayHTML(d) {
+  const rows = [];
+  ((d.sgpx || {}).slots || []).filter((e) => e && e.posted_at).forEach((e) => ["props", "tds"].forEach((k) =>
+    (e[k] || []).forEach((t, i) => rows.push({ e, k, t, n: i + 1 }))));
+  if (!rows.length) return "";
+  return `<section class="rpk-top rpk-sgpx-today" aria-label="SGPX parlays today">
+    <h4 class="rpk-top-h">SGPX parlays<span>our strongest picks from different games, combined</span></h4>
+    ${rows.map(({ e, k, t, n }) => `<button type="button" class="rpk-top-row" data-rpk-tab="sgpx">
+        <span class="rpk-top-game">${escapeHtml(rpSgpxTitle(e, k, n))} · ${escapeHtml(e.day ? `${e.label}’s games`
+          : `kickoff ${e.label}`)}</span>
+        <span class="rpk-top-legs">${(t.legs || []).map((l) => rpBetWords(l)).join(" + ")}</span>
+        <span class="rpk-top-p"><b>${Math.round(100 * Number(t.joint))}%</b> by our numbers${t.take_words
+          ? ` · take it at ${escapeHtml(t.take_words)} or better` : ""}</span>
+      </button>`).join("")}
+  </section>`;
+}
+
 /* TODAY'S PICKS, the first tab: what the day carries and how its finished
    games went, the likeliest tickets still to play, a chip a game, then the
    games by where they stand (on now, still to play, finished), each folded
@@ -238,7 +261,7 @@ function rpTodayHTML(d, byGame, keys) {
   return `<div class="rpk-summary"><b>${escapeHtml(carries)}</b>${
       sofar ? `<span>Finished so far: ${escapeHtml(sofar)}</span>` : ""}
       <button type="button" class="rpk-rec" data-rpk-rec="1" data-rpk-tab="record"></button></div>
-    ${rpTopHTML(rpTopTickets(d, byGame, keys))}${jump}${groups}`;
+    ${rpTopHTML(rpTopTickets(d, byGame, keys))}${rpSgpxTodayHTML(d)}${jump}${groups}`;
 }
 
 /* HOW OUR REPORTS DID (engine/reportrecord, 2026-11-16). Ethan: "think about
@@ -849,7 +872,8 @@ async function renderReportPicks() {
   const sgpx = locked
     ? memberLockHTML("SGPX parlays are for members", "Our strongest picks from different games, combined, each with "
       + "its price and our chance.")
-    : sgpxSlots.map((e, i) => `<div class="rpk-sgpx"><div class="rr-head">Kickoff ${escapeHtml(e.label || "")}</div>
+    : sgpxSlots.map((e, i) => `<div class="rpk-sgpx"><div class="rr-head">${escapeHtml(e.day
+        ? `${e.label || ""}’s games, all day` : `Kickoff ${e.label || ""}`)}</div>
         <div data-rpk-sgpx="${i}"></div></div>`).join("");
   host.innerHTML = `${paper}${subtabbedHTML("reportpicks", [
       ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", `<div data-rpk-slate></div>${today}`],

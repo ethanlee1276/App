@@ -3494,10 +3494,18 @@ def _et_clock(t) -> str:
     return f"{e.strftime('%a')} {(e.hour % 12) or 12}:{e.minute:02d} {'PM' if e.hour >= 12 else 'AM'} ET"
 
 
-def hold_until_post(x: dict, sport: str, now=None, ready=None) -> str | None:
+#: THE HELD GAMES' LEGS, SET ASIDE FOR THE DAY'S SGPX (engine/sgpx, step ACM): {"AWAY@HOME": {list: tickets}}
+#: as each held game built them, before its lists are emptied. A day ticket posts with the day's first kickoff
+#: window, before a later game posts its own, so it reads these. Working state: an underscore key, which the
+#: gate never publishes (gate.publish).
+HELD_KEY = "_sgpx_held"
+
+
+def hold_until_post(x: dict, sport: str, now=None, ready=None, stash: dict | None = None) -> str | None:
     """A game still more than its POST_LEAD from its start posts no parlay yet: every list emptied, and when
     they post said (``post_at``, ``post_note``). Returns ``post_at`` when held, None when it posts. Never
-    raises: a game whose start cannot be read posts as built."""
+    raises: a game whose start cannot be read posts as built. ``stash`` (the board's HELD_KEY) keeps the lists
+    of a game it holds, as built, the first time they are there."""
     if not post_late_on() or not isinstance(x, dict) or x.get("kept") or x.get("posted_before"):
         return None
     start = game_start(x)
@@ -3510,6 +3518,10 @@ def hold_until_post(x: dict, sport: str, now=None, ready=None) -> str | None:
         x.pop("post_at", None)
         x.pop("post_note", None)
         return None
+    if stash is not None and not stash.get(game_label(x)):
+        built = {k: list(x[k]) for k in POST_LISTS if x.get(k)}
+        if built:
+            stash[game_label(x)] = built
     for k in POST_LISTS:
         if x.get(k):
             x[k] = []
@@ -4048,7 +4060,7 @@ def as_posted(board: dict, sport: str, x: dict, now=None) -> None:
             _rechoose_scorers(x, mine, pairs.get(game_label(x)), sp in RESEARCH_SPORTS)
             if hold_posted(x, mine, sport=sp):
                 label_tickets(x, sp, quote_index(board), carried_picks(board))
-        hold_until_post(x, sp, now, ready=inactives_ready(board, x, sp))
+        hold_until_post(x, sp, now, ready=inactives_ready(board, x, sp), stash=board.setdefault(HELD_KEY, {}))
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ a game's parlays not set as posted before its report ({type(exc).__name__}: {exc})")
 
@@ -4087,7 +4099,8 @@ def post_late(board: dict, now=None) -> int:
         sp = str(gp.get("sport") or "").lower()
         now = now or dt.datetime.now(dt.timezone.utc)
         held = sum(1 for x in gp.get("games") or [] if isinstance(x, dict)
-                   and hold_until_post(x, sp, now, ready=inactives_ready(board, x, sp)))
+                   and hold_until_post(x, sp, now, ready=inactives_ready(board, x, sp),
+                                       stash=board.setdefault(HELD_KEY, {})))
         _recount(board)
         return held
     except Exception as exc:                                 # noqa: BLE001

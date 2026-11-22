@@ -189,7 +189,7 @@ def test_ask_and_the_record_page_say_three_of_each():
     assert ("three three-leg and three two-leg player-prop parlays from its report, and in football and hockey "
             "its three touchdown or goal-scorer pairs") in desc
     js = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
-    assert 'const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx_td"];' in js and "GP_FILL_WORDS" in js
+    assert 'const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx_td", "sgpx_day_props", "sgpx_day_td"];' in js and "GP_FILL_WORDS" in js
     rj = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert '{ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) }) : ""}${' in rj, \
         "a short game's scorer note shows under the pairs it made"

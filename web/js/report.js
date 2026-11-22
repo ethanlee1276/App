@@ -591,8 +591,10 @@
       /* AN SGPX TICKET (engine/sgpx, step ACI) joins legs from different games: each leg says its game, and
          this game's result grades none of the others, so the card is never drawn settled here. */
       const cross = b.kind === "sgpx";
+      // A day ticket's leg from a later game says it was picked before that game's inactives (engine/sgpx, step ACM).
       const gameTag = (l) => (cross && l.game
-        ? ` <span class="gr-parlay-game">${escapeHtml(String(l.game).replace("@", " at "))}</span>` : "");
+        ? ` <span class="gr-parlay-game">${escapeHtml(String(l.game).replace("@", " at "))}${
+          l.early ? " · picked before its inactives" : ""}</span>` : "");
       return `<div class="gr-parlays">${(b.items || []).map((t) => (!cross && settled(t)) || `<div class="gr-parlay">
         <div class="gr-parlay-head"><span class="gr-parlay-title"><b>${escapeHtml(t.title || "")}</b>${t.cls
           ? ` <span class="gr-parlay-class ${escapeAttr(t.cls)}">${escapeHtml(t.cls_label || "")}</span>` : ""}</span>${

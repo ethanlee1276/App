@@ -592,7 +592,9 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
 
 #: THE SGPX PARLAYS (engine/sgpx, step ACI): each kickoff slot's tickets across its games, journaled under their
 #: kind's source (sgpx.SOURCES) and counted on the Record beside each game's own parlays (`game_parlay_record`).
-SGPX_SOURCES = {"sgpx_props": "sgpx_props", "sgpx_td": "sgpx_td"}
+SGPX_SOURCES = {"sgpx_props": "sgpx_props", "sgpx_td": "sgpx_td",
+                # The day's tickets (step ACM), whose later legs were picked before their games' inactives.
+                "sgpx_day_props": "sgpx_day_props", "sgpx_day_td": "sgpx_day_td"}
 
 
 def _leg_row(l: dict) -> dict:
@@ -614,7 +616,7 @@ def log_sgpx(conn, sg: dict, sport: str, date: str, games=None) -> int:
         return 0
     from . import ledger as L
     from .gameparlays import _leg_id
-    from .sgpx import KINDS, SOURCES
+    from .sgpx import DAY_SOURCES, KINDS, SOURCES
     wrote = 0
     for e in sg.get("slots") or []:
         if not isinstance(e, dict) or not e.get("posted_at"):
@@ -647,11 +649,12 @@ def log_sgpx(conn, sg: dict, sport: str, date: str, games=None) -> int:
                     " notional_units, source, status, at_start)"
                     " VALUES (?,?,?,?,?,?,?,1,0,?,NULL,?,?,?,NULL,?,?,?,?,0,?,?,'open',1)",
                     (datetime.datetime.now().isoformat(timespec="seconds"), sport, date, key, "sgpx", len(legs),
-                     "SGPX " + ", ".join(t.get("games") or e.get("games") or []), t.get("naive_dec"), take,
+                     ("SGPX day " if e.get("day") else "SGPX ") + ", ".join(t.get("games") or e.get("games") or []),
+                     t.get("naive_dec"), take,
                      "the least price the card says to take it at: our fair price and 5%",
                      "|".join(sorted(books)) or None, t.get("joint"),
                      round(1.0 / float(take), 4) if take else None, t.get("independent"),
-                     "; ".join(t.get("links") or []), NOTIONAL_UNITS, SOURCES[kind]))
+                     "; ".join(t.get("links") or []), NOTIONAL_UNITS, (DAY_SOURCES if e.get("day") else SOURCES)[kind]))
                 for i, l in enumerate(legs, start=1):
                     conn.execute(
                         "INSERT INTO parlay_legs (parlay_id, leg_no, player, team, market, side, line, odds, book,"
