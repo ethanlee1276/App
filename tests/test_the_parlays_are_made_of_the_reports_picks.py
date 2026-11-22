@@ -158,8 +158,8 @@ def test_too_few_picks_fill_from_the_games_other_props_and_say_so():
         GP._board_legs = was_legs
     # Three legs make one trio: no more to make, whatever a leg rides on.
     assert len(three["threes"]) == 1 and three["threes_note"] == (
-        "1 of 3: this report's picks (3 of its 3 picks are at 60% or better) make no more three that fit "
-        "together without a conflict and reach 15% by our numbers"), three.get("threes_note")
+        "1 of 3: this report's picks (3 of its 3 picks are at 60% or better) make no other three-leg ticket "
+        "without a conflict that reaches 15% by our numbers"), three.get("threes_note")
     # ...and the report says it under the ticket it made, on the page and in the report's section.
     import types
     was = GR._game_parlays
