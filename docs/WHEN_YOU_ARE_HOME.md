@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABO. The WNBA's player pages get every box-score column, by the night** (step 855; 22 November). Nothing to run.
+Every WNBA player page showed four columns (minutes, points, rebounds, assists) where the NBA's show fifteen. The
+reason is old data, not the page: the box-score reader learned steals, blocks and turnovers on 13 October and field
+goals, free throws and offensive rebounds on 20 October, after the WNBA season had ended, so every WNBA game on file
+has only the first few. RUN_NEXT 00i had the one-off command to read 2026 again; instead of you running it, the
+nightly run now reads every stored WNBA day from 2024 to 2026 that has no steals on file again, forty days a night,
+oldest first, each day twice at most, and says in its log how many are left; once none is left it does nothing. The
+pages fill in as the nights go. The WNBA still has no shot chart (the NBA's and college basketball's come from their
+own shot tables); that is a bigger piece, for before the WNBA season starts in May.
+
 **ABN. Hockey's and college basketball's Record pages read like the NFL's** (step 854; 22 November). Nothing to run.
 You said: "the record pages to match each other. Not numbers wise but visual wise." Hockey and college basketball
 stake nothing yet (their edge picks wait on paper and their Most Likely picks are tracked for their hit rate), so

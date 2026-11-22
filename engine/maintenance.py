@@ -2026,6 +2026,58 @@ REREAD_DAYS_PER_NIGHT = 4
 REREAD_TRIES = 3
 
 
+#: THE WNBA'S OLDER BOX SCORES, READ AGAIN WITH EVERY COLUMN (22 November 2026). The box-score reader kept
+#: minutes, points, rebounds, assists and threes until it learned steals, blocks and turnovers (13 October) and
+#: field goals, free throws and offensive rebounds (20 October), after the WNBA's season had ended, so every WNBA
+#: player page showed four columns (MIN, PTS, REB, AST) where the NBA's show fifteen. RUN_NEXT 00i (step VH) read
+#: 2026 again by hand; the night now reads each stored WNBA day with no steals on file again, oldest first,
+#: WNBA_REFILL_DAYS_PER_NIGHT a night and each WNBA_REFILL_TRIES times at most, until none is left.
+WNBA_REFILL_SEASONS = (2024, 2025, 2026)
+WNBA_REFILL_DAYS_PER_NIGHT = 40
+WNBA_REFILL_TRIES = 2
+
+
+def wnba_days_short(hconn, seasons=WNBA_REFILL_SEASONS) -> list:
+    """The stored WNBA days, oldest first, whose player lines carry no steals (filed before the box kept them)."""
+    if hconn is None or not seasons:
+        return []
+    marks = ",".join("?" * len(seasons))
+    try:
+        rows = hconn.execute(
+            f"SELECT DISTINCT period FROM player_game_logs WHERE sport='wnba' AND season IN ({marks}) "
+            f"AND period NOT IN (SELECT DISTINCT period FROM player_game_logs WHERE sport='wnba' AND market='stl') "
+            f"ORDER BY period", tuple(seasons)).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return []
+    return [str(r[0]) for r in rows if r and r[0]]
+
+
+def wnba_box_refill(state: dict, hconn, ingest, log=print, per_night: int = WNBA_REFILL_DAYS_PER_NIGHT) -> int:
+    """Read again, with ``ingest(iso_day)`` (espnhoops.ingest_day for the WNBA), the WNBA days whose lines lack the
+    box score's later columns (wnba_days_short), at most ``per_night`` and each WNBA_REFILL_TRIES times; count each
+    read in ``state`` ("wnba_box_refill"). Returns the days read."""
+    tries = state.setdefault("wnba_box_refill", {})
+    short = wnba_days_short(hconn)
+    days = [d for d in short if int(tries.get(d, 0) or 0) < WNBA_REFILL_TRIES][:per_night]
+    read = 0
+    for d in days:
+        tries[d] = int(tries.get(d, 0) or 0) + 1
+        try:
+            res = ingest(d) or {}
+        except Exception as exc:                              # noqa: BLE001
+            log(f"  ⚠️  wnba box scores: {d} read again and failed: {exc}")
+            continue
+        if any("scoreboard" in str(x) for x in res.get("skipped") or []):
+            log(f"  ⚠️  wnba box scores: {res['skipped'][0]} (the rest wait for tomorrow night)")
+            break
+        read += 1
+    if read:
+        left = len([d for d in wnba_days_short(hconn) if int(tries.get(d, 0) or 0) < WNBA_REFILL_TRIES])
+        log(f"  wnba box scores: {read} day(s) read again with every column"
+            + (f", {left} left" if left else ", none left"))
+    return read
+
+
 def days_without_final(hconn, sport: str, before: _dt.date, today: _dt.date, tries: dict) -> list:
     """The days, oldest first, before ``before`` and inside REREAD_WINDOW_DAYS
     of ``today``, on which a stored game of ``sport`` has no final; a day read
@@ -3119,6 +3171,17 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                     log(f"  wnba results: {tot_g} game(s), {tot_l:,} log rows")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  wnba results ingest failed: {exc}")
+
+    # The WNBA's older box scores, read again with every column (wnba_box_refill), any month: nothing to do once
+    # every stored day has its steals.
+    if _wnba_day is not None and _hconn is not None:
+        try:
+            from . import db as _wrdb
+            _wrconn = _wrdb.connect()
+            wnba_box_refill(state, _hconn, lambda day: _wnba_day(_wrconn, day), log)
+            _wrconn.commit()
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  wnba box scores: reading again the days filed before every column failed: {exc}")
 
     # MEN'S COLLEGE BASKETBALL RESULTS (2026-11-13) — ESPN's Division I
     # scoreboard and each final's box score, one date at a time from the
