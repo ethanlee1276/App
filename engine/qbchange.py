@@ -424,12 +424,28 @@ def card(ch: dict, applied: float = 1.0, own: bool = False, position: str = "") 
         # The new starter's own lean between his targets, in words (engine/qblean, step ABZ).
         from . import qblean as _ql
         out["lean"] = _ql.words(ch)
+    if ch.get("reunion") and ch.get("replacement"):
+        # Back with a club he played for (engine/qblean.reunion, step ACJ): his games there, in words.
+        from . import qblean as _ql
+        r = ch["reunion"]
+        out["reunion"] = _ql.reunion_words(r, ch["replacement"], club_words(ch["team"]),
+                                           set(r.get("now_on") or []) or None)
     # TOO FEW PASSES TO RATE (their instructions v3.1 §8: "no pass-catcher legs
     # on that team"; likelyboard.METHOD_NEW_QB reads it). Present only when true.
     if (ch.get("status") != "RETURNS" and ch.get("replacement")
             and int(ch.get("replacement_attempts") or 0) < GREEN_ATTEMPTS):
         out["unrated"] = True
     return out
+
+
+def club_words(team: str) -> str:
+    """"the Vikings" for MIN, the code itself for a club the names table does not hold."""
+    try:
+        from .sources.oddsapi import TEAM_ABBR
+        full = next((n for n, c in TEAM_ABBR.items() if c == team), "")
+    except Exception:                                        # noqa: BLE001
+        full = ""
+    return f"the {full.split()[-1]}" if full else team
 
 
 def effect(prop, game) -> tuple:

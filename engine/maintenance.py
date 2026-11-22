@@ -3298,6 +3298,17 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  team pages: keeping baseball's season failed: {exc}")
 
+    # THE QUARTERBACKS' GAMES CLUB BY CLUB (engine/qblean.DOC_VERSION, step ACJ): a doc of the old shape is read
+    # again tonight, out of process, not on Wednesday's refit, so the next NFL build can say a starter back with
+    # a club he played for (qblean.reunion) without waiting the week.
+    try:
+        from . import qblean as _ql
+        if _ql.on() and int((_ql.load() or {}).get("v") or 1) < _ql.DOC_VERSION:
+            log("  quarterbacks: their games club by club, read again tonight"
+                + "".join(f" ({x})" for x in _spawn_module("engine.qblean", log)))
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ⚠️  quarterbacks: their games club by club not read again: {exc}")
+
     # MEN'S COLLEGE BASKETBALL RESULTS (2026-11-13) — ESPN's Division I
     # scoreboard and each final's box score, one date at a time from the
     # league's last stored final, in its season window (November to the

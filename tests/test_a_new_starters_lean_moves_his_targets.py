@@ -49,7 +49,10 @@ def test_each_starters_targets_are_counted_by_position_in_his_clean_starts():
             + [dict(_play("g3", "TB", "qbB", "rb1"), sack="1")] * 4     # sacks are no targets
             + [dict(_play("g3", "TB", "qbB", "rb1"), season_type="POST")] * 4)
     got = L.count_season(rows, pos, names)
-    assert got == {"qbA": {"name": "Kyle Trask", "WR": 3, "TE": 6, "RB": 0, "starts": 1}}, got
+    # …and his clean start club by club (step ACJ): the receivers kept once they drew three of his targets.
+    assert got == {"qbA": {"name": "Kyle Trask", "WR": 3, "TE": 6, "RB": 0, "starts": 1,
+                           "teams": {"TB": {"starts": 1, "att": 9, "cmp": 9, "yds": 72, "td": 0, "targets": 0,
+                                            "tgt": {}}}}}, got
     doc = {"seasons": {"2025": {"qbA": {"name": "Kyle Trask", "WR": 30, "TE": 20, "RB": 10, "starts": 3}},
                        "2026": {"x": {"name": "Kyle Trask", "WR": 10, "TE": 0, "RB": 0, "starts": 1}}}}
     c = L.career(doc, "Kyle Trask")

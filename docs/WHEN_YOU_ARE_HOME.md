@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACJ. A quarterback back with a club he played for is read against his games there** (step 875; 22 November). One
+optional command (00r). You asked for this with Kirk Cousins back with the Vikings; tonight he starts for them in
+Kyler Murray's place. The quarterback history the box builds off the play-by-play (the one ABZ's lean reads) now
+keeps each starter's games club by club: his attempts, completions, yards and touchdowns there, and the receivers he
+threw to there. When a new starter is back with a club he started for before starting somewhere else (four starts
+there or more), the quarterback line on his game's report says his starts there, his yards and touchdowns a game,
+and, of the receivers on the club now, what share of his targets each drew then. It moves no number yet. ABZ
+measured that one receiver's share with one quarterback predicts nothing beyond his share of the offense, and
+whether a returning starter's old games there do is a separate question, to be measured on every season the box
+holds before any pick uses it. The box rebuilds that history once tonight in its nightly run, so Monday's builds are
+the first that can say it; command 00r does it now, for tonight's Vikings game. The same for receivers and backs
+back with a former club is next.
+
 **ACI. SGPX parlays: our best picks from different games in one ticket** (step 874; 22 November). Nothing to run.
 You asked for same game parlay X tickets: the top picks of separate NFL games combined, one kind for player props
 and one for touchdowns, like Derrick Henry with Jahmyr Gibbs and Amon-Ra St. Brown. Each kickoff window gets three

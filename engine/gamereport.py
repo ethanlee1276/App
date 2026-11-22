@@ -1640,6 +1640,9 @@ def sec_injuries(c: Ctx) -> dict | None:
                 text += f". {q['volume']}"
             if q.get("lean"):
                 text += f". {q['lean']}"
+            if q.get("reunion"):
+                # Back with a club he played for (engine/qblean.reunion, step ACJ).
+                text += f". {q['reunion']}"
             blocks.append(_p(text))
     resets = (c.result.get("sample_resets") or {})
     for bucket in ("reset", "held"):

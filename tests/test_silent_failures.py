@@ -137,6 +137,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # error's own name as its status ("URLError", "HTTP 404"), kept on the feed and published beside its
         # counts; a quiet read returns "ok", so the two never look alike.
         "_get",
+        # THE REPORTS' SGPX SECTION (engine/gamereport._sgpx, step ACI): it returns nothing either way, and a
+        # failure prints its own line in the build log ("the SGPX parlays not added to the reports"), the
+        # reports kept as they were.
+        "_sgpx",
         # THE EXPORT'S SAMPLER (engine/stacksample.Sampler._run, 2026-11-08),
         # caught by this sweep the day it was written: it returns None either
         # way, and a failure sets ``error``, which the settle pass puts on its

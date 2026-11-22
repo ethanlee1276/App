@@ -61,6 +61,12 @@ START_SHARE = 0.8
 FIRST_SEASON = 2017
 #: The markets a target's share reaches.
 MARKETS = ("receptions", "rec_yds")
+#: The doc's shape: 2 since each starter's games are kept club by club (step ACJ).
+DOC_VERSION = 2
+#: A receiver is kept on a starter's club line once he drew this many of his targets there in a season.
+TEAM_TARGETS_MIN = 3
+#: A starter back with a former club (`reunion`): his starts there, before his line there is said.
+REUNION_MIN_STARTS = 4
 GROUPS = ("WR", "TE", "RB")
 
 
@@ -79,9 +85,13 @@ def _norm(name) -> str:
 
 # --- the career splits, off the play-by-play the box already caches ------------------------------------------------
 def count_season(rows, positions: dict, names: dict) -> dict:
-    """{passer id: {"name", "WR", "TE", "RB", "starts"}} for one season's regular-season plays: each starter's
-    targets in his clean starts (START_SHARE of his team's passes), by the receiver's position (``positions``:
-    {gsis id: position}); ``names``: {gsis id: full name}."""
+    """{passer id: {"name", "WR", "TE", "RB", "starts", "teams"}} for one season's regular-season plays: each
+    starter's targets in his clean starts (START_SHARE of his team's passes), by the receiver's position
+    (``positions``: {gsis id: position}); ``names``: {gsis id: full name}. ``teams`` (step ACJ) keeps his clean
+    starts club by club: {club: {"starts", "att", "cmp", "yds", "td", "targets", "tgt": {receiver's name:
+    targets}}}: ``targets`` all he threw to a named receiver there, ``tgt`` the receivers he threw to at least
+    TEAM_TARGETS_MIN times, so a starter back with a club he played for can
+    be read against his own games there (`reunion`)."""
     games: dict = {}
     for r in rows:
         if str(r.get("season_type") or "REG") != "REG" or str(r.get("pass_attempt") or "") != "1":
@@ -91,21 +101,51 @@ def count_season(rows, positions: dict, names: dict) -> dict:
         qb, team, gid = r.get("passer_player_id"), r.get("posteam"), r.get("game_id")
         if not qb or not team or not gid:
             continue
-        g = games.setdefault((gid, team), {"att": collections.Counter(), "tgt": collections.defaultdict(collections.Counter)})
+        g = games.setdefault((gid, team), {"att": collections.Counter(), "tgt": collections.defaultdict(collections.Counter),
+                                           "rec": collections.defaultdict(collections.Counter),
+                                           "line": collections.defaultdict(collections.Counter)})
         g["att"][qb] += 1
-        grp = group(positions.get(r.get("receiver_player_id") or ""))
-        if r.get("receiver_player_id") and grp:
+        rid = r.get("receiver_player_id") or ""
+        grp = group(positions.get(rid))
+        if rid and grp:
             g["tgt"][qb][grp] += 1
+        if rid and names.get(rid):
+            g["rec"][qb][names[rid]] += 1
+        if str(r.get("complete_pass") or "") == "1":
+            g["line"][qb]["cmp"] += 1
+            g["line"][qb]["yds"] += _num(r.get("yards_gained"))
+        if str(r.get("pass_touchdown") or "") == "1":
+            g["line"][qb]["td"] += 1
     out: dict = {}
-    for g in games.values():
+    for (gid, team), g in games.items():
         qb, att = g["att"].most_common(1)[0]
         if att < START_SHARE * sum(g["att"].values()):
             continue
-        mine = out.setdefault(qb, {"name": names.get(qb, ""), "WR": 0, "TE": 0, "RB": 0, "starts": 0})
+        mine = out.setdefault(qb, {"name": names.get(qb, ""), "WR": 0, "TE": 0, "RB": 0, "starts": 0, "teams": {}})
         mine["starts"] += 1
         for k in GROUPS:
             mine[k] += int(g["tgt"][qb].get(k, 0))
+        club = mine["teams"].setdefault(team, {"starts": 0, "att": 0, "cmp": 0, "yds": 0, "td": 0, "targets": 0,
+                                               "tgt": {}})
+        club["starts"] += 1
+        club["att"] += int(att)
+        club["targets"] += int(sum(g["rec"][qb].values()))
+        for k in ("cmp", "yds", "td"):
+            club[k] += int(g["line"][qb].get(k, 0))
+        for who, n in g["rec"][qb].items():
+            club["tgt"][who] = club["tgt"].get(who, 0) + int(n)
+    for mine in out.values():
+        for club in mine["teams"].values():
+            club["tgt"] = {w: n for w, n in sorted(club["tgt"].items(), key=lambda kv: -kv[1])
+                           if n >= TEAM_TARGETS_MIN}
     return out
+
+
+def _num(v) -> float:
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 #: The play-by-play columns the count reads, beyond the loader's own.
@@ -123,7 +163,9 @@ def build(seasons, load_pbp=None, load_roster=None, have: dict | None = None, cu
             return load_pbp_rows(season, columns=PBP_COLUMNS)
     if load_roster is None:
         from .sources.nflverse import load_rosters as load_roster
-    doc = {"seasons": dict((have or {}).get("seasons") or {}), "built_at": None, "notes": []}
+    # A doc written before the clubs were kept (step ACJ) is read again whole: its seasons have no ``teams``.
+    kept = dict((have or {}).get("seasons") or {}) if int((have or {}).get("v") or 1) >= DOC_VERSION else {}
+    doc = {"v": DOC_VERSION, "seasons": kept, "built_at": None, "notes": []}
     for season in seasons:
         key = str(season)
         if key in doc["seasons"] and season != current:
@@ -172,6 +214,66 @@ def career(doc: dict, name: str) -> dict | None:
     if n < MIN_TARGETS:
         return None
     return {**{k: tot[k] / n for k in GROUPS}, "targets": n, "starts": tot["starts"]}
+
+
+# --- a starter back with a club he played for (step ACJ) ------------------------------------------------------------
+def reunion(doc: dict, name: str, team: str, season: int | None = None) -> dict | None:
+    """A quarterback back with ``team`` after starting elsewhere: his clean starts for it before the last season he
+    started for another club, added up. {"team", "first", "last", "starts", "att", "cmp", "yds", "td", "tgt"};
+    None when he never left it, never started for it, or started for it fewer than REUNION_MIN_STARTS times."""
+    want = _norm(name)
+    if not want or not team:
+        return None
+    by_season: dict = {}
+    for key, per in ((doc or {}).get("seasons") or {}).items():
+        try:
+            yr = int(key)
+        except (TypeError, ValueError):
+            continue
+        if season is not None and yr > int(season):
+            continue
+        for row in (per or {}).values():
+            if _norm((row or {}).get("name")) == want:
+                for club, line in ((row or {}).get("teams") or {}).items():
+                    by_season.setdefault(yr, {})[club] = line
+    away = [yr for yr, clubs in by_season.items() if any(c != team for c in clubs)]
+    if not away:
+        return None
+    last_away = max(away)
+    stint = sorted(yr for yr, clubs in by_season.items() if team in clubs and yr < last_away)
+    if not stint:
+        return None
+    tot = {"starts": 0, "att": 0, "cmp": 0, "yds": 0, "td": 0, "targets": 0}
+    tgt: collections.Counter = collections.Counter()
+    for yr in stint:
+        line = by_season[yr][team]
+        for k in tot:
+            tot[k] += int(line.get(k) or 0)
+        tgt.update({w: int(n) for w, n in (line.get("tgt") or {}).items()})
+    if tot["starts"] < REUNION_MIN_STARTS:
+        return None
+    return {"team": team, "first": stint[0], "last": stint[-1], **tot, "tgt": dict(tgt.most_common())}
+
+
+def reunion_words(r: dict, who: str, club: str = "the team", now_on: set | None = None, most: int = 3) -> str:
+    """The reunion in a sentence: his starts for the club then, his line a game, and, of the men on the club now
+    (``now_on``: normalized names), the most targets he threw to then, as shares of all his targets there. ""
+    when there is none to say."""
+    if not r or not r.get("starts"):
+        return ""
+    n = int(r["starts"])
+    years = f"{r['first']}" if r["first"] == r["last"] else f"{r['first']}–{r['last']}"
+    att, cmp_ = int(r.get("att") or 0), int(r.get("cmp") or 0)
+    head = (f"{who} is back with {club}: in his {n} starts for them ({years}) he threw for "
+            f"{round(float(r.get('yds') or 0) / n)} yards and {float(r.get('td') or 0) / n:.1f} touchdowns a game"
+            + (f", completing {round(100 * cmp_ / att)}% of his passes" if att else ""))
+    # Shares of every target he threw there, the receivers under the line too.
+    total = int(r.get("targets") or 0) or sum(int(v) for v in (r.get("tgt") or {}).values())
+    mates = [(w, int(v)) for w, v in (r.get("tgt") or {}).items() if now_on is None or _norm(w) in now_on]
+    if total and mates:
+        head += (f". Of the receivers there now, " + ", ".join(
+            f"{w} drew {round(100 * v / total)}%" for w, v in mates[:most]) + " of his targets then")
+    return head
 
 
 # --- the team's recent split, and the factors ----------------------------------------------------------------------
@@ -225,6 +327,12 @@ def attach(changes: dict, doc: dict, stats_rows, week: int | None = None) -> dic
         try:
             if not isinstance(ch, dict) or ch.get("status") == "RETURNS" or not ch.get("replacement"):
                 continue
+            # BACK WITH A CLUB HE PLAYED FOR (step ACJ; Ethan, 22 November, of Kirk Cousins back with the
+            # Vikings): his own games there, said on the report. Words only: whether they move a number is
+            # chemfit.py's test R, on the box, and nothing here prices them.
+            back = reunion(doc, ch["replacement"], team, _season_of(stats_rows))
+            if back:
+                ch["reunion"] = dict(back, now_on=sorted(_on_team(stats_rows, team)))
             qb = career(doc, ch["replacement"])
             split = team_split(stats_rows, team, before_week=week)
             if not qb or not split:
@@ -235,6 +343,35 @@ def attach(changes: dict, doc: dict, stats_rows, week: int | None = None) -> dic
         except Exception as exc:                             # noqa: BLE001
             print(f"  ⚠️ {team}'s new starter's lean not read ({type(exc).__name__}: {exc})")
     return changes
+
+
+def _season_of(stats_rows):
+    """The season the weekly rows are of (their newest), or None."""
+    yrs = []
+    for r in stats_rows or []:
+        try:
+            yrs.append(int(float(r.get("season") or 0)))
+        except (TypeError, ValueError):
+            continue
+    return max(yrs) if yrs and max(yrs) > 0 else None
+
+
+def _on_team(stats_rows, team: str) -> set:
+    """The normalized names of the club's men with a target this season, off its weekly rows: the receivers on
+    it now."""
+    out = set()
+    for r in stats_rows or []:
+        if str(r.get("recent_team") or r.get("team") or "") != team:
+            continue
+        try:
+            if float(r.get("targets") or 0) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        name = r.get("player_display_name") or r.get("player_name") or ""
+        if name:
+            out.add(_norm(name))
+    return out
 
 
 def multiplier(ch: dict, prop) -> float:
