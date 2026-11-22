@@ -276,7 +276,7 @@ def test_the_page_marks_every_pick_every_ticket_and_every_leg():
     game = O.for_games("nfl", [("2026-11-15", "NE", "DET")], member=True, path=path, where=where)["2026-11-15|NE|DET"]
     html = _render(game)
     strip = html[html.index('<summary class="rpk-bets-sum">'):html.index("</summary>")]
-    assert re.findall(r'class="rpk-bets-k">([^<]+)<', strip) == ["Picks", "Parlays", "Touchdown pairs"]
+    assert re.findall(r'class="rpk-bets-k">([^<]+)<', strip) == ["Picks", "Three-leg parlays", "Touchdown pairs"]
     assert '<b class="won">2 of 3</b>' in strip, "the picks that hit of the ones won or lost: Gibbs and the spread"
     assert '<b class="">1 of 2</b>' in strip, "the parlays, one hit"
     marks = re.findall(r'class="rpk-mk (\w+)"', strip)
@@ -285,9 +285,9 @@ def test_the_page_marks_every_pick_every_ticket_and_every_leg():
     assert "Jahmyr Gibbs over 74.5 rushing yards" in body and "had 142" in body
     assert "Lions −3.5" in body, "a spread said as the club and its number"
     assert "didn’t play" in body and "waiting on the box score" in body
-    assert "<b>Parlay 1</b> <span>Hit</span>" in body and "<b>Parlay 2</b> <span>Missed by one leg</span>" in body
+    assert "<b>Three-leg parlay 1</b> <span>Hit</span>" in body and "<b>Three-leg parlay 2</b> <span>Missed by one leg</span>" in body
     assert "<b>Touchdown pair 1</b>" in body and "Amon-Ra St. Brown to score a touchdown" in body
-    tix = body[body.index("<b>Parlay 2</b>"):body.index("</ul></li>", body.index("<b>Parlay 2</b>"))]
+    tix = body[body.index("<b>Three-leg parlay 2</b>"):body.index("</ul></li>", body.index("<b>Three-leg parlay 2</b>"))]
     assert re.findall(r'class="rpk-mk (\w+)"', tix) == ["won", "lost", "won"], "the ticket's legs each marked"
     assert html.startswith('<details class="rpk-bets" open>'), "the newest game opens"
     said = _render(game, words=O.market_words({"g": game}))
@@ -306,7 +306,7 @@ def test_one_set_a_game_and_a_game_never_kept_says_why_it_lists_none():
     # reports") the versions the board replaced are listed, apart and never counted: the strip counts the set
     # at the start alone, and the replaced version sits in its own fold under the game's own tickets.
     strip = flat[:flat.index("</summary>")]
-    assert re.findall(r'class="rpk-bets-k">([^<]+)<', strip) == ["Picks", "Parlays", "Touchdown pairs"], strip
+    assert re.findall(r'class="rpk-bets-k">([^<]+)<', strip) == ["Picks", "Three-leg parlays", "Touchdown pairs"], strip
     assert '<b class="lost">0 of 1</b>' in strip, "the parlay counted is the kept one, which lost"
     assert "Posted earlier, replaced before the game · 1 parlay · <b class=\"won\">1 of 1</b> hit" in flat, flat[-900:]
     assert flat.index("The touchdown pairs") < flat.index("Posted earlier, replaced before the game")

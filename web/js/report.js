@@ -963,10 +963,11 @@
   }
   //: A ticket's class in words (engine/gameparlays.CLASS_WORDS).
   const CLASS_WORDS = { safe: "Safe", balanced: "Balanced", pop: "Pop", long: "Long shot" };
-  // ``both``: the game posts two-leg tickets beside its three-leg ones (every league now), so each says its size.
-  function card(t, n, kind, sport, both) {
+  // Each ticket says its size: "Three-leg parlay 1", "Two-leg parlay 1", "Touchdown pair 1" (step ACG).
+  function card(t, n, kind, sport) {
     const pct = (x) => `${Math.round(Number(x || 0) * 100)}%`;
-    const title = kind === "three" ? `${both ? "Three-leg parlay" : "Parlay"} ${n}` : kind === "two" ? `Two-leg parlay ${n}`
+    // One name everywhere (step ACG): the engine's card, the Live tab and Report Picks say it the same way.
+    const title = kind === "three" ? `Three-leg parlay ${n}` : kind === "two" ? `Two-leg parlay ${n}`
       : `${["nfl", "cfb"].includes(sport) ? "Touchdown" : "Scorer"} pair ${n}`;
     // The legs-unrelated chance only where it differs (a link counted): beside an equal number it says it twice.
     const unrel = pct(t.independent) !== pct(t.joint) ? ` (${pct(t.independent)} if the legs were unrelated)` : "";
@@ -1034,8 +1035,7 @@
         : g.twos_paper ? `<p class="gr-note">Two-leg parlays: on paper for now, built and graded but not posted.</p>`
         : g.twos_note ? `<p class="gr-note">No two-leg parlay: ${escapeHtml(g.twos_note)}</p>` : "";
       // The three-leg tickets first, then the two-leg ones, then the scorer pairs.
-      const both = (g.twos || []).length > 0;
-      return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport, both)) })
+      return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
           + (g.threes_note ? `<p class="gr-note">${escapeHtml(g.threes_note)}</p>` : "")
         : g.threes_paper ? `<p class="gr-note">Three-leg parlays: on paper for now, built and graded but not posted.</p>`
         : `<p class="gr-note">${escapeHtml(postNote(g) || "No three-leg ticket without a conflict in this game.")}</p>`}${twos}

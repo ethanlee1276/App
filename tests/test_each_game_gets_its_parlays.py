@@ -276,7 +276,7 @@ def test_the_card_says_it_in_words():
     assert "by our numbers" in c["price_line"] and "take it at" in c["price_line"]
     assert all(l["pick"].endswith("to score a touchdown") for l in c["legs"])
     three = GP.card(gp["games"][0]["threes"][0], 1, "three", "nfl")
-    assert three["title"] == "Parlay 1" and len(three["legs"]) == 3
+    assert three["title"] == "Three-leg parlay 1" and len(three["legs"]) == 3
     assert GP.pick_words({"player": "Malik Nabers", "market": "receptions", "market_label": "Receptions",
                           "side": "Over", "line": 4.5}) == "Malik Nabers over 4.5 receptions"
 

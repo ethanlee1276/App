@@ -83,7 +83,7 @@ def test_a_game_under_way_has_each_ticket_with_each_legs_number_and_what_it_need
     assert [(g["away"], g["home"]) for g in games] == [("NYK", "TOR")], "the game not started is not followed"
     g = games[0]
     assert (g["state"], g["clock"], g["away_score"], g["home_score"]) == ("live", "Q3 4:12", 78, 80)
-    assert [t["title"] for t in g["tickets"]] == ["Parlay 1", "Parlay 2"], "the paper two-leg ticket is not listed"
+    assert [t["title"] for t in g["tickets"]] == ["Three-leg parlay 1", "Three-leg parlay 2"], "the paper two-leg ticket is not listed"
     one, two = g["tickets"]
     brunson, barnes, towns = one["legs"]
     assert brunson == {"player": "Jalen Brunson", "team": "NYK", "pick": brunson["pick"], "market": "pts",
@@ -226,7 +226,7 @@ def test_ask_can_say_whether_a_reports_parlay_is_still_alive():
     assert [(x["league"], x["game"], x["state"]) for x in got] == [("nba", "NYK @ TOR", "live")]
     assert got[0]["score"] == "NYK 78, TOR 80" and got[0]["clock"] == "Q3 4:12"
     one = got[0]["tickets"][0]
-    assert one["ticket"] == "Parlay 1" and one["standing"] == "Alive: 1 of 3 legs in"
+    assert one["ticket"] == "Three-leg parlay 1" and one["standing"] == "Alive: 1 of 3 legs in"
     assert one["our_chance_before_the_game"] == 0.31
     assert one["legs"][0] == {"pick": "Jalen Brunson over 24.5 points", "has": 26.0, "result": "won"}
     assert one["legs"][1] == {"pick": "Scottie Barnes over 10.5 rebounds", "has": 9.0, "need": "Needs 2 more"}
@@ -263,7 +263,7 @@ def test_the_live_tab_draws_each_game_ticket_and_leg():
     assert ('<div class="card grl-game live"> <div class="grl-game-h"><b>NYK 78 – 80 TOR</b>'
             '<span class="grl-clock live">Q3 4:12</span><span class="grl-lg">NBA</span></div>') in html
     one, two = html.split('<div class="grl-t s-')[1:3]
-    assert one.startswith('alive"> <div class="grl-t-h"><b>Parlay 1</b><span class="grl-dots" aria-hidden="true">'
+    assert one.startswith('alive"> <div class="grl-t-h"><b>Three-leg parlay 1</b><span class="grl-dots" aria-hidden="true">'
                           '<i class="won"></i><i></i><i></i></span> <span class="grl-t-st">Alive: 1 of 3 legs in</span>')
     # A leg: the face and the name, the pick's own words, where it stands, the number so far against its line.
     assert ('<li class="grl-leg r-won"> <div class="grl-leg-h"><span class="gr-parlay-who"><span class="gr-parlay-face">'

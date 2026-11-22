@@ -174,7 +174,7 @@ def test_every_page_carries_three_of_each_and_keeps_old_two_leg_tickets_readable
     kinds = [x.get("kind") for x in sec["blocks"] if x.get("type") == "parlays"]
     assert kinds == ["three", "two", "scorers"], kinds
     three = next(x for x in sec["blocks"] if x.get("kind") == "three")
-    assert len(three["items"]) == 3 and three["items"][0]["title"] == "Parlay 1"
+    assert len(three["items"]) == 3 and three["items"][0]["title"] == "Three-leg parlay 1"
     two = next(x for x in sec["blocks"] if x.get("kind") == "two")
     assert len(two["items"]) == 3 and two["items"][0]["title"] == "Two-leg parlay 1"
     assert "Best two-leg parlay: " in GR.parlay_sentence(c)

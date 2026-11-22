@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACG. A three-leg ticket has one name everywhere** (step 872; 22 November). Nothing to run. Looking at the new
+settled cards on the live Record page: the same ticket was "Parlay 1" there, in its game's own report and on the
+Live tab, but "Three-leg parlay 1" on Report Picks' Today tab. Every page now calls it "Three-leg parlay 1", beside
+"Two-leg parlay 1" and "Touchdown pair 1", and Report Picks' lists say "Three-leg parlays" over them. Reports
+already written keep the name they were written with.
+
 **ACF. A game the NFL moved takes ESPN's kickoff time** (step 871; 22 November). Nothing to run. Today's board had
 the Steelers at the Eagles at 4:25 PM and the Jaguars at the Giants at 1 PM; ESPN's live scoreboard had them the
 other way round, and the Steelers' game was in its first quarter while the board still showed it as a 4:25 game. The

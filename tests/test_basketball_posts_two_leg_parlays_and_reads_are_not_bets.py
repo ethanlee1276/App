@@ -171,8 +171,8 @@ def test_the_pages_carry_the_kind():
     assert 'kind === "two" ? `Two-leg parlay ${n}`' in report
     # A game that posts both sizes names both ("Three-leg parlay 1" beside "Two-leg parlay 1"); one whose
     # pair slot holds no scorer pairs heads its tickets "Parlays", not "Parlays and pairs".
-    assert 'kind === "three" ? `${both ? "Three-leg parlay" : "Parlay"} ${n}`' in report
-    assert 'const both = (g.twos || []).length > 0;' in report
+    # One name everywhere since step ACG: every three-leg ticket says its size.
+    assert 'const title = kind === "three" ? `Three-leg parlay ${n}` : kind === "two" ? `Two-leg parlay ${n}`' in report
     assert '${(tix.scorers || []).length ? "Parlays and pairs" : "Parlays"}' in reportpicks
     gr = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
     assert '("twos", "Best two-leg parlay", likeliest)' in gr and '_h("Two-leg parlays")' in gr

@@ -642,7 +642,7 @@ function rpTicketWords(t) {
   return "Waiting on the box score";
 }
 function rpTicketsHTML(list, kind, sport, game) {
-  const name = kind === "threes" ? "Parlay" : kind === "twos" ? "Two-leg parlay" : ["nfl", "cfb"].includes(sport) ? "Touchdown pair"
+  const name = kind === "threes" ? "Three-leg parlay" : kind === "twos" ? "Two-leg parlay" : ["nfl", "cfb"].includes(sport) ? "Touchdown pair"
     : sport === "nhl" ? "Goal-scorer pair" : "Scorer pair";
   if (typeof settledTicketHTML === "function") {
     const g = rpSettledGame(game, sport);
@@ -676,7 +676,7 @@ function rpBetsHTML(x, sport, open, game) {
   const paper = x.paper || {}, pTwos = paper.twos || [], pThrees = paper.threes || [];
   const pairWord = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
   // The three-leg tickets, the two-leg ones, then the scorer pairs.
-  const parts = [["Picks", picks], [twos.length ? "Three-leg parlays" : "Parlays", threes], ["Two-leg parlays", twos],
+  const parts = [["Picks", picks], ["Three-leg parlays", threes], ["Two-leg parlays", twos],
                  ["Three-leg on paper", pThrees], ["Two-leg on paper", pTwos],
                  [pairWord, pairs]].filter(([, l]) => l.length);
   // A size on paper at the start, said once: its tickets were never posted, or there were none.
@@ -706,7 +706,7 @@ function rpBetsHTML(x, sport, open, game) {
       <div class="rpk-bets-body">
         ${picks.length ? sec("The picks", picks.map((p) => rpPickLI(p, game, sport)).join("")) : ""}
         ${unkept}
-        ${threes.length ? sec(twos.length ? "The three-leg parlays" : "The parlays", rpTicketsHTML(threes, "threes", sport, game)) : ""}
+        ${threes.length ? sec("The three-leg parlays", rpTicketsHTML(threes, "threes", sport, game)) : ""}
         ${twos.length ? sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport, game)) : ""}
         ${pThrees.length ? sec("The three-leg parlays on paper", rpTicketsHTML(pThrees, "threes", sport, game)) : ""}
         ${pTwos.length ? sec("The two-leg parlays on paper", rpTicketsHTML(pTwos, "twos", sport, game)) : ""}

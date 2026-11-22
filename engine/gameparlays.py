@@ -2555,7 +2555,9 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
     price line, each leg in words with its price and why, the script it
     needs, how the legs link, the backups and the caveats."""
     joint = float(t.get("joint") or 0)
-    head = (f"Parlay {n}" if kind == "three" else f"Two-leg parlay {n}" if kind == "two"
+    # ONE NAME FOR A TICKET EVERYWHERE (step ACG): "Three-leg parlay 1" on the report, the Live tab, Report
+    # Picks and the Record alike, beside "Two-leg parlay 1" and "Touchdown pair 1".
+    head = (f"Three-leg parlay {n}" if kind == "three" else f"Two-leg parlay {n}" if kind == "two"
             else f"{SCORER_WORDS.get(sport, 'Scorer').capitalize()} pair {n}")
     # The legs-unrelated chance only where it differs from ours (a link counted,
     # `link_weight`): said beside an equal number it is the same number twice.
