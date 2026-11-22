@@ -190,7 +190,7 @@ def test_every_game_s_tickets_get_the_button():
         assert f'data-t="DraftKings">bet slip|Leg {i} of 3</a>' in html, i
     assert "The whole ticket, one slip" in html and "Or leg by leg" in html
     assert 'data-t="BetMGM"' not in html, "a book holding one leg of three is no way to bet the ticket"
-    assert "Parlay 1 · Josh Allen over 249.5 passing yards + James Cook over 60.5 rushing yards" in html
+    assert "Three-leg parlay 1 · Josh Allen over 249.5 passing yards + James Cook over 60.5 rushing yards" in html
     for bad in ("undefined", "[object", "NaN"):
         assert bad not in html, bad
 
