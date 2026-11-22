@@ -127,7 +127,8 @@ def test_each_line_is_a_door_to_its_game_and_the_strip_is_the_members_only():
     # The page binds every [data-rpk-jump] after drawing: open the game's fold and scroll to it.
     i = PAGE.index('host.querySelectorAll("[data-rpk-jump]").forEach')
     assert 'if (el.tagName === "DETAILS") el.open = true;' in PAGE[i:i + 400]
-    assert "${rpTopHTML(rpTopTickets(d, byGame, keys))}${jump}${groups}" in PAGE
+    # …with the SGPX tickets right under them since step ACM (Ethan: "on the same page with the game report picks").
+    assert "${rpTopHTML(rpTopTickets(d, byGame, keys))}${rpSgpxTodayHTML(d)}${jump}${groups}" in PAGE
     # Drawn inside the Today tab's own HTML, which a locked board never builds (its lock card stands instead).
     j = PAGE.index("const today = locked")
     assert PAGE.index("memberLockHTML(", j) < PAGE.index(": rpTodayHTML(d, byGame, keys);", j)
