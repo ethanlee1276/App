@@ -113,7 +113,7 @@ than bankroll management.
 | Own stored tape, appended every build | HAVE | `engine/predmarket.py` — "a year of tape is the moat" |
 | Kalshi order book as a pricing source | HAVE (2026-08-03) | `engine/sources/kalshi.py` — keyless public API, mid-of-book as the fair (no vig to strip), snapshot tape from day one, and a cross-market board on the Prediction Markets page: Kalshi's probability beside the model's, gap in points, only where both exist. Enters as a PRICE, never as flow — `predmarket.py`'s no-trader-identity reasoning still stands and a test forbids the adapter growing wallet-shaped functions. Awaiting first live pull on Ethan's machine. |
 | Novig / ProphetX | PARTIAL | quoted as books through the odds feed (`engine/odds.py` `EXCHANGE_BOOKS`, commission in `engine/exchangefees.py`); not read as a fair-price source the way Kalshi is. Both received CFTC designation in June 2026. |
-| Cross-market edge: exchange fair value vs traditional book | PARTIAL (2026-08-03) | exchange-vs-MODEL ships (the Kalshi board); exchange-vs-de-vigged-BOOK is the remaining leg, and the inputs (cached book odds) already exist |
+| Cross-market edge: exchange fair value vs traditional book | HAVE as a read (2026-10-17) | exchange-vs-MODEL ships (the Kalshi board); exchange-vs-de-vigged-BOOK ships too: `engine/sources/kalshi.py` `board` sets `book_p` / `book_gap_pts` from `odds.devig_two_way` on the books' moneylines (which `pm_build.py` carries), flags `divergence` at `KALSHI_BOOK_DIVERGENCE_PTS`, and the Prediction Markets page lists them (`web/js/more.js`). A read only: `rec` still comes from the model's net edge, never from the book gap |
 | Sporttrade | WON'T | exited sports betting entirely, May–June 2026 |
 
 ### Pillar 3 — Radical transparency
@@ -149,7 +149,7 @@ than bankroll management.
 | UFC referee & judge assignments | MISSING | `PARKED` in `engine/coverage.py`: "no structured assignment feed" |
 | Travel / rest / altitude | PARTIAL | rest/travel built and rendered (`engine/fatigue.py`, wired into `engine/pipeline.py`, `engine/betting.py`, `engine/losspatterns.py`); altitude is a static venue field (`engine/stadiums.py`), not a fatigue-specific adjustment |
 | Injury-report latency | PARTIAL | `engine/injuries.py` has the reports; `engine/injurylag.py` measures how far line moves land from our `first_seen` on `injury_events` (wired in `nfl_build.py`). Measured, not acted on. |
-| Published effect sizes for venue adjustments | MISSING | the study's specific ask: don't just show wind, show what wind is worth |
+| Published effect sizes for venue adjustments | PARTIAL (2026-11-15) | the study's specific ask: don't just show wind, show what wind is worth. The NFL game report does, for weather: `engine/weather.py` `evaluate_weather` words each measured move ("passing yards ran 11% lower … than in calm games", 2016-2025) and its reasons reach the Weather and venue section (`engine/pipeline.py` `_conditions`, `engine/gamereport.py` `sec_weather`). Other leagues' venue adjustments (altitude, parks) not checked |
 
 ### Portfolio risk (Stage 3)
 
