@@ -3098,10 +3098,6 @@ select.calc-in { width: auto; font-weight: 600; }
 
 /* Recent settled picks */
 .rec-list { padding: 0; gap: 0; }
-/* The tier table's sum (recBoardSection): ruled off on a tinted row, and
-   the words weigh more. */
-.rl-row.rl-total { border-top: var(--hairline) solid var(--border); background: var(--fill-subtle); font-weight: 600; }
-
 /* WHAT THE PARLAY HEADLINE IS NOT COUNTING.
    Three rows, set as a table rather than as cards: they are the same
    measurement asked of three different populations, and the whole point

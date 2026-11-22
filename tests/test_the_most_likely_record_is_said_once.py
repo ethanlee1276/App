@@ -25,6 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REC = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
 APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
 
 
 def _fn(src, name):
@@ -41,6 +42,20 @@ def test_the_top_tile_is_the_one_record():
     assert '(lk.open ? ` · ${lk.open} open` : "")' in card, "its open picks ride the sample's tile"
     verdict = _fn(REC, "verdictBooksHTML")
     assert "line(lk)" not in verdict, "the verdict draws the book's picture and reading, not its record again"
+
+
+def test_the_total_rows_styling_left_with_the_row():
+    """The row went on 2026-11-19; `.rl-row.rl-total` stayed in the
+    stylesheet for three days, styling nothing.
+
+    That is the cheap half of this kind of cut and the half that gets
+    forgotten, because a dead selector has no symptom: the page looks
+    right, the suite is green, and the rule sits there reading like a
+    row that exists. Worse, its comment named `recBoardSection` — so
+    the next person to open that function would go looking for a total
+    the function no longer draws. Delete the style with the markup."""
+    assert "rl-total" not in CSS, \
+        "the tier table's total row is gone; its rule styles nothing"
 
 
 def test_a_most_likely_half_says_its_size_and_return_not_a_record():
