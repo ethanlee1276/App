@@ -182,7 +182,7 @@ def test_every_page_draws_them_beside_the_others():
     assert "Best three-leg parlay: " in line and "Best two-leg parlay: " in line and "Best touchdown pair: " in line, line
     js = {n: (ROOT / "web" / "js" / f"{n}.js").read_text(encoding="utf-8") for n in ("report", "reportpicks", "record")}
     assert "const both = (g.twos || []).length > 0;" in js["report"], "each ticket says its size beside the other"
-    assert 'sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport))' in js["reportpicks"]
+    assert 'sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport, game))' in js["reportpicks"]
     assert 'const GP_KINDS = ["three", "two", "scorers"];' in js["record"]
     for name in ("more", "account"):
         copy = (ROOT / "web" / "js" / f"{name}.js").read_text(encoding="utf-8")

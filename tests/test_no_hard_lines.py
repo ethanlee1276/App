@@ -144,6 +144,12 @@ COLOURED = {
     ("styles.css", ".card.longshot.lk-top .grade.lk-pct"), ("styles.css", ".card.longshot.lk-mid .grade.lk-pct"),
     ("styles.css", ".stub-cta"), ("styles.css", ".pw-buy, .co-go"),
     ("styles.css", ':where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus'),
+    # A settled ticket and its legs (step ACC, 22 November 2026): Ethan asked for them ringed, with a betting
+    # app's "Recently Settled" list beside it: "each leg is highlighted green if it won, and if it's
+    # highlighted red, that leg lost, and then the whole parlay will be highlighted green if that parlay won".
+    # Green or red alone: a push, a void or a wait is its fill, with a transparent border.
+    ("settled.css", ".st-tix.won"), ("settled.css", ".st-tix.lost"), ("settled.css", ".st-leg.won"),
+    ("settled.css", ".st-leg.lost"),
 }
 
 

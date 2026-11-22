@@ -32,17 +32,16 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+SETTLED = (ROOT / "web" / "js" / "settled.js").read_text(encoding="utf-8")
 RP = (ROOT / "web" / "js" / "reportpicks.js").read_text(encoding="utf-8")
 RECORD = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
 REPORT_JS = ROOT / "web" / "js" / "report.js"
-CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
+CSS = (ROOT / "web" / "css" / "settled.css").read_text(encoding="utf-8")
 
 
 def _settled_src() -> str:
-    """The drawing itself, off app.js: its words, its helpers and the ticket."""
-    a = APP.index("const SETTLED_SCORE = ")
-    b = APP.index("\n}\n", APP.index("function settledTicketHTML(t, g) {")) + 3
-    return APP[a:b]
+    """The drawing itself (js/settled.js): its words, its helpers and the ticket."""
+    return SETTLED
 
 
 def _rp(name: str) -> str:
@@ -288,6 +287,10 @@ def _browser():
                     page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');}"
                                          "catch(e){}")
                     page.goto(f"http://127.0.0.1:{port}/index.html?sport=nfl", wait_until="load")
+                    page.wait_for_function("typeof loadRoom === 'function'", timeout=20000)
+                    # Never with the first paint: the drawing arrives with the pages that draw it.
+                    assert page.evaluate("typeof settledTicketHTML") == "undefined"
+                    page.evaluate("loadRoom('js/record.js', 'css/record.css')")
                     page.wait_for_function("typeof settledTicketHTML === 'function'", timeout=20000)
                     page.evaluate(f"document.documentElement.dataset.theme = '{theme}'")
                     page.evaluate("""([g, ts]) => { const box = document.createElement('div'); box.id = 'acc';
