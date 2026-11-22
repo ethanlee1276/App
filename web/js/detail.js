@@ -1948,6 +1948,9 @@ function reportWatchFor(g, sport) {
   const entry = lg && (lg.games || {})[`${g.away}@${g.home}`];
   return entry ? Object.assign({ checked_at: lg.checked_at }, entry) : null;
 }
+/* A weather number the page can print: present and a real number (null reads as 0 to Number, and is none). */
+function wxNum(v) { return v != null && v !== "" && Number.isFinite(Number(v)); }
+
 function gameReportHTML(g, extras) {
   const d = state.data || {};
   const r = gameReportFor(g);
@@ -2283,9 +2286,13 @@ function renderGamePage() {
   const art = mlb ? ballpark(g) : nba ? court(g) : state.sport === "nhl" ? rink(g) : stadium(g);
   const cond = nba ? "Indoor hardwood" : state.sport === "nhl" ? "Indoor ice"
     : w.dome ? (w.retractable ? "Retractable roof · expected closed" : "Indoor")
+    // NO NUMBER, NO FORECAST (22 November 2026): a game the weather pull never reached, or one it reached
+    // without a temperature, printed "NaN°F" and "NaNmph" here as a forecast, where the strip card says it
+    // honestly (app.js wxKnown). It says so here too; a wind it lacks is left out.
+    : !wxNum(w.temp_f) ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")
     // Same rule as the strip card: an unmeasured prior is not a forecast.
     : w.measured === false ? "Outdoor · weather not pulled"
-    : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}${
+    : `${Math.round(w.temp_f)}°F${wxNum(w.wind_mph) ? ` · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}` : ""}${
       isLive || isFinal ? "" : mlb ? " · first-pitch forecast" : " · kickoff forecast"}${
       // A game abroad reads MET Norway's forecast (engine/sources/metno),
       // and its licence asks for the credit wherever its data shows.

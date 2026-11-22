@@ -118,6 +118,30 @@ def test_every_other_weather_surface_asks_the_same_question():
     assert "NOT PULLED" in VIS[k:k + 1400]
 
 
+def test_the_game_page_header_never_prints_nan_degrees():
+    """A game the weather pull never reached, or reached without a temperature, printed "NaN°F · NaNmph ·
+    kickoff forecast" in the game page header (seen 22 November 2026), where the strip card said it
+    honestly. It says "weather not pulled" now, and a wind it lacks is left out; the flag rule above is
+    untouched (a missing `measured` still reads as known)."""
+    import shutil, subprocess, json as _json, tempfile as _tf, os as _os
+    det = _read("web", "js", "detail.js")
+    assert '!wxNum(w.temp_f) ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")' in det
+    assert "wxNum(w.wind_mph) ? ` · ${Math.round(w.wind_mph)}mph" in det
+    node = shutil.which("node")
+    if not node:
+        return
+    i = det.index("function wxNum(")
+    fn = det[i:det.index("\n", i) + 1]
+    with _tf.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(fn + "console.log(JSON.stringify([undefined, null, '', NaN, 'x', 0, 62.4, '58'].map(wxNum)));")
+        path = fh.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+    finally:
+        _os.unlink(path)
+    assert _json.loads(out.stdout) == [False, False, False, False, False, True, True, True], out.stdout
+
+
 def test_absence_of_the_flag_reads_as_known_so_mlb_is_untouched():
     """MLB really does pull its weather, and its payload predates this
     flag. `=== false` rather than a truthiness test is what keeps that

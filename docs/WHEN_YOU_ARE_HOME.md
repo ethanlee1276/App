@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABI. A game page never prints "NaN°F"** (step 849; 22 November). Nothing to run. Checking the NFL game reports in
+a browser for step ABH, the game page's header read "NaN°F · NaNmph · kickoff forecast" for a game with no weather
+on file: the header printed whatever numbers the game carried, where the game cards on the board already said
+"Outdoor · weather not pulled". A game the weather pull never reached, or reached without a temperature, says that
+in the header too now, and a wind it lacks is left out. A sweep of every league's demo board and its first game
+pages found no other "NaN", "undefined" or "null" in the text.
+
 **ABH. A game's report says exactly what the board posts** (step 848; 22 November). Nothing to run. You said, the
 Sunday morning: "I see parlays posted now on the game reports for nfl but those shouldn't be there by what u said."
 You were right. Each game report writes its own copy of the game's parlays (its parlays section, its card's parlay
