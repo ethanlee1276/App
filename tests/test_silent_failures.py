@@ -133,6 +133,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
     judged = {
         # names its failure (this file holds them)
         "_snapshot_closes", "_settled_props_with_close",
+        # THE INACTIVES WATCH'S ONE READ (engine/inactiveswatch._get, step ACH): a failed read returns the
+        # error's own name as its status ("URLError", "HTTP 404"), kept on the feed and published beside its
+        # counts; a quiet read returns "ok", so the two never look alike.
+        "_get",
         # THE EXPORT'S SAMPLER (engine/stacksample.Sampler._run, 2026-11-08),
         # caught by this sweep the day it was written: it returns None either
         # way, and a failure sets ``error``, which the settle pass puts on its
