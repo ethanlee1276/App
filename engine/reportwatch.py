@@ -96,42 +96,14 @@ ROSTER_WORDS = re.compile(
 #: league's own word for the game is a word too: "probable", "questionable", "doubtful" or "game-time decision"
 #: (engine/sources/espninjuries.designation, step ABU).
 #: Nothing here moves a number: the board reads the designation, as before.
-LEAN_OUT = re.compile(
-    r"\b(won[’']?t play|will not play|ruled out|will miss|is out for|(?:is )?not expected to play|"
-    r"isn[’']?t expected to play|not slated to play|not expected to start|won[’']?t suit up|will not suit up|"
-    r"will sit out|won[’']?t be available|will not be available|is inactive|declared inactive|listed as inactive|"
-    r"won[’']?t dress|will not dress|healthy scratch|won[’']?t travel|will not travel)\b", re.I)
-LEAN_IN = re.compile(
-    r"\b(slated to play|expected to play|set to play|plans? to play|will play|will start|expected to start|"
-    r"slated to start|cleared to play|will be available|available to play|will suit up|will dress|good to go)\b",
-    re.I)
-#: Who reported it, where the blurb says ("..., Ian Rapoport of NFL Network reports.").
-BY = re.compile(r"(?:,\s*|\bper\s+)([A-Z][\w.'’-]*(?:\s+[A-Z][\w.'’-]*){0,3}\s+of\s+(?:[Tt]he\s+)?"
-                r"[A-Z][\w.'’&-]*(?:\s+[A-Z][\w.'’&-]*){0,4})(?:\s+reports?)?\.?\s*$")
+# The blurb's reading lives with the board it reads (engine/sources/espninjuries, step ABY): the Injuries page and
+# the game reports read every blurb the same way.
+from .sources.espninjuries import BY, LEAN_IN, LEAN_OUT, lean, reported_by  # noqa: E402,F401
+
 #: A blurb this old is no Sunday-morning word: the week's filings say it.
 WORD_HOURS = 36
 #: The designations a word can sit beside: a player cleared or already ruled out has nothing left to lean.
 LEAN_ON = ("questionable", "doubtful", "day-to-day", "probable", "game-time decision", "gtd")
-
-
-def lean(comment, day: str | None = None) -> str | None:
-    """"in", "out", or None: which way a blurb leans on its player's next game. ``day``: that game's weekday
-    (Eastern), so a blurb naming another day is about another game."""
-    from .sources.espninjuries import about_game
-    text = " ".join(str(comment or "").split())
-    if not about_game(text, day):
-        return None
-    out = bool(LEAN_OUT.search(text))
-    inn = bool(LEAN_IN.search(LEAN_OUT.sub(" ", text)))
-    if out == inn:
-        return None
-    return "out" if out else "in"
-
-
-def reported_by(comment) -> str:
-    """The reporter and outlet a blurb names at its end, or ""."""
-    m = BY.search(" ".join(str(comment or "").split()))
-    return m.group(1) if m else ""
 
 
 def _norm(s) -> str:

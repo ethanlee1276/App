@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABY. A listed player's newest word, everywhere the site lists him** (step 864; 22 November). Nothing to run. You
+said: "Baker Mayfield's foot/right thumb is slated to play in Sunday's game against Detroit Lions, Ian Rapoport of
+NFL Network reports. But he's still labeled as questionable on ESPN ... we need to be ... reporting it in our game
+reports and every other spot where we report injuries." Where it stood: his game's report said it in its "If he
+plays, and if he sits" section (step ABS) and the player page showed the blurb in full; the Injuries page showed it
+only on a hover, and every report's injury lines said "questionable" and nothing more. Now the Injuries page says it
+under his status, green or red by its lean ("expected to play Sun, per Ian Rapoport of NFL Network"), and every
+league's report says it on the player's injury line ("Baker Mayfield (QB) — questionable; the newest word: expected
+to play, per Ian Rapoport of NFL Network"), on its practice-report line too. One reader serves the page, the reports
+and the live watch, and it reads a blurb for the game it names, counted from when it was posted: "McVay said
+Saturday that Williams ... is expected to play Wednesday" is Wednesday's game, a Sunday blurb naming Saturday is
+about a game already played, and a blurb about the rest of a game under way or about someone else is no word. Using
+it to our advantage in the picks themselves (a questionable player's own props are held until the lineup) waits on
+what the inactives showed today.
+
 **ABX. Every WNBA club has its whole team page** (step 863; 22 November). Nothing to run. Checking the live team
 pages: the Indiana Fever's had its name, roster and depth chart; the Las Vegas Aces' read "LV" with no name, no
 roster and no depth chart, and so did the Valkyries', the Sparks', the Liberty's and the Mystics'. The WNBA's stored

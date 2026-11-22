@@ -191,6 +191,44 @@ def about_game(text, day: str | None = None) -> bool:
     return True
 
 
+#: A BLURB'S LEAN (step ABT, moved here in step ABY so every page reads a blurb one way). On a Sunday morning the
+#: blurb moves while the designation stands: at 7:24 AM ET Baker Mayfield was still "Questionable" and his blurb
+#: said "Mayfield (foot/right thumb) is slated to play in Sunday's game against the Lions, Ian Rapoport of NFL
+#: Network reports". A blurb that leans both ways ("With Omar Cooper ruled out, Mitchell is expected to play an
+#: elevated role") is about someone else, and leans neither.
+LEAN_OUT = re.compile(
+    r"\b(won[’']?t play|will not play|ruled out|will miss|is out for|(?:is )?not expected to play|"
+    r"isn[’']?t expected to play|not slated to play|not expected to start|won[’']?t suit up|will not suit up|"
+    r"will sit out|won[’']?t be available|will not be available|is inactive|declared inactive|listed as inactive|"
+    r"won[’']?t dress|will not dress|healthy scratch|won[’']?t travel|will not travel)\b", re.I)
+LEAN_IN = re.compile(
+    r"\b(slated to play|expected to play|set to play|plans? to play|will play|will start|expected to start|"
+    r"slated to start|cleared to play|will be available|available to play|will suit up|will dress|good to go)\b",
+    re.I)
+#: Who reported it, where the blurb says ("..., Ian Rapoport of NFL Network reports.").
+BY = re.compile(r"(?:,\s*|\bper\s+)([A-Z][\w.'’-]*(?:\s+[A-Z][\w.'’-]*){0,3}\s+of\s+(?:[Tt]he\s+)?"
+                r"[A-Z][\w.'’&-]*(?:\s+[A-Z][\w.'’&-]*){0,4})(?:\s+reports?)?\.?\s*$")
+
+
+def lean(comment, day: str | None = None) -> str | None:
+    """"in", "out", or None: which way a blurb leans on its player's game on ``day`` (its weekday, Eastern; a
+    blurb naming another day is about another game)."""
+    text = " ".join(str(comment or "").split())
+    if not about_game(text, day):
+        return None
+    out = bool(LEAN_OUT.search(text))
+    inn = bool(LEAN_IN.search(LEAN_OUT.sub(" ", text)))
+    if out == inn:
+        return None
+    return "out" if out else "in"
+
+
+def reported_by(comment) -> str:
+    """The reporter and outlet a blurb names at its end, or ""."""
+    m = BY.search(" ".join(str(comment or "").split()))
+    return m.group(1) if m else ""
+
+
 #: THE LEAGUE'S OWN WORD UNDER "DAY-TO-DAY" (step ABU). ESPN files an NBA player who is probable, questionable
 #: or doubtful all as "Day-To-Day", and the blurb under it keeps the league's word: on the Sunday morning,
 #: "Siakam (hip) is listed as questionable for Sunday's game against New York", "Cunningham (knee) is probable
@@ -212,31 +250,60 @@ def designation(comment, day: str | None = None) -> str | None:
     return "game-time decision" if word == "a game-time decision" else word
 
 
-def word_for_today(row: dict, now: dt.datetime | None = None) -> dict | None:
-    """The league's own word under a bare "Day-To-Day" for today's or tomorrow's game (Eastern), for the
-    Injuries page (step ABW): ``{"word", "day"}``, the day None when the blurb names none (then only a blurb
-    filed in the last day counts). None for any other status, or a blurb about another day."""
-    if str((row or {}).get("status") or "").strip().lower() != "day-to-day" or not row.get("comment"):
-        return None
+#: How far after its posting a blurb's named day can fall: a Wednesday's blurb names Sunday's game, a Saturday's
+#: ("McVay said Saturday that Williams ... is expected to play Wednesday") the Wednesday after it.
+BLURB_AHEAD_DAYS = 4
+
+
+def blurb_day(row: dict, now: dt.datetime | None = None):
+    """The weekday (Eastern) of the game a row's blurb is about, when that game is today or later: the first day
+    it names, today or later, within BLURB_AHEAD_DAYS of its posting ("Sunday" for a Friday blurb about Sunday's
+    game); None for a
+    blurb that names no day and was posted in the last day (about the next game); False for one about a game
+    already played, or too old to say."""
+    text = " ".join(str((row or {}).get("comment") or "").split())
+    stamp = _parse_iso_ts((row or {}).get("date"))
+    if not text or stamp is None:
+        return False
     try:
         from zoneinfo import ZoneInfo
-        et = (now or dt.datetime.now(dt.timezone.utc)).astimezone(ZoneInfo("America/New_York"))
+        zone = ZoneInfo("America/New_York")
     except Exception:                                        # noqa: BLE001
-        return None
-    text = " ".join(str(row["comment"]).split())
+        return False
+    today = (now or dt.datetime.now(dt.timezone.utc)).astimezone(zone).date()
+    posted = dt.datetime.fromtimestamp(stamp, dt.timezone.utc).astimezone(zone).date()
     named = {m.lower() for m in WEEKDAYS.findall(text)}
-    if named:
-        for d in (et, et + dt.timedelta(days=1)):
-            day = d.strftime("%A")
-            if day.lower() in named:
-                word = designation(text, day)
-                return {"word": word, "day": day} if word else None
+    if not named:
+        return None if (today - posted).days <= 1 else False
+    for ahead in range(BLURB_AHEAD_DAYS + 1):
+        d = posted + dt.timedelta(days=ahead)
+        # A day already past is when it was said ("said Saturday"), or the game it was about: the next one named.
+        if d >= today and d.strftime("%A").lower() in named:
+            return d.strftime("%A")
+    return False
+
+
+#: The designations a lean can sit beside: a player cleared or already ruled out has nothing left to lean.
+LEANS_ON = ("questionable", "doubtful", "day-to-day", "probable", "game-time decision", "gtd")
+
+
+def newest_word(row: dict, now: dt.datetime | None = None) -> dict | None:
+    """A listed player's newest word for his next game, off his row's blurb (step ABY): ``{"word", "day", "by"}``,
+    the word "in" or "out" (which way the blurb leans), else under a bare "Day-To-Day" the league's own word
+    (``designation``); the day the game's weekday (None when the blurb names none); ``by`` the reporter it names.
+    None for a cleared or ruled-out player, a blurb about another game, or one that says neither."""
+    status = str((row or {}).get("status") or "").strip().lower()
+    if status not in LEANS_ON or not row.get("comment"):
         return None
-    stamp = _parse_iso_ts(row.get("date"))
-    if stamp is None or et.timestamp() - stamp > 86400:
+    day = blurb_day(row, now)
+    if day is False:
         return None
-    word = designation(text)
-    return {"word": word, "day": None} if word else None
+    word = lean(row["comment"], day)
+    if not word and status == "day-to-day":
+        word = designation(row["comment"], day)
+    if not word:
+        return None
+    return {"word": word, "day": day, "by": reported_by(row["comment"])}
 
 
 def parse_injuries(payload) -> list[dict]:

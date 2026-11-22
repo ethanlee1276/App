@@ -20,7 +20,7 @@ from pathlib import Path
 
 from engine.sources.espninjuries import INJURY_TTL, LEAGUES, cache_age_s, \
     current_rows, drop_stale_returns, fetch_injuries, is_return, \
-    parse_injuries, word_for_today
+    parse_injuries, newest_word
 from engine.sources.fetch import DataUnavailable
 
 
@@ -60,13 +60,14 @@ def main(argv=None) -> int:
             # sit next to a live designation. Then the age cut: a stale
             # "Active" is a standing claim of health nobody re-verifies.
             sports[league] = drop_stale_returns(current_rows(rows))
-            # UNDER "DAY-TO-DAY", THE LEAGUE'S OWN WORD (step ABW): ESPN files an NBA player who is probable,
-            # questionable or doubtful all as "Day-To-Day", and the blurb keeps the word for today's or
-            # tomorrow's game ("Siakam (hip) is listed as questionable for Sunday's game").
+            # A LISTED PLAYER'S NEWEST WORD (steps ABW, ABY): his blurb's lean on his next game ("Mayfield
+            # (foot/right thumb) is slated to play in Sunday's game against the Lions, Ian Rapoport of NFL
+            # Network reports", while ESPN still lists him questionable), else under ESPN's bare "Day-To-Day"
+            # the league's own word ("Siakam (hip) is listed as questionable for Sunday's game").
             for r in sports[league]:
-                w = word_for_today(r)
+                w = newest_word(r)
                 if w:
-                    r["word"], r["word_day"] = w["word"], w["day"]
+                    r["word"], r["word_day"], r["word_by"] = w["word"], w["day"], w["by"]
             # AND WHEN WE LEARNED IT. The page keeps the current board and
             # drops the rest, so a designation four minutes old and one
             # standing since Tuesday read identically. `engine.newstape`

@@ -121,26 +121,24 @@ def test_the_watch_says_a_new_word_as_an_update():
     assert '`${now}${u.injury ? ` (${String(u.injury).toLowerCase()})` : ""}, now listed ${u.word} for the game${' in js
 
 
-def test_the_injuries_page_says_it_for_todays_or_tomorrows_game():
+def test_the_injuries_page_says_it_for_the_game_the_blurb_names():
     now = dt.datetime(2026, 11, 22, 15, 0, tzinfo=dt.timezone.utc)          # Sunday, 10 AM ET
     cases = [
-        ({"status": "Day-To-Day", "comment": SIAKAM, "date": "2026-11-21T22:19Z"}, {"word": "questionable", "day": "Sunday"}),
+        ({"status": "Day-To-Day", "comment": SIAKAM, "date": "2026-11-21T22:19Z"},
+         {"word": "questionable", "day": "Sunday", "by": ""}),
         ({"status": "Day-To-Day", "comment": "X is probable for Monday's game.", "date": "2026-11-22T12:00Z"},
-         {"word": "probable", "day": "Monday"}),
+         {"word": "probable", "day": "Monday", "by": ""}),
         ({"status": "Day-To-Day", "comment": "Tatum (rest) has been ruled out for Saturday's game against the Kings.",
           "date": "2026-11-22T15:02Z"}, None),
         ({"status": "Day-To-Day", "comment": "X is doubtful to play.", "date": "2026-11-22T12:00Z"},
-         {"word": "doubtful", "day": None}),
+         {"word": "doubtful", "day": None, "by": ""}),
         ({"status": "Day-To-Day", "comment": "X is doubtful to play.", "date": "2026-11-19T12:00Z"}, None),
         ({"status": "Questionable", "comment": SIAKAM, "date": "2026-11-22T12:00Z"}, None),
         ({"status": "Day-To-Day", "date": "2026-11-22T12:00Z"}, None)]
     for row, want in cases:
-        assert E.word_for_today(row, now) == want, (row, E.word_for_today(row, now))
+        assert E.newest_word(row, now) == want, (row, E.newest_word(row, now))
     ib = (ROOT / "injuries_build.py").read_text(encoding="utf-8")
-    assert 'r["word"], r["word_day"] = w["word"], w["day"]' in ib
-    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    assert '${r.word ? `<span class="inj-line-ret inj-word">${escapeHtml(injWord(r))}</span>` : ""}' in app
-    assert 'const injWord = (r) => r && r.word ? `${r.word}${r.word_day ? ` for ${String(r.word_day).slice(0, 3)}` : ""}` : "";' in app
+    assert 'r["word"], r["word_day"], r["word_by"] = w["word"], w["day"], w["by"]' in ib
 
 
 def test_nothing_moves_a_number():

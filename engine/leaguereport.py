@@ -47,7 +47,7 @@ from __future__ import annotations
 
 from .gamereport import (KEY, Ctx, _claimed_list, _f, _h, _join, _lift_bets, _list, _num, _ord, _p, _pct, _section,
                          _sentence, a_pct, absent_sentence, cap, finish, injury_claim, keep_started, kickoff_words,
-                         line_words, stamp_track,
+                         line_words, newest_word, stamp_track,
                          log_changes, market_sentence, ml_chances, named, parlay_sentence, player_clause,
                          read_pick, sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
 
@@ -631,7 +631,9 @@ def nhl_injuries(c: Ctx) -> dict | None:
         for i in (_goalie(c, t).get("injuries") or []):
             if isinstance(i, dict) and i.get("player"):
                 items.append((f"{i['player']} ({t}) — {str(i.get('status') or '').lower()}"
-                              + (f", {str(i['injury']).lower()}" if i.get("injury") else ""),
+                              + (f", {str(i['injury']).lower()}" if i.get("injury") else "")
+                              # Which way his newest blurb leans (step ABY).
+                              + (f"; {newest_word(c, t, i['player'])}" if newest_word(c, t, i["player"]) else ""),
                               injury_claim(i["player"], t, i.get("status"))))
     pulled = [p for p in _tape(c).get("pulled") or [] if p]
     blocks = [_claimed_list(items)]
@@ -918,6 +920,9 @@ def nba_injuries(c: Ctx) -> dict | None:
     if not inj:
         return None
     items = [(f"{i['player']} ({i['team']}) — {nba_word(c, i)}"
+              # Which way his newest blurb leans, the league's word already said (step ABY).
+              + (f"; {newest_word(c, i['team'], i['player'], designations=False)}"
+                 if newest_word(c, i["team"], i["player"], designations=False) else "")
               + (f", {str(i['injury']).lower()}" if i.get("injury") else ""),
               injury_claim(i["player"], i["team"], i.get("status"))) for i in inj]
     return _section("injuries", "Injuries", [_claimed_list(items)])

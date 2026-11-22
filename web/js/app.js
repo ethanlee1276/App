@@ -20328,9 +20328,16 @@ function injTag(sport, player) {
 
 // "return Thu, Nov 19", not the feed's "2026-11-19" (the NHL injuries page, 2026-11-18).
 const injRet = (r) => r.return_date ? `return ${formatGameDate(r.return_date) || r.return_date}` : "";
-/* Under ESPN's bare "Day-To-Day", the league's own word for today's or tomorrow's game, read off the blurb
-   (injuries_build, step ABW): "questionable for Sun". */
-const injWord = (r) => r && r.word ? `${r.word}${r.word_day ? ` for ${String(r.word_day).slice(0, 3)}` : ""}` : "";
+/* A listed player's newest word for his next game, read off his blurb (injuries_build, steps ABW and ABY):
+   which way it leans ("expected to play Sun, per Ian Rapoport of NFL Network") or, under ESPN's bare
+   "Day-To-Day", the league's own word ("questionable for Sun"). */
+const INJ_LEAN = { in: "expected to play", out: "expected to miss the game" };
+const injWord = (r) => {
+  if (!r || !r.word) return "";
+  const day = r.word_day ? String(r.word_day).slice(0, 3) : "";
+  const said = INJ_LEAN[r.word] ? `${INJ_LEAN[r.word]}${day ? ` ${day}` : ""}` : `${r.word}${day ? ` for ${day}` : ""}`;
+  return `${said}${r.word_by ? `, per ${r.word_by}` : ""}`;
+};
 
 /* The dossier and full profile get the whole sentence, not the tag. */
 function injLineHTML(r) {
@@ -20377,7 +20384,8 @@ function injRow(r, withTeam) {
     </span>
     <span class="inj-line-right">
       <b style="color:${injTone(r.status)}">${escapeHtml(r.status)}</b>
-      ${r.word ? `<span class="inj-line-ret inj-word">${escapeHtml(injWord(r))}</span>` : ""}
+      ${r.word ? `<span class="inj-line-ret inj-word${r.word === "in" ? " up" : r.word === "out" ? " down" : ""}">${
+        escapeHtml(injWord(r))}</span>` : ""}
       ${r.return_date ? `<span class="inj-line-ret">${escapeHtml(injRet(r))}</span>` : ""}
     </span>
   </div>`;

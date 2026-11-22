@@ -1526,6 +1526,74 @@ def injury_claim(player, team, status, pos=None) -> dict | None:
             **({"pos": str(pos)} if pos else {})}
 
 
+# --- a listed player's newest word, in the report (step ABY, 22 November 2026) -------------------------------------
+#: Ethan, the Sunday afternoon: "Baker Mayfield's foot/right thumb is slated to play in Sunday's game against
+#: Detroit Lions, Ian Rapoport of NFL Network reports. But he's still labeled as questionable on ESPN ... clearly
+#: that information is being conveyed and we're not reporting it ... reporting it in our game reports and every
+#: other spot where we report injuries." ESPN's board files a blurb with each designation; each listed player's
+#: line in a report now says which way his newest blurb leans for this game, and who reported it.
+WORDS_TTL_S = 300
+_WORDS: dict = {}
+
+
+def _word_index(sport: str) -> dict:
+    """{(club, normalized name): ESPN board row} for a league, off the board's own cache file (written by the
+    league's build, which reads the board first), kept WORDS_TTL_S; {} when there is none, and when it cannot be
+    read (said in the build's log)."""
+    import time as _t
+    hit = _WORDS.get(sport)
+    if hit and _t.time() - hit[0] < WORDS_TTL_S:
+        return hit[1]
+    idx: dict = {}
+    try:
+        import json as _json
+        from .sources import espninjuries as _E
+        from . import reportwatch as _rw
+        # The board as its build last fetched it (its ten-minute cache): a report asks nothing of the network.
+        path = _E._cache_file(sport)
+        if sport in _E.LEAGUES and path.exists():
+            table = _rw.team_table(sport, [])
+            for r in _E.current_rows(_E.parse_injuries(_json.loads(path.read_text(encoding="utf-8")))):
+                code = _rw.code_of(r.get("team") or "", table)
+                if code and r.get("player"):
+                    idx[(code, _rw._norm(r["player"]))] = r
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the injury board's newest words not read for {sport} ({type(exc).__name__}: {exc})")
+    _WORDS[sport] = (_t.time(), idx)
+    return idx
+
+
+def _report_day(c: Ctx) -> str | None:
+    """The game's weekday, Eastern ("Sunday"), or None."""
+    from zoneinfo import ZoneInfo
+    from .gameparlays import game_start
+    t = game_start(c.g)
+    return t.astimezone(ZoneInfo("America/New_York")).strftime("%A") if t else None
+
+
+#: A lean in the report's words.
+LEAN_WORDS = {"in": "expected to play", "out": "expected to miss the game"}
+
+
+def newest_word(c: Ctx, team, player, designations: bool = True) -> str:
+    """"the newest word: expected to play, per Ian Rapoport of NFL Network" for a listed player whose newest blurb
+    leans for this game (engine/sources/espninjuries.newest_word); under ESPN's bare "Day-To-Day", the league's own
+    word ("the newest word: listed questionable for the game"), unless ``designations`` is off; "" otherwise."""
+    from .sources.espninjuries import newest_word as _newest
+    from . import reportwatch as _rw
+    r = _word_index(c.sport).get((team, _rw._norm(player)))
+    w = _newest(r) if r else None
+    if not w or (w["day"] and _report_day(c) and w["day"] != _report_day(c)):
+        return ""
+    if w["word"] in LEAN_WORDS:
+        said = LEAN_WORDS[w["word"]]
+    elif designations:
+        said = f"listed {w['word']} for the game"
+    else:
+        return ""
+    return f"the newest word: {said}" + (f", per {w['by']}" if w.get("by") else "")
+
+
 def sec_injuries(c: Ctx) -> dict | None:
     blocks = []
     rows = [r for r in c.scan.get("injuries") or [] if isinstance(r, dict)]
@@ -1535,6 +1603,7 @@ def sec_injuries(c: Ctx) -> dict | None:
         if mine:
             blocks += [_h(c.name(t)), _claimed_list(
                 (f"{r.get('player')} ({r.get('position') or '—'}) — {str(r.get('status') or '').lower()}"
+                 + (f"; {newest_word(c, t, r.get('player'))}" if newest_word(c, t, r.get("player")) else "")
                  + (f". {r['opens'][0].upper()}{r['opens'][1:]}" if r.get("opens") else ""),
                  injury_claim(r.get("player"), t, r.get("status"), r.get("position")))
                 for r in mine)]
@@ -1690,7 +1759,9 @@ def practice_blocks(c: Ctx) -> list:
     named = {r.get("player") for r in c.reads} | {
         r.get("player") for r in c.scan.get("injuries") or [] if isinstance(r, dict)}
     held = bool((v.get("held_out") or {}).get("holds"))
-    lines = [practice_line(x, held) for x in rows if x["player"] in named]
+    lines = [practice_line(x, held) + (f". {cap(newest_word(c, x.get('team'), x['player']))}"
+                                        if newest_word(c, x.get("team"), x["player"]) else "")
+             for x in rows if x["player"] in named]
     rest = [f"{x['player']} ({x.get('team')}, {str(x.get('designation') or '').lower()})"
             for x in rows if x["player"] not in named]
     if rest:
