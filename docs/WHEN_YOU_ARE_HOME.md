@@ -9341,17 +9341,20 @@ the boards keep sweeping`.
 **ACH. The NFL's inactives are read fresher, and ESPN's other feeds are timed against the board** (step 873; 22
 November). Nothing to run. You asked for a faster inactives source than ESPN's injury board. On Sunday the 4:25
 games' lists reached our picks 25 to 42 minutes after they came out: ESPN's board filed each club's men 1 to 21
-minutes after the lists came out, our copy of the board was up to 10 minutes old, and the build that reads it runs
-about every 10 minutes. Two changes. First, from 100 minutes before an NFL kickoff to 5 minutes after it, the box
-reads the injury board again once its copy is a minute old, not ten (`sudo ./deploy/setenv.sh QB_INACTIVES_FRESH
-off` puts it back to ten). Second, a watcher on the box reads ESPN's other feeds for each game in that window: the
-game's summary from two hosts, its gamecast, and both clubs' game rosters. It notes when each feed first shows each
-man inactive, and how far ahead of or behind the board that was. None of those feeds has been looked at during an
-inactives window (this sandbox cannot reach ESPN), so the watcher finds the marks by key, whatever the page's shape,
-and notes where in each page it found them. It changes no pick. Its counts and times are at
+minutes after the lists came out, our copy of the board was up to 10 minutes old, and the NFL board is rebuilt once
+a sweep, about every 10 minutes. Three changes. First, from 100 minutes before an NFL kickoff to 5 minutes after it,
+the box reads the injury board again once its copy is a minute old, not ten (`sudo ./deploy/setenv.sh
+QB_INACTIVES_FRESH off` puts it back to ten). Second, after each other board's build, the sweep checks whether a
+waiting NFL game is now due to post (its post time passed with both teams' lists on the board, or its deadline
+passed) and rebuilds the NFL board then, instead of at the next sweep, at most once every 5 minutes
+(`QB_NFL_DUE_BUILD off` stops that). Third, a watcher on the box reads ESPN's other feeds for each game in that
+window: the game's summary from two hosts, its gamecast, and both clubs' game rosters. It notes when each feed first
+shows each man inactive, and how far ahead of or behind the board that was. None of those feeds has been looked at
+during an inactives window (this sandbox cannot reach ESPN), so the watcher finds the marks by key, whatever the
+page's shape, and notes where in each page it found them. It changes no pick. Its counts and times are at
 /data/inactives_watch.json, with no names, and `python3 -m engine.inactiveswatch` prints them on the box. Tonight's
 Vikings at 49ers and Monday's Bengals at Commanders are its first two games. If a feed proves faster than the board,
-the picks switch to it in a later step (`sudo ./deploy/setenv.sh QB_INACTIVES_WATCH off` stops the watcher).
+the picks switch to it in a later step (`QB_INACTIVES_WATCH off` stops the watcher).
 
 **ACG. A three-leg ticket has one name everywhere** (step 872; 22 November). Nothing to run. Looking at the new
 settled cards on the live Record page: the same ticket was "Parlay 1" there, in its game's own report and on the

@@ -2953,6 +2953,80 @@ def _note_rest(name: str) -> None:
         pass
 
 
+#: A HELD NFL GAME POSTS WHEN IT IS DUE, NOT AT THE NEXT SWEEP (step ACH, 22 November 2026). An NFL game's picks
+#: post at the first build after its post time with both clubs' inactives on ESPN's board, or at its deadline
+#: (engine/gameparlays.post_due), and the NFL builds once a sweep: about every ten minutes on the Sunday, the NFL's
+#: own build about four of them. So after each other board's build the sweep asks whether a held NFL game is now
+#: due, off the injury board's copy (a minute old in the window: espninjuries.ttl_for), and builds the NFL again
+#: when one is, at most once every NFL_DUE_GAP_S. Off without a deploy: ``sudo ./deploy/setenv.sh QB_NFL_DUE_BUILD
+#: off``.
+NFL_DUE_GAP_S = 300
+NFL_DUE_ENV = "QB_NFL_DUE_BUILD"
+_NFL_DUE_LAST = [0.0]
+_NFL_HELD: dict = {}     # the NFL board's held games, kept by its copy's time: read again only once it is rebuilt
+
+
+def _nfl_held(board) -> list:
+    """The games on an NFL board's game parlays still waiting to post."""
+    games = ((board.get("game_parlays") or {}).get("games") or []) if isinstance(board, dict) else []
+    return [x for x in games
+            if isinstance(x, dict) and x.get("post_at") and not x.get("kept") and not x.get("posted_before")]
+
+
+def _nfl_due_now(now=None, board=None, rows=None) -> list:
+    """The held NFL games whose picks are due now ("MIN@SF"): each game on the NFL board's game parlays still
+    waiting to post (``post_at``), its post time passed and both clubs' inactives on ESPN's board, or its deadline
+    passed. [] when none is, or anything cannot be read."""
+    import datetime as _d
+    import types as _t
+    try:
+        from engine import gameparlays as _gp
+        from engine.sources import injuries as _inj
+        if board is None:
+            path = _full_copy(NFL_OUT)
+            stamp = os.path.getmtime(path)
+            if _NFL_HELD.get("stamp") != stamp:
+                with open(path) as fh:
+                    whole = json.load(fh)
+                _NFL_HELD.update(stamp=stamp, held=_nfl_held(whole))
+            held = _NFL_HELD.get("held") or []
+        else:
+            held = _nfl_held(board)
+        if not held:
+            return []
+        t = now or _d.datetime.now(_d.timezone.utc)
+        if rows is None:
+            from engine.sources import espninjuries as _ei
+            rows = _ei.parse_injuries(_ei.fetch_injuries("nfl"))
+        ins = set(_inj.inactives_posted(rows, [_t.SimpleNamespace(home=x.get("home"), away=x.get("away"),
+                                                                  kickoff=x.get("kickoff"), date=x.get("date"))
+                                               for x in held], now=t.timestamp()))
+        due = []
+        for x in held:
+            start = _gp.game_start(x)
+            if start is not None and _gp.post_due(start, "nfl", t, {x.get("home"), x.get("away")} <= ins)[0]:
+                due.append(f"{x.get('away')}@{x.get('home')}")
+        return due
+    except Exception:                                         # noqa: BLE001 — a check never stops the sweep
+        return []
+
+
+def _nfl_when_due(quiet: bool = False, due=None) -> list:
+    """Builds the NFL again when a held game is due (`_nfl_due_now`), at most once every NFL_DUE_GAP_S. Returns
+    the games it built for."""
+    if str(os.environ.get(NFL_DUE_ENV, "on")).strip().lower() in ("off", "0", "false", "no"):
+        return []
+    if time.time() - _NFL_DUE_LAST[0] < NFL_DUE_GAP_S or _resting_board("nfl"):
+        return []
+    games = _nfl_due_now() if due is None else due
+    if not games:
+        return []
+    _NFL_DUE_LAST[0] = time.time()
+    print(f"  NFL  built again between boards: {', '.join(games)} due to post")
+    with _isolated("nfl"): _note_board("nfl", refresh_nfl(quiet=quiet))
+    return games
+
+
 def refresh_all(quiet: bool = False) -> None:
     _lap = [time.time()]
     _STEP_FAIL.clear()
@@ -2961,6 +3035,11 @@ def refresh_all(quiet: bool = False) -> None:
         _STEP_S[step] = round(time.time() - _lap[0], 1)
         _lap[0] = time.time()
         _note_progress()                 # the watchdog's proof of a moving sweep
+        if step != "nfl" and _nfl_when_due(quiet):
+            # A held NFL game came due (step ACH): its build is timed apart from the board just done.
+            _STEP_S["nfl-due"] = round(time.time() - _lap[0], 1)
+            _lap[0] = time.time()
+            _note_progress()
 
     # In SPORT_PRIORITY order — the leagues first, as he ranks them,
     # then the tool boards. See the tuple's own comment.

@@ -11,7 +11,9 @@ picks 25 to 42 minutes after they came out, up to ten of them our copy's age. Wh
     ``didNotPlay`` true, a status word or a sentence that says it, with his club where the page names it;
   * it notes each man's first sighting in each feed and sets it against the board's, at the middle of each
     read's gap, and publishes counts and times only, never a name or ESPN's words;
-  * out of a window it asks nothing; it never raises; the launcher starts it.
+  * out of a window it asks nothing; it never raises; the launcher starts it;
+  * after each other board's build the sweep builds the NFL again when a held game's picks are due, its post time
+    passed with both clubs' lists on the board, or its deadline passed: they post then, not at the next sweep.
 
     python3 tests/test_the_inactives_are_read_fresh_and_timed.py
 """
@@ -195,6 +197,47 @@ def test_a_full_slate_is_read_in_turn_and_nothing_is_asked_out_of_a_window():
         assert W.watch_once(now=lambda: T0 - 60 * 60, **kw) == W.IDLE_S and asked == []
     finally:
         os.environ.pop(W.ENV, None)
+
+
+def _lists(clubs, filed):
+    stamp = dt.datetime.fromtimestamp(filed, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    names = {"SF": "San Francisco 49ers", "MIN": "Minnesota Vikings"}
+    return [{"team": names[c], "player": f"{c} Man {i}", "status": "Out", "date": stamp,
+             "comment": f"Man {i} is inactive for Sunday's game."} for c in clubs for i in range(3)]
+
+
+def test_a_held_nfl_game_is_built_again_once_it_is_due():
+    import launch as L
+    held = {"home": "SF", "away": "MIN", "kickoff": "20:20", "date": "2026-11-22", "post_at": "2026-11-23T00:05:00Z"}
+    board = {"game_parlays": {"games": [held, dict(held, home="DET", away="GB", kept=True),
+                                        dict(held, home="PHI", away="DAL", posted_before=True)]}}
+    at = lambda m: dt.datetime.fromtimestamp(T0 - m * 60, dt.timezone.utc)                   # noqa: E731
+    both, one = _lists(("SF", "MIN"), T0 - 85 * 60), _lists(("SF",), T0 - 85 * 60)
+    assert L._nfl_due_now(at(80), board, both) == [], "before its post time, lists or not"
+    assert L._nfl_due_now(at(74), board, both) == ["MIN@SF"], "its post time passed and both lists in"
+    assert L._nfl_due_now(at(74), board, one) == [], "one club's list: it waits"
+    assert L._nfl_due_now(at(49), board, []) == ["MIN@SF"], "its deadline"
+    assert L._nfl_due_now(at(74), {"game_parlays": {"games": [dict(held, post_at=None)]}}, both) == [], "posted"
+    assert L._nfl_due_now(at(74), {"x": 1}, both) == [] and L._nfl_due_now(at(74), [], both) == []
+    built = []
+    was = L.refresh_nfl, L._resting_board, L._note_board, L._NFL_DUE_LAST[0]
+    L.refresh_nfl = lambda quiet=False: built.append(quiet) or True
+    L._resting_board = lambda name: False
+    L._note_board = lambda name, ok: None
+    try:
+        L._NFL_DUE_LAST[0] = 0.0
+        assert L._nfl_when_due(True, due=["MIN@SF"]) == ["MIN@SF"] and built == [True]
+        assert L._nfl_when_due(True, due=["MIN@SF"]) == [] and built == [True], "once a gap"
+        L._NFL_DUE_LAST[0] = 0.0
+        assert L._nfl_when_due(True, due=[]) == [] and built == [True], "nothing due"
+        os.environ[L.NFL_DUE_ENV] = "off"
+        assert L._nfl_when_due(True, due=["MIN@SF"]) == [] and built == [True], "the switch off"
+    finally:
+        os.environ.pop(L.NFL_DUE_ENV, None)
+        L.refresh_nfl, L._resting_board, L._note_board, L._NFL_DUE_LAST[0] = was
+    src = (ROOT / "launch.py").read_text(encoding="utf-8")
+    body = src[src.index("def refresh_all("):src.index("    # In SPORT_PRIORITY order", src.index("def refresh_all("))]
+    assert 'if step != "nfl" and _nfl_when_due(quiet):' in body, "asked after each other board's build"
 
 
 def test_the_launcher_starts_it():
