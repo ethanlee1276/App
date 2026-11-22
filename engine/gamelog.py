@@ -443,7 +443,8 @@ def _results(conn, sport: str, season: int) -> tuple[dict, dict]:
     by_id, by_pair = {}, {}
     for r in conn.execute("SELECT period, game_id, home, away, home_score, away_score, date FROM games "
                           "WHERE sport=? AND season=?", (sport, season)):
-        g = {"period": str(r[0]), "home": r[2], "away": r[3], "hs": r[4], "as": r[5], "date": r[6]}
+        g = {"period": str(r[0]), "home": r[2], "away": r[3], "hs": r[4], "as": r[5], "date": r[6],
+             "game_id": str(r[1]), "season": season}
         by_id[str(r[1])] = g
         by_pair[(str(r[0]), frozenset((r[2], r[3])))] = g
     return by_id, by_pair

@@ -136,7 +136,7 @@ function plrHeroHTML(player, sport, team, pos, face, bio) {
   const share = typeof shareBtn === "function" && typeof slugify === "function" ? shareBtn("player", slugify(player)) : "";
   const age = bio ? plrAge(bio) : "";
   const body = bio ? (ufc ? [bio.nickname ? `“${bio.nickname}”` : "", bio.height, bio.reach ? `${bio.reach} reach` : "",
-    age !== "" ? `Age ${age}` : ""] : [bio.height, bio.weight, age !== "" ? `Age ${age}` : ""])
+    age !== "" ? `Age ${age}` : ""] : [bio.height, bio.weight, age !== "" ? `Age ${age}` : bio.class || ""])
     .filter(Boolean).map(escapeHtml).join(" · ") : "";
   // THE CLUB'S LIGHT BEHIND THE WHOLE PAGE (styles.css .amb-club, SITEBG1),
   // inside the header so a redrawn header brings its own and leaves none.
@@ -186,6 +186,9 @@ function plrSeasonHTML(d, note = "") {
    not — the games played and the role's other counts, a target or an attempt — rides under them as pills,
    each said once. Off the season's own line in the career table (engine/playerpage `career`). */
 const PLR_PILL_SKIP = /avg|pct|rate|per|era|whip|obp|slg|ops|gaa|sv|ba$|ypc|ypr|ypa|lng|long/i;
+//: A rate, never a count, whatever its key (basketball's "ftp", "fg3p"): a pill read "81 free throw percentage"
+//: on Jalen Brunson's page and "0 three-point percentage" on a college guard's (22 November 2026).
+const plrIsRate = (col) => /%/.test(String((col || {}).label || "")) || /percent/i.test(String((col || {}).title || ""));
 function plrSeasonPills(d, nums) {
   const c = d.career || {};
   const row = (c.rows || []).find((r) => String(r.season) === String(d.season));
@@ -196,7 +199,7 @@ function plrSeasonPills(d, nums) {
   for (const col of group.cols || []) {
     const v = (row.values || {})[`${group.key}.${col.key}`];
     if (pills.length >= 4 || v == null || !Number.isInteger(Number(v)) || shown.has(String(col.key).toLowerCase())
-        || PLR_PILL_SKIP.test(col.key)) continue;
+        || PLR_PILL_SKIP.test(col.key) || plrIsRate(col)) continue;
     // A plus-minus is said with its sign, "+28" (McDavid's pill read "28 plus-minus"), and a true minus.
     const num = `${col.label === "+/-" && Number(v) > 0 ? "+" : ""}${Number(v).toLocaleString()}`;
     pills.push(`${typeof trueMinus === "function" ? trueMinus(num) : num} ${String(col.title || col.label || col.key).toLowerCase()}`);
@@ -409,7 +412,7 @@ function plrBioHTML(d) {
     ["Number", b.number !== "" && b.number != null ? `#${escapeHtml(b.number)}` : ""],
     ["Height", escapeHtml(b.height || "")], ["Weight", escapeHtml(b.weight || "")],
     ["Born", escapeHtml(born)], ["Birthplace", escapeHtml(b.birthplace || "")],
-    ["College", escapeHtml(b.college || "")], ["Experience", escapeHtml(exp)],
+    ["College", escapeHtml(b.college || "")], ["Class", escapeHtml(b.class || "")], ["Experience", escapeHtml(exp)],
     ["Shoots", escapeHtml(b.shoots === "L" ? "Left" : b.shoots === "R" ? "Right" : b.shoots || "")],
     ["Status", escapeHtml(b.status || "")],
     ["On file", b.first_season ? escapeHtml(`${b.first_season === b.last_season ? plrSeasonLabel(d.sport, b.first_season)

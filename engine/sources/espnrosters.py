@@ -80,6 +80,9 @@ def parse_roster(payload: dict) -> list[dict]:
             or None,
             "headshot": str(shot or "") if str(shot or "").startswith("http") else "",
             "status": str(hurt[0].get("status") or "") if hurt else "",
+            # A college player's class ("Junior"), which ESPN gives where it gives no age (22 November 2026).
+            "class": str((a.get("experience") or {}).get("displayValue") or "").strip()
+            if isinstance(a.get("experience"), dict) else "",
         })
     return out
 

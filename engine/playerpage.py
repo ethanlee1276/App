@@ -38,6 +38,7 @@ from __future__ import annotations
 import bisect
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -669,14 +670,48 @@ def _birthplace(sport: str, row: dict, player: str, position: str) -> str:
     return f"{hit['city']}, {hit['state']}" if hit and hit.get("city") else ""
 
 
+#: ONE HEIGHT AND ONE WEIGHT, AS THE NFL'S PAGE SAYS THEM (22 November 2026; Ethan: "every single sports player
+#: pages to match each other ... NFL is kind of like the one we want to go off of"). Each league's roster comes
+#: from its own feed and each feed spells them its own way: the NFL's and the NHL's 6'5" and 237 lb, ESPN's
+#: (basketball's, college's) 6' 2" and 190 lbs, and some feeds a bare 74 inches or 190. Every page says 6'2"
+#: and 190 lb now; anything it cannot read is said as the feed said it.
+_FEET = re.compile(r"^\s*(\d)\s*(?:'|’|ft\.?|-)\s*(\d{1,2})\s*(?:\"|”|''|in\.?)?\s*$")
+_INCHES = re.compile(r"^\s*(\d{2})(?:\.\d+)?\s*$")
+_POUNDS = re.compile(r"^\s*(\d{2,3})(?:\.\d+)?\s*(?:lbs?\.?|pounds)?\s*$", re.I)
+
+
+def nfl_height(v) -> str:
+    """A height as 6'2" (feet and inches, no space), from any feed's spelling; blank stays blank."""
+    s = "" if v is None else str(v).strip()
+    m = _FEET.match(s)
+    if m and 0 <= int(m.group(2)) < 12:
+        return f"{int(m.group(1))}'{int(m.group(2))}\""
+    m = _INCHES.match(s)
+    if m and 48 <= int(m.group(1)) <= 95:
+        n = int(m.group(1))
+        return f"{n // 12}'{n % 12}\""
+    return s
+
+
+def nfl_weight(v) -> str:
+    """A weight as 190 lb, from any feed's spelling; blank stays blank."""
+    s = "" if v is None else str(v).strip()
+    m = _POUNDS.match(s)
+    return f"{int(m.group(1))} lb" if m and 80 <= int(m.group(1)) <= 450 else s
+
+
 def bio(sport: str, player: str, row: dict, position: str = "") -> dict:
-    """The facts a roster publishes, as it publishes them (blank is unknown)."""
+    """The facts a roster publishes, as it publishes them (blank is unknown), the height and weight said one
+    way in every league (`nfl_height`, `nfl_weight`)."""
     pick = lambda k: row.get(k) if row.get(k) not in (None, "") else ""        # noqa: E731
     return {"team": pick("team"), "number": "" if pick("number") == "" else str(row["number"]),
-            "position": pick("position") or position, "height": pick("height"), "weight": pick("weight"),
+            "position": pick("position") or position, "height": nfl_height(pick("height")),
+            "weight": nfl_weight(pick("weight")),
             "age": pick("age"), "born": pick("born"),
             "birthplace": _birthplace(sport, row, player, pick("position") or position),
             "college": pick("college"), "years_exp": pick("years_exp"), "rookie": bool(row.get("rookie")),
+            # A college player's class ("Junior"): what ESPN's header says of him where it has no age.
+            "class": pick("class"),
             "shoots": pick("shoots"), "status": pick("status"), "headshot": pick("headshot")}
 
 
@@ -765,12 +800,18 @@ def _date_of(sport: str, g: dict, res: dict | None) -> str:
     return g["period"][:10]
 
 
-def _record(by_id: dict, team: str, through: str) -> str:
-    """A club's wins and losses (and ties) in the season through one period."""
+def _record(by_id: dict, team: str, through: str, sport: str = "") -> str:
+    """A club's wins and losses (and ties) in the season through one period.
+
+    EACH GAME ONCE (22 November 2026): college football's games table can hold one game more than once
+    (engine/standings.once, which its standings and team pages already read), and this counted every copy:
+    Ohio State "15-9" on Jeremiah Smith's page, 7-4 on the field."""
+    from .standings import once
+    rows = [r for r in by_id.values()
+            if team in (r["home"], r["away"]) and r["hs"] is not None and r["as"] is not None
+            and r["period"] <= through]
     w = l = t = 0
-    for r in by_id.values():
-        if team not in (r["home"], r["away"]) or r["hs"] is None or r["as"] is None or r["period"] > through:
-            continue
+    for r in (once(sport, rows) if sport else rows):
         mine, theirs = (r["hs"], r["as"]) if r["home"] == team else (r["as"], r["hs"])
         if mine > theirs:
             w += 1
@@ -895,8 +936,8 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
             if g.get("result"):
                 last["result"], last["score"] = g["result"], g["score"]
                 if sport not in NO_RECORDS:
-                    last["record"] = _record(by_id, g["team"], g["period"])
-                    last["opp_record"] = _record(by_id, g["opponent"], g["period"])
+                    last["record"] = _record(by_id, g["team"], g["period"], sport)
+                    last["opp_record"] = _record(by_id, g["opponent"], g["period"], sport)
             out["last"] = last
 
         # The season's splits, a game's average at a time (a baseball split's totals: SPLIT_TOTALS).

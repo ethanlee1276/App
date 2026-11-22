@@ -37,7 +37,8 @@ def _pills(pm):
     if not Path(node).exists():
         return None
     i = PLR.index("const PLR_PILL_SKIP")
-    js = STUBS + PLR[i:PLR.index(";\n", i) + 2] + _fn(PLR, "plrSeasonPills")
+    k = PLR.index("const plrIsRate")
+    js = STUBS + PLR[i:PLR.index(";\n", i) + 2] + PLR[k:PLR.index(";\n", k) + 2] + _fn(PLR, "plrSeasonPills")
     d = {"season": 2026, "role": "skater", "career": {
         "groups": [{"key": "skater", "cols": [{"key": "g", "label": "G", "title": "Goals"},
                                               {"key": "pm", "label": "+/-", "title": "Plus-minus"},

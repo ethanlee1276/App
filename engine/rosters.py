@@ -405,6 +405,10 @@ def mlb_feed_rosters(feed: dict, games_by_player: dict | None = None,
                 "number": p.get("number"),
                 "age": None,
                 "born": _born(p.get("born")),
+                # His size and hometown, where the league's feed gave them (a player page's header and Bio).
+                "height": p.get("height") or None,
+                "weight": p.get("weight") or None,
+                "birthplace": p.get("birthplace") or None,
                 "games": int(games.get((ab, p.get("name", "")), 0)),
                 "last_seen": "",
                 # The id is RIGHT HERE, so this path needs no name join at
@@ -486,6 +490,12 @@ def cfb_feed_rosters(feed: dict, games_by_player: dict | None = None,
                 "years_exp": None,
                 "number": p.get("number") or None,
                 "age": None,
+                # His size, class and hometown off ESPN's roster (22 November 2026: Jeremiah Smith's page had
+                # none of them where every NFL page has its height, weight and age).
+                "height": p.get("height") or None,
+                "weight": p.get("weight") or None,
+                "class": p.get("class") or None,
+                "birthplace": p.get("birthplace") or None,
                 "games": int(played[0]) if played else 0,
                 "last_seen": str(played[1]) if played else "",
                 "headshot": (face_of(faces, name)
@@ -591,6 +601,8 @@ def feed_rosters(sport: str, feed: dict, games_by: dict | None = None,
                 "age": p.get("age") if isinstance(p.get("age"), int) else _age_on(p.get("born") or "", today),
                 "height": p.get("height") or None, "weight": p.get("weight") or None,
                 "shoots": p.get("shoots") or None, "birthplace": p.get("birthplace") or None,
+                # A college player's class ("Junior"), where ESPN gives it (22 November 2026).
+                **({"class": str(p["class"])} if p.get("class") else {}),
                 "born": _born(p.get("born")),
                 "games": int(played[0]) if played else 0,
                 "last_seen": str(played[1]) if played else "",

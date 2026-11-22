@@ -9338,6 +9338,26 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABK. Every league's player page reads like the NFL's** (step 851; 22 November). Nothing to run. You said: "We want
+every single sports player pages to match each other and like have it match ESPN ... NFL is kind of like the one we
+want to go off of." I drew one player's page in each league side by side from the live site's own player data (Josh
+Allen, Jeremiah Smith, Jalen Brunson, Caitlin Clark, Connor McDavid, Aaron Judge and a college guard). The layout
+was the same; what differed came from each league's data, and is fixed: (1) the header's height and weight were each
+feed's spelling, 6'5" and 237 lb on the NFL's and the NHL's, 6' 2" and 190 lbs on the basketball leagues'; every
+page says 6'2" and 190 lb now. (2) College football's and baseball's headers had no height, weight or age, and
+college basketball's no age: their feeds sent the size and the parsers dropped it. College football's roster now
+keeps ESPN's height, weight, class and hometown, baseball's MLB's height, weight and hometown (its per-team fallback
+asks for the birth date too), and college basketball's its class; a college player shows his class ("Junior") where
+a pro shows his age, as ESPN does. These fill in when the rosters next rebuild. (3) College football's previous game
+said Ohio State "15-9": the games table holds some college games twice (a known problem the standings already
+filter), and the player page counted every copy, plus one copy dated 1993; it counts each game once now (7-4), and a
+game dated outside its own season is dropped, from Ohio State's schedule too. (4) The WNBA's box scores name five
+clubs by ESPN's codes (GS, LA, LV, NY, WSH) where our team list has its own, so Caitlin Clark's last opponent read
+"LV" with no name or colours; both codes read the club now. (5) A basketball rate rode the season's small boxes as a
+count, "81 free throw percentage"; rates stay out of them. Still different, and data rather than the page: the
+WNBA's stats tables carry 4 columns (minutes, points, rebounds, assists) where the NBA's carry 15, because the
+WNBA's box scores are stored with fewer stats, and the WNBA has no shot chart.
+
 **ABJ. A game short of its parlays says why in one plain sentence** (step 850; 22 November). Nothing to run. A game
 report that posts fewer than three of a kind says why under them, and it read "... make no more two that fit
 together without a conflict and reach 30% by our numbers with no leg on more than 2 of the game's parlays". It reads

@@ -688,6 +688,13 @@ def _roster_entry(e: dict) -> dict:
         # The hydrated person carries his birth date (the birthday line on
         # a game's page, engine/rosters); the per-team fallback may not.
         "born": str(person.get("birthDate") or "")[:10],
+        # …and his size and hometown, which his player page's header and Bio menu say as every league's do
+        # (22 November 2026: Aaron Judge's page had no height, weight or age where Josh Allen's had all three).
+        "height": str(person.get("height") or "").strip() or None,
+        "weight": person.get("weight") or None,
+        "birthplace": ", ".join(str(x) for x in (person.get("birthCity"),
+                                                 person.get("birthStateProvince") or person.get("birthCountry"))
+                                if x) or None,
     }
 
 
@@ -714,9 +721,11 @@ def _rosters_per_team(teams: list[dict], ttl: int) -> dict:
         if not tid or not ab:
             continue
         try:
+            # `hydrate=person`: the fallback's rows carry the birth date, size and hometown the hydrated
+            # path's do (a player page's header read none of them when this path answered).
             blob = _get_json(
-                f"{STATS_BASE}/teams/{tid}/roster?rosterType=active",
-                f"mlb_roster_{tid}.json", ttl=ttl)
+                f"{STATS_BASE}/teams/{tid}/roster?rosterType=active&hydrate=person",
+                f"mlb_roster_{tid}_person.json", ttl=ttl)
         except Exception:                                     # noqa: BLE001
             continue          # one club short beats no page at all
         players = [_roster_entry(e) for e in (blob.get("roster") or [])]

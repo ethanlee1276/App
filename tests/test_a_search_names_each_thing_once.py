@@ -115,7 +115,8 @@ def test_the_season_card_carries_the_games_and_the_targets_as_pills():
     if not Path(node).exists():
         return
     i = PLR.index("const PLR_PILL_SKIP")
-    js = STUBS + PLR[i:PLR.index(";\n", i) + 2] + _fn(PLR, "plrSeasonPills")
+    k = PLR.index("const plrIsRate")
+    js = STUBS + PLR[i:PLR.index(";\n", i) + 2] + PLR[k:PLR.index(";\n", k) + 2] + _fn(PLR, "plrSeasonPills")
     d = {"season": 2026, "role": "receiving", "career": {
         "groups": [{"key": "rushing", "cols": [{"key": "car", "title": "Rushing attempts"}]},
                    {"key": "receiving", "cols": [{"key": "rec", "title": "Receptions"}, {"key": "tgt", "title": "Targets"},

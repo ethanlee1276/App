@@ -118,6 +118,29 @@ def _day(period):
         return None
 
 
+#: …AND A GAME FILED UNDER A DATE OUTSIDE ITS OWN SEASON IS NO GAME OF IT (22 November 2026). Ohio State's
+#: 14 November win over Northwestern sat a second time as 31 January 1993, in the 2026 season, where no copy
+#: of it is a day away: its schedule listed twelve games and its player pages counted it. A college season
+#: runs from its summer to the February after (the bowls); a row dated outside that is dropped. A row with
+#: no date (a week number) or no season stays.
+def _in_its_season(r) -> bool:
+    d = _day(_get(r, "period"))
+    try:
+        season = int(_get(r, "season"))
+    except (TypeError, ValueError):
+        return True
+    if d is None:
+        return True
+    return _dt.date(season, 7, 1) <= d <= _dt.date(season + 1, 2, 28)
+
+
+def _get(r, key):
+    try:
+        return r[key]
+    except (IndexError, KeyError, TypeError):
+        return None
+
+
 def once(sport: str, rows, name=None) -> list:
     """``rows`` with a game filed more than once counted once, in a COPIES
     league (any other league's rows come back as they are). Each row reads
@@ -128,6 +151,7 @@ def once(sport: str, rows, name=None) -> list:
     rows = list(rows)
     if sport not in COPIES:
         return rows
+    rows = [r for r in rows if _in_its_season(r)]
     canon = name or (lambda t: divisions.canonical(sport, t))
 
     def gid(r):

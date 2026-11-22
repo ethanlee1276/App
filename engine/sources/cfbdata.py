@@ -888,8 +888,30 @@ def parse_team_people(payload: dict) -> list[dict]:
             # absent one and a broken image for a wrong one.
             "headshot": url if url.startswith("http") else "",
             "number": str(a.get("jersey") or "").strip(),
+            # The rest of what ESPN's roster says of him: his size, his class ("Junior") and his hometown,
+            # which his player page's header and Bio menu say (22 November 2026).
+            "height": str(a.get("displayHeight") or "").strip(),
+            "weight": str(a.get("displayWeight") or "").strip(),
+            "class": _class_of(a),
+            "birthplace": _place_of(a),
         })
     return out
+
+
+def _class_of(a: dict) -> str:
+    """A college player's class as ESPN says it ("Junior", "Redshirt Sophomore"), or ""."""
+    x = a.get("experience")
+    if isinstance(x, dict):
+        return str(x.get("displayValue") or "").strip()
+    return ""
+
+
+def _place_of(a: dict) -> str:
+    """His hometown as ESPN gives it ("Miami Gardens, FL"), or ""."""
+    b = a.get("birthPlace")
+    if not isinstance(b, dict):
+        return ""
+    return ", ".join(str(x) for x in (b.get("city"), b.get("state") or b.get("country")) if x)
 
 
 def parse_team_headshots(payload: dict) -> dict:

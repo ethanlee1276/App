@@ -122,3 +122,13 @@ const WNBA_TEAMS = {
     "tertiary": "#c4ced4"
   }
 };
+
+/* THE CODES ESPN'S BOX SCORES WRITE (22 November 2026). A player's game log, splits and previous game name
+   five clubs as ESPN does: GS, LA, LV, NY and WSH, where this table files them GSV, LAS, LVA, NYL and WAS.
+   Caitlin Clark's page read "LV" with no name, logo or colour for the Aces. Each code reads its club here too,
+   hidden from every list of the clubs (not enumerable), so no club is listed twice. */
+[["GS", "GSV"], ["LA", "LAS"], ["LV", "LVA"], ["NY", "NYL"], ["WSH", "WAS"]].forEach(([espn, ours]) => {
+  if (WNBA_TEAMS[ours] && !Object.prototype.hasOwnProperty.call(WNBA_TEAMS, espn)) {
+    Object.defineProperty(WNBA_TEAMS, espn, { value: WNBA_TEAMS[ours], enumerable: false });
+  }
+});
