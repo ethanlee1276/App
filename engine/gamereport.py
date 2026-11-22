@@ -3889,7 +3889,7 @@ def picks_post_on() -> bool:
     return _os.environ.get(PICKS_POST_ENV, "on").strip().lower() not in ("off", "0", "no", "false")
 
 
-def picks_wait(sport: str, g: dict, now=None) -> dict | None:
+def picks_wait(sport: str, g: dict, now=None, ready=None) -> dict | None:
     """``{"post_at", "text"}`` while a game's picks are still to post; None once they post, with the switch
     off, or when its start cannot be read. Never raises."""
     if not picks_post_on() or not isinstance(g, dict):
@@ -3902,12 +3902,19 @@ def picks_wait(sport: str, g: dict, now=None) -> dict | None:
             return None
         now = now or _dtm.datetime.now(_dtm.timezone.utc)
         lead = gameparlays.post_lead(sport)
-        at = start - _dtm.timedelta(minutes=lead)
-        if now >= at:
+        due, at, waiting = gameparlays.post_due(start, sport, now, ready)
+        if due:
             return None
         words = gameparlays._et_clock(at)
     except Exception:                                        # noqa: BLE001
         return None
+    if waiting:
+        # Both teams' inactives not yet on the board (engine/gameparlays.post_due, step ACB).
+        return {"post_at": at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "text": (f"Our picks for this game post once both teams' inactives are in, "
+                         f"{('at ' + words) if words else 'before it starts'} at the latest, with its parlays, built "
+                         "then from the newest injury news, lineups and lines; once posted they never change, and "
+                         "they are the ones the Record counts")}
     return {"post_at": at.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "text": (f"Our picks for this game post {('at ' + words) if words else 'before it starts'}, about {lead} "
                      "minutes before the start, with its parlays, built then from the newest injury news, lineups "
@@ -3946,7 +3953,9 @@ def picks_timeline(c: Ctx, sections: list, now=None) -> list:
     ones the game posted, as posted; at the post time, this build's picks, marked as posted (``posted_at``).
     A game already started is kept whole by engine/reportkeep. Never raises: on a fault the sections stand."""
     try:
-        wait = picks_wait(getattr(c, "sport", ""), c.g, now=now)
+        from .gameparlays import inactives_ready as _ready
+        wait = picks_wait(getattr(c, "sport", ""), c.g, now=now,
+                          ready=_ready(getattr(c, "result", None), c.g, getattr(c, "sport", "")))
         if wait:
             out = []
             for s in sections:

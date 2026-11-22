@@ -619,6 +619,7 @@ def main() -> None:
                 _board_rows = _pi(_fi("nfl"))
                 _inactives = injuries_feed.inactives_posted(_board_rows, slate.games)
                 _active = injuries_feed.active_filings(_board_rows, slate.games)
+                _inactives_read = True
             except Exception as _iex:                         # noqa: BLE001
                 print(f"  ⚠️ the inactives lists not read: {_iex}")
         try:
@@ -1236,6 +1237,13 @@ def main() -> None:
                        likely_previous=_likely_was,
                        before_likely=_scan_first)
     _mem("run_slate", args.memtrace)
+    # WHOSE INACTIVES ARE IN (step ACB): an NFL game's picks and parlays post at 75 minutes only once both clubs'
+    # lists are on ESPN's board (engine/gameparlays.post_due), and only when this build read the board at all.
+    if locals().get("_inactives_read"):
+        from engine.gameparlays import INACTIVES_IN_KEY as _iik
+        result[_iik] = sorted(locals().get("_inactives") or {})
+        if result[_iik]:
+            print(f"  Inactives in for: {', '.join(result[_iik])}")
     # IF THE STARTER PLAYS, AND IF HE SITS (engine/qbscenario, step ABS): each team whose starting quarterback is
     # questionable or a game-time decision, its props priced both ways by the board's own pricing, for its report.
     try:

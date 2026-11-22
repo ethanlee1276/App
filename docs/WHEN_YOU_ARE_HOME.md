@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACB. An NFL game's picks and parlays wait for both teams' inactives** (step 867; 22 November). Nothing to run.
+What today showed: the inactives come out 90 minutes before kickoff, and ESPN's board files them a team at a time.
+For the 1 PM games a team's first inactive reached the board 1 to 14 minutes after 11:30 AM ET, its last up to 21
+minutes after, and Carolina's none by noon; the board our builds read is up to ten minutes old. So the 1 PM picks,
+posted at 11:45, saw only a few teams' lists. Now an NFL game posts at 75 minutes before kickoff only if both teams'
+lists are already on the board; otherwise it waits and posts on the first build after they are, or at 50 minutes
+before kickoff at the latest. While it waits, its report and its parlays say "Our picks for this game post once both
+teams' inactives are in, at 12:10 PM at the latest" (in the reader's zone). A build that could not read ESPN's board
+posts at 75 minutes as before, and the other leagues are unchanged. Today's 4 PM and night games are the first it
+reaches if it is live by then.
+
 **ACA. A questionable player not on his club's inactives list plays, and his own props are priced** (step 866; 22
 November). Nothing to run. You said: "we need to be having that information on hand and using that data to our
 advantage." What today's inactives showed: ESPN's board filed the Ravens' seven inactives as "Out" with the note

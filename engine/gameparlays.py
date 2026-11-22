@@ -3405,6 +3405,39 @@ def hold_posted(x: dict, mine: dict, sport: str = "") -> int:
 #: Off without a deploy: ``sudo ./deploy/setenv.sh QB_PARLAY_POST_LATE off``.
 POST_LEAD_MIN = {"nfl": 75}
 POST_LEAD_DEFAULT = 90
+#: THE NFL'S POST WAITS FOR ITS INACTIVES (step ACB, 22 November 2026). The lists come out 90 minutes before
+#: kickoff and ESPN's board files them a club at a time: on the Sunday, a club's first inactive 1 to 14 minutes
+#: after 11:30 AM ET, its last up to 21 minutes after, Carolina's none by noon; and the board we read is up to ten
+#: minutes old. A post at 75 minutes saw few clubs' lists. So an NFL game posts at its POST_LEAD only once both
+#: clubs' lists are on the board (``INACTIVES_IN_KEY``, written by the NFL build), else the first build after they
+#: are, else at POST_DEADLINE_MIN before its start. A board that does not say (another league, or a build that
+#: could not read ESPN's board) posts at its POST_LEAD as before.
+POST_WAIT_SPORTS = ("nfl",)
+POST_DEADLINE_MIN = 50
+INACTIVES_IN_KEY = "inactives_in"
+
+
+def inactives_ready(board, g, sport) -> bool | None:
+    """True when both of the game's clubs' inactives are on ESPN's board, False when the board says they are
+    not yet, None when it does not say (post as before)."""
+    if str(sport or "").lower() not in POST_WAIT_SPORTS or not isinstance(board, dict) or not isinstance(g, dict):
+        return None
+    ins = board.get(INACTIVES_IN_KEY)
+    if not isinstance(ins, list):
+        return None
+    return {g.get("home"), g.get("away")} <= set(ins)
+
+
+def post_due(start, sport: str, now, ready=None) -> tuple:
+    """(due, post_at, waiting): whether a game starting at ``start`` posts now, the time it posts (its POST_LEAD,
+    or, waiting on its inactives, its POST_DEADLINE_MIN), and whether it is waiting on them."""
+    lead = post_lead(sport)
+    at = start - dt.timedelta(minutes=lead)
+    deadline = start - dt.timedelta(minutes=POST_DEADLINE_MIN)
+    wait = str(sport or "").lower() in POST_WAIT_SPORTS and ready is False
+    if now >= at and (not wait or now >= deadline):
+        return True, at, False
+    return False, (deadline if wait and now >= at else at), bool(wait and now >= at)
 POST_LATE_ENV = "QB_PARLAY_POST_LATE"
 #: Every list a game's tickets sit in.
 POST_LISTS = ("threes", "twos", "scorers", "paper_threes", "paper_twos")
@@ -3451,7 +3484,7 @@ def _et_clock(t) -> str:
     return f"{e.strftime('%a')} {(e.hour % 12) or 12}:{e.minute:02d} {'PM' if e.hour >= 12 else 'AM'} ET"
 
 
-def hold_until_post(x: dict, sport: str, now=None) -> str | None:
+def hold_until_post(x: dict, sport: str, now=None, ready=None) -> str | None:
     """A game still more than its POST_LEAD from its start posts no parlay yet: every list emptied, and when
     they post said (``post_at``, ``post_note``). Returns ``post_at`` when held, None when it posts. Never
     raises: a game whose start cannot be read posts as built."""
@@ -3462,8 +3495,8 @@ def hold_until_post(x: dict, sport: str, now=None) -> str | None:
         return None
     now = now or dt.datetime.now(dt.timezone.utc)
     lead = post_lead(sport)
-    at = start - dt.timedelta(minutes=lead)
-    if now >= at:
+    due, at, waiting = post_due(start, sport, now, ready)
+    if due:
         x.pop("post_at", None)
         x.pop("post_note", None)
         return None
@@ -3472,9 +3505,16 @@ def hold_until_post(x: dict, sport: str, now=None) -> str | None:
             x[k] = []
     x["post_at"] = at.strftime("%Y-%m-%dT%H:%M:%SZ")
     words = _et_clock(at)
-    x["post_note"] = (f"This game's parlays post {('at ' + words) if words else 'before it starts'}, about "
-                      f"{lead} minutes before the start, built then from the newest injury news, lineups and "
-                      f"lines; once posted they never change, and they are the ones the Record counts")
+    if waiting:
+        # Both clubs' inactives not yet on the board (step ACB).
+        x["post_note"] = (f"This game's parlays post once both teams' inactives are in, "
+                          f"{('at ' + words) if words else 'before it starts'} at the latest, built then from the "
+                          f"newest injury news, lineups and lines; once posted they never change, and they are the "
+                          f"ones the Record counts")
+    else:
+        x["post_note"] = (f"This game's parlays post {('at ' + words) if words else 'before it starts'}, about "
+                          f"{lead} minutes before the start, built then from the newest injury news, lineups and "
+                          f"lines; once posted they never change, and they are the ones the Record counts")
     x["threes_note"] = x["post_note"]
     for k in ("twos_note", "scorers_note", "posted_kept", "posted_replaced"):
         x.pop(k, None)
@@ -3993,7 +4033,7 @@ def as_posted(board: dict, sport: str, x: dict, now=None) -> None:
             _rechoose_scorers(x, mine, pairs.get(game_label(x)), sp in RESEARCH_SPORTS)
             if hold_posted(x, mine, sport=sp):
                 label_tickets(x, sp, quote_index(board), carried_picks(board))
-        hold_until_post(x, sp, now)
+        hold_until_post(x, sp, now, ready=inactives_ready(board, x, sp))
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ a game's parlays not set as posted before its report ({type(exc).__name__}: {exc})")
 
@@ -4031,7 +4071,8 @@ def post_late(board: dict, now=None) -> int:
     try:
         sp = str(gp.get("sport") or "").lower()
         now = now or dt.datetime.now(dt.timezone.utc)
-        held = sum(1 for x in gp.get("games") or [] if isinstance(x, dict) and hold_until_post(x, sp, now))
+        held = sum(1 for x in gp.get("games") or [] if isinstance(x, dict)
+                   and hold_until_post(x, sp, now, ready=inactives_ready(board, x, sp)))
         _recount(board)
         return held
     except Exception as exc:                                 # noqa: BLE001
