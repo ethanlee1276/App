@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABR. The Picks pages share one switch: Most Likely, Report Picks, Best Parlays** (step 857; 22 November). Nothing
+to run. You said: the Picks button "will take you to the most likely picks page, and then there'll be an option in
+that picks page to switch to the game report picks and parlays". The Picks button at the bottom still opens Most
+Likely. Most Likely, Report Picks and Best Parlays now each open on the same three-way switch under the league
+chips, the page you are on filled in gold, and the bottom Picks button stays lit on all three, so they read as one
+place. A league with no game reports (UFC) shows no switch. The "Best Parlays" button that sat at the top of Report
+Picks since yesterday is gone, because the switch right above it does the same thing and a second button to the same
+page on one screen is clutter.
+
 **ABQ. A game report's picks post once, with its parlays, and never change** (step 856; 22 November). Nothing to
 run. You said: "not throwing a million different picks into one game report and keep switching picks ... like the
 issue we had last night for NBA ... figure out the timeline for that." Why it happened: every build (every 7 to 10

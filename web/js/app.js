@@ -986,7 +986,30 @@ function sportLabel(s) {
  * itself actually is. The unavailability rides in the accessible
  * description instead, where it is a fact about the row rather than a
  * claim that the row is inert. */
+/* THE PICKS PAGES (step ABR, 22 November 2026). Ethan: the Picks button "will take you to the most likely picks
+   page, and then there'll be an option in that picks page to switch to the game report picks and parlays". Each
+   of the three carries the same switch at its top (index.html .picks-switch): a tap opens the page it names. */
+const PICKS_PAGES = ["likely", "reportpicks", "bestparlays"];
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-picks-go]");
+  if (!b || b.classList.contains("active")) return;
+  e.preventDefault();
+  switchView(b.dataset.picksGo, true);
+});
+/* A league with no such page (UFC has no game reports) hides its button, and a switch with one button left, itself. */
+function markPicksSwitch(hidden) {
+  document.querySelectorAll(".picks-switch").forEach((nav) => {
+    let shown = 0;
+    nav.querySelectorAll("[data-picks-go]").forEach((b) => {
+      b.hidden = (hidden || []).includes(b.dataset.picksGo);
+      if (!b.hidden) shown += 1;
+    });
+    nav.hidden = shown < 2;
+  });
+}
+
 function markOffRows(hidden) {
+  markPicksSwitch(hidden);
   const why = HIDDEN_WHY[state.sport] || {};
   const label = sportLabel(state.sport);
   document.querySelectorAll(".nav-btn[data-view]").forEach((b) => {
@@ -24306,6 +24329,11 @@ function _switchViewNow(name, push, dir) {
   const lit = (name === "game" || name === "prop" || name === "potd") ? "recommended"
     : name === "pbp" ? "live" : name;
   document.querySelectorAll(".nav-btn").forEach((b) => setSelected(b, b.dataset.view === lit));
+  // THE PICKS TAB, LIT ON EACH PICKS PAGE (step ABR): Most Likely, Report Picks and Best Parlays are one place on
+  // the phone's tab bar, the switch at their top choosing between them.
+  if (PICKS_PAGES.includes(lit)) {
+    document.querySelectorAll('.tabbar .nav-btn[data-view="likely"]').forEach((b) => setSelected(b, true));
+  }
   syncNavHint(lit);
   markSportRow();
   if (name === "prop") {

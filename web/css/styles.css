@@ -773,6 +773,28 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
 }
 .subnav-btn:focus-visible { outline-offset: 2px; }
 
+/* THE PICKS PAGES' SWITCH (step ABR, 22 November 2026): Most Likely, Report Picks, Best Parlays, at the top of each,
+   drawn as the site's sub-tabs are (a fill and an edge; the page in view in the brand's fill), in three equal
+   segments so the row fits a phone without wrapping or scrolling. */
+.picks-switch {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
+  margin: 0 0 14px;
+}
+.picks-switch[hidden] { display: none; }
+.ps-btn {
+  cursor: pointer; border-radius: var(--radius-sm);
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 600; line-height: var(--lh-tight);
+  background: var(--fill-subtle);
+  border: var(--hairline) solid transparent;
+  color: var(--text-dim); padding: 10px 6px; text-align: center; white-space: normal;
+  transition: color var(--dur-base) var(--ease-out),
+              background var(--dur-base) var(--ease-out);
+}
+.ps-btn[hidden] { display: none; }
+.ps-btn:hover { color: var(--text); background: var(--fill-hover); }
+.ps-btn.active { background: var(--brand); color: var(--brand-ink); font-weight: 700; cursor: default; }
+.ps-btn:focus-visible { outline-offset: 2px; }
+
 /* The hint is the answer to "which tab has what", which is a thing Ethan
    named directly. Tab labels are necessarily short; this line says what
    the room actually holds, and it changes with the tab rather than

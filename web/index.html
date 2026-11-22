@@ -1306,6 +1306,14 @@
 
     <!-- Long Shots -->
     <section class="view" id="view-likely">
+      <!-- THE PICKS PAGES, ONE SWITCH (step ABR, 22 November 2026; Ethan: the Picks button "will take you to
+           the most likely picks page, and then there'll be an option in that picks page to switch to the
+           game report picks and parlays"). The same three on each, the page in view filled. -->
+      <nav class="picks-switch" aria-label="Picks pages">
+        <button type="button" class="ps-btn active" data-picks-go="likely" aria-current="page">Most Likely</button>
+        <button type="button" class="ps-btn" data-picks-go="reportpicks">Report Picks</button>
+        <button type="button" class="ps-btn" data-picks-go="bestparlays">Best Parlays</button>
+      </nav>
       <div class="section-title" id="likely-title">Most Likely
         <span class="sub" id="likely-sub">— grouped by the kind of bet, ranked by how likely it is</span>
       </div>
@@ -1329,6 +1337,14 @@
 
     <!-- Report Picks: each game report's bets and parlays (renderReportPicks). -->
     <section class="view" id="view-reportpicks">
+      <!-- THE PICKS PAGES, ONE SWITCH (step ABR, 22 November 2026; Ethan: the Picks button "will take you to
+           the most likely picks page, and then there'll be an option in that picks page to switch to the
+           game report picks and parlays"). The same three on each, the page in view filled. -->
+      <nav class="picks-switch" aria-label="Picks pages">
+        <button type="button" class="ps-btn" data-picks-go="likely">Most Likely</button>
+        <button type="button" class="ps-btn active" data-picks-go="reportpicks" aria-current="page">Report Picks</button>
+        <button type="button" class="ps-btn" data-picks-go="bestparlays">Best Parlays</button>
+      </nav>
       <div class="section-title">Report Picks
         <span class="sub" id="reportpicks-sub">— every bet and parlay from our game reports</span>
       </div>
@@ -1337,6 +1353,14 @@
 
     <!-- Best Parlays: the reports' parlays ranked best to worst (renderBestParlays). -->
     <section class="view" id="view-bestparlays">
+      <!-- THE PICKS PAGES, ONE SWITCH (step ABR, 22 November 2026; Ethan: the Picks button "will take you to
+           the most likely picks page, and then there'll be an option in that picks page to switch to the
+           game report picks and parlays"). The same three on each, the page in view filled. -->
+      <nav class="picks-switch" aria-label="Picks pages">
+        <button type="button" class="ps-btn" data-picks-go="likely">Most Likely</button>
+        <button type="button" class="ps-btn" data-picks-go="reportpicks">Report Picks</button>
+        <button type="button" class="ps-btn active" data-picks-go="bestparlays" aria-current="page">Best Parlays</button>
+      </nav>
       <div class="section-title">Best Parlays
         <span class="sub" id="bestparlays-sub">— every report parlay, ranked best to worst</span>
       </div>
