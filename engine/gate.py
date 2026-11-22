@@ -212,6 +212,8 @@ PAID_KEYS = (
     # three-leg tickets and three scorer pairs a game, every leg a paid pick with our
     # chance — the boards under a ninth name, so a paid key.
     "game_parlays",
+    # THE SGPX PARLAYS (engine/sgpx, step ACI): the same legs across games, so as paid as `game_parlays`.
+    "sgpx",
     "edge_board",
     "futures",
     # UFC NAMES ITS PICKS DIFFERENTLY, AND THAT WAS A LIVE HOLE. Found

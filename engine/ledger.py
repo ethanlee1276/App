@@ -11509,6 +11509,14 @@ def _game_parlay_record(conn) -> dict:
     except Exception as exc:                                  # noqa: BLE001
         return {"error": f"{type(exc).__name__}: {exc}"}
     _recent_finals(rec)
+    # THE SGPX PARLAYS (engine/sgpx, step ACI), beside each league's game parlays, each kind by its own name.
+    try:
+        from . import parlayledger
+        for sp, kinds in parlayledger.game_parlay_record(conn, sources=parlayledger.SGPX_SOURCES).items():
+            rec.setdefault(sp, {}).update(kinds)
+    except Exception as exc:                                  # noqa: BLE001
+        # Said in the export's log, not in the record: every key of it is a league the page draws.
+        print(f"  ⚠️ the SGPX parlays' record not read ({type(exc).__name__}: {exc})")
     return rec
 
 

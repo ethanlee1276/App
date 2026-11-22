@@ -842,8 +842,19 @@ async function renderReportPicks() {
      page, where he reads the reports' parlays game by game, never said so: its door is at the top of the day. */
   /* …and since step ABR (22 November) it is the switch at the top of every Picks page (index.html .picks-switch),
      so the button that stood here, a second door to the same page on the same screen, is gone. */
+  /* THE SGPX PARLAYS (engine/sgpx, step ACI; Ethan, 22 November: "We can have those as a separate tab as same
+     game parlay X, SGPX parlays"): our strongest picks from different games in each kickoff window, combined,
+     drawn the way each game's report draws them. A tab only on a day that has them. */
+  const sgpxSlots = ((d.sgpx || {}).slots || []).filter((e) => e && (e.blocks || []).length);
+  const sgpx = locked
+    ? memberLockHTML("SGPX parlays are for members", "Our strongest picks from different games, combined, each with "
+      + "its price and our chance.")
+    : sgpxSlots.map((e, i) => `<div class="rpk-sgpx"><div class="rr-head">Kickoff ${escapeHtml(e.label || "")}</div>
+        <div data-rpk-sgpx="${i}"></div></div>`).join("");
   host.innerHTML = `${paper}${subtabbedHTML("reportpicks", [
       ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", `<div data-rpk-slate></div>${today}`],
+      ["sgpx", "SGPX parlays", "Our strongest picks from different games, combined",
+        locked || sgpxSlots.length ? sgpx : ""],
       ["record", "Record", "Every report pick and parlay, won or lost", `<div class="rpk-book" data-rpk-book="1"></div>`],
       ["facts", "How our reports did", "Every finished game’s report, fact-checked", rpFactsHTML()]])}`;
   bindSubtabs(host);
@@ -871,6 +882,11 @@ async function renderReportPicks() {
   });
   loadReport().then((R) => {
     if (!R || !R.gameTickets) return;
+    // Each kickoff window's SGPX tickets, block by block as the report draws them.
+    host.querySelectorAll("[data-rpk-sgpx]").forEach((el) => {
+      const e = sgpxSlots[Number(el.dataset.rpkSgpx)];
+      if (e && R.block) el.innerHTML = (e.blocks || []).map((b) => R.block(b)).join("");
+    });
     host.querySelectorAll("[data-rpk-tix]").forEach((el) => {
       const x = byGame.get(el.dataset.rpkTix);
       if (!x || !x.tix) return;

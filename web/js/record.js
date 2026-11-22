@@ -1053,9 +1053,11 @@ const tlUnits = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x || 0).toFixed(2)}u`);
    leg marked. On "All", one table of every league. The two-leg tickets are
    every league's (Ethan, 20 November: "we want 3 two-leg parlays for each game
    report as well"); basketball's books post no scorer, so it has no pairs. */
-const GP_KIND = { three: "Three-leg parlays", two: "Two-leg parlays" };
-//: A league's kinds in the page's order: the three-leg tickets, the two-leg ones, then the scorer pairs.
-const GP_KINDS = ["three", "two", "scorers"];
+const GP_KIND = { three: "Three-leg parlays", two: "Two-leg parlays",
+  // The SGPX parlays (engine/sgpx, step ACI): our strongest picks from different games, combined.
+  sgpx_props: "SGPX parlays", sgpx_td: "SGPX touchdown parlays" };
+//: A league's kinds in the page's order: the three-leg tickets, the two-leg ones, the scorer pairs, then SGPX.
+const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx_td"];
 // How a game's ticket was made up (engine/gameparlays.FILL_KINDS; "report": its own picks), in words, by kind.
 //: A ticket's class in the page's order (engine/gameparlays.CLASSES).
 const GP_CLASSES = [["safe", "Safe"], ["balanced", "Balanced"], ["pop", "Pop"], ["long", "Long shots"]];
@@ -1183,9 +1185,15 @@ function gpBlockHTML(b, kind, sport) {
      how the ticket went and its legs' tally, the units at the price the record took, then each leg in its box,
      green when it won and red when it lost, over the game's final and day (engine/ledger._recent_finals). */
   const settled = (t) => {
-    const [away, home] = String(t.game || "").split("@");
+    // An SGPX ticket's legs are from several games ("SGPX CLE@BAL, TB@DET"): it is titled by them, over no one final.
+    const cross = /^SGPX /.test(String(t.game || ""));
+    const [away, home] = cross ? [] : String(t.game || "").split("@");
     const day = t.day || (/^\d{4}-\d{2}-\d{2}$/.test(String(t.date || "")) ? t.date : "");
-    return settledTicketHTML({ title: away && home ? `${teamName(away)} at ${teamName(home)}` : gpKindWord(kind, sport),
+    const title = cross ? `${gpKindWord(kind, sport)} · ${String(t.game).slice(5).split(", ").map((g) => {
+      const [a, h] = g.split("@");
+      return a && h ? `${teamName(a)} at ${teamName(h)}` : g;
+    }).join(", ")}` : away && home ? `${teamName(away)} at ${teamName(home)}` : gpKindWord(kind, sport);
+    return settledTicketHTML({ title,
       status: ["won", "lost", "push", "void"].includes(t.status) ? t.status : "pending", dec: t.price_dec,
       units: t.pnl_units, note: t.chance != null ? `we gave it ${Math.round(t.chance * 100)}%` : "",
       legs: (t.legs || []).map((l) => ({ bet: l, res: { status: ["won", "lost", "push", "void"].includes(l.status)

@@ -4826,6 +4826,26 @@ def _report_only(result: dict) -> None:
         print(f"  ⚠️ the parlays' post time not read ({exc})")
 
 
+def _sgpx(result: dict, reports: list, sport: str, out, now=None) -> None:
+    """engine/sgpx.attach, then each report of a game in a slot with SGPX tickets gets its "SGPX parlays"
+    section, after the game's own parlays. Never raises past the reports."""
+    try:
+        from . import sgpx
+        line = sgpx.attach(result, sport, out, now=now)
+        if line:
+            print(f"  {line}")
+        for r in reports:
+            secs = [s for s in r.get("sections") or [] if not (isinstance(s, dict) and s.get("key") == sgpx.KEY)]
+            sec = sgpx.section(sgpx.for_game(result, f"{r.get('away')}@{r.get('home')}"))
+            if sec:
+                at = next((i + 1 for i, s in enumerate(secs) if isinstance(s, dict) and s.get("key") == "parlays"),
+                          len(secs))
+                secs.insert(at, sec)
+            r["sections"] = secs
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the SGPX parlays not added to the reports ({type(exc).__name__}: {exc})")
+
+
 def _parlays_from_picks(c: Ctx, built: dict) -> None:
     """The game's three-leg tickets rebuilt from the picks this report shows
     (engine/gameparlays.from_report): its card's, read here the way the card
@@ -5193,6 +5213,8 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
         # A GAME NO REPORT REBUILT POSTS NO THREE-LEG TICKET (GPLEGS1): its legs
         # would be no report's picks (engine/gameparlays.report_only).
         _report_only(result)
+        # SGPX (engine/sgpx, step ACI): each kickoff slot's tickets across its games, once every game in it posted.
+        _sgpx(result, reports, sport, out)
         # HOW THESE READS HAVE DONE (engine/reportrecord): each graded section opens
         # with its kind of read's record so far, before a started game's is kept.
         stamp_track(reports, sport, out)

@@ -590,6 +590,82 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
     return wrote
 
 
+#: THE SGPX PARLAYS (engine/sgpx, step ACI): each kickoff slot's tickets across its games, journaled under their
+#: kind's source (sgpx.SOURCES) and counted on the Record beside each game's own parlays (`game_parlay_record`).
+SGPX_SOURCES = {"sgpx_props": "sgpx_props", "sgpx_td": "sgpx_td"}
+
+
+def _leg_row(l: dict) -> dict:
+    """A leg as the paper bucket journals it (gameparlays.journal_rows' own keys)."""
+    return {"player": l.get("player"), "team": l.get("team"), "opponent": l.get("opponent"),
+            "market": l.get("market"), "side": l.get("side"), "line": l.get("line"), "odds": l.get("odds"),
+            "book": l.get("book"), "model_prob": l.get("p"), "game_date": l.get("game_date"), "home": l.get("home"),
+            "away": l.get("away"), "position": l.get("position") or ""}
+
+
+def log_sgpx(conn, sg: dict, sport: str, date: str, games=None) -> int:
+    """Journal every SGPX ticket a board posted (engine/sgpx): its legs on paper first (PARLAY_LEG_CATEGORY), so
+    each has a row to settle from, then each ticket whose every leg has one, under its kind's source, counted as
+    posted (``at_start`` 1: a slot's tickets post once and never change), tracked at a stake of nothing and graded
+    at the least price its card says to take it at. Returns tickets newly written; a ticket already journaled for
+    its day is left alone."""
+    ensure_schema(conn)
+    if not isinstance(sg, dict) or not sport or not date:
+        return 0
+    from . import ledger as L
+    from .gameparlays import _leg_id
+    from .sgpx import KINDS, SOURCES
+    wrote = 0
+    for e in sg.get("slots") or []:
+        if not isinstance(e, dict) or not e.get("posted_at"):
+            continue
+        seen, rows = set(), []
+        for kind in KINDS:
+            for t in e.get(kind) or []:
+                for l in t.get("legs") or []:
+                    if _leg_id(l) not in seen:
+                        seen.add(_leg_id(l))
+                        rows.append(_leg_row(l))
+        if rows:
+            L.log_most_likely(conn, {"sport": sport, "date": date, "games": games or [], "most_likely": rows},
+                              depth=None, category=PARLAY_LEG_CATEGORY, grade_label="Parlay leg")
+        for kind in KINDS:
+            for t in e.get(kind) or []:
+                legs = t.get("legs") or []
+                if len(legs) < 2 or not all(_has_leg_row(conn, sport, date, l) for l in legs):
+                    continue
+                key = legs_key(legs)
+                if conn.execute("SELECT 1 FROM parlays WHERE sport=? AND date=? AND legs_key=?",
+                                (sport, date, key)).fetchone():
+                    continue
+                books = {(l.get("book") or "").strip() for l in legs if l.get("book")}
+                take = t.get("take_dec")
+                cur = conn.execute(
+                    "INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified,"
+                    " was_play, naive_product_dec, quoted_dec, assumed_dec, price_basis, book, correlation_tax,"
+                    " modeled_joint, implied_joint, independent_joint, conditional_reasoning, stake_units,"
+                    " notional_units, source, status, at_start)"
+                    " VALUES (?,?,?,?,?,?,?,1,0,?,NULL,?,?,?,NULL,?,?,?,?,0,?,?,'open',1)",
+                    (datetime.datetime.now().isoformat(timespec="seconds"), sport, date, key, "sgpx", len(legs),
+                     "SGPX " + ", ".join(t.get("games") or e.get("games") or []), t.get("naive_dec"), take,
+                     "the least price the card says to take it at: our fair price and 5%",
+                     "|".join(sorted(books)) or None, t.get("joint"),
+                     round(1.0 / float(take), 4) if take else None, t.get("independent"),
+                     "; ".join(t.get("links") or []), NOTIONAL_UNITS, SOURCES[kind]))
+                for i, l in enumerate(legs, start=1):
+                    conn.execute(
+                        "INSERT INTO parlay_legs (parlay_id, leg_no, player, team, market, side, line, odds, book,"
+                        " p_final, status, pool, fair, p_raw, fair_line) VALUES (?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?)",
+                        (cur.lastrowid, i, l.get("player"), l.get("team"), l.get("market"),
+                         str(l.get("side") or "").upper() or None,
+                         l.get("line") if l.get("line") is not None else 0.5, l.get("odds"), l.get("book"),
+                         l.get("p"), l.get("pool") or None, l.get("fair"), l.get("p_raw"), l.get("fair_line")))
+                wrote += 1
+    if wrote:
+        conn.commit()
+    return wrote
+
+
 def journal_game_parlay_legs(conn, board: dict, sport: str) -> int:
     """Every leg of a board's game parlays on paper (PARLAY_LEG_CATEGORY),
     so each ticket's legs have rows the settle pass grades. A leg the
@@ -733,7 +809,7 @@ def since_rules(t) -> bool:
     return str(t["ts"] or "") >= RULES_SINCE
 
 
-def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
+def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT, sources: dict | None = None) -> dict:
     """THE GAME REPORTS' PARLAYS, LEAGUE BY LEAGUE (2026-11-16). Ethan: "you did
     not put the 'parlays for this game' on the record page. We wanna see if the
     legs and the parlays we recommend are hitting so each sport needs to have a
@@ -768,7 +844,8 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
         def is_benched(_sp):
             return False
     out: dict = {}
-    for kind, source in SOURCES.items():
+    # …and the SGPX parlays across games (step ACI), each kind under its own source's name.
+    for kind, source in (SOURCES if sources is None else sources).items():
         tickets = conn.execute(f"SELECT * FROM parlays WHERE source=? AND {AT_START} ORDER BY date, id",
                                (source,)).fetchall()
         before = dict(conn.execute(
@@ -851,9 +928,10 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                                           "chance": round(float(j_all), 3) if j_all is not None else None,
                                           "net_units": round(float(u_all or 0.0), 2)}
             # HOW EACH KIND OF FILLED TICKET DOES (ZR, FILL_SINCE): the report's own
-            # tickets ("report") beside each way a game was filled up to its three.
+            # tickets ("report") beside each way a game was filled up to its three. A game's
+            # own kinds only, as the tiers and the rebuild below: an SGPX ticket is never filled.
             fills: dict = {}
-            for t in rows:
+            for t in rows if sources is None else []:
                 if str(t["ts"] or "") < FILL_SINCE:
                     continue
                 f = fills.setdefault(t["fill"] or "report", {"graded": 0, "wins": 0, "open": 0, "_j": [], "_n": 0.0})
@@ -900,7 +978,7 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
             # HOW EACH BEST PARLAYS TIER HAS DONE (TIER_KINDS, step AAX): the tier each counted ticket wore
             # when its game started, graded and open.
             tiers: dict = {}
-            for t in rows:
+            for t in rows if sources is None else []:
                 tr = t["tier"] if t["tier"] in TIER_ORDER else None
                 if tr is None or t["status"] not in ("won", "lost", "open"):
                     continue
@@ -920,8 +998,8 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                          "net_units": round(v["_n"], 2)}
                     for tr in TIER_ORDER if (v := tiers.get(tr))}
             # Since the rebuild (RULES_SINCE): how the new tickets have done, apart.
-            new = [t for t in graded if since_rules(t)]
-            new_open = sum(1 for t in rows if t["status"] == "open" and since_rules(t))
+            new = [t for t in graded if since_rules(t)] if sources is None else []
+            new_open = sum(1 for t in rows if t["status"] == "open" and since_rules(t)) if sources is None else 0
             if new or new_open:
                 nj = [float(t["modeled_joint"]) for t in new if t["modeled_joint"] is not None]
                 nn = sum(float(t["pnl_units"] or 0.0) for t in new)
@@ -1276,7 +1354,7 @@ def waiting(conn, days: int = 2, today=None) -> list[dict]:
 #: The tickets whose legs ride on their own paper bucket (engine/gameparlays): only
 #: there is a leg with no row a journaling gap. A Parlay Zone leg earned the board
 #: as a single, so a missing single is an error upstream, and its ticket waits.
-NO_ROW_VOID_SOURCES = ("game_three", "game_two", "game_td")
+NO_ROW_VOID_SOURCES = ("game_three", "game_two", "game_td", *SGPX_SOURCES)
 
 
 def _voids_missing(p, resolved: list) -> bool:
@@ -2023,6 +2101,13 @@ def journal_built_boards(conn, root) -> dict:
                 wrote += log_game_parlays(conn, gp_ok, sport, day)
             except sqlite3.Error as exc:
                 skipped.append(f"{sport}/game_parlays: {exc}")
+        # THE SGPX PARLAYS (engine/sgpx, step ACI): each posted kickoff slot's tickets across games.
+        sg = board.get("sgpx")
+        if isinstance(sg, dict) and sg.get("slots"):
+            try:
+                wrote += log_sgpx(conn, sg, sport, board.get("date") or "", board.get("games"))
+            except sqlite3.Error as exc:
+                skipped.append(f"{sport}/sgpx: {exc}")
         # EVERY BET THE GAME REPORTS POST (engine/reportbets, 2026-11-16), in
         # the record's report book, from the same private copy.
         from . import reportbets

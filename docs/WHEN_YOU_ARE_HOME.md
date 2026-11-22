@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACI. SGPX parlays: our best picks from different games in one ticket** (step 874; 22 November). Nothing to run.
+You asked for same game parlay X tickets: the top picks of separate NFL games combined, one kind for player props
+and one for touchdowns, like Derrick Henry with Jahmyr Gibbs and Amon-Ra St. Brown. Each kickoff window gets three
+of each: games that kick off within 45 minutes of the first share a window (a Sunday's 1 PM games; its 4:05 and 4:25
+games). A ticket has three legs from at least two games, at most two from one game. The legs are the ones each
+game's own report posted: the player props of its three-leg and two-leg parlays, and the scorers of its touchdown
+pairs. Legs from different games are counted as unrelated, so their chances multiply. Two legs from one game are
+counted the way that game's own parlays count them, and a pair our rules keep apart (two pass catchers from one team
+on a touchdown ticket) makes no ticket. The likeliest tickets post first, each leg on two tickets at most. Because
+each game's picks wait for its inactives, a window's tickets post once every game in it has posted, before the first
+kickoff, and then never change. A window of one game (a Thursday, Sunday or Monday night game) has none. They are on
+each game's report as an "SGPX parlays" section after its own parlays, on Report Picks as their own "SGPX parlays"
+tab, and on the Record as their own blocks, graded at the price each card says to take it at (`sudo
+./deploy/setenv.sh QB_SGPX off` turns them off). The first window with more than one game is next Sunday's early
+games.
+
 **ACH. The NFL's inactives are read fresher, and ESPN's other feeds are timed against the board** (step 873; 22
 November). Nothing to run. You asked for a faster inactives source than ESPN's injury board. On Sunday the 4:25
 games' lists reached our picks 25 to 42 minutes after they came out: ESPN's board filed each club's men 1 to 21

@@ -237,6 +237,8 @@
 .gr-parlay-legs > li { cursor: pointer; }
 .gr-parlay-pick { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
 .gr-parlay-px { font-size: .86em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
+/* An SGPX leg's game (engine/sgpx): each leg of a ticket across games says which game it is from. */
+.gr-parlay-game { font-size: .8em; color: var(--text-mute); white-space: nowrap; }
 .gr-parlay-p { font-size: .82em; font-weight: 600; color: var(--good); font-variant-numeric: tabular-nums; }
 .gr-parlay-r { font-size: .78em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .gr-person-pick { margin: 6px 0 0; font-size: .88em; font-weight: 600; }

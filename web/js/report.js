@@ -588,17 +588,22 @@
           legs: bets.map((bet, i) => ({ bet, res: (x.legs || [])[i] || null, words: ((t.legs || [])[i] || {}).pick, open: true })) },
         { sport: RESULTS.sport, home: RESULTS.home, away: RESULTS.away, final: RESULTS.final, date: RESULTS.date });
       };
-      return `<div class="gr-parlays">${(b.items || []).map((t) => settled(t) || `<div class="gr-parlay">
+      /* AN SGPX TICKET (engine/sgpx, step ACI) joins legs from different games: each leg says its game, and
+         this game's result grades none of the others, so the card is never drawn settled here. */
+      const cross = b.kind === "sgpx";
+      const gameTag = (l) => (cross && l.game
+        ? ` <span class="gr-parlay-game">${escapeHtml(String(l.game).replace("@", " at "))}</span>` : "");
+      return `<div class="gr-parlays">${(b.items || []).map((t) => (!cross && settled(t)) || `<div class="gr-parlay">
         <div class="gr-parlay-head"><span class="gr-parlay-title"><b>${escapeHtml(t.title || "")}</b>${t.cls
           ? ` <span class="gr-parlay-class ${escapeAttr(t.cls)}">${escapeHtml(t.cls_label || "")}</span>` : ""}</span>${
-          ticketTag(t.legs)}${(t.bet_legs || []).length && !CLOSED && !t.one_book_gone
+          cross ? "" : ticketTag(t.legs)}${(t.bet_legs || []).length && !CLOSED && !t.one_book_gone
           ? parlayBet(t.bet_legs, `${t.title || "Parlay"} · ${(t.legs || []).map((l) => l.pick).filter(Boolean).join(" + ")}`) : ""}</div>
         ${odds(t)}
         ${t.cls_why ? `<p class="gr-parlay-classwhy">${escapeHtml(t.cls_why)}</p>` : ""}
         ${t.one_book && !CLOSED ? `<p class="gr-parlay-book${t.one_book_gone ? " gone" : ""}">${escapeHtml(t.one_book)}</p>` : ""}
         <ol class="gr-parlay-legs">${(t.legs || []).map((l) => `<li${l.player
           ? ` data-open="player:${escapeAttr(slugify(l.player))}"` : ""}>
-          <span class="gr-parlay-pick"><span class="gr-parlay-who">${face(l)}<b>${named(l.pick || "", b.names)}</b></span>${l.price
+          <span class="gr-parlay-pick"><span class="gr-parlay-who">${face(l)}<b>${named(l.pick || "", b.names)}</b></span>${gameTag(l)}${l.price
             ? ` <span class="gr-parlay-px">${escapeHtml(l.price)}</span>` : ""}${l.chance
             ? ` <span class="gr-parlay-p">${Math.round(Number(l.chance) * 100)}%</span>` : ""}${l.research != null
             ? ` <span class="gr-parlay-r" title="Our research score: the team’s expected points, the defense faced, the usage and red-zone work, the matchup read and the game script">research score ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}${
