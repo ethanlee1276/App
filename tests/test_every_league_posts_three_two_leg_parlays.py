@@ -183,7 +183,7 @@ def test_every_page_draws_them_beside_the_others():
     js = {n: (ROOT / "web" / "js" / f"{n}.js").read_text(encoding="utf-8") for n in ("report", "reportpicks", "record")}
     assert 'const title = kind === "three" ? `Three-leg parlay ${n}`' in js["report"], "each ticket says its size"
     assert 'sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport, game))' in js["reportpicks"]
-    assert 'const GP_KINDS = ["three", "two", "scorers"];' in js["record"]
+    assert 'const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx_td"];' in js["record"]
     for name in ("more", "account"):
         copy = (ROOT / "web" / "js" / f"{name}.js").read_text(encoding="utf-8")
         assert "three two-leg parlays" in copy and "in basketball, three two-leg" not in copy, name

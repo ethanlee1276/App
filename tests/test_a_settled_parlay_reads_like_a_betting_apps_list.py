@@ -252,7 +252,9 @@ def test_the_record_carries_each_tickets_price_units_final_and_day():
     missing = os.path.join(tempfile.mkdtemp(), "none.db")
     assert ledger._recent_finals(rec, missing) == 0 and not os.path.exists(missing), "no history, no file left behind"
     src = (ROOT / "engine" / "ledger.py").read_text(encoding="utf-8")
-    assert "        rec = parlayledger.game_parlay_record(conn)\n" in src and "    _recent_finals(rec)\n    return rec" in src
+    assert "        rec = parlayledger.game_parlay_record(conn)\n" in src and "    _recent_finals(rec)\n" in src
+    # …and the SGPX parlays beside them (engine/sgpx, step ACI), merged after the finals are read.
+    assert src.index("    _recent_finals(rec)\n") < src.index("game_parlay_record(conn, sources=parlayledger.SGPX_SOURCES)")
     assert set(ledger._game_parlay_record(None)) == {"error"}, "a failure never breaks the export"
 
 

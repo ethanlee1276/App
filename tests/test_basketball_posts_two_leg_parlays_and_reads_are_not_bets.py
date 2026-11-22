@@ -165,7 +165,7 @@ def test_the_record_keeps_every_leagues_two_leg_tickets():
 
 def test_the_pages_carry_the_kind():
     record, reportpicks, report = _js("record"), _js("reportpicks"), _js("report")
-    assert 'const GP_KINDS = ["three", "two", "scorers"];' in record
+    assert 'const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx_td"];' in record
     assert '["Two-leg parlays", twos]' in reportpicks and 'sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport, game))' \
         in reportpicks
     assert 'kind === "two" ? `Two-leg parlay ${n}`' in report
