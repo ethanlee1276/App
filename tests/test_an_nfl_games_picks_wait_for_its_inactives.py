@@ -71,8 +71,10 @@ def test_waiting_the_report_and_its_parlays_say_so():
 
 def test_the_callers_ask_and_the_build_says_whose_lists_are_in():
     gp = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
-    assert "hold_until_post(x, sp, now, ready=inactives_ready(board, x, sp))" in gp
-    assert "and hold_until_post(x, sp, now, ready=inactives_ready(board, x, sp)))" in gp
+    # (Each caller also sets a held game's tickets aside for the day's SGPX since step ACM: the `stash`.)
+    assert gp.count("hold_until_post(x, sp, now, ready=inactives_ready(board, x, sp),") == 2
+    assert ("and hold_until_post(x, sp, now, ready=inactives_ready(board, x, sp),\n"
+            "                                       stash=board.setdefault(HELD_KEY, {})))") in gp
     gr = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
     assert 'ready=_ready(getattr(c, "result", None), c.g, getattr(c, "sport", "")))' in gr
     nb = (ROOT / "nfl_build.py").read_text(encoding="utf-8")
