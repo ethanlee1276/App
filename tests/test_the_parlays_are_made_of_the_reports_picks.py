@@ -249,6 +249,21 @@ def _nfl_result():
 
 
 def test_end_to_end_a_reports_parlays_are_its_own_picks():
+    # This game is in 2099, far before its post time (step ABD), so its report would say when its parlays
+    # post (tests/test_a_game_report_says_what_the_board_posts.py); the tickets are read with that off.
+    import os
+    was = os.environ.get("QB_PARLAY_POST_LATE")
+    os.environ["QB_PARLAY_POST_LATE"] = "off"
+    try:
+        _end_to_end()
+    finally:
+        if was is None:
+            os.environ.pop("QB_PARLAY_POST_LATE", None)
+        else:
+            os.environ["QB_PARLAY_POST_LATE"] = was
+
+
+def _end_to_end():
     result, priced = _nfl_result()
     result["game_parlays"] = GP.build(result, "nfl")
     others = {GP._pick_key(dict(p, side="OVER")) for p in priced}

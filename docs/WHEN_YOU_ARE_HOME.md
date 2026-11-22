@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABH. A game's report says exactly what the board posts** (step 848; 22 November). Nothing to run. You said, the
+Sunday morning: "I see parlays posted now on the game reports for nfl but those shouldn't be there by what u said."
+You were right. Each game report writes its own copy of the game's parlays (its parlays section, its card's parlay
+line and its short version) the moment its picks rebuild them, and the post time (step ABD) and the lock (step ABB)
+were applied to the board only after every report was written. So the board, Report Picks and Best Parlays held
+Sunday's NFL parlays until 75 minutes before each kickoff while every NFL report printed a fresh set; and since the
+lock went in on the 21st, a game that had posted showed on its report page each build's newest set, not the locked
+one Report Picks, Best Parlays and the Record use (the Record always counted the locked set). Now each report
+applies both to its game before it writes a word: before the post time its parlays section says only when they post
+(in the reader's own zone on the page) and its card names no ticket; after it, the report shows the posted set
+exactly as posted. Every league's report goes through the same step.
+
 **ABG. An NBA leg rides at most two of a game's six parlays** (step 847; 22 November). Nothing to run. Your answer
 to decision 18: "Yes limit it". Each list already held a leg to two tickets, so one NBA leg could ride four of a
 game's six parlays, two three-leg and two two-leg. On the NBA's tickets graded at their start (17 to 21 November), 8

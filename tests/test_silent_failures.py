@@ -164,6 +164,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # "a game's posted parlays not held (<error>)" into the build's log, which
         # no quiet build does.
         "hold_posted",
+        # A GAME'S TICKETS SET AS POSTED BEFORE ITS REPORT IS WRITTEN (engine/gameparlays.
+        # as_posted, step ABH, 2026-11-22), caught by this sweep the hour it was written:
+        # None either way, and the board's own pass after the reports (report_only,
+        # post_late) still sets what it posts; a failure prints "a game's parlays not
+        # set as posted before its report (<error>)" into the build's log, which no
+        # quiet build does.
+        "as_posted",
         # A GAME'S REBUILD FROM ITS REPORT'S PICKS (engine/gamereport._parlays_from_picks,
         # 2026-11-19): None either way, but a failure prints, is kept on the game's
         # entry (rebuild_error) and the heartbeat counts it (threes_short_why), which

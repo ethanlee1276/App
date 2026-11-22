@@ -3937,17 +3937,7 @@ def report_only(board: dict) -> int:
             x.pop("posted_kept", None)
             x.pop("posted_replaced", None)
             continue
-        cands = pairs.get(game_label(x))
-        if mine.get("scorers") and cands:
-            x["scorers"] = [dict(t, legs=[slim(l) for l in t["legs"]])
-                            for t in choose(cands, SCORER_PER_GAME, rank=scorer_rank(researched),
-                                            researched=researched, keep=mine["scorers"])]
-            # Never fewer than the build chose (`choose`); a game short of its three says how many it has.
-            note = str(x.get("scorers_note") or "")
-            if len(x["scorers"]) >= SCORER_PER_GAME:
-                x.pop("scorers_note", None)
-            elif re.match(r"\d+ of \d+: ", note):
-                x["scorers_note"] = f"{len(x['scorers'])} of {SCORER_PER_GAME}: {note.split(': ', 1)[1]}"
+        _rechoose_scorers(x, mine, pairs.get(game_label(x)), researched)
         # THE LOCK (step ABB): what the game posted stays exactly as posted; this build only fills a gap.
         if hold_posted(x, mine, sport=str(gp.get("sport") or "").lower()):
             x["legs_from"] = LEGS_FROM_REPORT
@@ -3958,6 +3948,54 @@ def report_only(board: dict) -> int:
     # The best parlays ranked again, on the tickets the reports posted (RANK_TIERS).
     _recount(board)
     return n
+
+
+def _rechoose_scorers(x: dict, mine: dict, cands, researched: bool) -> None:
+    """A game's scorer pairs chosen again with the ones it posted last build first (ZQ, `choose`), from
+    every pair it could post this build (``cands``). Never fewer than the build chose; a game short of its
+    three says how many it has."""
+    if not (mine.get("scorers") and cands):
+        return
+    x["scorers"] = [dict(t, legs=[slim(l) for l in t["legs"]])
+                    for t in choose(cands, SCORER_PER_GAME, rank=scorer_rank(researched),
+                                    researched=researched, keep=mine["scorers"])]
+    note = str(x.get("scorers_note") or "")
+    if len(x["scorers"]) >= SCORER_PER_GAME:
+        x.pop("scorers_note", None)
+    elif re.match(r"\d+ of \d+: ", note):
+        x["scorers_note"] = f"{len(x['scorers'])} of {SCORER_PER_GAME}: {note.split(': ', 1)[1]}"
+
+
+#: A GAME'S REPORT SAYS EXACTLY WHAT THE BOARD POSTS (step ABH, 22 November 2026). Ethan, the Sunday
+#: morning: "I see parlays posted now on the game reports for nfl but those shouldn't be there by what u
+#: said." Each report writes its parlays section, its card's parlay line and its short version
+#: (gamereport.finish) right after its picks rebuild the game's tickets (`from_report`), and the lock
+#: (`hold_posted`, step ABB) and the post time (`hold_until_post`, step ABD) ran only after every report
+#: was written (`report_only`, `post_late`): the board held Sunday's NFL tickets until 75 minutes before
+#: each kickoff while every NFL report printed a fresh set, and once a game had posted, its report printed
+#: each build's fresh set, not the locked one Report Picks and Best Parlays showed. `as_posted` does to a
+#: game's entry what those two do, the moment its report rebuilds it, so the report writes what the board
+#: posts; `report_only` and `post_late` still run after, and find nothing more to do.
+
+
+def as_posted(board: dict, sport: str, x: dict, now=None) -> None:
+    """One game's tickets as the board will post them, set the moment its report rebuilds them (step
+    ABH): its scorer pairs chosen again with the posted ones first, the lock (`hold_posted`) and the post
+    time (`hold_until_post`). A started game's kept entry is left as it is. Never raises."""
+    try:
+        if not isinstance(board, dict) or not isinstance(x, dict) or x.get("kept"):
+            return
+        sp = str(sport or "").lower()
+        posted = board.get(POSTED_KEY) if isinstance(board.get(POSTED_KEY), dict) else {}
+        mine = posted.get(f"{x.get('away')}@{x.get('home')}|{str(x.get('date') or '')[:10]}")
+        if isinstance(mine, dict):
+            pairs = board.get(SCORER_PAIRS_KEY) if isinstance(board.get(SCORER_PAIRS_KEY), dict) else {}
+            _rechoose_scorers(x, mine, pairs.get(game_label(x)), sp in RESEARCH_SPORTS)
+            if hold_posted(x, mine, sport=sp):
+                label_tickets(x, sp, quote_index(board), carried_picks(board))
+        hold_until_post(x, sp, now)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ a game's parlays not set as posted before its report ({type(exc).__name__}: {exc})")
 
 
 def _recount(board: dict) -> None:

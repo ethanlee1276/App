@@ -3971,6 +3971,11 @@ def sec_parlays(c: Ctx) -> dict | None:
         # No prop priced in this game yet (THREELEG3): when its props are
         # bought, said once, where its tickets will be.
         return _section("parlays", "Parlays for this game", [_p(f"No parlays yet: {gp.get('props_note') or ''}")])
+    if gp.get("post_at") and gp.get("post_note") and not any(gp.get(k) for k in ("threes", "twos", "scorers")):
+        # NOT POSTED YET (step ABD, said by the report since step ABH): when this game's parlays post, once.
+        # ``post_at`` lets the page say the time in the reader's own zone (js/report.js postNote).
+        return _section("parlays", "Parlays for this game",
+                        [dict(_p(gp["post_note"]), post_at=gp["post_at"])])
     blocks = []
     threes = [card(t, i, "three", c.sport) for i, t in enumerate(gp.get("threes") or [], 1)]
     if threes:
@@ -4538,7 +4543,10 @@ def _parlays_from_picks(c: Ctx, built: dict) -> None:
             card = None
         picks = reportbets.bets_of(([card] if card else []) + written,
                                    reportbets.pool(_card_rows(c), c.reads))
-        gameparlays.from_report(c.result, c.sport, c.g, picks)
+        x = gameparlays.from_report(c.result, c.sport, c.g, picks)
+        # …and as the board will post them, before this report writes them (step ABH): the tickets the game
+        # posted stand (the lock), and a game still before its post time says when they post.
+        gameparlays.as_posted(c.result, c.sport, x)
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ the parlays not built from the report's picks for {c.away}@{c.home} ({exc})")
         # Kept on the game's entry (the private board), so the heartbeat can say a

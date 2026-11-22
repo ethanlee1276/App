@@ -444,7 +444,9 @@
         ${winnerLinesHTML(b)}
       </div>`;
     }
-    if (b.type === "p") return `<p class="gr-p">${named(b.text, b.names, b.marks, true)}${gradeLine(b.grade)}</p>`;
+    // A game's "parlays post at Sun 11:45 AM ET" (step ABH) carries its post time: said in the reader's zone.
+    if (b.type === "p") return `<p class="gr-p">${named(b.post_at ? postNote({ threes_note: b.text, post_at: b.post_at }) : b.text,
+      b.names, b.marks, true)}${gradeLine(b.grade)}</p>`;
     /* HOW THESE READS HAVE DONE (engine/reportrecord.track_lines): a graded
        section's kind of read, its record on finished games so far. */
     if (b.type === "track") return `<p class="gr-track">${escapeHtml(b.text)}</p>`;
