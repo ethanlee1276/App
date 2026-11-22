@@ -240,6 +240,21 @@ def test_a_report_and_report_picks_show_them():
     assert "sgpx" in gate.PAID_KEYS
 
 
+def test_the_heartbeat_counts_them():
+    was = _stub_pairs()
+    try:
+        import json as _json
+        import launch as LA
+        r = _result()
+        S.attach(r, "nfl", None, now=dt.datetime(2030, 11, 24, 16, 50, tzinfo=UTC))
+        path = Path(tempfile.mkdtemp()) / "recommendations.json"
+        path.write_text(_json.dumps(r), encoding="utf-8")
+        got = LA._board_counts(str(path)).get("sgpx")
+        assert got == {"posted": 1, "waiting": 1, "props": 3, "tds": len(r["sgpx"]["slots"][0]["tds"])}, got
+    finally:
+        GP.ticket = was
+
+
 def test_the_record_journals_and_counts_them():
     was = _stub_pairs()
     try:

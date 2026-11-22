@@ -855,6 +855,17 @@ def _board_counts(path: str) -> dict:
     pg = (b.get("likely_board") or {}).get("price_grade")
     if isinstance(pg, dict) and pg.get("on"):
         out["price_grade"] = {k: int(pg.get(k) or 0) for k in ("rows", "green", "yellow", "red")}
+    # THE SGPX PARLAYS (engine/sgpx, step ACI), counted: a paid key, so the heartbeat is where anyone can see a
+    # kickoff window posted them (its tickets of each kind) or is waiting on its games. Present only when built.
+    sg = b.get("sgpx")
+    if isinstance(sg, dict) and isinstance(sg.get("slots"), list):
+        posted = [e for e in sg["slots"] if isinstance(e, dict) and e.get("posted_at")]
+        out["sgpx"] = {"posted": len(posted),
+                       "waiting": sum(1 for e in sg["slots"] if isinstance(e, dict) and e.get("post_note")),
+                       "props": sum(len(e.get("props") or []) for e in posted),
+                       "tds": sum(len(e.get("tds") or []) for e in posted)}
+        if not sg["slots"] and str(sg.get("note") or "").startswith("the SGPX parlays did not build"):
+            out["sgpx"]["error"] = str(sg["note"]).split(":")[1].strip()[:80] if ":" in sg["note"] else "failed"
     return out
 
 
