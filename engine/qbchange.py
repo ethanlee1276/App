@@ -420,6 +420,10 @@ def card(ch: dict, applied: float = 1.0, own: bool = False, position: str = "") 
            "replacement": ch.get("replacement"), "tier": ch["tier"], "headline": headline(ch),
            "detail": detail(ch), "applied": round(applied, 3), "note": note,
            "reported": ch.get("reported"), "volume": volume}
+    if ch.get("lean"):
+        # The new starter's own lean between his targets, in words (engine/qblean, step ABZ).
+        from . import qblean as _ql
+        out["lean"] = _ql.words(ch)
     # TOO FEW PASSES TO RATE (their instructions v3.1 §8: "no pass-catcher legs
     # on that team"; likelyboard.METHOD_NEW_QB reads it). Present only when true.
     if (ch.get("status") != "RETURNS" and ch.get("replacement")
@@ -443,6 +447,18 @@ def effect(prop, game) -> tuple:
     if mult != 1.0:
         reason = (f"QB change: {headline(ch)} — behind a downgrade at quarterback receivers lost "
                   f"{round((1 - mult) * 100)}% (measured) (×{mult:.2f})")
+    # THE NEW STARTER'S OWN LEAN between his targets (engine/qblean, step ABZ): measured on 199 new starters' games.
+    from . import qblean as _ql
+    lean = _ql.multiplier(ch, prop)
+    if lean != 1.0:
+        what = _ql.GROUP_WORDS.get(_ql.group(getattr(prop, "position", "")), "his position")
+        lean_why = (f"QB change: {ch.get('replacement') or 'the new starter'} has thrown "
+                    f"{round(float(((ch.get('lean') or {}).get('qb') or {}).get(_ql.group(prop.position), 0)) * 100)}% "
+                    f"of his targets to {what}, against the team's "
+                    f"{round(float(((ch.get('lean') or {}).get('team') or {}).get(_ql.group(prop.position), 0)) * 100)}% "
+                    f"lately; a new starter's own split carried over a fifth of the way (measured) (×{lean:.2f})")
+        reason = f"{reason}; {lean_why}" if reason else lean_why
+        mult = round(mult * lean, 4)
     return mult, reason, card(ch, mult, position=getattr(prop, "position", ""))
 
 

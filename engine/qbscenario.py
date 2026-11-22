@@ -129,7 +129,9 @@ def build(slate, starters: dict, injuries: list, changes_fn, price, sport: str =
             rows.sort(key=lambda r: (-abs(r["sits"] - r["plays"]), r["player"]))
             out.append({"team": team, "starter": who["starter"], "status": who["status"],
                         "replacement": ch.get("replacement"), "tier": ch.get("tier"),
-                        "headline": _qbc.headline(dict(ch, status=who["status"])), "rows": rows})
+                        "headline": _qbc.headline(dict(ch, status=who["status"])), "rows": rows,
+                        # The backup's own lean between his targets, priced in ``sits`` (engine/qblean).
+                        **({"lean": ch["lean"]} if ch.get("lean") else {})})
         except Exception as exc:                             # noqa: BLE001
             print(f"  ⚠️ {team}'s if-he-sits version not built ({type(exc).__name__}: {exc})")
     return out

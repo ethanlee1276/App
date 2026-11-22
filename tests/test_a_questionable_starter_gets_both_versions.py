@@ -152,7 +152,7 @@ def test_the_nfl_build_makes_them_and_the_page_opens_the_section():
     nb = (ROOT / "nfl_build.py").read_text(encoding="utf-8")
     i = nb.index("result = run_slate(slate, config, model=model, nfl_usage=nfl_usage,")
     assert nb.index('result["qb_scenarios"] = _qs.build(', i) > i
-    assert "lambda inj: _qbc.changes(_qb_now, inj, depth_qb1, news_qb=_news_now)," in nb
+    assert "lambda inj: _qls.attach(_qbc.changes(_qb_now, inj, depth_qb1, news_qb=_news_now), _qls_doc," in nb
     assert "lambda sub: _price_props(sub, config, model=model, nfl_usage=nfl_usage, team_notes=qb_notes," in nb
     cb = (ROOT / "cfb_build.py").read_text(encoding="utf-8")
     j = cb.index('out["recommendations"] = _price_props(_prop_slate, sport="cfb")')

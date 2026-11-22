@@ -720,6 +720,18 @@ def main() -> None:
         qb_changes = _qbc.changes(carry_report.get("qb") or {},
                                   [i for g in slate.games for i in g.injuries], depth_qb1,
                                   news_qb=_news_qb)
+        # THE NEW STARTER'S OWN LEAN between his targets (engine/qblean, step ABZ): it rides each change into
+        # pricing (engine/qbchange.effect).
+        try:
+            from engine import qblean as _ql
+            _ql_doc = _ql.load()
+            _ql.attach(qb_changes, _ql_doc, _weekly_kept.get("stats") or [], args.week)
+            for t, ch in sorted(qb_changes.items()):
+                if ch.get("lean"):
+                    print(f"  · {t}: {_ql.words(ch)}")
+        except Exception as _qlx:                              # noqa: BLE001
+            _ql_doc = {}
+            print(f"  ⚠️ the new starters' leans not read: {_qlx}")
         _qb_applied = _qbc.apply_to_slate(slate, qb_changes)
         if qb_changes:
             print(f"\nQB changes: {len(qb_changes)} team(s) starting someone else.")
@@ -1213,12 +1225,15 @@ def main() -> None:
     # IF THE STARTER PLAYS, AND IF HE SITS (engine/qbscenario, step ABS): each team whose starting quarterback is
     # questionable or a game-time decision, its props priced both ways by the board's own pricing, for its report.
     try:
-        from engine import qbchange as _qbc, qbscenario as _qs
+        from engine import qbchange as _qbc, qbscenario as _qs, qblean as _qls
         from engine.pipeline import price_props as _price_props
         _qb_now, _news_now = carry_report.get("qb") or {}, locals().get("_news_qb") or {}
+        _qls_doc = locals().get("_ql_doc") or {}
         result["qb_scenarios"] = _qs.build(
             slate, _qs.nfl_starters(_qb_now), [i for g in slate.games for i in g.injuries],
-            lambda inj: _qbc.changes(_qb_now, inj, depth_qb1, news_qb=_news_now),
+            # The backup's own lean between his targets rides the if-he-sits change too (engine/qblean, step ABZ).
+            lambda inj: _qls.attach(_qbc.changes(_qb_now, inj, depth_qb1, news_qb=_news_now), _qls_doc,
+                                    _weekly_kept.get("stats") or [], args.week),
             lambda sub: _price_props(sub, config, model=model, nfl_usage=nfl_usage, team_notes=qb_notes,
                                      sport="nfl", ripples=ripples), sport="nfl")
         _qs.attach_news(result["qb_scenarios"], "nfl")

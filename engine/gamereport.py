@@ -1635,6 +1635,8 @@ def sec_injuries(c: Ctx) -> dict | None:
                 text += f". {q['detail']}"
             if q.get("volume"):
                 text += f". {q['volume']}"
+            if q.get("lean"):
+                text += f". {q['lean']}"
             blocks.append(_p(text))
     resets = (c.result.get("sample_resets") or {})
     for bucket in ("reset", "held"):
@@ -1707,6 +1709,12 @@ def sec_swing(c: Ctx) -> dict | None:
         else:
             effect = f"If he sits, {rep} starts"
         blocks.append(_p(effect))
+        if sc.get("lean"):
+            # The backup's own lean between his targets (engine/qblean, step ABZ), in the sits version's numbers.
+            from .qblean import words as _lean_words
+            lw = _lean_words({"replacement": rep, "lean": sc["lean"]}, f"the {club}" if c.sport == "nfl" else club)
+            if lw:
+                blocks.append(_p(lw))
         moved = [r for r in sc.get("rows") or [] if abs(float(r.get("sits", 0)) - float(r.get("plays", 0))) >= SWING_MIN]
         if moved:
             blocks.append(_list(

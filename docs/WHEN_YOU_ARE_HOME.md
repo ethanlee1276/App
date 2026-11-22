@@ -9338,6 +9338,26 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABZ. Quarterback and receiver chemistry, measured: a new starter's own lean moves his targets, a pair's
+"chemistry" does not** (step 865; 22 November). Nothing to run. You asked to measure "the chemistry between
+quarterbacks and their wide receivers and their tight ends ... one quarterback may prefer to throw more to a certain
+wide receiver or tight end ... or they may prefer to throw to tight ends more compared to wide receivers in
+general". I measured it on nflverse's play-by-play, every regular-season pass 2017 to 2026 (about 170,000 targets),
+each setting chosen on 2021-2023 and judged on seasons it never saw. One receiver with one quarterback: his share of
+the targets with this week's starter, against his share over all his recent games, predicted his targets worse at
+every setting (the two shares sit 1.3 points apart at the median), and so did his catch rate and yards a target with
+that quarterback; a receiver's role is set by the offense, not by who throws to him, so it is in no number. A new
+starter's own split between wide receivers, tight ends and backs is real: moved a fifth of the way from the team's
+recent split toward his career split, it improved six of the seven unseen seasons (199 games; 2017 +11.7%, 2018
++12.1%, 2019 -0.6%, 2020 +6.5%, 2024 +1.8%, 2025 +2.3%, 2026 +0.7%). Its size is not pinned down: the fit seasons'
+own best, a blend of 0.35, fails on the unseen seasons, so the fifth is the one-standard-error rule's pick, and
+every blend from a tenth to a fifth passes. Now, when a team's starter is out or benched, each receiver's catches
+and receiving yards move by how much his position's share moves that fifth of the way, capped at 15% either way,
+after the measured downgrade step; the board, Most Likely, the Edge picks, the report's picks and the if-he-sits
+version all read it, and the report says it ("Kyle Trask has thrown 40% of his targets to tight ends ... the tight
+ends' targets +7%"). The career splits are built by the Wednesday fitters, so it starts with this Wednesday's run.
+`python3 chemfit.py` measures it again. Off without a deploy: `sudo ./deploy/setenv.sh QB_QB_LEAN off`.
+
 **ABY. A listed player's newest word, everywhere the site lists him** (step 864; 22 November). Nothing to run. You
 said: "Baker Mayfield's foot/right thumb is slated to play in Sunday's game against Detroit Lions, Ian Rapoport of
 NFL Network reports. But he's still labeled as questionable on ESPN ... we need to be ... reporting it in our game

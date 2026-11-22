@@ -2779,13 +2779,19 @@ def _run_deep_refit(log) -> list[str]:
     """The Wednesday deep fitters, out of process and detached.
     Injectable for tests, which must never spawn the real fitters.
 
+    engine.qblean rides along too (step ABZ, 2026-11-22): each quarterback's career split between wide
+    receivers, tight ends and backs, which a quarterback change on the next NFL build reads.
+
     engine.scouthist rides along (2026-10-04): it replays the scout's
     football flags over every stored season and saves the ones proven in
     both halves, which the Most Likely board reads on its next build — so
     the history behind a "first game back" correction re-measures itself
     as seasons are added, with nobody pasting it."""
     return (_spawn_module("engine.deepfit", log) + _spawn_module("engine.scouthist", log)
-            + _spawn_module("engine.posspread", log) + _spawn_module("engine.cfb.lineup", log))
+            + _spawn_module("engine.posspread", log) + _spawn_module("engine.cfb.lineup", log)
+            # A new starter's own lean between his targets (engine/qblean, step ABZ): each quarterback's career
+            # split, off the play-by-play, kept for the NFL build's quarterback changes.
+            + _spawn_module("engine.qblean", log))
 
 
 def _continue_deep_refit(log) -> list[str]:
