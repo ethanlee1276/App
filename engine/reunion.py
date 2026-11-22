@@ -42,7 +42,9 @@ def stints(conn, sport: str = "nfl") -> dict:
         _STINTS.clear()
         _STINTS[key] = out
         return out
-    except Exception:                                        # noqa: BLE001 — a history that cannot be read says nothing
+    except Exception as exc:                                 # noqa: BLE001 — a history that cannot be read says nothing
+        # …and says so in the build log: an empty answer is also what a history with no games gives.
+        print(f"  ⚠️ the players' games club by club not read ({type(exc).__name__}: {exc})")
         return {}
 
 

@@ -141,6 +141,9 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # failure prints its own line in the build log ("the SGPX parlays not added to the reports"), the
         # reports kept as they were.
         "_sgpx",
+        # THE PLAYERS' GAMES CLUB BY CLUB (engine/reunion.stints, step ACK): {} on a failure, as on a history with
+        # no games, so a failure prints its own line in the build log; the report says nothing either way.
+        "stints",
         # THE EXPORT'S SAMPLER (engine/stacksample.Sampler._run, 2026-11-08),
         # caught by this sweep the day it was written: it returns None either
         # way, and a failure sets ``error``, which the settle pass puts on its
