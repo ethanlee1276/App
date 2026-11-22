@@ -3286,6 +3286,17 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  basketball history: moving the preseason games out failed: {exc}")
 
+    # BASEBALL'S TEAM PAGES, READY (step ACD): every club's season read once and kept (engine/teamdex.warm), so
+    # a reader's first team page is served from the copy; read again only when a baseball row changed since.
+    if _hconn is not None:
+        try:
+            from . import teamdex as _tdx
+            _kept = _tdx.warm(_hconn, "mlb")
+            if _kept:
+                log(f"  team pages: baseball's season kept for {_kept} clubs")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  team pages: keeping baseball's season failed: {exc}")
+
     # MEN'S COLLEGE BASKETBALL RESULTS (2026-11-13) — ESPN's Division I
     # scoreboard and each final's box score, one date at a time from the
     # league's last stored final, in its season window (November to the

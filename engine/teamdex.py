@@ -733,9 +733,60 @@ def _latest_season(conn, sport: str, team: str) -> int | None:
 _SUMS = ("SELECT l.player AS player, l.position AS position, l.market AS market, COUNT(*) n, "
          "SUM(l.value) total, COUNT(DISTINCT l.game_id) games")
 
+#: BASEBALL'S SEASON, EVERY CLUB AT ONCE, KEPT (step ACD, 22 November 2026). Baseball's team pages never
+#: answered on the box: the Yankees' gave up at 90 seconds, the Dodgers' at 55 and the Mariners' at 90. A
+#: baseball row is filed under its player and day ("Name-2026-09-27"), so a club's rows are read through its
+#: game days (`_keyed`), and each of its ~160 days reads every club's rows of that day: about the league's
+#: whole season, for one club, twice a page (the squad and the stat page). One read of the season groups
+#: every club's sums at once from the same rows, and it is kept against the logs' own count of their changes
+#: (engine/logcache): read again only when a baseball row changes, and served from the copy otherwise (all
+#: winter). The night warms it (`warm`), so no reader waits on the first read. Hockey's and basketball's
+#: pages answer in one to four seconds their own way, and are read as before.
+SEASON_KEPT = frozenset({"mlb"})
+
+
+def _kept_season(conn, sport: str, season: int) -> dict:
+    """``{team: [(player, position, market, n, total, games)]}`` for every club in one season: one read,
+    kept (`SEASON_KEPT`)."""
+    def compute() -> dict:
+        t0 = _time.perf_counter()
+        out: dict = {}
+        for r in conn.execute(
+                "SELECT team, player, position, market, COUNT(*), SUM(value), COUNT(DISTINCT game_id) "
+                "FROM player_game_logs WHERE sport=? AND season=? AND player<>'' "
+                "GROUP BY team, player, position, market", (sport, season)):
+            out.setdefault(str(r[0] or ""), []).append(tuple(r[1:]))
+        _note("season_read", t0, f"{season} {len(out)} clubs")
+        return out
+    from . import logcache
+    return logcache.memo(conn, "team_season_rows", sport, (int(season),), compute, code=__file__)
+
+
+def warm(conn, sport: str) -> int:
+    """Read the newest season of a kept league (`SEASON_KEPT`) into the kept copy, for the night: the clubs it
+    holds, or 0 for a league read as before. Never raises."""
+    if sport not in SEASON_KEPT:
+        return 0
+    try:
+        row = conn.execute("SELECT MAX(season) FROM games WHERE sport=?", (sport,)).fetchone()
+        return len(_kept_season(conn, sport, int(row[0]))) if row and row[0] is not None else 0
+    except Exception:                                         # noqa: BLE001
+        return 0
+
 
 def _season_rows(conn, sport: str, team: str, season: int) -> list:
-    """The team's (player, position, market) sums for one season (`_keyed`)."""
+    """The team's (player, position, market) sums for one season (`_keyed`; a kept league's off its kept
+    season, `_kept_season`)."""
+    if sport in SEASON_KEPT:
+        t0 = _time.perf_counter()
+        try:
+            kept = _kept_season(conn, sport, season).get(team)
+        except Exception:                                     # noqa: BLE001
+            kept = None
+        if kept:
+            _note("kept", t0, f"{season} {len(kept)} rows")
+            keys = ("player", "position", "market", "n", "total", "games")
+            return [dict(zip(keys, r)) for r in kept]
     games = _team_games(conn, sport, team, season)
     rows = _keyed(conn, sport, team, season, games, _SUMS,
                   " AND l.player<>'' GROUP BY l.player, l.position, l.market") if games else None

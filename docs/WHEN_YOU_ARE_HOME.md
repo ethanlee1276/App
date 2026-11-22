@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACD. Baseball's team pages open again** (step 869; 22 November). Nothing to run. Every baseball team page gave up
+before it answered: the Yankees' and the Mariners' at 90 seconds, the Dodgers' with an error at 55, while hockey's
+answered in about four seconds and basketball's in one. The cause: a baseball stat line is filed under the player
+and the day, so the page found a team's lines by reading every game day of its season, and each day held every
+team's lines. One team's page read nearly the whole league's season, and did it twice (the roster and the stat
+tables). Now the season is read once for every team together, and that read is kept until a baseball stat line
+changes (all winter, it never does). The nightly run makes that read, so a reader's first team page is served from
+it straight away. Hockey and basketball team pages are read as before.
+
 **ACC. A settled parlay reads like your screenshot** (step 868; 22 November). Nothing to run. You sent a betting
 app's "Recently Settled" list and said you want to scroll through the game report data and see each leg green if it
 won, red if it lost, and the whole parlay green if it won. Every place that lists a finished game's report tickets
