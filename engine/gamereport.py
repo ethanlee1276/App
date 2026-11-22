@@ -1651,6 +1651,9 @@ def sec_injuries(c: Ctx) -> dict | None:
             if any(f"joined {t} " in det + " " for t in c.teams):
                 blocks.append(_p(f"{who} {det} (week {r.get('week')}) — the games before the move "
                                  f"count for less"))
+    # BACK WITH A CLUB HE PLAYED FOR (engine/reunion, step ACK): the game's men with a prop, their old games there.
+    for line in _reunion_lines(c):
+        blocks.append(_p(line))
     if not blocks:
         if status.get("applied") or status.get("asked") or status.get("total"):
             blocks.append(_p("Neither team lists a starter or a featured player as out or "
@@ -3792,6 +3795,25 @@ def _card_in_game(c: Ctx, r: dict) -> bool:
     if r.get("kind") == "game":
         return {r.get("home"), r.get("away")} == teams or {r.get("team"), r.get("opponent")} == teams
     return r.get("team") in teams and (not r.get("opponent") or r.get("opponent") in teams)
+
+
+def _reunion_lines(c: Ctx) -> list:
+    """engine/reunion's lines for this game's men with a prop on the board (NFL; the build's history connection).
+    [] when there is none, or the history cannot be read."""
+    if c.sport != "nfl" or c.conn is None or not c.season:
+        return []
+    try:
+        from . import reunion
+        from .qbchange import club_words
+        seen, players = set(), []
+        for r in _card_pool(c):
+            who, team = str(r.get("player") or ""), str(r.get("team") or "")
+            if who and team in c.teams and (who, team) not in seen:
+                seen.add((who, team))
+                players.append((who, team))
+        return reunion.lines_for(c.conn, players, int(c.season), club_words)
+    except Exception:                                        # noqa: BLE001 — words only: a history that will not read says nothing
+        return []
 
 
 def _card_pool(c: Ctx, key: str = "rows") -> list:

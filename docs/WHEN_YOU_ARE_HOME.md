@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACK. A receiver or back with a club he played for is read against his games there too** (step 876; 22 November).
+Nothing to run. The same as ACJ for every other man with a prop in an NFL game: a wide receiver, tight end or back
+whose club now is one he played for before playing somewhere else (four games there or more) gets a line on his
+game's report, off the box's game logs: his games for them, the seasons, and his catches and receiving yards a game
+there, or his carries and rushing yards. Three such lines a game at most, the most games there first. Words only,
+like ACJ: nothing prices them until it is measured.
+
 **ACJ. A quarterback back with a club he played for is read against his games there** (step 875; 22 November). One
 optional command (00r). You asked for this with Kirk Cousins back with the Vikings; tonight he starts for them in
 Kyler Murray's place. The quarterback history the box builds off the play-by-play (the one ABZ's lean reads) now
