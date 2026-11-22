@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABV. The night keeps the basketball history to its leagues' own games** (step 861; 22 November). Nothing to run.
+Checking the live player pages against ESPN's: Caitlin Clark's 2026 season still counted the All-Star Game (it read
+"IND/SPO") and exhibitions against "COOP" and Nigeria's national team; A'ja Wilson's every season since 2021 counted
+an All-Star side (USA, WIL, CLA, SPO); Jalen Brunson's 2024-25 and 2023-24 counted the NBA's (STRIPES, KEN). Those
+games sat in the pages' averages and in the boards' form and hit rates. The nightly has refused such games since 17
+November, and the two commands that take out what it stored before (RUN_NEXT 00j) were never run on the box. The
+night runs them now: once a week it takes out every stored game with a side that is no club of its league (a side
+with more than six stored games is a club the tables do not list yet, and it is said in the log and left alone), and
+it moves each stored season's preseason games to the preseason tables, forty scoreboard days a night until every
+season is done. The first night should clear them. One more difference from ESPN's pages, in every league but
+baseball, the NFL's included: a season's row counts its playoff games with the regular season (Josh Allen's 2024
+reads 19 games), where ESPN shows the regular season and the postseason apart. Not changed here; it is a decision
+for you, since the NFL page does it too.
+
 **ABU. The NBA's own word under ESPN's "Day-To-Day"** (step 860; 22 November). Nothing to run. ESPN files an NBA
 player who is probable, questionable or doubtful all as "Day-To-Day", and the blurb under it keeps the league's own
 word. This morning: "Siakam (hip) is listed as questionable for Sunday's game against New York", "Cunningham (knee)

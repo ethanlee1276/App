@@ -62,32 +62,47 @@ def season_days(conn, league: str, season: int) -> list[str]:
     return [str(r[0]) for r in rows if r[0]]
 
 
+def found_season(conn, league: str, season: int, load=None) -> dict:
+    """``found`` for one stored season: {"games": [...], "rows": n, "unread": [days], "asked": days asked}."""
+    load = load or _scoreboard(league)
+    games, unread, asked = [], [], 0
+    for day in season_days(conn, league, season):
+        asked += 1
+        try:
+            listed = load(day) or []
+        except Exception as exc:                          # noqa: BLE001
+            unread.append(f"{day}: {exc}")
+            continue
+        for g in listed:
+            if not g.get("preseason"):
+                continue
+            gid = str(g.get("game_id") or "")
+            row = conn.execute("SELECT season, period, home, away FROM games WHERE sport=? AND game_id=?",
+                               (league, gid)).fetchone() if gid else None
+            if not row:
+                continue
+            lines = conn.execute("SELECT COUNT(*) FROM player_game_logs WHERE sport=? AND game_id=?",
+                                 (league, gid)).fetchone()[0]
+            games.append({"game_id": gid, "season": int(row[0]), "day": str(row[1])[:10],
+                          "home": row[2], "away": row[3], "rows": int(lines)})
+    games.sort(key=lambda g: (g["day"], g["game_id"]))
+    return {"games": games, "rows": sum(g["rows"] for g in games), "unread": unread, "asked": asked}
+
+
+def stored_seasons(conn, league: str) -> list:
+    return [int(r[0]) for r in conn.execute(
+        "SELECT DISTINCT season FROM games WHERE sport=? AND season IS NOT NULL ORDER BY season", (league,))]
+
+
 def found(conn, league: str, load=None) -> dict:
     """{"games": [{game_id, season, day, home, away, rows}], "rows": n, "unread": [days]} for one league:
     every stored game the scoreboard calls preseason, oldest first."""
     load = load or _scoreboard(league)
-    seasons = [int(r[0]) for r in conn.execute(
-        "SELECT DISTINCT season FROM games WHERE sport=? AND season IS NOT NULL ORDER BY season", (league,))]
     games, unread = [], []
-    for season in seasons:
-        for day in season_days(conn, league, season):
-            try:
-                listed = load(day) or []
-            except Exception as exc:                          # noqa: BLE001
-                unread.append(f"{day}: {exc}")
-                continue
-            for g in listed:
-                if not g.get("preseason"):
-                    continue
-                gid = str(g.get("game_id") or "")
-                row = conn.execute("SELECT season, period, home, away FROM games WHERE sport=? AND game_id=?",
-                                   (league, gid)).fetchone() if gid else None
-                if not row:
-                    continue
-                lines = conn.execute("SELECT COUNT(*) FROM player_game_logs WHERE sport=? AND game_id=?",
-                                     (league, gid)).fetchone()[0]
-                games.append({"game_id": gid, "season": int(row[0]), "day": str(row[1])[:10],
-                              "home": row[2], "away": row[3], "rows": int(lines)})
+    for season in stored_seasons(conn, league):
+        one = found_season(conn, league, season, load)
+        games += one["games"]
+        unread += one["unread"]
     games.sort(key=lambda g: (g["day"], g["game_id"]))
     return {"games": games, "rows": sum(g["rows"] for g in games), "unread": unread}
 

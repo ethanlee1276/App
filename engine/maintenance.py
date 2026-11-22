@@ -2078,6 +2078,87 @@ def wnba_box_refill(state: dict, hconn, ingest, log=print, per_night: int = WNBA
     return read
 
 
+# --- THE BASKETBALL HISTORY, ITS LEAGUES' OWN GAMES ONLY (step ABV, 22 November 2026) --------------------------------
+#: Checking the live player pages on the Sunday: Caitlin Clark's 2026 season still counted the All-Star Game
+#: ("IND/SPO") and exhibitions against "COOP" and Nigeria's national team; A'ja Wilson's every season since 2021 an
+#: All-Star side (USA, WIL, CLA, SPO); Jalen Brunson's 2024-25 and 2023-24 the NBA's (STRIPES, KEN). The writer has
+#: stored a pro league's game only when both sides are its clubs since 17 November (sources/espnhoops.ingest_day),
+#: and the two commands that take out what it stored before (engine/hoopsexhibitions, engine/hoopspreseason; RUN_NEXT
+#: 00j) waited to be typed on the box. The night runs them now.
+HOOPS_CLEAN_LEAGUES = ("nba", "wnba")
+#: A side that is no club of its league is an All-Star or exhibition side only while it has at most this many stored
+#: games in all (an All-Star weekend's tournament plays three, a national team's tour one or two). One with more is a
+#: club the division tables do not list yet (engine/divisions): it is said in the log and never removed.
+EXHIBITION_MAX_GAMES = 6
+#: How often the history is looked over again for such games: the writer refuses them, so after the first night
+#: there should be none.
+HOOPS_CLEAN_EVERY_DAYS = 7
+#: The scoreboard days asked a night for stored preseason games (free ESPN requests), oldest season first; a season
+#: whose every day answered is done and never asked again.
+PRESEASON_DAYS_A_NIGHT = 40
+
+
+def hoops_exhibitions_out(hconn, log=print, leagues=HOOPS_CLEAN_LEAGUES) -> int:
+    """Take the stored All-Star and exhibition games out of the NBA's and the WNBA's history (engine/hoopsexhibitions),
+    every game whose sides that are no club each have at most EXHIBITION_MAX_GAMES stored games. Returns the rows
+    removed."""
+    from . import hoopsexhibitions as _x
+    removed = 0
+    for league in leagues:
+        rep = _x.found(hconn, league)
+        if not rep["games"]:
+            continue
+        seen: dict = {}
+        for g in rep["games"]:
+            for side in g["sides"]:
+                if not _x.is_club(league, side):
+                    seen.setdefault(side, set()).add(g["game_id"])
+        big = sorted(side for side, ids in seen.items() if len(ids) > EXHIBITION_MAX_GAMES)
+        gone = [g for g in rep["games"] if not any(side in big for side in g["sides"])]
+        if big:
+            log(f"  ⚠️  {league} history: {', '.join(big)} is no {league.upper()} club in engine/divisions and has "
+                f"more than {EXHIBITION_MAX_GAMES} stored games; left alone (a club to add there?)")
+        if gone:
+            n = _x.apply(hconn, league, {"games": gone})
+            removed += n
+            sides = sorted({side for g in gone for side in g["sides"] if not _x.is_club(league, side)})
+            log(f"  {league} history: {len(gone)} All-Star or exhibition game(s) taken out, {n:,} row(s) "
+                f"({', '.join(sides)[:160]})")
+    return removed
+
+
+def hoops_preseason_out(state: dict, hconn, log=print, load_for=None, per_night: int = PRESEASON_DAYS_A_NIGHT,
+                        leagues=HOOPS_CLEAN_LEAGUES) -> int:
+    """Move each stored season's preseason games to the preseason tables (engine/hoopspreseason), asking ESPN's
+    scoreboard about at most ``per_night`` days a night, oldest season first; a season whose every day answered is
+    kept in ``state`` ("hoops_preseason_done") and never asked again. Returns the games moved."""
+    from . import hoopspreseason as _pre
+    done = state.setdefault("hoops_preseason_done", {})
+    asked = moved = 0
+    for league in leagues:
+        mine = done.setdefault(league, [])
+        load = (load_for or _pre._scoreboard)(league)
+        for season in _pre.stored_seasons(hconn, league):
+            if season in mine:
+                continue
+            days = _pre.season_days(hconn, league, season)
+            if asked and asked + len(days) > per_night:
+                return moved                       # the rest wait for tomorrow night
+            one = _pre.found_season(hconn, league, season, load)
+            asked += one["asked"]
+            if one["games"]:
+                res = _pre.apply(hconn, league, one)
+                moved += res["games"]
+                log(f"  {league} history: {res['games']} preseason game(s) of {season} moved out of the season "
+                    f"({res['lines']:,} stat line(s))")
+            if one["unread"]:
+                log(f"  ⚠️  {league} history: {len(one['unread'])} day(s) of {season} unread ({one['unread'][0]}); "
+                    "asked again tomorrow night")
+            else:
+                mine.append(season)
+    return moved
+
+
 def days_without_final(hconn, sport: str, before: _dt.date, today: _dt.date, tries: dict) -> list:
     """The days, oldest first, before ``before`` and inside REREAD_WINDOW_DAYS
     of ``today``, on which a stored game of ``sport`` has no final; a day read
@@ -3182,6 +3263,22 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             _wrconn.commit()
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  wnba box scores: reading again the days filed before every column failed: {exc}")
+
+    # The basketball history, its leagues' own games only (step ABV): the All-Star and exhibition games stored before
+    # the writer refused them, once a week, and each stored season's preseason, a few seasons a night until done.
+    if _hconn is not None:
+        import time as _ctime
+        _cnow, last_clean = _ctime.time(), state.get("hoops_clean_ts")
+        if not (isinstance(last_clean, (int, float)) and _cnow - last_clean < HOOPS_CLEAN_EVERY_DAYS * 86400):
+            try:
+                hoops_exhibitions_out(_hconn, log)
+                state["hoops_clean_ts"] = _cnow
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  basketball history: taking out the All-Star and exhibition games failed: {exc}")
+        try:
+            hoops_preseason_out(state, _hconn, log)
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  basketball history: moving the preseason games out failed: {exc}")
 
     # MEN'S COLLEGE BASKETBALL RESULTS (2026-11-13) — ESPN's Division I
     # scoreboard and each final's box score, one date at a time from the
