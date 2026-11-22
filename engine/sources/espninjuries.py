@@ -212,6 +212,33 @@ def designation(comment, day: str | None = None) -> str | None:
     return "game-time decision" if word == "a game-time decision" else word
 
 
+def word_for_today(row: dict, now: dt.datetime | None = None) -> dict | None:
+    """The league's own word under a bare "Day-To-Day" for today's or tomorrow's game (Eastern), for the
+    Injuries page (step ABW): ``{"word", "day"}``, the day None when the blurb names none (then only a blurb
+    filed in the last day counts). None for any other status, or a blurb about another day."""
+    if str((row or {}).get("status") or "").strip().lower() != "day-to-day" or not row.get("comment"):
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        et = (now or dt.datetime.now(dt.timezone.utc)).astimezone(ZoneInfo("America/New_York"))
+    except Exception:                                        # noqa: BLE001
+        return None
+    text = " ".join(str(row["comment"]).split())
+    named = {m.lower() for m in WEEKDAYS.findall(text)}
+    if named:
+        for d in (et, et + dt.timedelta(days=1)):
+            day = d.strftime("%A")
+            if day.lower() in named:
+                word = designation(text, day)
+                return {"word": word, "day": day} if word else None
+        return None
+    stamp = _parse_iso_ts(row.get("date"))
+    if stamp is None or et.timestamp() - stamp > 86400:
+        return None
+    word = designation(text)
+    return {"word": word, "day": None} if word else None
+
+
 def parse_injuries(payload) -> list[dict]:
     """ESPN's envelope → flat rows, one per player designation.
 

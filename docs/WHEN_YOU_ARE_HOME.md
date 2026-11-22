@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABW. The Injuries page says the NBA's own word too** (step 862; 22 November). Nothing to run. Step ABU put the
+league's word for the game into the NBA's game reports; the Injuries page still said only ESPN's "Day-To-Day". Now a
+day-to-day player whose blurb gives the word for today's or tomorrow's game shows it under his status ("questionable
+for Sun"); a blurb about another day's game shows nothing extra, and one that names no day counts only when it was
+filed in the last day.
+
 **ABV. The night keeps the basketball history to its leagues' own games** (step 861; 22 November). Nothing to run.
 Checking the live player pages against ESPN's: Caitlin Clark's 2026 season still counted the All-Star Game (it read
 "IND/SPO") and exhibitions against "COOP" and Nigeria's national team; A'ja Wilson's every season since 2021 counted
