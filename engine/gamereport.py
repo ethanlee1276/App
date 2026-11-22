@@ -1602,7 +1602,10 @@ def sec_injuries(c: Ctx) -> dict | None:
         mine = [r for r in rows if r.get("team") == t]
         if mine:
             blocks += [_h(c.name(t)), _claimed_list(
-                (f"{r.get('player')} ({r.get('position') or '—'}) — {str(r.get('status') or '').lower()}"
+                (f"{r.get('player')} ({r.get('position') or '—'}) — active: not on "
+                 f"{'the ' if c.sport == 'nfl' else ''}{c.name(t)}{chr(39) if c.name(t).endswith('s') else chr(39) + 's'} "
+                 f"inactives list (was {str(r['cleared']).lower()})" if r.get("cleared") else
+                 f"{r.get('player')} ({r.get('position') or '—'}) — {str(r.get('status') or '').lower()}"
                  + (f"; {newest_word(c, t, r.get('player'))}" if newest_word(c, t, r.get("player")) else "")
                  + (f". {r['opens'][0].upper()}{r['opens'][1:]}" if r.get("opens") else ""),
                  injury_claim(r.get("player"), t, r.get("status"), r.get("position")))

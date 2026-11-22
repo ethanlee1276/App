@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACA. A questionable player not on his club's inactives list plays, and his own props are priced** (step 866; 22
+November). Nothing to run. You said: "we need to be having that information on hand and using that data to our
+advantage." What today's inactives showed: ESPN's board filed the Ravens' seven inactives as "Out" with the note
+"inactive" at 11:32 AM ET, two minutes after the lists came out, and our builds read "Out" as out, so an inactive
+player was already handled. The other half was not: a questionable player who is active stays "Questionable" on the
+board until kickoff (Mayfield still did, after his game's injury list had dropped him), and the site holds a
+questionable player's own props, so his props never priced, inactives or not. Now, once a club's list is on the
+board for its game (at least three players filed inactive since 100 minutes before kickoff; a list left from an
+earlier game does not count), every player it still lists questionable, doubtful or a game-time decision who is not
+on it is active: his own props are priced, no teammate is priced as if he sat, and his game's report says "active:
+not on the Ravens' inactives list (was questionable)". ESPN also files some active players one at a time ("Mayfield
+(foot/thumb) is listed as active Sunday at Detroit, Scott Smith of the Buccaneers' official site reports" at 11:36
+AM ET, with no Buccaneers inactives on the board), and our builds read an "Active" row as a cleared-to-play notice
+that changes nothing, so the club's Friday "Questionable" stood; an "Active" filing inside a player's game window
+now clears him by himself. A club whose list is not on the board yet, and a player with no such filing, stay as they
+were. NFL only; college posts no list. Off without a deploy: `sudo ./deploy/setenv.sh QB_ACTIVE_AFTER_INACTIVES
+off`.
+
 **ABZ. Quarterback and receiver chemistry, measured: a new starter's own lean moves his targets, a pair's
 "chemistry" does not** (step 865; 22 November). Nothing to run. You asked to measure "the chemistry between
 quarterbacks and their wide receivers and their tight ends ... one quarterback may prefer to throw more to a certain

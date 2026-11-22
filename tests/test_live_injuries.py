@@ -249,7 +249,7 @@ def test_the_build_fetches_the_live_board_and_passes_it_through():
     src = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
     assert "live = injuries_feed.load_live_injuries(slate)" in src
     assert "attach_injuries_to_slate(slate, args.season, args.week,\n" \
-           "                                                        live=live)" in src
+           "                                                        live=live, inactives=_inactives, active=_active)" in src
     assert 'injury_status["live_error"] = str(exc)' in src
     assert "live_added=ir.live_added" in src
     assert '"nflverse+espn" if live is not None else "nflverse"' in src

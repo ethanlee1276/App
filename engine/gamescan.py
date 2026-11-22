@@ -1927,7 +1927,9 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
     inj_rows = []
     for i in injuries or []:
         t, st = getattr(i, "team", ""), str(getattr(i, "status", "") or "").upper()
-        if t not in teams or st not in OUT_STATUSES | {"QUESTIONABLE"}:
+        # A man active after his club's inactives (engine/sources/injuries.clear_the_active, step ACA) stays on
+        # the list, so the report says he plays.
+        if t not in teams or (st not in OUT_STATUSES | {"QUESTIONABLE"} and not getattr(i, "cleared", None)):
             continue
         who = getattr(i, "player", "")
         used = usage.get((t, _key(who))) or {}
@@ -1935,8 +1937,10 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
                 and (used.get("carry_share") or 0) < 0.3:
             continue
         inj_rows.append({"team": t, "player": who, "position": getattr(i, "position", ""),
-                         "status": st, "opens": _opens(i, t, opp[t], ratings, charts, usage),
-                         "headshot": _face(faces, who)})
+                         "status": st,
+                         "opens": "" if getattr(i, "cleared", None) else _opens(i, t, opp[t], ratings, charts, usage),
+                         "headshot": _face(faces, who),
+                         **({"cleared": str(i.cleared)} if getattr(i, "cleared", None) else {})})
     # THE PLAYERS WITH PROPS IN THIS GAME, each read against his opponent —
     # AND EVERY TEAM'S KEY PLAYERS WHETHER OR NOT A BOOK HAS PRICED THEM
     # (key_players; Ethan, 2026-09-25: "really good information we should

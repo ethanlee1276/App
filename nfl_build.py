@@ -610,9 +610,23 @@ def main() -> None:
             injury_status["live_error"] = str(exc)
             print(f"\n⚠️  Live injury board unavailable — weekly report only.\n   {exc}")
         _it = _lap("injuries + resets", "live injury board", _it)
+        # ACTIVE AFTER THE INACTIVES (step ACA): each club whose game-day list is on ESPN's board, read off the
+        # board's own cache (the live read above fetched it).
+        _inactives, _active = {}, {}
+        if live is not None:
+            try:
+                from engine.sources.espninjuries import fetch_injuries as _fi, parse_injuries as _pi
+                _board_rows = _pi(_fi("nfl"))
+                _inactives = injuries_feed.inactives_posted(_board_rows, slate.games)
+                _active = injuries_feed.active_filings(_board_rows, slate.games)
+            except Exception as _iex:                         # noqa: BLE001
+                print(f"  ⚠️ the inactives lists not read: {_iex}")
         try:
             ir = injuries_feed.attach_injuries_to_slate(slate, args.season, args.week,
-                                                        live=live)
+                                                        live=live, inactives=_inactives, active=_active)
+            if ir.cleared:
+                print("  Active after the inactives: " + "; ".join(
+                    f"{p} ({t}, was {str(w).lower()})" for t, p, w in ir.cleared))
             summary = ", ".join(f"{n}×{s}" for s, n in sorted(ir.by_status.items()))
             print(f"\nInjuries: {ir.total} designations this week ({summary}) — "
                   f"{ir.weekly} from the weekly report, "

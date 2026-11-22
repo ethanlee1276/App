@@ -36,6 +36,7 @@ ten minutes plus one build behind ESPN.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -136,6 +137,8 @@ class InjuryAttachResult:
     #: Set when the weekly report could not be fetched and the live board
     #: carried the slate alone. None when the weekly report was read.
     weekly_error: str | None = None
+    #: (team, player, was) for each man active after his club's inactives (step ACA).
+    cleared: list = field(default_factory=list)
 
 
 # --- the live board -----------------------------------------------------------
@@ -348,8 +351,111 @@ def _spell_like_slate(injuries: list[Injury], slate) -> None:
             inj.player = hit
 
 
+# --- ACTIVE AFTER THE INACTIVES (step ACA, 22 November 2026) ----------------------------------------------------
+#: Ethan, the Sunday: "clearly that information is being conveyed and we're not reporting it. So we need to be having
+#: that information on hand and using that data to our advantage." ESPN's board files each club's game-day
+#: inactives as "Out" with the note "inactive" within minutes (the Ravens' seven at 11:32 AM ET on 22 November, two
+#: minutes after the lists came out), and keeps a questionable man who is active at "Questionable" until kickoff:
+#: Baker Mayfield still read "Questionable" on the board after his game's injury list had dropped him, and the hold
+#: on a questionable man's own props (engine/injuries.CONCERN_STATUSES) kept every one of his props off the board
+#: through his game. Once a club's list is on the board for its game (at least INACTIVES_MIN rows filed as inactive
+#: since INACTIVES_LEAD_S before kickoff), every man it still lists questionable, doubtful or a game-time decision
+#: who is not on it is active: his own props are priced, and no teammate is priced as if he sat. NFL only (college
+#: posts no list). Off without a deploy: ``sudo ./deploy/setenv.sh QB_ACTIVE_AFTER_INACTIVES off``.
+INACTIVES_LEAD_S = 100 * 60
+INACTIVES_MIN = 3
+INACTIVES_ENV = "QB_ACTIVE_AFTER_INACTIVES"
+_INACTIVE = re.compile(r"^\s*inactive\.?\s*$|\b(?:is|was|been|declared|listed as) inactive\b", re.I)
+
+
+def inactives_posted(rows, games, team_key=None, now: float | None = None) -> dict:
+    """{team: {normalized names}} for each slate team whose game-day inactives list is on ESPN's board (``rows``:
+    espninjuries.parse_injuries rows) for its game in ``games`` (the slate's): its kickoff less than
+    INACTIVES_LEAD_S away (or under way), at least INACTIVES_MIN rows filed as inactive since then."""
+    import os
+    if str(os.environ.get(INACTIVES_ENV, "on")).strip().lower() in ("off", "0", "false", "no"):
+        return {}
+    from .espninjuries import _parse_iso_ts
+    from .oddsapi import TEAM_ABBR, normalize_name
+    from ..gameparlays import game_start
+    team_key = team_key or TEAM_ABBR.get
+    now = time.time() if now is None else now
+    windows: dict = {}
+    for g in games or []:
+        start = game_start({"kickoff": getattr(g, "kickoff", "") or "", "date": getattr(g, "date", "") or ""})
+        if start is None:
+            continue
+        t0 = start.timestamp()
+        if t0 - INACTIVES_LEAD_S <= now <= t0 + 5 * 3600:
+            for team in (getattr(g, "home", ""), getattr(g, "away", "")):
+                windows[team] = (t0 - INACTIVES_LEAD_S, t0 + 5 * 3600)
+    names: dict = {}
+    for r in rows or []:
+        if str(r.get("status") or "").strip().lower() != "out" or not _INACTIVE.search(str(r.get("comment") or "")):
+            continue
+        team = team_key(r.get("team") or "")
+        win = windows.get(team)
+        stamp = _parse_iso_ts(r.get("date"))
+        if win and stamp is not None and win[0] <= stamp <= win[1]:
+            names.setdefault(team, set()).add(normalize_name(r.get("player") or ""))
+    return {t: v for t, v in names.items() if len(v) >= INACTIVES_MIN}
+
+
+def active_filings(rows, games, team_key=None, now: float | None = None) -> dict:
+    """{team: {normalized names}}: the men ESPN's board files "Active" inside their game's inactives window (since
+    INACTIVES_LEAD_S before its kickoff). The board does this one man at a time and not for every club (on 22
+    November: "Mayfield (foot/thumb) is listed as active Sunday at Detroit" at 11:36 AM ET, with no Buccaneers
+    inactives on the board), so it clears a man by himself, whether or not his club's list is there."""
+    import os
+    if str(os.environ.get(INACTIVES_ENV, "on")).strip().lower() in ("off", "0", "false", "no"):
+        return {}
+    from .espninjuries import _parse_iso_ts
+    from .oddsapi import TEAM_ABBR, normalize_name
+    from ..gameparlays import game_start
+    team_key = team_key or TEAM_ABBR.get
+    now = time.time() if now is None else now
+    windows: dict = {}
+    for g in games or []:
+        start = game_start({"kickoff": getattr(g, "kickoff", "") or "", "date": getattr(g, "date", "") or ""})
+        if start is None:
+            continue
+        t0 = start.timestamp()
+        if t0 - INACTIVES_LEAD_S <= now <= t0 + 5 * 3600:
+            for team in (getattr(g, "home", ""), getattr(g, "away", "")):
+                windows[team] = (t0 - INACTIVES_LEAD_S, t0 + 5 * 3600)
+    out: dict = {}
+    for r in rows or []:
+        if str(r.get("status") or "").strip().lower() != "active":
+            continue
+        team = team_key(r.get("team") or "")
+        win = windows.get(team)
+        stamp = _parse_iso_ts(r.get("date"))
+        if win and stamp is not None and win[0] <= stamp <= win[1]:
+            out.setdefault(team, set()).add(normalize_name(r.get("player") or ""))
+    return out
+
+
+def clear_the_active(injuries: list, posted: dict, active: dict | None = None) -> list:
+    """Each injury listed questionable, doubtful or a game-time decision is ACTIVE (its old status kept as
+    ``cleared``) when ESPN filed him "Active" in his game's window (``active``), or when his club's inactives are
+    posted (``posted``) and he is not on the list. Returns the cleared."""
+    from .oddsapi import normalize_name
+    out = []
+    for inj in injuries or []:
+        if getattr(inj, "status", "") not in ("QUESTIONABLE", "DOUBTFUL", "GTD"):
+            continue
+        team, who = getattr(inj, "team", ""), normalize_name(getattr(inj, "player", ""))
+        names = (posted or {}).get(team)
+        if who in ((active or {}).get(team) or set()) or (names is not None and who not in names):
+            inj.cleared = inj.status
+            inj.status = "ACTIVE"
+            out.append(inj)
+    return out
+
+
 def attach_injuries_to_slate(slate, season: int, week: int,
-                             live: list[Injury] | None = None) -> InjuryAttachResult:
+                             live: list[Injury] | None = None, inactives: dict | None = None,
+                             active: dict | None = None) -> InjuryAttachResult:
     """Populate each game's injuries from the real feed and report which of the
     slate's prop players are themselves dinged (and will be held).
 
@@ -372,6 +478,8 @@ def attach_injuries_to_slate(slate, season: int, week: int,
     week_injuries, added = merge_injuries(week_injuries, live or [])
     if live:
         _spell_like_slate(week_injuries, slate)
+    # Active after the inactives (step ACA): a club's list posted, a man still listed and not on it plays.
+    cleared = clear_the_active(week_injuries, inactives or {}, active or {})
 
     by_team: dict[str, list[Injury]] = {}
     for inj in week_injuries:
@@ -385,6 +493,7 @@ def attach_injuries_to_slate(slate, season: int, week: int,
     result = InjuryAttachResult(total=len(week_injuries), weekly=n_weekly,
                                 live=len(live or []), live_added=added,
                                 weekly_error=weekly_error)
+    result.cleared = [(i.team, i.player, i.cleared) for i in cleared]
     for inj in week_injuries:
         result.by_status[inj.status] = result.by_status.get(inj.status, 0) + 1
     for prop in slate.props:

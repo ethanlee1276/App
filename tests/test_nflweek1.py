@@ -92,7 +92,8 @@ def test_the_board_records_whether_the_injury_layer_actually_ran():
     # `applied` must be set from the SUCCESS path only. A default of True,
     # or a set outside the try, would report a layer that never ran.
     assert "applied=True" in BUILD, "nothing ever marks the layer as applied"
-    body = BUILD[i:i + 2600]
+    # Wide enough for the inactives read before the attach (step ACA, 2026-11-22).
+    body = BUILD[i:i + 4600]
     ok = body.index("applied=True")
     err = body.index('injury_status["error"]')
     assert ok < err, "applied=True is set on the failure path"
