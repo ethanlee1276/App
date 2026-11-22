@@ -205,9 +205,13 @@ function rpSgpxTitle(e, kind, n) {
   return `SGPX ${e.day ? "day " : ""}${kind === "tds" ? "touchdown parlay" : "parlay"} ${n}`;
 }
 function rpSgpxTodayHTML(d) {
+  // The likeliest of each kind a window (the day's first): a phone's screen, not every ticket; the tab has them all.
   const rows = [];
-  ((d.sgpx || {}).slots || []).filter((e) => e && e.posted_at).forEach((e) => ["props", "tds"].forEach((k) =>
-    (e[k] || []).forEach((t, i) => rows.push({ e, k, t, n: i + 1 }))));
+  let all = 0;
+  ((d.sgpx || {}).slots || []).filter((e) => e && e.posted_at).forEach((e) => ["props", "tds"].forEach((k) => {
+    all += (e[k] || []).length;
+    if ((e[k] || [])[0]) rows.push({ e, k, t: e[k][0], n: 1 });
+  }));
   if (!rows.length) return "";
   return `<section class="rpk-top rpk-sgpx-today" aria-label="SGPX parlays today">
     <h4 class="rpk-top-h">SGPX parlays<span>our strongest picks from different games, combined</span></h4>
@@ -218,6 +222,7 @@ function rpSgpxTodayHTML(d) {
         <span class="rpk-top-p"><b>${Math.round(100 * Number(t.joint))}%</b> by our numbers${t.take_words
           ? ` · take it at ${escapeHtml(t.take_words)} or better` : ""}</span>
       </button>`).join("")}
+    ${all > rows.length ? `<button type="button" class="btn ghost rpk-sgpx-all" data-rpk-tab="sgpx">All ${all} SGPX tickets ›</button>` : ""}
   </section>`;
 }
 
@@ -240,8 +245,12 @@ function rpTodayHTML(d, byGame, keys) {
     const t = rpTally(g, x.bets, x.tix);
     if (t) Object.keys(done).forEach((f) => { done[f] += t[f]; });
   });
+  // …and the SGPX tickets posted (step ACM), counted with the rest.
+  const sgpxN = ((d.sgpx || {}).slots || []).filter((e) => e && e.posted_at)
+    .reduce((n, e) => n + (e.props || []).length + (e.tds || []).length, 0);
   const carries = [plural(keys.length, "game"), picks ? plural(picks, "pick") : "", threes ? plural(threes, "parlay") : "",
-                   pairs ? plural(pairs, `${pair} pair`) : ""].filter(Boolean).join(" · ");
+                   pairs ? plural(pairs, `${pair} pair`) : "", sgpxN ? plural(sgpxN, "SGPX ticket") : ""]
+    .filter(Boolean).join(" · ");
   const sofar = rpTallyWords(done);
   const jump = keys.length > 1 ? `<div class="std-chips likely-jump rpk-jump">${keys.map((k) => {
     const [away, home] = k.split("@");

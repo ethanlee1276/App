@@ -239,6 +239,8 @@ def test_a_report_and_report_picks_show_them():
     # …and on Today's picks, beside the game report picks, each row opening the tab (Ethan: "on the same page").
     assert "${rpTopHTML(rpTopTickets(d, byGame, keys))}${rpSgpxTodayHTML(d)}${jump}${groups}" in js
     assert 'class="rpk-top-row" data-rpk-tab="sgpx"' in js
+    assert "if ((e[k] || [])[0]) rows.push({ e, k, t: e[k][0], n: 1 });" in js, "the likeliest of each kind a window"
+    assert 'data-rpk-tab="sgpx">All ${all} SGPX tickets ›</button>' in js
     # …and on Best Parlays, the same switch's ranked page, its own tab (one book whole first, then our chance).
     bp = (ROOT / "web" / "js" / "bestparlays.js").read_text(encoding="utf-8")
     assert '["sgpx", "SGPX parlays", "Our strongest picks from different games, combined", sgpx]]);' in bp

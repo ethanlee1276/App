@@ -143,6 +143,8 @@ button.rpk-rec:empty { display: none; }
 .rpk-top-row { display: grid; gap: 2px; width: 100%; padding: 8px 0; border: 0; background: none; text-align: left;
   font: inherit; color: var(--text); cursor: pointer; }
 .rpk-top-row + .rpk-top-row { border-top: 1px solid var(--border-soft); }
+/* The SGPX rows' door to every ticket (js/reportpicks.js rpSgpxTodayHTML). */
+.rpk-sgpx-all { margin-top: 6px; width: 100%; }
 .rpk-top-game { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 600; }
 .rpk-top-legs { font-size: var(--fs-sm); line-height: var(--lh-snug); transition: color .15s ease; }
 .rpk-top-p { color: var(--text-mute); font-size: var(--fs-xs); }
