@@ -2326,6 +2326,23 @@ def main() -> None:
         _t = _clock.lap("injuries + lineup + prop pricing", "lineup", _t)
         out["recommendations"] = _price_props(_prop_slate, sport="cfb")
         _clock.lap("injuries + lineup + prop pricing", "pricing", _t)
+        # IF THE STARTER PLAYS, AND IF HE SITS (engine/qbscenario, step ABS), college's own way: its usual
+        # quarterback questionable or a game-time decision, his team priced both ways.
+        try:
+            from engine import qbscenario as _qs
+            from engine.cfb import lineup as _clu2, qbchange as _cq2
+            _pass = (_lu or {}).get("passers") or {} if "_lu" in locals() else {}
+            _pq = (_lu or {}).get("priced_qbs") or {} if "_lu" in locals() else {}
+            out["qb_scenarios"] = _qs.build(
+                _prop_slate, _qs.cfb_starters(_pass), _cfb_inj,
+                lambda inj: _cq2.changes(_pass, inj, _pq),
+                lambda sub: _price_props(sub, sport="cfb"), sport="cfb") if _pass else []
+            if out["qb_scenarios"]:
+                from engine.sources.cfbdata import resolve_team as _rt
+                _qs.attach_news(out["qb_scenarios"], "cfb", team_key=lambda name: _rt(name, lookup))
+                print("  If-he-sits versions: " + "; ".join(f"{s['team']} {s['headline']}" for s in out["qb_scenarios"]))
+        except Exception as _qsx:                            # noqa: BLE001
+            print(f"  ⚠️  college's if-he-sits versions not built: {_qsx}")
         _clock.mark("injuries + lineup + prop pricing")
         # The inventions (engine/ideas): readings of this slate, written
         # to a private file the pick and game pages ask for.

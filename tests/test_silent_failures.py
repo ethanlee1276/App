@@ -177,6 +177,11 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # and it prints "the picks' post time not applied for <game> (<error>)" into the
         # build's log, which no quiet build does.
         "picks_timeline",
+        # A STARTER'S NEWEST INJURY WORD (engine/qbscenario.attach_news, step ABS, 2026-11-22):
+        # on a fault the scenarios stand without it (the report says his status, as on a day
+        # ESPN files no blurb), and it prints "the starters' newest injury word not read
+        # (<error>)" into the build's log, which no quiet build does.
+        "attach_news",
         # A GAME'S REBUILD FROM ITS REPORT'S PICKS (engine/gamereport._parlays_from_picks,
         # 2026-11-19): None either way, but a failure prints, is kept on the game's
         # entry (rebuild_error) and the heartbeat counts it (threes_short_why), which

@@ -326,7 +326,8 @@
      card, engine/gamereport.sec_card) and the short version; the rest fold
      to their titles. */
   // How the report did, on a finished game (engine/reportgrade), reads first.
-  const OPEN_SECTIONS = ["graded", "card", "short"];
+  // …and if the starter plays or sits (step ABS): the biggest open question about the game, never folded away.
+  const OPEN_SECTIONS = ["graded", "card", "swing", "short"];
 
   /* A rank as a bar's length: 1st the longest, last the shortest. */
   function rankWidth(rank, n) {

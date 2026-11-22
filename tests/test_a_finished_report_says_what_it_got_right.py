@@ -412,7 +412,7 @@ def test_the_page_draws_the_grades_the_kept_picks_and_how_the_report_did():
     js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert "function gradeLine(gr)" in js and "${gradeLine(v.grade)}" in js
     assert "gradeLine((b.grades || [])[i])" in js, "each list line its own grade"
-    assert 'const OPEN_SECTIONS = ["graded", "card", "short"];' in js
+    assert 'const OPEN_SECTIONS = ["graded", "card", "swing", "short"];' in js
     css = (ROOT / "web" / "css" / "report.css").read_text(encoding="utf-8")
     assert ".gr-graded.won" in css and ".gr-graded.lost" in css
     detail = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")

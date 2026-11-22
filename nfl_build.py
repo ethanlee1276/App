@@ -1210,6 +1210,22 @@ def main() -> None:
                        likely_previous=_likely_was,
                        before_likely=_scan_first)
     _mem("run_slate", args.memtrace)
+    # IF THE STARTER PLAYS, AND IF HE SITS (engine/qbscenario, step ABS): each team whose starting quarterback is
+    # questionable or a game-time decision, its props priced both ways by the board's own pricing, for its report.
+    try:
+        from engine import qbchange as _qbc, qbscenario as _qs
+        from engine.pipeline import price_props as _price_props
+        _qb_now, _news_now = carry_report.get("qb") or {}, locals().get("_news_qb") or {}
+        result["qb_scenarios"] = _qs.build(
+            slate, _qs.nfl_starters(_qb_now), [i for g in slate.games for i in g.injuries],
+            lambda inj: _qbc.changes(_qb_now, inj, depth_qb1, news_qb=_news_now),
+            lambda sub: _price_props(sub, config, model=model, nfl_usage=nfl_usage, team_notes=qb_notes,
+                                     sport="nfl", ripples=ripples), sport="nfl")
+        _qs.attach_news(result["qb_scenarios"], "nfl")
+        if result["qb_scenarios"]:
+            print(f"  If-he-sits versions: " + "; ".join(f"{s['team']} {s['headline']}" for s in result["qb_scenarios"]))
+    except Exception as _exc:                                  # noqa: BLE001
+        print(f"  ⚠️ the starters' if-he-sits versions not built: {_exc}")
     # FIRST TOUCHDOWN IS THE NFL'S LONG SHOTS (engine/firsttd; Ethan,
     # 2026-10-31: "I only want our long shot picks to be stuff like ... first
     # touchdown score for NFL ... going after what the data and tools that we

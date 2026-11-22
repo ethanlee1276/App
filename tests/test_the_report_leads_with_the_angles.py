@@ -111,7 +111,8 @@ def test_the_game_reads_his_four_angles():
 
 def test_the_report_puts_them_first():
     src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
-    assert "SECTIONS = (sec_angles, sec_facts," in src
+    # First of the built sections, after only the if-he-sits versions when a starter is questionable (step ABS).
+    assert "SECTIONS = (sec_swing, sec_angles, sec_facts," in src
     assert "angle_tables = _angles.nfl_tables(conn, season, before_week=_week_of(result))" in src
     ftn = (ROOT / "engine" / "sources" / "ftn.py").read_text(encoding="utf-8")
     assert '"yards_gained")' in ftn and 'out["scrambles"]' in ftn and 'out["defense_weeks"]' in ftn

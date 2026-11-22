@@ -449,7 +449,8 @@ def attach(conn, slate, games: list, injuries: list, season: int, date: str) -> 
             for t in (g.get("home"), g.get("away")):
                 out_by[t].add(_norm(name))       # matched only where he is on that team's order
     # The QB change, from the passers the books priced and ESPN's board.
-    chs = cq.changes(cq.passers(conn, int(season), teams), injuries, priced_qbs(slate))
+    passers = cq.passers(conn, int(season), teams)
+    chs = cq.changes(passers, injuries, priced_qbs(slate))
     this = passing(d["players"])
     last_players, _ = season_games(conn, int(season) - 1, teams) if chs else ({}, {})
     before = passing_before(this, passing(last_players), str(date)[:10]) if chs else {}
@@ -477,7 +478,9 @@ def attach(conn, slate, games: list, injuries: list, season: int, date: str) -> 
                            "last": d["last"].get(t, 0), "basis": BASIS}
             lineups[t] = g.lineup[t]
         g.qb_changes = {t: chs[t] for t in (g.home, g.away) if t in chs}
-    return {"qb_changes": chs, "lineups": lineups, "outs": n_out, "orders": len(d["order"])}
+    # …and the passers and the priced quarterbacks themselves, for the if-he-sits versions (engine/qbscenario).
+    return {"qb_changes": chs, "lineups": lineups, "outs": n_out, "orders": len(d["order"]),
+            "passers": passers, "priced_qbs": priced_qbs(slate)}
 
 
 def main(argv=None) -> int:

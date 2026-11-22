@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABS. A questionable starting quarterback gets both versions of his game's report** (step 858; 22 November).
+Nothing to run. You said: "today for the Lions game, it's not confirmed if Baker Mayfield is playing or not yet. So
+we should have a game report ready for if Baker Mayfield is in and one if he's not in." What the site did: a starter
+listed out or doubtful was already priced as out (his backup starts, and his receivers' numbers drop by what we
+measured behind a backup: about 9% fewer catches and 10% fewer yards, 2022 to 2025). A starter listed questionable,
+or a game-time decision, changed nothing: the game was priced as if he plays and the report answered only that side.
+Now, for every team whose starting quarterback is questionable or a game-time decision, the build prices that team's
+props a second time, through the same pricing, with the backup the site would start in his place; and the game's
+report opens a section right under our picks, "If he plays, and if he sits": his status, when the inactives come out
+and when our picks post (after them, from whichever version holds then), the injury report's newest word on him with
+when it was posted (this morning's on Mayfield: "slated to play in Sunday's game against the Lions, Ian Rapoport of
+NFL Network reports"), who starts if he sits and what that has done, and every number that moves, both ways ("Mike
+Evans over 4.5 receptions: 64% if he plays, 58% if he sits"). NFL and college football both build it; college's
+backup effect is measured from college games and is flat until its fit saves one, so a college game says who would
+start and that nothing moves yet. It shows on the next build after the deploy, so today's 1 PM games, whose picks
+post at 11:45 AM ET right after the inactives, are settled by the inactives themselves.
+
 **ABR. The Picks pages share one switch: Most Likely, Report Picks, Best Parlays** (step 857; 22 November). Nothing
 to run. You said: the Picks button "will take you to the most likely picks page, and then there'll be an option in
 that picks page to switch to the game report picks and parlays". The Picks button at the bottom still opens Most

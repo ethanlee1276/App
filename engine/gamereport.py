@@ -1584,6 +1584,70 @@ def sec_injuries(c: Ctx) -> dict | None:
     return _section("injuries", "Injuries and availability", blocks)
 
 
+# --- if the starter plays, and if he sits (ABS) ---------------------------------------------------
+#: IF HE PLAYS, AND IF HE SITS (step ABS, 22 November 2026; engine/qbscenario). Ethan: "we should have a game report
+#: ready for if Baker Mayfield is in and one if he's not in ... users are going to want to see that and know that
+#: before the game starts." A starting quarterback listed questionable, or a game-time decision, is priced both
+#: ways by the build; this section says both, open under our picks: who starts if he sits, what that has done, and
+#: how each of his team's numbers moves.
+SWING_SHOW = 6
+#: A move smaller than this, in chance, is not one.
+SWING_MIN = 0.01
+SWING_STATUS = {"QUESTIONABLE": "questionable", "GTD": "a game-time decision"}
+
+
+def sec_swing(c: Ctx) -> dict | None:
+    from .qbscenario import for_game
+    from .gameparlays import pick_words
+    scen = for_game(c.result, c.teams)
+    if not scen:
+        return None
+    blocks = []
+    for sc in scen:
+        team, who = sc.get("team"), str(sc.get("starter") or "")
+        rep = str(sc.get("replacement") or "his backup")
+        status = SWING_STATUS.get(str(sc.get("status") or "").upper(), "questionable")
+        when = ("the inactives come out 90 minutes before kickoff, and our picks post 75 minutes before it, after them"
+                if c.sport == "nfl" else "our picks post 90 minutes before kickoff, from the newest news on him")
+        if len(scen) > 1:
+            blocks.append(_h(f"{who}, {c.name(team)}"))
+        club = c.name(team)
+        own = ("the " if c.sport == "nfl" else "") + club + ("'" if club.endswith("s") else "'s")
+        blocks.append(_p(f"{who}, {own} starting quarterback, is {status}: {when}, from whichever version "
+                         f"holds then"))
+        news = sc.get("news") or {}
+        if news.get("text"):
+            try:
+                import datetime as _dtm
+                from .gameparlays import _et_clock
+                at = _dtm.datetime.fromisoformat(str(news.get("posted")).replace("Z", "+00:00"))
+                stamp = _et_clock(at)
+            except (TypeError, ValueError):
+                stamp = ""
+            line = f"The newest word on him, posted at {stamp}: {news['text']}" if stamp else \
+                f"The newest word on him: {news['text']}"
+            blocks.append(dict(_p(line), post_at=news.get("posted")) if stamp else _p(line))
+        tier = str(sc.get("tier") or "")
+        if c.sport == "nfl" and tier == "downgrade":
+            effect = (f"If he sits, {rep} starts, a step down by what each has thrown; behind a step down like that, "
+                      f"receivers have caught about 9% fewer passes for about 10% fewer yards (measured on the "
+                      f"2022 to 2025 seasons)")
+        elif tier == "similar":
+            effect = (f"If he sits, {rep} starts, a backup who has thrown about as well: nothing we measured moves "
+                      f"behind a change like that")
+        else:
+            effect = f"If he sits, {rep} starts"
+        blocks.append(_p(effect))
+        moved = [r for r in sc.get("rows") or [] if abs(float(r.get("sits", 0)) - float(r.get("plays", 0))) >= SWING_MIN]
+        if moved:
+            blocks.append(_list(
+                f"{pick_words({'player': r['player'], 'market': r['market'], 'side': 'OVER', 'line': r['line']})}: "
+                f"{_pct(r['plays'])} if he plays, {_pct(r['sits'])} if he sits" for r in moved[:SWING_SHOW]))
+        else:
+            blocks.append(_p("None of the team's priced numbers moves by a point either way"))
+    return _section("swing", "If he plays, and if he sits", blocks)
+
+
 #: How a listed player practised, in words (engine/practice.PRACTICE).
 PRACTICE_WORDS = {"DNP": ("did not practice", "who did not practice"),
                   "Limited": ("limited", "who were limited in practice"),
@@ -4161,7 +4225,7 @@ def parlay_sentence(c: Ctx) -> str:
     return _sentence(". ".join(bits)) if bits else ""
 
 
-SECTIONS = (sec_angles, sec_facts, sec_meetings, sec_market, sec_rankings, sec_identity, sec_injuries,
+SECTIONS = (sec_swing, sec_angles, sec_facts, sec_meetings, sec_market, sec_rankings, sec_identity, sec_injuries,
             sec_matchups, sec_trenches, sec_redzone, sec_context, sec_scripts, sec_watch,
             sec_parlays, sec_weather, sec_before)
 
