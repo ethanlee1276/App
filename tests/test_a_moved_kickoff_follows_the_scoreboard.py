@@ -87,6 +87,29 @@ def test_the_scoreboards_games_are_matched_as_the_overlay_matches_them():
         L.fetch_live = was
 
 
+def test_a_game_that_posted_keeps_its_picks_when_its_start_moves_later():
+    # The Jaguars at the Giants posted for 1 PM; the scoreboard's 4:25 puts its post time ahead again. What it
+    # posted stays: the report's picks (engine/gamereport.picks_timeline) and its parlays (`posted_before`,
+    # tests/test_parlays_post_late_then_never_change.py).
+    import copy
+    import datetime as dt
+    sys.path.insert(0, str(ROOT / "tests"))
+    RP = __import__("test_a_reports_picks_post_once_and_never_change")
+    from engine.reportlog import game_key
+    _result, rep = RP._report(RP.START - dt.timedelta(minutes=70))
+    card = RP._sec(rep, "card")
+    posted = {"card": card, "at": card["posted_at"],
+              "sections": {s["key"]: s for s in rep["sections"] if s.get("key") != "card" and s.get("posted_at")}}
+    result2, _ = RP.TP._nfl_result()
+    result2["game_parlays"] = RP.GP.build(result2, "nfl")
+    result2[RP.GR.PICKS_POSTED_KEY] = {game_key(RP.GAME): copy.deepcopy(posted)}
+    _r, rep2 = RP._report(RP.START - dt.timedelta(hours=5), result2)
+    assert RP._sec(rep2, "card") == posted["card"], "posted: as posted, whatever the clock now says"
+    _r, fresh = RP._report(RP.START - dt.timedelta(hours=5))
+    assert RP._sec(fresh, "card")["blocks"][0]["text"].startswith("Our picks for this game post at "), \
+        "a game that never posted still says when it posts"
+
+
 def test_the_build_reads_them_before_anything_is_timed_off_the_kickoff():
     src = (ROOT / "nfl_build.py").read_text(encoding="utf-8")
     body = src[src.index("def show_games("):src.index("\ndef ", src.index("def show_games(") + 10)]

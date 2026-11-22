@@ -3954,8 +3954,12 @@ def picks_timeline(c: Ctx, sections: list, now=None) -> list:
     A game already started is kept whole by engine/reportkeep. Never raises: on a fault the sections stand."""
     try:
         from .gameparlays import inactives_ready as _ready
-        wait = picks_wait(getattr(c, "sport", ""), c.g, now=now,
-                          ready=_ready(getattr(c, "result", None), c.g, getattr(c, "sport", "")))
+        from .reportlog import game_key
+        # Posted already: as posted, whatever the clock says now (step ACF: a kickoff the scoreboard moves later
+        # takes no posted pick off the report).
+        kept = (((c.result or {}).get(PICKS_POSTED_KEY) or {}).get(game_key(c.g)) or {}) if picks_post_on() else {}
+        wait = None if kept.get("card") else picks_wait(
+            getattr(c, "sport", ""), c.g, now=now, ready=_ready(getattr(c, "result", None), c.g, getattr(c, "sport", "")))
         if wait:
             out = []
             for s in sections:
@@ -3973,8 +3977,6 @@ def picks_timeline(c: Ctx, sections: list, now=None) -> list:
             return [x for x in out if x]
         if not picks_post_on():
             return sections
-        from .reportlog import game_key
-        kept = ((c.result or {}).get(PICKS_POSTED_KEY) or {}).get(game_key(c.g)) or {}
         if kept.get("card"):
             held = dict(kept.get("sections") or {}, card=kept["card"])
             out = [copy.deepcopy(held[s.get("key")]) if s.get("key") in held else s for s in sections]

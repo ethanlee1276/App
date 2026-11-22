@@ -9347,7 +9347,10 @@ to post at 3:10 PM, after it had kicked off, and the Jaguars-Giants picks were d
 Now, whenever the build reads live scores, a game that ESPN's scoreboard lists ten minutes or more from the
 schedule's time on the same day takes ESPN's time right away, before the forecast, the inactives and the post times
 are worked out. A time still to be decided, and a move to another day, are left alone and noted in the build's
-output. Today's two games cannot be re-timed after the fact; from the next build on, a moved game is timed right.
+output. And a game whose picks and parlays have already posted keeps them whatever its start now reads: when the
+Jaguars-Giants kickoff moves from 1 PM to 4:25, the picks it posted for 1 PM stay up rather than coming down until a
+new post time. Today's two games cannot be re-timed after the fact; from the next build on, a moved game is timed
+right.
 
 **ACE. The WNBA's re-read starts with this season** (step 870; 22 November). Nothing to run. Checking A'ja Wilson's
 page on the live site: only her newest 2026 game shows steals, blocks and turnovers, because the nightly re-read of

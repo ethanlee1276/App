@@ -120,14 +120,23 @@ def test_early_builds_post_nothing_the_first_inside_its_lead_posts_and_then_it_h
     assert {k: _legs(x3[k]) for k in ("threes", "twos", "scorers")} == {k: _legs(x2[k]) for k in ("threes", "twos", "scorers")}
 
 
-def test_a_game_posted_before_this_step_and_still_far_off_posts_afresh_at_its_time():
-    # Sunday's NFL tickets were posted days ahead and locked on the 21st; far from their start they come down
-    # until their post time, and then post from the newest numbers.
+def test_a_game_that_posted_is_never_taken_down():
+    # This step's first day took the NFL tickets posted days ahead under the old rule down until their post time
+    # (every one of them has posted again since). From step ACF (22 November) a game that posted stays posted
+    # however far off its start now reads: a kickoff ESPN's scoreboard moves later (the Jaguars at the Giants,
+    # posted for 1 PM, kicking off at 4:25) takes nothing it posted off the board.
     b = _build()
     x = GP.for_game(b, "NYG", "WAS")
     b2 = _build(posted=_posted(x))
     GP.post_late(b2, START - dt.timedelta(hours=20))
-    assert not GP.for_game(b2, "NYG", "WAS")["threes"]
+    x2 = GP.for_game(b2, "NYG", "WAS")
+    assert x2["threes"] and x2.get("posted_before") is True and "post_at" not in x2
+    assert {k: _legs(x2[k]) for k in ("threes", "twos", "scorers")} == {k: _legs(x[k]) for k in ("threes", "twos", "scorers")}
+    held = dict(x, posted_before=True)
+    assert GP.hold_until_post(held, "nfl", START - dt.timedelta(hours=20)) is None and held["threes"]
+    fresh = _build()
+    GP.post_late(fresh, START - dt.timedelta(hours=20))
+    assert not GP.for_game(fresh, "NYG", "WAS")["threes"], "a game that never posted still waits for its time"
 
 
 def test_every_leagues_report_stage_runs_it_after_the_reports_and_before_the_keep():

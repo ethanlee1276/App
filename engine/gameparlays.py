@@ -3313,6 +3313,14 @@ LOCK_ENV = "QB_PARLAY_LOCK"
 LOCK_PLACES = {"threes": THREE_PER_GAME, "twos": TWO_PER_GAME, "scorers": SCORER_PER_GAME}
 
 
+def already_posted(mine) -> bool:
+    """Whether the last build posted any of the game's tickets (the lock's own record, `posted_from`). A game
+    that posted is never held back again (step ACF): its start moving later (a kickoff the scoreboard corrects)
+    takes nothing it posted off the board."""
+    full = mine.get(POSTED_TICKETS) if isinstance(mine, dict) else None
+    return isinstance(full, dict) and any(full.get(k) for k in LOCK_KINDS)
+
+
 def lock_on() -> bool:
     """The lock's switch (QB_PARLAY_LOCK=off turns it off)."""
     return os.environ.get(LOCK_ENV, "on").strip().lower() not in ("off", "0", "no", "false")
@@ -3488,7 +3496,7 @@ def hold_until_post(x: dict, sport: str, now=None, ready=None) -> str | None:
     """A game still more than its POST_LEAD from its start posts no parlay yet: every list emptied, and when
     they post said (``post_at``, ``post_note``). Returns ``post_at`` when held, None when it posts. Never
     raises: a game whose start cannot be read posts as built."""
-    if not post_late_on() or not isinstance(x, dict) or x.get("kept"):
+    if not post_late_on() or not isinstance(x, dict) or x.get("kept") or x.get("posted_before"):
         return None
     start = game_start(x)
     if start is None:
@@ -3973,6 +3981,9 @@ def report_only(board: dict) -> int:
                 x["twos"] = []
                 x.pop("twos_note", None)
         mine = posted.get(f"{x.get('away')}@{x.get('home')}|{str(x.get('date') or '')[:10]}")
+        if already_posted(mine):
+            # Posted already: the post time (`post_late`, next) never holds it back again (step ACF).
+            x["posted_before"] = True
         if not isinstance(mine, dict):
             x.pop("posted_kept", None)
             x.pop("posted_replaced", None)
@@ -4028,6 +4039,8 @@ def as_posted(board: dict, sport: str, x: dict, now=None) -> None:
         sp = str(sport or "").lower()
         posted = board.get(POSTED_KEY) if isinstance(board.get(POSTED_KEY), dict) else {}
         mine = posted.get(f"{x.get('away')}@{x.get('home')}|{str(x.get('date') or '')[:10]}")
+        if already_posted(mine):
+            x["posted_before"] = True
         if isinstance(mine, dict):
             pairs = board.get(SCORER_PAIRS_KEY) if isinstance(board.get(SCORER_PAIRS_KEY), dict) else {}
             _rechoose_scorers(x, mine, pairs.get(game_label(x)), sp in RESEARCH_SPORTS)
