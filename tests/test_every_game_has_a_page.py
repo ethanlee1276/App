@@ -467,7 +467,8 @@ TEAM = {"sport": "nfl", "team": "DAL", "name": "Dallas Cowboys",
 
 def test_an_old_game_says_its_day_and_has_no_chat():
     detail = READ("web", "js", "detail.js")
-    assert "const ago = d.archive ? pbpPlayedOn(d) : pbpAgo(d.generated_at);" in detail
+    assert ('const ago = d.archive || lv.state === "final" ? pbpPlayedOn(d) || pbpAgo(d.generated_at)'
+            " : pbpAgo(d.generated_at);") in detail, "a final from the live loop's file says its day too"
     assert "function pbpPlayedOn(d) {" in detail
     assert 'return day && y !== String(new Date().getFullYear()) ? `${day}, ${y}` : day;' in detail, \
         "a past season's meeting names its year"

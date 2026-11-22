@@ -314,18 +314,27 @@ def espn_carriers(comp: dict) -> tuple[list, list]:
         n = str(name or "").strip()
         if n and n not in nat and n not in loc:
             into.append(n)
-    for b in comp.get("broadcasts") or []:
-        if str((b or {}).get("market") or "national").lower() == "national":
-            for n in (b or {}).get("names") or []:
-                _add(nat, n)
-    for g in comp.get("geoBroadcasts") or []:
-        g = g or {}
+    def _geo(g: dict) -> None:
         kind = str(((g.get("type") or {}).get("shortName")) or "").lower()
         if kind and kind not in ("tv", "streaming", "web"):
-            continue
+            return
         name = (g.get("media") or {}).get("shortName")
         market = str(((g.get("market") or {}).get("type")) or "").lower()
         _add(nat if market == "national" else loc, name)
+    for b in comp.get("broadcasts") or []:
+        b = b if isinstance(b, dict) else {}
+        # A game summary's header (engine/gamearchive, a past game's page) names each carrier as the
+        # scoreboard's `geoBroadcasts` does, with its `media` and its `market` as a block, not `names`:
+        # the NFL's finished games drew no network where the live loop's finals said "NBA TV" (22 November
+        # 2026).
+        if isinstance(b.get("media"), dict):
+            _geo(b)
+            continue
+        if str(b.get("market") or "national").lower() == "national":
+            for n in b.get("names") or []:
+                _add(nat, n)
+    for g in comp.get("geoBroadcasts") or []:
+        _geo(g if isinstance(g, dict) else {})
     return nat, loc
 
 

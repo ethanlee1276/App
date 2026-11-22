@@ -52,6 +52,9 @@ const liveHoldWord = (lv) => ((lv || {}).hold ? String(lv.hold) : "");
 const pbpOrd = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
 const pbpTime = (iso) => (iso ? "7:15 PM" : "");
 const pbpAgo = (s) => (s ? "updated 5s ago" : "");
+// A final says the day it was played (pbpPlayedOn, step ABL): its start, as the reader's day.
+const utcMs = (s) => Date.parse(s || "");
+const formatGameDate = (s) => (/^\d{4}-\d{2}-\d{2}/.test(s || "") ? `day ${String(s).slice(0, 10)}` : "");
 const teamMarkIn = (lg, a, size) => `<span class="team-mark-wrap" data-a="${a}" data-size="${size}"></span>`;
 let _cfbTeams = null;
 const TABLES = {

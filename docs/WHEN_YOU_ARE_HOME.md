@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABL. A finished game reads Final on its page, in every league** (step 852; 22 November). Nothing to run. You said:
+"We want all the live pages to match each other ... NFL is kind of like the one we want to go off of ... how it gets
+data." Opened this morning, the Knicks' 97-96 win over the Trail Blazers still read LIVE, "End of 4th Quarter" and
+"updated 10 hr ago", and a college basketball game's page the same, where the NFL's finished games read Final and
+the day they were played. The cause: the live loop wrote a game's play file only while the game was live, so the
+pass that first saw it final wrote nothing, and the file kept its last live copy until it was deleted a day and a
+half later (hockey's read Final only because its rink pass writes the score onto the file). Fixed three ways: (1)
+the loop now writes a game that has just ended once more, as final, with its last plays, a few games a pass after
+the live ones; its card on the Live tab is left alone. (2) A page that opens a file still saying live, more than
+three hours old, of a game the scoreboard no longer has live, reads the game from the archive instead (the same
+place the NFL's past games come from), which builds it final; that covers the games that ended before this change.
+(3) Every final's header now says the day it was played, in your own time zone, where the live-loop finals said
+"updated 10 hr ago". One more difference fixed with it: a past game's page (the archive) drew no network, where the
+live loop's finals said "NBA TV"; the archive now reads the network from ESPN's game summary. I could not reach ESPN
+from my sandbox to see that summary's exact shape, so I will check an NFL game's archive page on the live site after
+the deploy.
+
 **ABK. Every league's player page reads like the NFL's** (step 851; 22 November). Nothing to run. You said: "We want
 every single sports player pages to match each other and like have it match ESPN ... NFL is kind of like the one we
 want to go off of." I drew one player's page in each league side by side from the live site's own player data (Josh

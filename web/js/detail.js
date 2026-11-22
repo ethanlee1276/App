@@ -2187,6 +2187,17 @@ function nbaScanHTML(g) {
   </div>`;
 }
 
+//: How old a play file still saying "live" may be before it is taken for a game that ended (pbpLeftLive).
+const PBP_LEFT_LIVE_MS = 3 * 3600e3;
+const PBP_LEFT_LIVE_ASKED = new Set();
+function pbpLeftLive(d, strip, event, now = Date.now()) {
+  if (!d || (d.live || {}).state !== "live") return false;
+  const at = utcMs(d.generated_at);
+  if (!Number.isFinite(at) || now - at < PBP_LEFT_LIVE_MS) return false;
+  const g = (strip || []).find((x) => x && String(x.event_id) === String(event));
+  return !(g && (g.live || {}).state === "live");
+}
+
 function renderGamePage() {
   const host = document.getElementById("game-body");
   if (!host) return;
@@ -5317,7 +5328,9 @@ function pbpBoardHTML(d, league, lv, opts) {
   };
   // Live, the Watch button names the carrier; the pill is for before and after.
   const carrier = (d.tv || [])[0] && lv.state !== "live" ? `<span class="pbp-sb-tv">${escapeHtml((d.tv || [])[0])}</span>` : "";
-  const ago = d.archive ? pbpPlayedOn(d) : pbpAgo(d.generated_at);
+  // A final says the day it was played, the live loop's file as the archive's (22 November 2026): the Knicks'
+  // win read "updated 10 hr ago" the next morning where the NFL's finals read "Sun, Nov 16".
+  const ago = d.archive || lv.state === "final" ? pbpPlayedOn(d) || pbpAgo(d.generated_at) : pbpAgo(d.generated_at);
   return `<div class="card pbp-hero" style="--ca:${col.away};--ch:${col.home}">
       ${side("away")}
       <div class="pbp-sb-mid">${pbpBoardMidHTML(d, league, lv, { noDetail: o.noDetail })}${o.mid || ""}${carrier}${ago ? `<span class="pbp-sb-ago">${escapeHtml(ago)}</span>` : ""}</div>
@@ -5336,7 +5349,14 @@ const PBP_ARCHIVE = new Map();
    its file is ("updated 5s ago" on last month's game reads as nonsense),
    and the year once it is not this one (a team's past meetings). */
 function pbpPlayedOn(d) {
-  const day = formatGameDate(d.date || ""), y = String(d.date || "").slice(0, 4);
+  // The live loop's file has no date of its own: its start, as the reader's day.
+  let iso = /^\d{4}-\d{2}-\d{2}/.test(String(d.date || "")) ? String(d.date) : "";
+  const t = iso ? NaN : utcMs((d.live || {}).start_time || "");
+  if (isFinite(t)) {
+    const x = new Date(t);
+    iso = `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  }
+  const day = formatGameDate(iso), y = iso.slice(0, 4);
   return day && y !== String(new Date().getFullYear()) ? `${day}, ${y}` : day;
 }
 async function pbpArchived(league, event) {
@@ -5468,6 +5488,16 @@ async function renderPbpPage(tick) {
   if (!d && league && event) {
     const got = await pbpArchived(league, event);
     if (got) { d = got; raw = JSON.stringify(got); }
+  }
+  // A LIVE FILE LEFT BEHIND (22 November 2026): a game that ended between two of the live loop's passes kept its
+  // last live copy (livescore_build.left_live writes it once more now): the Knicks' 97-96 win read LIVE, "End of
+  // 4th Quarter" and "Call it" the next morning. A copy still saying live, hours old, of a game the strip does not
+  // have live is read from the archive instead, which builds it final from the feed (engine/gamearchive).
+  // Asked once a visit: a game the archive cannot build keeps its file (and the strip's final, below), and the
+  // page's five-second poll does not ask the server again each time.
+  if (d && league && event && !PBP_LEFT_LIVE_ASKED.has(`${league}_${event}`) && pbpLeftLive(d, strip, event)) {
+    const got = await pbpArchived(league, event);
+    if (got) { d = got; raw = JSON.stringify(got); } else PBP_LEFT_LIVE_ASKED.add(`${league}_${event}`);
   }
   if (state.view !== "pbp") return;                // moved on while fetching
   // Watching on TV: the copy from the reader's delay ago, and this game's

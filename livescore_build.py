@@ -40,6 +40,7 @@ import argparse
 import datetime as _dt
 import json
 import os
+import re
 import time as _time
 from pathlib import Path
 
@@ -465,7 +466,9 @@ def attach_plays(games: list[dict], league: str,
         g["plays_state"] = "idle"
     live = [g for g in games if g["live"]["state"] == "live"]
     if not live:
-        return f"no games in progress — no {noun} fetched"
+        finals = rewrite_finals(league, games, pbp_dir)
+        return (f"no games in progress — no {noun} fetched" +
+                (f", {finals} ended game(s) written final" if finals else ""))
     live = _round_robin(live, league, pbp_dir)
     served, waiting = live[:PLAYS_MAX_GAMES], live[PLAYS_MAX_GAMES:]
     for g in waiting:
@@ -548,6 +551,9 @@ def attach_plays(games: list[dict], league: str,
         note += f", {deep} deep file(s)"
     if boxes:
         note += f", {boxes} box score(s)"
+    finals = rewrite_finals(league, games, pbp_dir)
+    if finals:
+        note += f", {finals} ended game(s) written final"
     return note
 
 
@@ -695,6 +701,61 @@ def pbp_doc(league: str, g: dict, payload: dict,
         if got:
             doc[key] = got
     return doc
+
+
+#: A GAME THAT HAS JUST ENDED IS WRITTEN ONCE MORE, AS FINAL (22 November 2026). The play files were written only
+#: while a game was live, so the pass that first saw it final wrote nothing, and its file kept its last live copy
+#: for good: the Knicks' 97-96 win over the Trail Blazers read LIVE, "End of 4th Quarter" and "updated 10 hr
+#: ago" the next morning, and a college basketball game's the same, where hockey's, ended a pass later, read
+#: Final. A final whose file still says live is fetched and written once more, a few a pass, after the live
+#: games (`attach_plays`); a file's state is read off its head (the "live" block opens it).
+FINAL_REWRITES_PER_PASS = 4
+_LIVE_HEAD = re.compile(r'"live"\s*:\s*\{\s*"state"\s*:\s*"live"')
+
+
+def left_live(games: list, league: str, pbp_dir) -> list:
+    """The finals among ``games`` whose play file still says the game is live."""
+    if pbp_dir is None:
+        return []
+    out = []
+    for g in games or []:
+        if not isinstance(g, dict) or (g.get("live") or {}).get("state") != "final" or not g.get("event_id"):
+            continue
+        try:
+            with open(Path(pbp_dir) / f"{league}_{g['event_id']}.json", "rb") as fh:
+                head = fh.read(2048).decode("utf-8", "replace")
+        except OSError:
+            continue
+        if _LIVE_HEAD.search(head):
+            out.append(g)
+    return out
+
+
+def rewrite_finals(league: str, games: list, pbp_dir) -> int:
+    """Write once more, as final, the play file of each game just ended whose file still says live (at most
+    FINAL_REWRITES_PER_PASS a pass, after the live games). Only the file: the game's card on the Live tab is
+    left as the scoreboard drew it. A summary that fails, or a hoops or hockey one with no play list, costs
+    that game this pass and nothing else; the next pass tries it again."""
+    from engine.sources import espnplays
+    ended = left_live(games, league, pbp_dir)[:FINAL_REWRITES_PER_PASS]
+    if not ended:
+        return 0
+    wrote = 0
+    fetched = _summaries(league, ended)
+    for g in ended:
+        try:
+            payload = next(fetched)
+            if isinstance(payload, Exception) or not isinstance(payload, dict):
+                continue
+            if league not in espnplays.FOOTBALL and not isinstance(payload.get("plays"), list):
+                continue
+            sides = {str(g.get("home_id") or ""): g["home"], str(g.get("away_id") or ""): g["away"]}
+            sides.pop("", None)
+            write_pbp(league, g, payload, pbp_dir, sides=sides)
+            wrote += 1
+        except Exception:                                    # noqa: BLE001
+            continue
+    return wrote
 
 
 def write_pbp(league: str, g: dict, payload: dict, pbp_dir: Path,
