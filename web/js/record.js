@@ -1179,7 +1179,21 @@ function gpBlockHTML(b, kind, sport) {
       <span class="rr-what">${escapeHtml(marketWord(m.market))}</span>
       <span><b>${m.won} of ${m.graded}</b> legs hit · ${Math.round((100 * m.won) / m.graded)}%${
         m.chance != null ? ` <span class="rr-mute">(we gave ${Math.round(m.chance * 100)}%)</span>` : ""}</span></div>`).join("");
+  /* THE NEWEST TICKETS, SETTLED AS THE SCREENSHOT DRAWS THEM (step ACC; app.js settledTicketHTML): the game,
+     how the ticket went and its legs' tally, the units at the price the record took, then each leg in its box,
+     green when it won and red when it lost, over the game's final and day (engine/ledger._recent_finals). */
+  const settled = (t) => {
+    const [away, home] = String(t.game || "").split("@");
+    const day = t.day || (/^\d{4}-\d{2}-\d{2}$/.test(String(t.date || "")) ? t.date : "");
+    return settledTicketHTML({ title: away && home ? `${teamName(away)} at ${teamName(home)}` : gpKindWord(kind, sport),
+      status: ["won", "lost", "push", "void"].includes(t.status) ? t.status : "pending", dec: t.price_dec,
+      units: t.pnl_units, note: t.chance != null ? `we gave it ${Math.round(t.chance * 100)}%` : "",
+      legs: (t.legs || []).map((l) => ({ bet: l, res: { status: ["won", "lost", "push", "void"].includes(l.status)
+        ? l.status : "pending", actual: l.actual }, open: true })) },
+    { sport, home, away, final: t.final || null, date: day });
+  };
   const recent = (b.recent || []).map((t) => {
+    if (typeof settledTicketHTML === "function") return settled(t);
     const won = t.status === "won";
     const pnl = t.pnl_units || 0;
     const game = String(t.game || "").replace("@", " at ");

@@ -129,6 +129,12 @@ function rpGameHTML(d, key, bets, tix, open) {
     // A read's chance is drawn muted, as a dropped pick's is: our number ranks it and can't price it.
     return r && r.read_only ? row.replace('class="hd-row', 'class="hd-row rpk-read') : row;
   }).join("");
+  // A FINISHED GAME'S PICKS, SETTLED AS ITS TICKETS ARE (step ACC): each in its box, green when it won and red
+  // when it lost, the game's final under it; a read says so.
+  const settled = fin && g && typeof settledLegHTML === "function" ? bets.map((r) => settledLegHTML({
+    bet: r, res: pickResult(r, g), words: r.pick_label || rpBetWords(r, true), open: true,
+    note: r.read_only ? "a read, not a bet" : "" }, { sport: state.sport, home: g.home, away: g.away, final: fin,
+    date: g.date })).join("") : "";
   return `<details class="rpk-game" id="rpk-${escapeAttr(away)}-${escapeAttr(home)}"${open ? " open" : ""}>
     <summary class="rpk-head">
       <span class="rpk-title"><b>${escapeHtml(teamName(away))} at ${escapeHtml(teamName(home))}</b>${
@@ -141,7 +147,7 @@ function rpGameHTML(d, key, bets, tix, open) {
     </summary>
     <div class="rpk-body">
       <h4 class="rpk-sub">Picks</h4>
-      ${rows ? `<div class="hd-card tn-rows">${rows}</div>` : `<p class="set-note">${escapeHtml(rpWaitWords(tix)
+      ${settled ? `<ol class="st-legs">${settled}</ol>` : rows ? `<div class="hd-card tn-rows">${rows}</div>` : `<p class="set-note">${escapeHtml(rpWaitWords(tix)
         || "No single pick on this game clears our bars.")}</p>`}
       ${tix ? `<h4 class="rpk-sub">${(tix.scorers || []).length ? "Parlays and pairs" : "Parlays"}</h4><div class="rpk-tix" data-rpk-tix="${escapeAttr(key)}"></div>` : ""}
       ${g ? `<button type="button" class="btn ghost rpk-open" data-gid="${escapeAttr(gameId(g))}">Open the report</button>` : ""}
@@ -565,7 +571,7 @@ async function rpBetsFill(list, sport, rows, first) {
   keys.forEach((k, i) => {
     const slot = [...list.querySelectorAll("[data-rpk-bets]")].find((x) => x.dataset.rpkBets === k);
     const x = RP_BETS.get(`${sport}|${k}`);
-    if (slot && x) slot.innerHTML = rpBetsHTML(x, sport, first && i === 0);
+    if (slot && x) slot.innerHTML = rpBetsHTML(x, sport, first && i === 0, rows[i]);
   });
 }
 //: A verdict's mark and its tone: a check, an X, or a dash for a push, a void or one still waiting.
@@ -581,11 +587,13 @@ function rpHit(list) {
 //: One pick or leg in plain words, as the game's page says it (js/detail.js gprPickWords; that room is the game page's).
 const RP_SCORE = { anytime_td: "to score a touchdown", anytime_goal: "to score a goal", goals: "to score a goal",
                    first_td: "to score the first touchdown" };
-function rpBetWords(p) {
+//: ``raw``: plain text, for a drawing that escapes its own words (app.js settledTicketHTML).
+function rpBetWords(p, raw) {
+  const esc = raw === true ? (x) => String(x == null ? "" : x) : escapeHtml;
   const m = String(p.market || "");
   const down = ["UNDER", "NO"].includes(String(p.side || "").toUpperCase());
   const num = (x) => { const v = Number(x); return Number.isInteger(v) ? String(v) : v.toFixed(1); };
-  const club = escapeHtml(teamName(p.team || p.player || ""));
+  const club = esc(teamName(p.team || p.player || ""));
   if (p.game || RES_GAME_MARKETS.has(m)) {
     if (m === "moneyline") return `${club} to win`;
     if (m === "spread") {
@@ -595,14 +603,27 @@ function rpBetWords(p) {
     if (m === "total") return `${down ? "Under" : "Over"} ${num(p.line)} total`;
     if (m === "team_total") return `${club} ${down ? "under" : "over"} ${num(p.line)}`;
   }
-  const who = escapeHtml(p.player || "");
+  const who = esc(p.player || "");
   if (RP_SCORE[m]) return `${who} ${down ? "not " : ""}${RP_SCORE[m]}`;
   // The leg's own word first (a board's leg carries `market_label`, "3-Pointers Made"): the engine's words
   // (marketWord) arrive with the record, after the page's first draw, and before them a key read "fg3m".
   return `${who} ${down ? "under" : "over"}${p.line == null ? "" : ` ${num(p.line)}`} ${
-    escapeHtml((p.market_label || RP_WORDS[m] || marketWord(m)).toLowerCase())}`;
+    esc((p.market_label || RP_WORDS[m] || marketWord(m)).toLowerCase())}`;
 }
-function rpPickLI(p) {
+/* SETTLED, AS THE SCREENSHOT DRAWS IT (step ACC; app.js settledTicketHTML): a finished game's picks and
+   tickets off the record, each leg in its box, green when it won and red when it lost, under the game's own
+   line ("409 · PIT 18 – 38 CIN · Final 11/15"). ``game``: the finished game's row ({home, away, final, date}). */
+const RP_SETTLED = new Set(["won", "lost", "push", "void"]);
+function rpSettledLeg(l, game, note) {
+  const bet = Object.assign({}, l, { market_label: l.market_label || RP_WORDS[l.market] || undefined });
+  return { bet, res: { status: RP_SETTLED.has(l.status) ? l.status : "pending", actual: l.actual },
+           words: l.pick_label || rpBetWords(l, true), open: true, note };
+}
+function rpSettledGame(game, sport) {
+  return game ? { sport, home: game.home, away: game.away, final: game.final, date: game.date } : { sport };
+}
+function rpPickLI(p, game, sport) {
+  if (typeof settledLegHTML === "function") return settledLegHTML(rpSettledLeg(p), rpSettledGame(game, sport || state.sport));
   const st = String(p.status || ""), m = String(p.market || ""), a = Number(p.actual);
   const did = p.actual == null || !Number.isFinite(a) ? (st === "void" ? "didn’t play" : st === "push" ? "push"
       : st === "won" || st === "lost" ? "" : "waiting on the box score")
@@ -620,13 +641,20 @@ function rpTicketWords(t) {
   if (t.status === "push" || t.status === "void") return "Void";
   return "Waiting on the box score";
 }
-function rpTicketsHTML(list, kind, sport) {
+function rpTicketsHTML(list, kind, sport, game) {
   const name = kind === "threes" ? "Parlay" : kind === "twos" ? "Two-leg parlay" : ["nfl", "cfb"].includes(sport) ? "Touchdown pair"
     : sport === "nhl" ? "Goal-scorer pair" : "Scorer pair";
+  if (typeof settledTicketHTML === "function") {
+    const g = rpSettledGame(game, sport);
+    // The record's price for it (the least the card said to take it at) and what it won or lost there.
+    return list.map((t, i) => `<li class="rpk-st">${settledTicketHTML({ title: `${name} ${i + 1}`,
+      status: RP_SETTLED.has(t.status) ? t.status : "pending", dec: t.price_dec, units: t.pnl_units,
+      legs: (t.legs || []).map((l) => rpSettledLeg(l)) }, g)}</li>`).join("");
+  }
   return list.map((t, i) => `<li class="rpk-bet-tix ${t.status === "won" ? "won" : t.status === "lost" ? "lost" : ""}">
       <div class="rpk-bet-tix-h">${rpMk(t.status)}<b>${escapeHtml(`${name} ${i + 1}`)}</b> <span>${
         escapeHtml(rpTicketWords(t))}</span></div>
-      <ul class="rpk-bet-legs">${(t.legs || []).map(rpPickLI).join("")}</ul></li>`).join("");
+      <ul class="rpk-bet-legs">${(t.legs || []).map((l) => rpPickLI(l)).join("")}</ul></li>`).join("");
 }
 //: The marks a kind's strip draws before it counts the rest ("+24"): the list under it has every one.
 const RP_STRIP_MAX = 12;
@@ -642,7 +670,8 @@ const RP_STRIP_MAX = 12;
 //: A size of ticket on paper (the holds of 17-20 November, since retired): its words and the rate it needed.
 const RP_PAPER = { threes: ["three-leg parlays", "25%"], twos: ["two-leg parlays", "36%"] };
 //: The game's picks and tickets: a strip of marks a kind, opening to every one by name.
-function rpBetsHTML(x, sport, open) {
+//: ``game``: the finished game's row ({home, away, final, date}), for each settled leg's line.
+function rpBetsHTML(x, sport, open, game) {
   const picks = x.picks || [], twos = x.twos || [], threes = x.threes || [], pairs = x.scorers || [];
   const paper = x.paper || {}, pTwos = paper.twos || [], pThrees = paper.threes || [];
   const pairWord = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
@@ -675,15 +704,15 @@ function rpBetsHTML(x, sport, open) {
   return `<details class="rpk-bets"${open ? " open" : ""}>
       <summary class="rpk-bets-sum">${strip}<span class="row-fold-chev" aria-hidden="true"></span></summary>
       <div class="rpk-bets-body">
-        ${picks.length ? sec("The picks", picks.map(rpPickLI).join("")) : ""}
+        ${picks.length ? sec("The picks", picks.map((p) => rpPickLI(p, game, sport)).join("")) : ""}
         ${unkept}
-        ${threes.length ? sec(twos.length ? "The three-leg parlays" : "The parlays", rpTicketsHTML(threes, "threes", sport)) : ""}
-        ${twos.length ? sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport)) : ""}
-        ${pThrees.length ? sec("The three-leg parlays on paper", rpTicketsHTML(pThrees, "threes", sport)) : ""}
-        ${pTwos.length ? sec("The two-leg parlays on paper", rpTicketsHTML(pTwos, "twos", sport)) : ""}
+        ${threes.length ? sec(twos.length ? "The three-leg parlays" : "The parlays", rpTicketsHTML(threes, "threes", sport, game)) : ""}
+        ${twos.length ? sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport, game)) : ""}
+        ${pThrees.length ? sec("The three-leg parlays on paper", rpTicketsHTML(pThrees, "threes", sport, game)) : ""}
+        ${pTwos.length ? sec("The two-leg parlays on paper", rpTicketsHTML(pTwos, "twos", sport, game)) : ""}
         ${paperNote}
-        ${pairs.length ? sec(`The ${pairWord.toLowerCase()}`, rpTicketsHTML(pairs, "scorers", sport)) : ""}
-        ${rpEarlierHTML(x.earlier, sport, pairWord)}
+        ${pairs.length ? sec(`The ${pairWord.toLowerCase()}`, rpTicketsHTML(pairs, "scorers", sport, game)) : ""}
+        ${rpEarlierHTML(x.earlier, sport, pairWord, game)}
       </div>
     </details>${held}`;
 }
@@ -692,7 +721,7 @@ function rpBetsHTML(x, sport, open) {
    a game's parlays could change during its day and only the set at the start was listed; every version
    replaced before the start is listed here, each with its mark, apart from the game's own tallies. Since
    then a posted parlay never changes, so a newer game has none. */
-function rpEarlierHTML(earlier, sport, pairWord) {
+function rpEarlierHTML(earlier, sport, pairWord, game) {
   const e = earlier || {};
   const parts = [["threes", "Three-leg parlays"], ["twos", "Two-leg parlays"], ["scorers", pairWord]]
     .filter(([k]) => (e[k] || []).length);
@@ -705,7 +734,7 @@ function rpEarlierHTML(earlier, sport, pairWord) {
       this game and replaced before it started; they aren’t in its counts above. Since then a posted parlay stays as it
       was posted.</p>
     ${parts.map(([k, w]) => `<h5 class="rpk-bets-h">${escapeHtml(w)} posted earlier</h5><ul class="rpk-bet-list">${
-      rpTicketsHTML(e[k], k, sport)}</ul>`).join("")}
+      rpTicketsHTML(e[k], k, sport, game)}</ul>`).join("")}
   </details>`;
 }
 //: A finished game's own report, graded, under its row (a member's; the rest are told what it holds).

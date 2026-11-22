@@ -179,11 +179,11 @@ def tickets(conn, sport: str, date, home: str, away: str, with_key: bool = False
         only = f" AND {AT_START}"
     out: dict = {}
     for kind, source in TICKETS.items():
-        rows = conn.execute(f"SELECT id, status, legs_key FROM parlays WHERE sport=? "
+        rows = conn.execute(f"SELECT id, status, legs_key, assumed_dec, pnl_units FROM parlays WHERE sport=? "
                             f"AND date IN ({','.join('?' * len(days))}) AND grade=? AND source=?{only} ORDER BY id",
                             (sport, *days, f"{away}@{home}", source)).fetchall()
         got = []
-        for pid, status, key in rows:
+        for pid, status, key, price, pnl in rows:
             legs = []
             for player, team, market, side, line, st, actual in conn.execute(
                     "SELECT player, team, market, side, line, status, actual FROM parlay_legs "
@@ -197,7 +197,15 @@ def tickets(conn, sport: str, date, home: str, away: str, with_key: bool = False
                     leg["actual"] = a
                 legs.append(leg)
             if len(legs) >= 2:
-                got.append({"status": _status(status), "legs": legs, **({"key": key or ""} if with_key else {})})
+                # Its price (the least its card said to take it at) and what it won or lost there, once settled: a
+                # settled ticket says both, as the Record does (step ACC, app.js settledTicketHTML).
+                money = {}
+                if price is not None and float(price) > 1:
+                    money["price_dec"] = round(float(price), 4)
+                if pnl is not None and _status(status) in SETTLED:
+                    money["pnl_units"] = round(float(pnl), 4)
+                got.append({"status": _status(status), "legs": legs, **money,
+                            **({"key": key or ""} if with_key else {})})
         if got:
             out[kind] = got
     return out

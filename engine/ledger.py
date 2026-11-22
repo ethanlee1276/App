@@ -11505,9 +11505,61 @@ def _game_parlay_record(conn) -> dict:
     (parlayledger.game_parlay_record); never breaks the export."""
     try:
         from . import parlayledger
-        return parlayledger.game_parlay_record(conn)
+        rec = parlayledger.game_parlay_record(conn)
     except Exception as exc:                                  # noqa: BLE001
         return {"error": f"{type(exc).__name__}: {exc}"}
+    _recent_finals(rec)
+    return rec
+
+
+_ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _recent_finals(rec: dict, hist_path=None) -> int:
+    """EACH NEWEST TICKET'S GAME, FINAL (step ACC, 22 November 2026). Ethan, with a screenshot of a betting
+    app's "Recently Settled" list: "each leg is highlighted green if it won, and if it's highlighted red, that
+    leg lost". The Record draws each of the newest tickets that way, each leg over its game's final score and
+    day ("409 · PIT 18 – 38 CIN · Final 11/15", app.js settledTicketHTML), so each carries its game's score
+    (``final``: {"home", "away"}) and kickoff day (``day``) off the history's games table, found the way a bet
+    is graded (`_hist_where`: an NFL ticket's week, any other's day). A game the table does not hold is left
+    as it was, and the page says the clubs and the day alone. Never breaks the export: returns how many it
+    found."""
+    found = 0
+    try:
+        from .db import DEFAULT_DB as _HIST, read_only as _read_only
+        path = Path(hist_path if hist_path is not None else _HIST)
+        # A box without the history has no finals to give, and opening it would leave an empty file behind.
+        if not path.is_file():
+            return 0
+        hist = _read_only(path)
+    except Exception:                                         # noqa: BLE001
+        return 0
+    try:
+        for sport, kinds in (rec or {}).items():
+            if not isinstance(kinds, dict):
+                continue
+            for block in kinds.values():
+                for t in (block.get("recent") or []) if isinstance(block, dict) else []:
+                    away, _, home = str(t.get("game") or "").partition("@")
+                    if not away or not home or not t.get("date"):
+                        continue
+                    where, args = _hist_where({"sport": sport, "date": str(t["date"])})
+                    row = hist.execute(
+                        f"SELECT home_score, away_score, date FROM games WHERE {where} AND home=? AND away=? "
+                        "AND home_score IS NOT NULL AND away_score IS NOT NULL LIMIT 1",
+                        (*args, home, away)).fetchone()
+                    if not row:
+                        continue
+                    t["final"] = {"home": row[0], "away": row[1]}
+                    day = str(row[2] or "") or (str(t["date"]) if _ISO_DAY.match(str(t["date"])) else "")
+                    if day:
+                        t["day"] = day[:10]
+                    found += 1
+    except Exception:                                         # noqa: BLE001
+        pass
+    finally:
+        hist.close()
+    return found
 
 
 def _two_leg_record(conn) -> dict:

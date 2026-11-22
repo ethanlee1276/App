@@ -2063,6 +2063,56 @@ main { view-transition-name: page; }
 .pr-lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 16%, transparent); }
 .pr-push, .pr-void, .pr-pending { color: var(--text-mute); }
 span.pr-res { margin: 6px 0 2px; }
+/* A SETTLED TICKET (app.js settledTicketHTML, step ACC; Ethan's screenshot of a betting app's "Recently
+   Settled" list): each leg in its own box, its border green when it won and red when it lost, the ticket's
+   own border and tint green when the whole ticket won and red when it lost; a push, a void or a wait plain.
+   The units it won sit right, in the ticket's colour, its price under them. */
+.st-tix { display: grid; gap: 10px; padding: 14px; border: 1.5px solid var(--border); border-radius: var(--radius);
+  background: var(--panel); min-width: 0; }
+.st-tix.won { border-color: color-mix(in oklab, var(--good) 75%, transparent);
+  background: color-mix(in oklab, var(--good) 7%, var(--panel)); }
+.st-tix.lost { border-color: color-mix(in oklab, var(--bad) 60%, transparent);
+  background: color-mix(in oklab, var(--bad) 5%, var(--panel)); }
+.st-tix + .st-tix { margin-top: 12px; }
+.st-tix-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.st-tix-faces { position: relative; flex: none; width: 40px; height: 40px; }
+.st-tix-faces > span { position: absolute; display: grid; line-height: 0; }
+.st-tix-faces > span:nth-child(1) { left: 2px; top: 0; }
+.st-tix-faces > span:nth-child(2) { left: 18px; top: 9px; }
+.st-tix-faces > span:nth-child(3) { left: 4px; top: 18px; }
+.st-tix-faces.n1 > span:nth-child(1) { left: 6px; top: 6px; }
+.st-tix-faces.n2 > span:nth-child(2) { top: 16px; }
+.st-tix-name { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.st-tix-name > b { font-size: var(--fs-lg); color: var(--text); }
+.st-tix-tally { font-size: var(--fs-sm); color: var(--text-mute); }
+.st-tix-verdict { font-weight: 700; }
+.st-tix.won .st-tix-verdict, .st-tix.won .st-tix-pay > b { color: var(--good); }
+.st-tix.lost .st-tix-verdict, .st-tix.lost .st-tix-pay > b { color: var(--bad); }
+.st-tix-pay { display: grid; justify-items: end; gap: 2px; flex: none; text-align: right;
+  font-variant-numeric: tabular-nums; }
+.st-tix-pay > b { font-size: var(--fs-lg); color: var(--text); }
+.st-tix-pay > span { font-size: var(--fs-sm); color: var(--text-mute); }
+.st-legs { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.st-leg { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px 12px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-2); }
+.st-leg.won { border-color: var(--good); }
+.st-leg.lost { border-color: var(--bad); }
+.st-leg[data-open] { cursor: pointer; }
+.st-leg-text { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.st-leg-bet { color: var(--text); font-weight: 700; overflow-wrap: anywhere; }
+.st-leg-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: var(--fs-sm);
+  color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.st-did { color: var(--text-dim); font-weight: 600; }
+.st-game { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.st-score { color: var(--text-dim); font-weight: 600; }
+.st-leg-mark { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%;
+  color: var(--text-mute); background: var(--fill-subtle); }
+.st-leg-mark.won { color: var(--good); background: color-mix(in oklab, var(--good) 16%, transparent); }
+.st-leg-mark.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 16%, transparent); }
+.st-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.st-tix-more { border-top: 1px solid var(--border-soft); padding-top: 8px; }
+.st-tix-more > summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim); }
+.st-tix-more[open] > summary { margin-bottom: 8px; }
 
 @media (prefers-reduced-motion: reduce) { .live-dot, .live-dot::after { animation: none; } .live-dot::after { display: none; } }
 

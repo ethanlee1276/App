@@ -506,7 +506,12 @@
        research's card — each pick, best first, with its price, our chance,
        the most to pay, how often he cleared it, why, and how its kind hit. */
     if (b.type === "picks") {
-      return `<ol class="gr-picks">${(b.items || []).map((v) => `<li class="gr-pick"${v.player
+      // A finished game's pick wears how it went, as a settled ticket's leg does (step ACC): green or red.
+      const went = (v) => {
+        const x = v.bet && RESULTS && typeof RESULTS.grade === "function" ? RESULTS.grade(v.bet) : null;
+        return x && (x.status === "won" || x.status === "lost") ? ` ${x.status}` : "";
+      };
+      return `<ol class="gr-picks">${(b.items || []).map((v) => `<li class="gr-pick${went(v)}"${v.player
         ? ` data-open="player:${escapeAttr(slugify(v.player))}"` : ""}>
         <div class="gr-pick-head"><span class="gr-pick-n">${escapeHtml(String(v.rank || ""))}</span>
           <b class="gr-pick-what">${named(v.pick || "", b.names)}</b>${v.price
@@ -547,7 +552,43 @@
       // Each leg wears its player's face (the club's helmet where the board has none), as the picks above do.
       const face = (l) => (l.player && typeof playerAvatar === "function"
         ? `<span class="gr-parlay-face">${playerAvatar(l.player, l.team, { size: 24, headshot: l.headshot })}</span>` : "");
-      return `<div class="gr-parlays">${(b.items || []).map((t) => `<div class="gr-parlay">
+      /* A FINISHED GAME'S TICKET, SETTLED (step ACC; Ethan's screenshot of a betting app's "Recently Settled"
+         list): each leg in its box, green when it won and red when it lost, the ticket green or red as a whole,
+         the units it won or lost at the price the card said to take it at (the record's price,
+         engine/parlayledger: take_dec). What the card said before the game is one tap under it. */
+      /* The market in the reader's words ("Passing Yards"): the board's leg carries them; a leg the report
+         wrote says them in its own words ("Joe Burrow over 249.5 passing yards", gameparlays.pick_words). */
+      const label = (t, l, bet) => {
+        if (bet.market_label || bet.game) return bet.market_label || "";
+        const own = (t.bet_legs || []).find((x) => x && x.player === bet.player && x.market === bet.market);
+        if (own && own.market_label) return own.market_label;
+        const said = String(l.pick || ""), line = bet.line == null || bet.line === "" ? "" : String(Number(bet.line));
+        const head = `${[bet.player, String(bet.side || "").toLowerCase(), line].filter(Boolean).join(" ")} `;
+        return bet.player && said.startsWith(head)
+          ? said.slice(head.length).replace(/(^|[\s+(-])([a-z])/g, (m, p, c) => p + c.toUpperCase()) : "";
+      };
+      const settled = (t) => {
+        if (!RESULTS || typeof RESULTS.ticket !== "function" || typeof settledTicketHTML !== "function") return "";
+        const bets = (t.legs || []).map((l) => (l.bet ? Object.assign({}, l.bet, {
+          market_label: label(t, l, l.bet) || undefined, headshot: l.bet.headshot || l.headshot }) : null));
+        const x = bets.length && bets.every(Boolean) ? RESULTS.ticket(bets) : null;
+        if (!x) return "";
+        const why = (t.legs || []).filter((l) => (l.why || []).length)
+          .map((l) => `<div class="gr-parlay-sub">${escapeHtml(l.pick || "")}</div><ul class="gr-why">${items(l.why)}</ul>`).join("");
+        const more = `<details class="st-tix-more"><summary>How we built it</summary>${odds(t)}${t.cls
+          ? `<p class="gr-parlay-classwhy"><span class="gr-parlay-class ${escapeAttr(t.cls)}">${escapeHtml(t.cls_label || "")}</span>${
+            t.cls_why ? ` ${escapeHtml(t.cls_why)}` : ""}</p>` : ""}${why}${
+          t.script ? `<p class="gr-parlay-script">${escapeHtml(t.script)}</p>` : ""}${
+          t.rule_note ? `<p class="gr-parlay-rule${t.td_rule ? " ok" : ""}">${escapeHtml(t.rule_note)}</p>` : ""}${
+          (t.links || []).length ? `<ul class="gr-list gr-parlay-links">${items(t.links)}</ul>` : ""}</details>`;
+        // The price the card said to take it at: its decimal on the Report Picks page, its American odds in a report.
+        const take = Number(t.take_dec) > 1 ? Number(t.take_dec) : Number(t.take) > 0 ? 1 + Number(t.take) / 100
+          : Number(t.take) < 0 ? 1 + 100 / Math.abs(Number(t.take)) : null;
+        return settledTicketHTML({ title: t.title, status: x.status, dec: take, more,
+          legs: bets.map((bet, i) => ({ bet, res: (x.legs || [])[i] || null, words: ((t.legs || [])[i] || {}).pick, open: true })) },
+        { sport: RESULTS.sport, home: RESULTS.home, away: RESULTS.away, final: RESULTS.final, date: RESULTS.date });
+      };
+      return `<div class="gr-parlays">${(b.items || []).map((t) => settled(t) || `<div class="gr-parlay">
         <div class="gr-parlay-head"><span class="gr-parlay-title"><b>${escapeHtml(t.title || "")}</b>${t.cls
           ? ` <span class="gr-parlay-class ${escapeAttr(t.cls)}">${escapeHtml(t.cls_label || "")}</span>` : ""}</span>${
           ticketTag(t.legs)}${(t.bet_legs || []).length && !CLOSED && !t.one_book_gone
@@ -950,6 +991,8 @@
       ? { cls: t.class, cls_label: CLASS_WORDS[t.class], cls_why: t.class_why || "" } : {};
     return {
       title, price_line: price, script, links: t.links || [], caveats: t.caveats || [], ...rule, ...klass,
+      // The least price the card says to take it at: the record grades a ticket at it (a settled ticket's units).
+      take_dec: t.take_dec || null,
       one_book: (t.one_book || {}).words || "", one_book_gone: !!(t.one_book || {}).gone,
       legs: (t.legs || []).map((l) => ({ pick: pickWords(l), player: l.player, team: l.team, headshot: l.headshot,
         price: [oddsWords(l.odds), l.book || ""].filter(Boolean).join(" "), chance: l.p, why: l.why || [],

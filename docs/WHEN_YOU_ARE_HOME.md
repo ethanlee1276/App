@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACC. A settled parlay reads like your screenshot** (step 868; 22 November). Nothing to run. You sent a betting
+app's "Recently Settled" list and said you want to scroll through the game report data and see each leg green if it
+won, red if it lost, and the whole parlay green if it won. Every place that lists a finished game's report tickets
+now draws them that way: the game's own report, Report Picks (the Today tab's finished games, and every finished
+game under "How our reports did"), and the Record's newest tickets. Each ticket shows its name, then "Won · 3 wins"
+or "Lost · 2 wins, 1 loss", and on the right the units it won or lost at the price its card said to take it at, with
+that price under them. Each leg sits in its own box with a green or red border and a check or an X. The box says the
+bet ("Over 249.5 · Joe Burrow Passing Yards"), then what the player did, the two teams with their logos and the
+final score, and the day ("409 · PIT 18 – 38 CIN · Final 11/15"). The whole ticket is outlined and tinted green when
+it won and red when it lost, and says so in words too. On the report, what the card said before the game (our
+chance, the script, each leg's why) is one tap under the ticket, under "How we built it". A finished game's own
+picks get the same boxes on Report Picks, and on the report each pick card gets a green or red outline. For the
+Record's newest tickets, the box now looks up each game's final score and day in the game history (an NFL ticket by
+its week).
+
 **ACB. An NFL game's picks and parlays wait for both teams' inactives** (step 867; 22 November). Nothing to run.
 What today showed: the inactives come out 90 minutes before kickoff, and ESPN's board files them a team at a time.
 For the 1 PM games a team's first inactive reached the board 1 to 14 minutes after 11:30 AM ET, its last up to 21
