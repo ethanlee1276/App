@@ -55,7 +55,7 @@ def test_the_slate_takes_the_games_the_forecast_was_stamped_on():
     assert unstamped.games[0].weather.measured is False, "without it, the schedule's prior"
     src = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
     assert "report=carry_report, qb_backups=True, games=games)" in src
-    assert src.index("games = show_games(args.season, args.week)") < src.index("games=games)")
+    assert src.index("games = show_games(args.season, args.week, scoreboard=bool(args.live))") < src.index("games=games)")
 
 
 # ---- wind reaches the number, by position, as measured ---------------------
