@@ -191,7 +191,8 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
     for g in live[PLAYS_MAX_GAMES:]:
         g["plays_state"] = "capped"
     if not live:
-        return "no games in progress — no plays fetched"
+        finals = rewrite_finals(games, pbp_dir)
+        return "no games in progress — no plays fetched" + (f", {finals} ended game(s) written final" if finals else "")
     from engine.mlb.sources.pbp import fetch_live_playbyplay, fetch_live_win_probability, recent_plays
     from engine import playmoments as _pm
     got = failed = deep = boxes = 0
@@ -259,7 +260,40 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
         note += f", {deep} deep file(s)"
     if boxes:
         note += f", {boxes} box score(s)"
+    finals = rewrite_finals(games, pbp_dir)
+    if finals:
+        note += f", {finals} ended game(s) written final"
     return note
+
+
+def rewrite_finals(games: list[dict], pbp_dir: Path | None) -> int:
+    """Baseball's play file of each game just ended, written once more as final, as
+    `livescore_build.rewrite_finals` writes the other leagues' (22 November 2026): the file was written only
+    while the game was live, so the pass that first saw it final wrote nothing and the page read the last
+    at-bat's copy, live, until the file was pruned. At most FINAL_REWRITES_PER_PASS a pass, after the live
+    games; only the file, the game's card left as the scoreboard drew it; a feed that fails costs that game
+    this pass."""
+    from livescore_build import FINAL_REWRITES_PER_PASS, left_live
+    ended = left_live(games, "mlb", pbp_dir, key="game_pk")[:FINAL_REWRITES_PER_PASS]
+    if not ended:
+        return 0
+    from engine.mlb.sources.pbp import fetch_live_playbyplay, fetch_live_win_probability, recent_plays
+    from engine import playmoments as _pm
+    wrote = 0
+    for g in ended:
+        try:
+            payload = fetch_live_playbyplay(g["game_pk"])
+            every = recent_plays(payload, 0)
+            try:
+                chances = _pm.mlb_win_chances(fetch_live_win_probability(g["game_pk"]))
+            except Exception:                                # noqa: BLE001
+                chances = {}
+            _pm.enrich(every, "mlb", chances, key=lambda r: r.get("at_bat"))
+            write_pbp(dict(g), payload, every, pbp_dir, chances=chances)
+            wrote += 1
+        except Exception:                                    # noqa: BLE001
+            continue
+    return wrote
 
 
 def _box_players(g: dict) -> list[dict]:

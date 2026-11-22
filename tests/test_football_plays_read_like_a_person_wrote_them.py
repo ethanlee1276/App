@@ -175,7 +175,8 @@ def test_the_last_play_card_keeps_the_last_real_snap():
 def test_a_finished_game_says_final_whatever_the_file_froze_at():
     """PIT @ NO in London, 2026-10-25: the deep file's last write held the
     scoreboard at "Q4 0:34, live" under a play list ending "End of Game"."""
-    assert 'const fast = (strip || []).find((g) => String(g.event_id) === String(event));' in DETAIL
+    assert 'const fast = (strip || []).find((g) => String(g.event_id || g.game_pk) === String(event));' in DETAIL, \
+        "baseball's rows by their game_pk"
     assert '((d.plays || []).slice(-1)[0] || {}).event === "End of Game"' in DETAIL
     assert 'state: "final", period: "Final", clock: "", detail: "",' in DETAIL
     assert "win_prob: undefined" in DETAIL, "no 99.9% with 0:34 left on a final"

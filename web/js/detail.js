@@ -2194,7 +2194,7 @@ function pbpLeftLive(d, strip, event, now = Date.now()) {
   if (!d || (d.live || {}).state !== "live") return false;
   const at = utcMs(d.generated_at);
   if (!Number.isFinite(at) || now - at < PBP_LEFT_LIVE_MS) return false;
-  const g = (strip || []).find((x) => x && String(x.event_id) === String(event));
+  const g = (strip || []).find((x) => x && String(x.event_id || x.game_pk) === String(event));
   return !(g && (g.live || {}).state === "live");
 }
 
@@ -5507,7 +5507,7 @@ async function renderPbpPage(tick) {
   d = tvHeld.d;
   PBP_BIG.d = null;
   if (tvHeld.held && d) {
-    strip = (strip || []).map((g) => (String(g.event_id) === String(event)
+    strip = (strip || []).map((g) => (String(g.event_id || g.game_pk) === String(event)
       ? { ...g, live: { ...(g.live || {}), ...(d.live || {}) } } : g));
   }
   // Saved for later: the veil instead of the game, and no chat for it.
@@ -5576,7 +5576,8 @@ async function renderPbpPage(tick) {
      list that ended "End of Game", and the page read LIVE all afternoon).
      The league's fast scoreboard, already fetched for the strip, has the
      final; so does a play list whose last entry is the end of the game. */
-  const fast = (strip || []).find((g) => String(g.event_id) === String(event));
+  // Baseball's rows name a game by its game_pk (live_build), every other league's by its event_id.
+  const fast = (strip || []).find((g) => String(g.event_id || g.game_pk) === String(event));
   const ended = ((d.plays || []).slice(-1)[0] || {}).event === "End of Game";
   if ((d.live || {}).state === "live" && ((!tvHeld.held && fast && (fast.live || {}).state === "final") || ended)) {
     // The in-game win chance goes with the clock it was read at: a final

@@ -713,16 +713,17 @@ FINAL_REWRITES_PER_PASS = 4
 _LIVE_HEAD = re.compile(r'"live"\s*:\s*\{\s*"state"\s*:\s*"live"')
 
 
-def left_live(games: list, league: str, pbp_dir) -> list:
-    """The finals among ``games`` whose play file still says the game is live."""
+def left_live(games: list, league: str, pbp_dir, key: str = "event_id") -> list:
+    """The finals among ``games`` whose play file still says the game is live (``key``: the row's id, baseball's
+    ``game_pk``)."""
     if pbp_dir is None:
         return []
     out = []
     for g in games or []:
-        if not isinstance(g, dict) or (g.get("live") or {}).get("state") != "final" or not g.get("event_id"):
+        if not isinstance(g, dict) or (g.get("live") or {}).get("state") != "final" or not g.get(key):
             continue
         try:
-            with open(Path(pbp_dir) / f"{league}_{g['event_id']}.json", "rb") as fh:
+            with open(Path(pbp_dir) / f"{league}_{g[key]}.json", "rb") as fh:
                 head = fh.read(2048).decode("utf-8", "replace")
         except OSError:
             continue

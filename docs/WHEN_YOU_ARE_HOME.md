@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABM. Baseball's game page and play files work like every other league's** (step 853; 22 November). Nothing to run;
+baseball is in its offseason, so this shows in the spring. Step ABL fixed finished games that kept reading LIVE in
+every league the main live loop serves; baseball's play files come from a loop of their own that had the same gap,
+and it now writes a game that has just ended once more, as final, the same way. Its page also looked a game up on
+the scoreboard strip by a field baseball's rows do not have (they carry baseball's own game number), so a baseball
+page never picked up the strip's Final, the fix every other league got on 25 October for a file frozen at its last
+live write; it finds baseball's games by their own number now.
+
 **ABL. A finished game reads Final on its page, in every league** (step 852; 22 November). Nothing to run. You said:
 "We want all the live pages to match each other ... NFL is kind of like the one we want to go off of ... how it gets
 data." Opened this morning, the Knicks' 97-96 win over the Trail Blazers still read LIVE, "End of 4th Quarter" and
