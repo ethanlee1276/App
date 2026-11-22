@@ -498,6 +498,81 @@ def _near_in_time(a: str, b: str, days: int = 1) -> bool:
     return abs((d1 - d2).days) <= days
 
 
+#: A KICKOFF THE SCHEDULE HAS WRONG (step ACF, 22 November 2026). That Sunday the board had the Steelers at the
+#: Eagles at 4:25 PM and the Jaguars at the Giants at 1 PM; ESPN's scoreboard had them the other way round, and the
+#: Steelers' game was in its first quarter while the board held its picks to post at 3:10 and read the two clubs'
+#: inactives as a list for a later game. The NFL moves games between windows (a flex, a cross-flex) and the season
+#: schedule the build reads can lag the move; ESPN's scoreboard carries the game's own time on the day. So a game
+#: the scoreboard lists at KICKOFF_MOVED_MIN or more from the schedule's time, on the same Eastern day, takes the
+#: scoreboard's time before anything is timed off it: the inactives' window, the picks' post time, the board's own
+#: clock. A time to be decided (midnight Eastern) and a move to another day are left alone, and said.
+KICKOFF_MOVED_MIN = 10
+
+
+def _schedule_start(day: str, kickoff: str):
+    """The schedule's start as an aware UTC datetime: an ISO time, or a bare Eastern "13:00" beside its day."""
+    import datetime as _dt
+    import re as _re
+    from zoneinfo import ZoneInfo
+    k = str(kickoff or "").strip()
+    try:
+        if "T" in k:
+            t = _dt.datetime.fromisoformat(k.replace("Z", "+00:00"))
+            return t if t.tzinfo else t.replace(tzinfo=_dt.timezone.utc)
+        m = _re.match(r"^(\d{1,2}):(\d{2})$", k)
+        d = _dt.date.fromisoformat(str(day or "")[:10])
+        if not m:
+            return None
+        return _dt.datetime(d.year, d.month, d.day, int(m.group(1)), int(m.group(2)),
+                            tzinfo=ZoneInfo("America/New_York"))
+    except (TypeError, ValueError):
+        return None
+
+
+def kickoff_from_scoreboard(g, live) -> str:
+    """Move ``g``'s kickoff to the scoreboard's start when they are KICKOFF_MOVED_MIN or more apart on the same
+    Eastern day (its old time kept as ``kickoff_moved``); returns "PIT@PHI 16:25 -> 13:00" when it moved, ""
+    when not, and "PIT@PHI: ..." (left alone) for a move it will not make."""
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+    try:
+        t = _dt.datetime.fromisoformat(str(getattr(live, "start_time", "") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if t.tzinfo is None:
+        return ""
+    before = _schedule_start(getattr(g, "date", ""), getattr(g, "kickoff", ""))
+    if before is None or abs((t - before).total_seconds()) < KICKOFF_MOVED_MIN * 60:
+        return ""
+    et, was = t.astimezone(ZoneInfo("America/New_York")), before.astimezone(ZoneInfo("America/New_York"))
+    name = f"{getattr(g, 'away', '')}@{getattr(g, 'home', '')}"
+    if (et.hour, et.minute) == (0, 0):
+        return f"{name}: the scoreboard's time is to be decided, the schedule's {was:%H:%M} kept"
+    if et.date() != was.date():
+        return f"{name}: the scoreboard has it on {et.date().isoformat()}, the schedule's day kept"
+    k = str(getattr(g, "kickoff", "") or "")
+    g.kickoff_moved = k
+    g.kickoff = t.astimezone(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if "T" in k else f"{et:%H:%M}"
+    return f"{name} {was:%H:%M} -> {et:%H:%M}"
+
+
+def kickoffs_from_scoreboard(games) -> list:
+    """`kickoff_from_scoreboard` for each game the scoreboard lists (matched as `attach_live` matches); the moves
+    it made or declined, in words. Nothing when the scoreboard does not answer."""
+    try:
+        board = fetch_live()
+    except DataUnavailable:
+        return []
+    said = []
+    for g in games or []:
+        live = board.get(frozenset((g.home, g.away)))
+        if live and _near_in_time(getattr(live, "start_time", ""), getattr(g, "date", "")):
+            moved = kickoff_from_scoreboard(g, live)
+            if moved:
+                said.append(moved)
+    return said
+
+
 def attach_live(slate) -> int:
     """Overlay live state onto a slate's games. Returns games matched.
 
@@ -529,6 +604,8 @@ def attach_live(slate) -> int:
         if live and _near_in_time(getattr(live, "start_time", ""),
                                   getattr(g, "date", "")):
             g.live = live
+            # …and its kickoff, where the schedule's is wrong (step ACF).
+            kickoff_from_scoreboard(g, live)
             n += 1
     return n
 

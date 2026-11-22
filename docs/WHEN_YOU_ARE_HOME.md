@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACF. A game the NFL moved takes ESPN's kickoff time** (step 871; 22 November). Nothing to run. Today's board had
+the Steelers at the Eagles at 4:25 PM and the Jaguars at the Giants at 1 PM; ESPN's live scoreboard had them the
+other way round, and the Steelers' game was in its first quarter while the board still showed it as a 4:25 game. The
+season schedule the build reads had not caught the swap. Everything timed off the kickoff used the wrong times: the
+Steelers' and Eagles' 1 PM inactives were not counted as their game's list, the game's picks and parlays were held
+to post at 3:10 PM, after it had kicked off, and the Jaguars-Giants picks were due before that game's inactives.
+Now, whenever the build reads live scores, a game that ESPN's scoreboard lists ten minutes or more from the
+schedule's time on the same day takes ESPN's time right away, before the forecast, the inactives and the post times
+are worked out. A time still to be decided, and a move to another day, are left alone and noted in the build's
+output. Today's two games cannot be re-timed after the fact; from the next build on, a moved game is timed right.
+
 **ACE. The WNBA's re-read starts with this season** (step 870; 22 November). Nothing to run. Checking A'ja Wilson's
 page on the live site: only her newest 2026 game shows steals, blocks and turnovers, because the nightly re-read of
 the WNBA's older box scores (step ABO) has not had its first night yet. It was set to go oldest first, forty game

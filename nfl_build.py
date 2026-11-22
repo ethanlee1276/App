@@ -25,11 +25,21 @@ from engine.pipeline import run_slate
 from engine.rules import RuleConfig
 
 
-def show_games(season: int, week: int) -> list:
+def show_games(season: int, week: int, scoreboard: bool = False) -> list:
     games = build_games(season, week)
     if not games:
         print(f"No games found for {season} week {week}.")
         return []
+    # A KICKOFF THE SCHEDULE HAS WRONG (step ACF, 22 November 2026): with the live layer, ESPN's scoreboard's time
+    # for a game the NFL moved (the Sunday's Steelers at Eagles, 4:25 PM on the schedule, kicked off at 1), before
+    # anything is timed off it: the forecast's hour below, the inactives' window, the picks' post time.
+    if scoreboard:
+        try:
+            from engine.sources.livescores import kickoffs_from_scoreboard
+            for said in kickoffs_from_scoreboard(games):
+                print(f"Kickoff by ESPN's scoreboard: {said}")
+        except Exception as exc:                              # noqa: BLE001
+            print(f"Kickoffs: the scoreboard not read — {type(exc).__name__}: {exc}")
     # THE FORECAST, BEFORE ANYTHING READS THE WEATHER. nflverse fills a
     # schedule row's temp and wind from the PLAYED game, so every outdoor
     # game on a forward board arrives blank and takes the engine's
@@ -395,7 +405,7 @@ def main() -> None:
     # injuries + resets 6 and the first touchdown board 8 at 10:12 on 9
     # November, none of them saying which read took the time.
     _st = _now()
-    games = show_games(args.season, args.week)
+    games = show_games(args.season, args.week, scoreboard=bool(args.live))
     _st = _lap("build_slate", "schedule", _st)
     if args.games_only and args.live:
         # The scoreboard overlay for THIS path too; the full build's runs
