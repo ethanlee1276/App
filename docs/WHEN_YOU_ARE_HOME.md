@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABX. Every WNBA club has its whole team page** (step 863; 22 November). Nothing to run. Checking the live team
+pages: the Indiana Fever's had its name, roster and depth chart; the Las Vegas Aces' read "LV" with no name, no
+roster and no depth chart, and so did the Valkyries', the Sparks', the Liberty's and the Mystics'. The WNBA's stored
+games keep ESPN's codes (LV, GS, LA, NY, WSH) while its names and rosters use the league's (LVA, GSV, LAS, NYL,
+WAS), so the five clubs whose codes differ lost everything keyed the other way, and searching "LVA" found no team at
+all. Now a club's code in either spelling is the same club on its team page: its full name, its roster and depth
+chart, and the search finds it from either code or its name. The NBA's search finds "GS" and "NY" too.
+
 **ABW. The Injuries page says the NBA's own word too** (step 862; 22 November). Nothing to run. Step ABU put the
 league's word for the game into the NBA's game reports; the Injuries page still said only ESPN's "Day-To-Day". Now a
 day-to-day player whose blurb gives the word for today's or tomorrow's game shows it under his status ("questionable

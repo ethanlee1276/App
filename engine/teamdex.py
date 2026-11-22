@@ -220,6 +220,23 @@ def _norm(s) -> str:
                     .replace("-", " ").split())
 
 
+#: THE LEAGUES WHOSE FEEDS SPELL A CLUB TWO WAYS (step ABX, 22 November 2026). The WNBA's stored games keep
+#: ESPN's codes (LV, GS, LA, NY, WSH) and its names, rosters and depth charts the league's (LVA, GSV, LAS, NYL,
+#: WAS): the Aces' page read "LV" with no name, roster or depth chart, and "LVA" found no team at all. The NBA's
+#: are stored in the league's codes, so "GS" found none there. engine/divisions knows every spelling of a club.
+CLUB_ALIAS_SPORTS = ("nba", "wnba")
+
+
+def club_code(sport: str, abbr: str) -> str:
+    """The league's own code for ``abbr`` (any of the feeds' spellings, engine/divisions.canonical) in a league
+    whose feeds spell a club two ways; ``abbr`` itself otherwise, or when it is no club."""
+    if sport not in CLUB_ALIAS_SPORTS or not abbr:
+        return abbr
+    from . import divisions
+    code = divisions.canonical(sport, str(abbr).strip().upper())
+    return code if code in divisions.MAPS.get(sport, {}) else abbr
+
+
 def resolve(query: str, sport: str, known=None) -> list[str]:
     """Abbreviations a typed name could mean, best match first.
 
@@ -241,12 +258,24 @@ def resolve(query: str, sport: str, known=None) -> list[str]:
     out: list[str] = []
 
     def add(abbr):
+        if abbr and abbr not in pool and sport in CLUB_ALIAS_SPORTS:
+            # A club the stored games spell another way (step ABX): its stored spelling.
+            want = club_code(sport, abbr)
+            abbr = next((p for p in pool if club_code(sport, p) == want), abbr)
         if abbr and abbr in pool and abbr not in out:
             out.append(abbr)
 
     for abbr in pool:
         if _norm(abbr) == q:
             add(abbr)
+    if sport in CLUB_ALIAS_SPORTS:
+        # A club's code in any of the feeds' spellings finds the club as the stored games spell it (step ABX).
+        from . import divisions
+        want = club_code(sport, query.strip().upper())
+        if want in divisions.MAPS.get(sport, {}):
+            for abbr in pool:
+                if club_code(sport, abbr) == want:
+                    add(abbr)
     for full, abbr in sorted(names.items()):
         if _norm(full) == q:
             add(abbr)
@@ -270,9 +299,16 @@ def label(abbr: str, sport: str) -> str:
     the page wants the one that identifies the team without context.
     """
     best = ""
-    for full, a in name_map(sport).items():
+    names = name_map(sport)
+    for full, a in names.items():
         if a == abbr and len(full) > len(best):
             best = full
+    if not best and sport in CLUB_ALIAS_SPORTS and club_code(sport, abbr) != abbr:
+        # The stored games' spelling of a club the name map keys by the league's code (step ABX).
+        code = club_code(sport, abbr)
+        for full, a in names.items():
+            if a == code and len(full) > len(best):
+                best = full
     if not best and sport == "cbb":
         best = _cbb_card_name(abbr)
     return best or abbr

@@ -1004,7 +1004,13 @@ def _live_roster(sport, team):
             blob = json.load(fh)
     except (OSError, ValueError):
         return None
-    entry = (blob.get("teams") or {}).get(team) or {}
+    clubs = blob.get("teams") or {}
+    entry = clubs.get(team) or {}
+    from engine import teamdex
+    if not entry and sport in teamdex.CLUB_ALIAS_SPORTS:
+        # The stored games' spelling of a club the roster board keys another way (teamdex.club_code, step ABX).
+        want = teamdex.club_code(sport, team)
+        entry = next((v for k, v in clubs.items() if teamdex.club_code(sport, k) == want), None) or {}
     players = entry.get("players") or []
     if not players:
         return None
