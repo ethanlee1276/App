@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACE. The WNBA's re-read starts with this season** (step 870; 22 November). Nothing to run. Checking A'ja Wilson's
+page on the live site: only her newest 2026 game shows steals, blocks and turnovers, because the nightly re-read of
+the WNBA's older box scores (step ABO) has not had its first night yet. It was set to go oldest first, forty game
+days a night, which would have reached 2026 only after 2024 and 2025, about ten nights from now. It now goes newest
+first, so tonight's run fills the latest forty game days of 2026 and the rest of the season follows over the next
+few nights.
+
 **ACD. Baseball's team pages open again** (step 869; 22 November). Nothing to run. Every baseball team page gave up
 before it answered: the Yankees' and the Mariners' at 90 seconds, the Dodgers' with an error at 55, while hockey's
 answered in about four seconds and basketball's in one. The cause: a baseball stat line is filed under the player

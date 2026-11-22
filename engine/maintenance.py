@@ -2030,7 +2030,8 @@ REREAD_TRIES = 3
 #: minutes, points, rebounds, assists and threes until it learned steals, blocks and turnovers (13 October) and
 #: field goals, free throws and offensive rebounds (20 October), after the WNBA's season had ended, so every WNBA
 #: player page showed four columns (MIN, PTS, REB, AST) where the NBA's show fifteen. RUN_NEXT 00i (step VH) read
-#: 2026 again by hand; the night now reads each stored WNBA day with no steals on file again, oldest first,
+#: 2026 again by hand; the night now reads each stored WNBA day with no steals on file again, newest first (the
+#: season a reader opens first: oldest first, 2026 waited behind two older seasons, ten nights at forty a night),
 #: WNBA_REFILL_DAYS_PER_NIGHT a night and each WNBA_REFILL_TRIES times at most, until none is left.
 WNBA_REFILL_SEASONS = (2024, 2025, 2026)
 WNBA_REFILL_DAYS_PER_NIGHT = 40
@@ -2038,7 +2039,7 @@ WNBA_REFILL_TRIES = 2
 
 
 def wnba_days_short(hconn, seasons=WNBA_REFILL_SEASONS) -> list:
-    """The stored WNBA days, oldest first, whose player lines carry no steals (filed before the box kept them)."""
+    """The stored WNBA days, newest first, whose player lines carry no steals (filed before the box kept them)."""
     if hconn is None or not seasons:
         return []
     marks = ",".join("?" * len(seasons))
@@ -2046,7 +2047,7 @@ def wnba_days_short(hconn, seasons=WNBA_REFILL_SEASONS) -> list:
         rows = hconn.execute(
             f"SELECT DISTINCT period FROM player_game_logs WHERE sport='wnba' AND season IN ({marks}) "
             f"AND period NOT IN (SELECT DISTINCT period FROM player_game_logs WHERE sport='wnba' AND market='stl') "
-            f"ORDER BY period", tuple(seasons)).fetchall()
+            f"ORDER BY period DESC", tuple(seasons)).fetchall()
     except Exception:                                         # noqa: BLE001
         return []
     return [str(r[0]) for r in rows if r and r[0]]
