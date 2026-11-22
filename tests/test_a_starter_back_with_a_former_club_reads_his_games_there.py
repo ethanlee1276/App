@@ -109,6 +109,26 @@ def test_the_card_and_the_report_say_it():
     assert "reunion" not in (ROOT / "engine" / "qbchange.py").read_text(encoding="utf-8").split("def effect(")[1]
 
 
+def test_the_measurement_reads_a_returning_starters_old_shares():
+    """chemfit.py's test R: each receiver's share with the returning starter then, against his share this season."""
+    from engine import chemfit as F
+
+    def game(season, week, qb, team, rec):
+        return {"season": season, "week": week, "game_id": f"g{season}{week}{team}", "team": team, "qb": qb,
+                "qb_share": 1.0, "targets": 30,
+                "rec": {rid: {"t": t, "c": 0, "y": 0.0, "pos": "WR", "by_starter": t} for rid, t in rec.items()}}
+    games = ([game(2022, w, "kc", "MIN", {"jj": 10, "th": 8}) for w in (1, 2, 3)]
+             + [game(2024, w, "kc", "ATL", {"dl": 10}) for w in (1, 2)]
+             + [game(2026, w, "km", "MIN", {"jj": 9, "th": 6}) for w in (1, 2, 3)]
+             + [game(2026, 4, "kc", "MIN", {"jj": 12, "th": 5})])
+    cases = F.reunion_cases(games)
+    assert [(c[0], c[2], c[3], round(c[4], 3), c[5], c[6]) for c in cases] == [
+        (2026, 12, 30, 0.3, 30, 54), (2026, 5, 30, 0.2, 24, 54)], cases
+    assert F.reunion_cases(games, first_back=0) == [], "past his first starts back"
+    src = (ROOT / "engine" / "chemfit.py").read_text(encoding="utf-8")
+    assert '("R  a returning starter\'s shares with his old club (k team-targets)", reunion_cases(games), pair_loss,' in src
+
+
 def test_the_box_reads_the_old_doc_again_that_night():
     mt = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
     assert 'if _ql.on() and int((_ql.load() or {}).get("v") or 1) < _ql.DOC_VERSION:' in mt

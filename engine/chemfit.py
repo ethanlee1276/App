@@ -14,7 +14,10 @@ interval (by team-game) is above zero and no more than two judged seasons are wo
   B  a new starter's own split between wide receivers, tight ends and backs, in his first three starts for a team,
      blended into the team's recent split, the blend chosen by the one-standard-error rule (the fit seasons' best,
      0.35, overshoots and fails on the unseen seasons);
-  S  the average shift after any change of starter.
+  S  the average shift after any change of starter;
+  R  a starter back with a club he started for before starting elsewhere (step ACJ), in his first six starts
+     back: each receiver's share of the targets then, with him, blended into his share this season, as test A
+     blends. Nothing ships on it unless it passes the same bar.
 """
 from __future__ import annotations
 
@@ -212,6 +215,47 @@ def lean_loss(c, w):
     return sum((actual[x] - ((1 - w) * team[x] + w * qb[x])) ** 2 for x in qblean.GROUPS)
 
 
+def reunion_cases(games: list, first_back: int = 6) -> list:
+    """Test R's cases (step ACJ): a starter back with a club he started for before starting elsewhere, in his first
+    ``first_back`` clean starts back; each receiver of the game who drew targets from him in his earlier starts for
+    the club and has three games or more this season: (season, key, targets, team targets, his share over his
+    games this season (test A's base, by age), his targets from the starter then, all the starter's targets
+    then). Read with `pair_loss`, as test A is: his share then blended into his share now, ``k`` team-targets."""
+    seq: dict = collections.defaultdict(list)            # qb -> [(club, game)] of his clean starts, in order
+    hist: dict = collections.defaultdict(list)           # (season, team, receiver) -> [(targets, team targets)]
+    cases = []
+    for g in sorted(games, key=lambda g: (g["season"], g["week"], g["team"])):
+        clean = g["qb_share"] >= qblean.START_SHARE
+        qb, team = g["qb"], g["team"]
+        mine = seq[qb]
+        if clean and g["targets"] >= 15 and mine:
+            # Back: his starts since he last started for another club, all of them for this one, after earlier
+            # starts for this one.
+            away = max((i for i, (club, _g) in enumerate(mine) if club != team), default=None)
+            if away is not None and len(mine) - 1 - away < first_back:
+                then = [x for club, x in mine[:away] if club == team]
+                if then:
+                    tgt = collections.Counter()
+                    for x in then:
+                        for rid, r in x["rec"].items():
+                            tgt[rid] += int(r.get("by_starter") or 0)
+                    total = sum(tgt.values())
+                    for rid, r in g["rec"].items():
+                        past = hist.get((g["season"], team, rid)) or []
+                        if total and tgt.get(rid) and len(past) >= 3:
+                            ws = [0.5 ** ((len(past) - 1 - j) / HALF) for j in range(len(past))]
+                            tw = sum(w * p[0] for w, p in zip(ws, past))
+                            Tw = sum(w * p[1] for w, p in zip(ws, past))
+                            if Tw > 0:
+                                cases.append((g["season"], g["game_id"] + team, r["t"], g["targets"], tw / Tw,
+                                              tgt[rid], total))
+        for rid, r in g["rec"].items():
+            hist[(g["season"], team, rid)].append((r["t"], g["targets"]))
+        if clean:
+            mine.append((team, g))
+    return cases
+
+
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(prog="python3 chemfit.py", description=__doc__.split("\n")[0])
@@ -227,9 +271,18 @@ def main(argv=None) -> int:
             ("A  a receiver's share with this starter (k team-targets)", pair_cases(games), pair_loss,
              (10, 20, 40, 80, 160, 320), None),
             ("B  a new starter's own split (w, one-standard-error rule)", lean_cases(games), lean_loss,
-             (0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4), 0.0)):
+             (0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4), 0.0),
+            # A starter back with a former club (step ACJ): a receiver's share with him then, into his share now.
+            ("R  a returning starter's shares with his old club (k team-targets)", reunion_cases(games), pair_loss,
+             (10, 20, 40, 80, 160, 320), None)):
         r = judge(cases, loss, grid, base, rule="one_se" if name.startswith("B") else "best")
         print(f"\n{name}: {len(cases)} cases; chosen {r['setting']}")
+        if r["setting"] is None:
+            # No case in the fit seasons: nothing can be chosen, so nothing passes. Said with the cases a season.
+            by = collections.Counter(c[0] for c in cases)
+            print("   too few to choose on " + f"{FIT[0]}-{FIT[-1]}; cases a season: "
+                  + (", ".join(f"{s} {n}" for s, n in sorted(by.items())) or "none"))
+            continue
         for s, (n, pct) in sorted(r["seasons"].items()):
             print(f"   {s}: n={n} {pct:+.2f}%")
         print(f"   interval {r['interval']}, {r['worse']} season(s) worse -> {'PASSES' if r['passes'] else 'fails'}")
