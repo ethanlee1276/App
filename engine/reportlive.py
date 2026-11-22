@@ -138,8 +138,46 @@ def game_tickets(sport: str, g: dict, fast_dir=None, now: float | None = None) -
             "tickets": tickets}
 
 
+def sgpx_tickets(sport: str, board: dict | None, fast_dir=None, now: float | None = None) -> dict | None:
+    """THE SGPX PARLAYS, LIVE (engine/sgpx, step ACN): every posted SGPX ticket of the board, a window's and the
+    day's, once one of its games is under way or over, as one group the Live tab draws like a game: each leg read
+    off its own game's live number, with that game ("AWAY@HOME"). The group is "final" once every leg's game is,
+    "live" before. None when no ticket is followed."""
+    from . import sgpx as SG
+    sg = (board or {}).get(SG.KEY)
+    if not isinstance(sg, dict):
+        return None
+    tickets, done = [], True
+    for e in sg.get("slots") or []:
+        if not isinstance(e, dict) or not e.get("posted_at"):
+            continue
+        for kind in SG.KINDS:
+            for n, t in enumerate(e.get(kind) or [], 1):
+                raw = [l for l in (t or {}).get("legs") or [] if isinstance(l, dict)]
+                if len(raw) < 2:
+                    continue
+                said = SG.card(t, n, kind, bool(e.get("day")))
+                legs, seen, over = [], False, True
+                for leg, words in zip(raw, said["legs"]):
+                    away, _at, home = str(leg.get("sgpx_game") or "").partition("@")
+                    g = {"home": leg.get("home") or home, "away": leg.get("away") or away}
+                    st = (live_state({"league": sport, "row": g}, fast_dir, now) or {}).get("state")
+                    seen = seen or st in FOLLOWED
+                    over = over and st == "final"
+                    legs.append(dict(_leg(sport, g, leg, words, fast_dir, now), game=f"{g['away']}@{g['home']}"))
+                if seen:
+                    done = done and over
+                    tickets.append({"kind": "sgpx", "title": said["title"], "chance": round(float(t.get("joint") or 0), 4),
+                                    "legs": legs, **standing(legs)})
+    if not tickets:
+        return None
+    return {"away": "", "home": "", "date": "", "sgpx": True, "title": "SGPX parlays",
+            "state": "final" if done else "live", "clock": "", "tickets": tickets}
+
+
 def league(sport: str, board: dict | None, fast_dir=None, now: float | None = None) -> list:
-    """Every followed game of one league's board, the ones still being played first."""
+    """Every followed game of one league's board, the ones still being played first, and its SGPX tickets
+    (`sgpx_tickets`) as one more."""
     gp = (board or {}).get("game_parlays")
     games = []
     for g in (gp.get("games") if isinstance(gp, dict) else None) or []:
@@ -150,6 +188,13 @@ def league(sport: str, board: dict | None, fast_dir=None, now: float | None = No
             got = None
         if got:
             games.append(got)
+    try:
+        sg = sgpx_tickets(sport, board, fast_dir, now)
+    except Exception as exc:                                     # noqa: BLE001
+        print(f"  ⚠️ the SGPX tickets not followed live for {sport} ({type(exc).__name__}: {exc})")
+        sg = None
+    if sg:
+        games.append(sg)
     games.sort(key=lambda x: x["state"] != "live")
     return games
 

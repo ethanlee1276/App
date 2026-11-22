@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACN. SGPX tickets are followed live** (step 879; 22 November). Nothing to run. The Live tab follows each game
+report's tickets leg by leg; an SGPX ticket spans games, so it had no game to sit under. Every posted SGPX ticket, a
+window's or the day's, is now followed once any of its games is under way: one "SGPX parlays" card on the Live tab,
+each leg with its own game and its number so far, and the ticket alive, down to its last leg, won or lost, the way
+the report parlays read.
+
 **ACM. Day-wide SGPX, one book first, and SGPX on Today's picks** (step 878; 22 November). Nothing to run. You said
 yes to day-wide SGPX. A day with two kickoff windows or more (a Sunday, or Thanksgiving's three games) now also gets
 three player-prop and three touchdown day tickets, each with legs from at least two windows. They post with the

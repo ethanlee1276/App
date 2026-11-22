@@ -1079,7 +1079,9 @@
     return `<li class="grl-leg${l.result ? ` r-${escapeAttr(l.result)}` : ""}${under ? " under" : ""}">
       <div class="grl-leg-h"><span class="gr-parlay-who"><span class="gr-parlay-face">${
         playerAvatar(l.player, l.team, { size: 24, headshot: l.headshot })}</span><b>${escapeHtml(who || said)}</b></span>${
-        who && rest ? `<span class="grl-pick">${escapeHtml(rest)}</span>` : ""}${chip}</div>
+        who && rest ? `<span class="grl-pick">${escapeHtml(rest)}</span>` : ""}${
+        // An SGPX leg's game (engine/reportlive.sgpx_tickets): each leg of one ticket is from its own game.
+        l.game ? ` <span class="gr-parlay-game">${escapeHtml(String(l.game).replace("@", " at "))}</span>` : ""}${chip}</div>
       ${has || bar || need ? `<div class="grl-leg-m">${has}${bar}${need}</div>` : ""}</li>`;
   }
   function liveTicketHTML(t, key) {
@@ -1093,6 +1095,13 @@
   function liveGameHTML(g, league, opts) {
     const live = g.state === "live";
     const key = `${league}|${g.away}@${g.home}`;
+    // THE SGPX GROUP (step ACN): tickets across games, under their own name, never veiled as one game is.
+    if (g.sgpx) {
+      return `<div class="card grl-game${live ? " live" : ""}">
+        <div class="grl-game-h"><b>${escapeHtml(g.title || "SGPX parlays")}</b><span class="grl-clock${live ? " live" : ""}">${
+          live ? "Live" : "Final"}</span><span class="grl-lg">${escapeHtml(String(league).toUpperCase())}</span></div>
+        ${(g.tickets || []).map((t, i) => liveTicketHTML(t, `${key}|sgpx${i}`)).join("")}</div>`;
+    }
     const veiled = opts && typeof opts.spoiled === "function" && opts.spoiled(league, g);
     const score = !veiled && g.away_score != null && g.home_score != null
       ? `${escapeHtml(g.away)} ${escapeHtml(String(g.away_score))} – ${escapeHtml(String(g.home_score))} ${escapeHtml(g.home)}`

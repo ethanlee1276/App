@@ -99,6 +99,32 @@ def test_a_game_under_way_has_each_ticket_with_each_legs_number_and_what_it_need
     assert two["legs"][2]["result"] == "won", "the other legs still say where they stand"
 
 
+def test_the_sgpx_tickets_are_followed_as_their_own_group():
+    # SGPX (engine/sgpx, step ACN): a ticket across games, each leg off its own game's number, once one is on.
+    def sgpx(*legs):
+        return {"slots": [{"key": "k", "label": "Thu 7:00 PM ET", "posted_at": "2026-11-19T22:30:00Z",
+                           "games": ["NYK@TOR", "BOS@LAL"], "tds": [],
+                           "props": [dict(_ticket(*legs, joint=0.2), games=["BOS@LAL", "NYK@TOR"])]},
+                          {"key": "w", "label": "Thu 10:00 PM ET", "games": ["X@Y"], "post_note": "later"}]}
+    on = sgpx(dict(_leg("Jalen Brunson", "NYK", "pts", "Points", "OVER", 24.5), sgpx_game="NYK@TOR"),
+              dict(_leg("Jayson Tatum", "BOS", "pts", "Points", "OVER", 26.5), sgpx_game="BOS@LAL"))
+    with tempfile.TemporaryDirectory() as d:
+        games = RL.league("nba", dict(NBA, sgpx=on), _fast(d), time.time())
+        later = RL.league("nba", {"sgpx": sgpx(dict(_leg("Jayson Tatum", "BOS", "pts", "Points", "OVER", 26.5),
+                                                    sgpx_game="BOS@LAL"),
+                                               dict(_leg("LeBron James", "LAL", "ast", "Assists", "OVER", 7.5),
+                                                    sgpx_game="BOS@LAL"))}, _fast(d), time.time())
+    group = next(g for g in games if g.get("sgpx"))
+    assert group["title"] == "SGPX parlays" and group["state"] == "live", "one game on, one still to start"
+    t = group["tickets"][0]
+    assert t["title"] == "SGPX parlay 1" and [l["game"] for l in t["legs"]] == ["NYK@TOR", "BOS@LAL"]
+    assert t["legs"][0]["current"] == 26.0 and t["legs"][0]["result"] == "won" and "current" not in t["legs"][1]
+    assert (t["state"], t["won"], t["of"]) == ("alive", 1, 2)
+    assert later == [], "no game of the ticket under way: not followed"
+    js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
+    assert "if (g.sgpx) {" in js and 'l.game ? ` <span class="gr-parlay-game">' in js
+
+
 def test_a_finished_game_settles_on_the_final_box_and_the_last_leg_is_named():
     with tempfile.TemporaryDirectory() as d:
         final = RL.league("nba", NBA, _fast(d, "final"), time.time())[0]
