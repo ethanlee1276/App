@@ -251,16 +251,19 @@ def _nfl_result():
 def test_end_to_end_a_reports_parlays_are_its_own_picks():
     # This game is in 2099, far before its post time (step ABD), so its report would say when its parlays
     # post (tests/test_a_game_report_says_what_the_board_posts.py); the tickets are read with that off.
+    # Its picks wait the same way (step ABQ, tests/test_a_reports_picks_post_once_and_never_change.py): read with
+    # that off too.
     import os
-    was = os.environ.get("QB_PARLAY_POST_LATE")
-    os.environ["QB_PARLAY_POST_LATE"] = "off"
+    was = {k: os.environ.get(k) for k in ("QB_PARLAY_POST_LATE", "QB_REPORT_PICKS_POST")}
+    os.environ["QB_PARLAY_POST_LATE"] = os.environ["QB_REPORT_PICKS_POST"] = "off"
     try:
         _end_to_end()
     finally:
-        if was is None:
-            os.environ.pop("QB_PARLAY_POST_LATE", None)
-        else:
-            os.environ["QB_PARLAY_POST_LATE"] = was
+        for k, v in was.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def _end_to_end():

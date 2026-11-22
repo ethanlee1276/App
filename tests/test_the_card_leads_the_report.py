@@ -25,6 +25,11 @@ sys.path.insert(0, ROOT)
 
 from engine import gamereport as GR, researchrecord as RR  # noqa: E402
 
+# THE CARD'S CONTENT, NOT ITS CLOCK. The fixture's game is in 2099, so its picks would wait for their post
+# time (gamereport.picks_timeline, step ABQ; tests/test_a_reports_picks_post_once_and_never_change.py holds
+# that): these read the card a game posts.
+os.environ["QB_REPORT_PICKS_POST"] = "off"
+
 REPORT_JS = os.path.join(ROOT, "web", "js", "report.js")
 REPORT_CSS = os.path.join(ROOT, "web", "css", "report.css")
 

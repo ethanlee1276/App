@@ -82,6 +82,8 @@ Standard library only. Never raises out of `attach`.
 """
 from __future__ import annotations
 
+import copy
+
 import argparse
 import datetime as _dt
 import json
@@ -3704,6 +3706,129 @@ def _card_rows(c: Ctx) -> list:
     return out
 
 
+# --- a report's picks post with its parlays, then never change (ABQ) ------------------------------
+#: A REPORT'S PICKS POST ONCE, WITH ITS PARLAYS, AND NEVER CHANGE (step ABQ, 22 November 2026). Ethan, the
+#: Sunday morning: "let's also work on not throwing a million different picks into one game report and keep
+#: switching picks and stuff like that, like the issue we had last night for NBA ... So we need to figure out
+#: the timeline for that". Every build chose a report's picks afresh, and the report book journals a pick the
+#: first time any version shows it (engine/reportbets), so a game piled up picks through the day (Saturday
+#: night's seven NBA reports: 50 graded singles) and a reader saw different ones on each visit. Now a game's
+#: picks follow its parlays' timeline (engine/gameparlays.post_lead: 75 minutes before an NFL kickoff, just
+#: after its inactives; 90 elsewhere). Before the post time the report gives its whole analysis, says when its
+#: picks post, and nothing in it is a pick: no card, no pick on a read, nothing journaled. At the post time its
+#: card and the picks its reads carry post once, built from the newest injury news, lineups and lines, and from
+#: then until the start the report shows them exactly as posted (each kept report, engine/reportkeep; every
+#: other section still updates). So a game posts its picks once, and those are the ones the Record counts.
+#: A start that cannot be read posts as built, as before. Off without a deploy:
+#: ``sudo ./deploy/setenv.sh QB_REPORT_PICKS_POST off``.
+PICKS_POST_ENV = "QB_REPORT_PICKS_POST"
+#: The board's working key for each game's picks as it posted them (`posted_picks_from`; never published).
+PICKS_POSTED_KEY = "_gr_posted_picks"
+#: Sections whose items never carry a pick of the report's own (the parlays post on their own clock).
+PICKS_NOT_IN = ("parlays",)
+
+
+def picks_post_on() -> bool:
+    """The picks' post time's switch (QB_REPORT_PICKS_POST=off: a report shows its picks as each build makes them)."""
+    import os as _os
+    return _os.environ.get(PICKS_POST_ENV, "on").strip().lower() not in ("off", "0", "no", "false")
+
+
+def picks_wait(sport: str, g: dict, now=None) -> dict | None:
+    """``{"post_at", "text"}`` while a game's picks are still to post; None once they post, with the switch
+    off, or when its start cannot be read. Never raises."""
+    if not picks_post_on() or not isinstance(g, dict):
+        return None
+    try:
+        import datetime as _dtm
+        from . import gameparlays
+        start = gameparlays.game_start(g)
+        if start is None:
+            return None
+        now = now or _dtm.datetime.now(_dtm.timezone.utc)
+        lead = gameparlays.post_lead(sport)
+        at = start - _dtm.timedelta(minutes=lead)
+        if now >= at:
+            return None
+        words = gameparlays._et_clock(at)
+    except Exception:                                        # noqa: BLE001
+        return None
+    return {"post_at": at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "text": (f"Our picks for this game post {('at ' + words) if words else 'before it starts'}, about {lead} "
+                     "minutes before the start, with its parlays, built then from the newest injury news, lineups "
+                     "and lines; once posted they never change, and they are the ones the Record counts")}
+
+
+def _has_pick(s: dict) -> bool:
+    return any(isinstance(it, dict) and (it.get("bet") or it.get("pick"))
+               for b in s.get("blocks") or [] if isinstance(b, dict) for it in b.get("items") or [])
+
+
+def posted_picks_from(kept_file) -> dict:
+    """{game key: {"card": section, "sections": {key: section}, "at": iso}}: each game still to play whose last
+    kept report had posted its picks (its card carries ``posted_at``), read from the file engine/reportkeep
+    keeps. {} with no file; never raises."""
+    try:
+        from .reportlog import read
+        games = read(kept_file).get("games")
+    except Exception:                                        # noqa: BLE001
+        return {}
+    out: dict = {}
+    for k, rec in (games.items() if isinstance(games, dict) else ()):
+        rep = rec.get("report") if isinstance(rec, dict) else None
+        secs = [x for x in (rep or {}).get("sections") or [] if isinstance(x, dict) and x.get("key")]
+        card = next((x for x in secs if x.get("key") == "card"), None)
+        if not card or not card.get("posted_at"):
+            continue
+        out[k] = {"card": card, "at": card["posted_at"],
+                  "sections": {x["key"]: x for x in secs if x.get("key") != "card" and x.get("posted_at")}}
+    return out
+
+
+def picks_timeline(c: Ctx, sections: list, now=None) -> list:
+    """The report's sections on its picks' timeline (step ABQ): before the post time its card says when its picks
+    post and no other section carries one; once posted, the card and every section that posted a pick are the
+    ones the game posted, as posted; at the post time, this build's picks, marked as posted (``posted_at``).
+    A game already started is kept whole by engine/reportkeep. Never raises: on a fault the sections stand."""
+    try:
+        wait = picks_wait(getattr(c, "sport", ""), c.g, now=now)
+        if wait:
+            out = []
+            for s in sections:
+                if s.get("key") == "card":
+                    out.append(_section("card", "Our picks for this game",
+                                        [dict(_p(wait["text"]), post_at=wait["post_at"])]))
+                    continue
+                if s.get("key") not in PICKS_NOT_IN:
+                    for b in s.get("blocks") or []:
+                        for it in (b.get("items") or []) if isinstance(b, dict) else []:
+                            if isinstance(it, dict):
+                                it.pop("pick", None)
+                                it.pop("bet", None)
+                out.append(s)
+            return [x for x in out if x]
+        if not picks_post_on():
+            return sections
+        from .reportlog import game_key
+        kept = ((c.result or {}).get(PICKS_POSTED_KEY) or {}).get(game_key(c.g)) or {}
+        if kept.get("card"):
+            held = dict(kept.get("sections") or {}, card=kept["card"])
+            out = [copy.deepcopy(held[s.get("key")]) if s.get("key") in held else s for s in sections]
+            # A posted section this build did not write (a read that went quiet) still shows what it posted.
+            have = {s.get("key") for s in out}
+            out += [copy.deepcopy(v) for k2, v in held.items() if k2 not in have]
+            return out
+        import datetime as _dtm
+        stamp = (now or _dtm.datetime.now(_dtm.timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for s in sections:
+            if s.get("key") == "card" or (s.get("key") not in PICKS_NOT_IN and _has_pick(s)):
+                s["posted_at"] = stamp
+        return sections
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the picks' post time not applied for {getattr(c, 'away', '')}@{getattr(c, 'home', '')} ({exc})")
+        return sections
+
+
 def _american(p: float) -> int | None:
     if not 0.0 < p < 1.0:
         return None
@@ -4510,6 +4635,13 @@ def _posted_before(result: dict, sport: str, out) -> None:
         result[gameparlays.POSTED_KEY] = gameparlays.posted_from(reportkeep.path_for(sport, _full_dir_for(out)))
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ the parlays posted last build not read ({exc})")
+    # …and each game's picks as it posted them (step ABQ), from the same file.
+    try:
+        from . import reportkeep
+        from .gate import _full_dir_for
+        result[PICKS_POSTED_KEY] = posted_picks_from(reportkeep.path_for(sport, _full_dir_for(out)))
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the picks posted last build not read ({exc})")
 
 
 def _report_only(result: dict) -> None:
@@ -4656,6 +4788,9 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
             sec["hint"] = hint
     color_names(c, sections)
     mark_statuses(sections)
+    # ITS PICKS POST WITH ITS PARLAYS, THEN NEVER CHANGE (`picks_timeline`, step ABQ): before the post time
+    # nothing in the report is a pick; after it, the picks it posted stand as posted.
+    sections = picks_timeline(c, sections)
     # EVERY BET THE REPORT SHOWS (engine/reportbets), matched to the board
     # row it came from, for the board's Report Picks list and the record's
     # report book; lifted off the report by the attach step.

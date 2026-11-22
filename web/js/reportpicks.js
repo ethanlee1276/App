@@ -88,6 +88,18 @@ function rpTallyWords(t) {
    how its picks and tickets went; the fold holds its picks, then its parlays
    and pairs, then the door to its report. A game saved for later (app.js
    spoiledG) says neither its score nor how it went. */
+/* A GAME WHOSE PICKS POST LATER SAYS WHEN (step ABQ, 22 November 2026): a report's picks post with its parlays
+   (engine/gamereport.picks_timeline, the same post time), so a game still before it has no pick yet, which is not
+   "No single pick on this game clears our bars". The time in the reader's own zone, as every start on the site. */
+function rpWaitWords(tix) {
+  const t = Date.parse((tix || {}).post_at || "");
+  if (!Number.isFinite(t) || t <= Date.now()) return "";
+  let w = "";
+  try { w = typeof bpNextWhen === "function" ? bpNextWhen(t) : (typeof tzTime === "function" ? tzTime(new Date(t)) : ""); }
+  catch (e) { w = ""; }
+  return `This game's picks post ${w ? `at ${w}` : "shortly before it starts"}, with its parlays, and never change after.`;
+}
+
 function rpGameHTML(d, key, bets, tix, open) {
   const g = rpGame(d, key);
   const [away, home] = key.split("@");
@@ -129,7 +141,8 @@ function rpGameHTML(d, key, bets, tix, open) {
     </summary>
     <div class="rpk-body">
       <h4 class="rpk-sub">Picks</h4>
-      ${rows ? `<div class="hd-card tn-rows">${rows}</div>` : `<p class="set-note">No single pick on this game clears our bars.</p>`}
+      ${rows ? `<div class="hd-card tn-rows">${rows}</div>` : `<p class="set-note">${escapeHtml(rpWaitWords(tix)
+        || "No single pick on this game clears our bars.")}</p>`}
       ${tix ? `<h4 class="rpk-sub">${(tix.scorers || []).length ? "Parlays and pairs" : "Parlays"}</h4><div class="rpk-tix" data-rpk-tix="${escapeAttr(key)}"></div>` : ""}
       ${g ? `<button type="button" class="btn ghost rpk-open" data-gid="${escapeAttr(gameId(g))}">Open the report</button>` : ""}
     </div>

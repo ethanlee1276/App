@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABQ. A game report's picks post once, with its parlays, and never change** (step 856; 22 November). Nothing to
+run. You said: "not throwing a million different picks into one game report and keep switching picks ... like the
+issue we had last night for NBA ... figure out the timeline for that." Why it happened: every build (every 7 to 10
+minutes) chose a report's picks afresh, and the record journals a pick the first time any version of the report
+shows it, so a game piled up picks through the day (Saturday night's seven NBA reports put 50 graded single picks on
+the record) and you saw different picks each time you looked. The timeline now: a game's picks post at the same
+moment as its parlays, 75 minutes before an NFL kickoff (right after the inactives) and 90 minutes before every
+other league's games. Before that the report shows all of its analysis and says when its picks post, and nothing in
+it counts. At the post time its card (at most 4 picks, 6 on a featured game) and the picks on its matchup reads post
+once, built from the newest injury news, lineups and lines, and they stay exactly as posted until the game starts;
+the report's other sections keep updating. Report Picks says when a waiting game's picks post. So each game posts
+one set of picks, and those are the ones the Record counts. It applies from its deploy on. One correction to what I
+wrote you earlier today in passing: the Record's "Earlier picks" row is every report pick from before 20 November,
+not picks a report replaced, so it says nothing about switching. Off without a deploy: `sudo ./deploy/setenv.sh
+QB_REPORT_PICKS_POST off`.
+
 **ABO. The WNBA's player pages get every box-score column, by the night** (step 855; 22 November). Nothing to run.
 Every WNBA player page showed four columns (minutes, points, rebounds, assists) where the NBA's show fifteen. The
 reason is old data, not the page: the box-score reader learned steals, blocks and turnovers on 13 October and field

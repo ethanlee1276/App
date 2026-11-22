@@ -171,6 +171,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # set as posted before its report (<error>)" into the build's log, which no
         # quiet build does.
         "as_posted",
+        # A REPORT'S PICKS ON THEIR POST TIME (engine/gamereport.picks_timeline, step ABQ,
+        # 2026-11-22), caught by this sweep the hour it was written: on a fault the sections
+        # stand as this build made them (the picks as before the step, never a blank report),
+        # and it prints "the picks' post time not applied for <game> (<error>)" into the
+        # build's log, which no quiet build does.
+        "picks_timeline",
         # A GAME'S REBUILD FROM ITS REPORT'S PICKS (engine/gamereport._parlays_from_picks,
         # 2026-11-19): None either way, but a failure prints, is kept on the game's
         # entry (rebuild_error) and the heartbeat counts it (threes_short_why), which
