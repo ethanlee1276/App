@@ -169,6 +169,49 @@ def current_rows(rows: list[dict]) -> list[dict]:
     return [v[2] for v in sorted(best.values(), key=lambda v: v[1])]
 
 
+#: A BLURB'S GAME (steps ABT and ABU, 22 November 2026). ESPN files a blurb with each designation, and the blurb
+#: is often newer than the designation, or older: on the Sunday morning eight NBA players read "Day-To-Day" with a
+#: blurb about Friday's or Saturday's game. A blurb is read only for the game it names: one naming a weekday
+#: other than the game's is about another game, and one about the rest of a game under way is about that game.
+WEEKDAYS = re.compile(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", re.I)
+IN_GAME = re.compile(r"\b(rest of|remainder of|won[’']?t return|will not return|did not return|didn[’']?t return|"
+                     r"exited|left (?:the|\w+'s) (?:game|contest))\b", re.I)
+
+
+def about_game(text, day: str | None = None) -> bool:
+    """True when a blurb can be about the game on ``day`` (its weekday, Eastern): not about the rest of a game
+    under way, and naming no weekday or that one."""
+    text = " ".join(str(text or "").split())
+    if not text or IN_GAME.search(text):
+        return False
+    if day:
+        named = {m.lower() for m in WEEKDAYS.findall(text)}
+        if named and day.lower() not in named:
+            return False
+    return True
+
+
+#: THE LEAGUE'S OWN WORD UNDER "DAY-TO-DAY" (step ABU). ESPN files an NBA player who is probable, questionable
+#: or doubtful all as "Day-To-Day", and the blurb under it keeps the league's word: on the Sunday morning,
+#: "Siakam (hip) is listed as questionable for Sunday's game against New York", "Cunningham (knee) is probable
+#: to play Sunday in Atlanta", "Antetokounmpo (groin) is listed as questionable for Sunday's game against
+#: Oklahoma City". Probable plays nearly always and doubtful nearly never, and "Day-To-Day" said neither.
+DESIGNATION = re.compile(r"\b(?:is|was|been|be|remains|considered|now|downgraded to|upgraded to)\s+"
+                         r"(?:listed\s+(?:as\s+)?)?(probable|questionable|doubtful|a game-time decision)\b", re.I)
+
+
+def designation(comment, day: str | None = None) -> str | None:
+    """"probable", "questionable", "doubtful" or "game-time decision": the league's word a blurb gives for the
+    game on ``day``; None when it gives none, or is about another game."""
+    if not about_game(comment, day):
+        return None
+    words = {m.lower() for m in DESIGNATION.findall(" ".join(str(comment or "").split()))}
+    if len(words) != 1:
+        return None
+    word = words.pop()
+    return "game-time decision" if word == "a game-time decision" else word
+
+
 def parse_injuries(payload) -> list[dict]:
     """ESPN's envelope → flat rows, one per player designation.
 

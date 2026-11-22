@@ -92,6 +92,9 @@ ROSTER_WORDS = re.compile(
 #:     a blurb like that, every one of them about the night before;
 #:   * one that leans both ways ("With Omar Cooper ruled out, Mitchell is expected to play an elevated role")
 #:     is about someone else and is no lean.
+#: Under ESPN's bare "Day-To-Day" (the NBA's, the NHL's, college basketball's), a new blurb that gives the
+#: league's own word for the game is a word too: "probable", "questionable", "doubtful" or "game-time decision"
+#: (engine/sources/espninjuries.designation, step ABU).
 #: Nothing here moves a number: the board reads the designation, as before.
 LEAN_OUT = re.compile(
     r"\b(won[’']?t play|will not play|ruled out|will miss|is out for|(?:is )?not expected to play|"
@@ -102,9 +105,6 @@ LEAN_IN = re.compile(
     r"\b(slated to play|expected to play|set to play|plans? to play|will play|will start|expected to start|"
     r"slated to start|cleared to play|will be available|available to play|will suit up|will dress|good to go)\b",
     re.I)
-IN_GAME = re.compile(r"\b(rest of|remainder of|won[’']?t return|will not return|did not return|didn[’']?t return|"
-                     r"exited|left (?:the|\w+'s) (?:game|contest))\b", re.I)
-WEEKDAYS = re.compile(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", re.I)
 #: Who reported it, where the blurb says ("..., Ian Rapoport of NFL Network reports.").
 BY = re.compile(r"(?:,\s*|\bper\s+)([A-Z][\w.'’-]*(?:\s+[A-Z][\w.'’-]*){0,3}\s+of\s+(?:[Tt]he\s+)?"
                 r"[A-Z][\w.'’&-]*(?:\s+[A-Z][\w.'’&-]*){0,4})(?:\s+reports?)?\.?\s*$")
@@ -117,13 +117,10 @@ LEAN_ON = ("questionable", "doubtful", "day-to-day", "probable", "game-time deci
 def lean(comment, day: str | None = None) -> str | None:
     """"in", "out", or None: which way a blurb leans on its player's next game. ``day``: that game's weekday
     (Eastern), so a blurb naming another day is about another game."""
+    from .sources.espninjuries import about_game
     text = " ".join(str(comment or "").split())
-    if not text or IN_GAME.search(text):
+    if not about_game(text, day):
         return None
-    if day:
-        named = {m.lower() for m in WEEKDAYS.findall(text)}
-        if named and day.lower() not in named:
-            return None
     out = bool(LEAN_OUT.search(text))
     inn = bool(LEAN_IN.search(LEAN_OUT.sub(" ", text)))
     if out == inn:
@@ -269,6 +266,10 @@ def injury_updates(rows: list, seen: dict, table: dict, now: float, first: bool,
         if posted is None or not 0 <= now - posted <= WORD_HOURS * 3600:
             continue
         word = lean(said, (days or {}).get(code))
+        if not word and status.lower() == "day-to-day":
+            # Under ESPN's "Day-To-Day", the league's own word for the game (step ABU).
+            from .sources.espninjuries import designation
+            word = designation(said, (days or {}).get(code))
         if word:
             out.append({"at": _iso(now), "team": code, "player": r["player"], "pos": r.get("pos") or "",
                         "from": was, "to": status, "word": word, "by": reported_by(said),

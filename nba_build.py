@@ -292,7 +292,10 @@ def hoops_injuries(league: str, fetch=None) -> dict:
         prev = out.get(k)
         if prev and prev["status"].lower() in OUT_STATUSES:
             continue
-        out[k] = {"player": r["player"], "status": status, "injury": r.get("injury") or ""}
+        out[k] = {"player": r["player"], "status": status, "injury": r.get("injury") or "",
+                  # The blurb: under ESPN's "Day-To-Day" it keeps the league's own word for the game
+                  # (engine/leaguereport.nba_word, step ABU).
+                  **({"comment": r["comment"]} if r.get("comment") else {})}
     return out
 
 

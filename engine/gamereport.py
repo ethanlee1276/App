@@ -2839,6 +2839,10 @@ def update_words(c: Ctx, u: dict) -> str:
         move = f"{now}{what}, now expected to {'play' if u['word'] == 'in' else 'miss the game'}" + \
             (f", per {u['by']}" if u.get("by") else "")
         what = ""
+    elif u.get("word") in ("probable", "questionable", "doubtful", "game-time decision"):
+        # Under ESPN's bare "Day-To-Day", the league's own word for the game (step ABU).
+        move = f"{now}{what}, now listed {u['word']} for the game" + (f", per {u['by']}" if u.get("by") else "")
+        what = ""
     seen = et_words(u.get("at"))
     return f"{who}: {move}{what}" + (f", seen {seen} ET" if seen else "")
 

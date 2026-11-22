@@ -728,12 +728,18 @@
         <span class="gr-news-src">${escapeHtml(n.source || "")}${Number.isFinite(at) ? ` · ${AGO(at)}` : ""}</span></li>`;
     }).join("")}</ul>`;
   }
+  const RW_DESIGNATIONS = ["probable", "questionable", "doubtful", "game-time decision"];
   function moveWords(u) {
     const was = String(u.from || "").toLowerCase(), now = String(u.to || "").toLowerCase();
     // A listed player's newest word, his designation unchanged (engine/reportwatch.lean, step ABT).
     if (u.word === "in" || u.word === "out") {
       return `${now}${u.injury ? ` (${String(u.injury).toLowerCase()})` : ""}, now expected to ${
         u.word === "in" ? "play" : "miss the game"}${u.by ? `, per ${u.by}` : ""}`;
+    }
+    // Under ESPN's bare "Day-To-Day", the league's own word for the game (step ABU).
+    if (RW_DESIGNATIONS.includes(u.word)) {
+      return `${now}${u.injury ? ` (${String(u.injury).toLowerCase()})` : ""}, now listed ${u.word} for the game${
+        u.by ? `, per ${u.by}` : ""}`;
     }
     if (now === "active") return was ? `cleared to play (was ${was})` : "cleared to play";
     return `${was ? `${was} to ${now}` : `newly listed ${now}`}${u.injury ? ` (${String(u.injury).toLowerCase()})` : ""}`;
@@ -775,7 +781,8 @@
       return `<p class="gr-watch-quiet">${icon("check", 13)} No new injury moves or headlines since this report was written${
         when ? ` · ${when}` : ""}</p>`;
     }
-    const tone = (u) => u.word === "out" ? "down" : u.word === "in" ? "up"
+    const tone = (u) => u.word === "out" || u.word === "doubtful" ? "down" : u.word === "in" || u.word === "probable" ? "up"
+      : u.word === "questionable" || u.word === "game-time decision" ? "warn"
       : /out|reserve|ir\b|doubtful|suspend/i.test(u.to || "") ? "down"
       : /active/i.test(u.to || "") ? "up" : "warn";
     return `<div class="card gr-watch" role="status">

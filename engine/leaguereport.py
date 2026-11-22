@@ -892,12 +892,32 @@ def nba_watch(c: Ctx) -> dict | None:
     return _section("watch", "Players to watch", shine_struggle(c, c.reads))
 
 
+def _game_day(c: Ctx) -> str | None:
+    """The game's weekday, Eastern ("Sunday"), or None."""
+    from zoneinfo import ZoneInfo
+    from .gameparlays import game_start
+    t = game_start(c.g)
+    return t.astimezone(ZoneInfo("America/New_York")).strftime("%A") if t else None
+
+
+def nba_word(c: Ctx, i: dict) -> str:
+    """A listed player's status in words: under ESPN's bare "Day-To-Day", the league's own word for this game
+    when his blurb gives one ("questionable", "probable", engine/sources/espninjuries.designation, step ABU)."""
+    status = str(i.get("status") or "").lower()
+    if status == "day-to-day" and i.get("comment"):
+        from .sources.espninjuries import designation
+        word = designation(i.get("comment"), _game_day(c))
+        if word:
+            return word
+    return status
+
+
 def nba_injuries(c: Ctx) -> dict | None:
     inj = [i for i in c.meta.get("injuries") or [] if isinstance(i, dict) and i.get("player")
            and i.get("team") in c.teams]
     if not inj:
         return None
-    items = [(f"{i['player']} ({i['team']}) — {str(i.get('status') or '').lower()}"
+    items = [(f"{i['player']} ({i['team']}) — {nba_word(c, i)}"
               + (f", {str(i['injury']).lower()}" if i.get("injury") else ""),
               injury_claim(i["player"], i["team"], i.get("status"))) for i in inj]
     return _section("injuries", "Injuries", [_claimed_list(items)])
@@ -909,7 +929,7 @@ def nba_before(c: Ctx) -> dict | None:
     q = [i for i in c.meta.get("injuries") or [] if isinstance(i, dict) and i.get("team") in c.teams
          and str(i.get("status") or "").lower() in ("questionable", "doubtful", "probable", "day-to-day", "game time decision")]
     if q:
-        lines.append("Still to be decided: " + _join(f"{i['player']} ({i['team']}, {str(i['status']).lower()})"
+        lines.append("Still to be decided: " + _join(f"{i['player']} ({i['team']}, {nba_word(c, i)})"
                                                      for i in q))
     lines += _stale(c)
     return _section("before", "Before tip-off", [_list(lines)])
@@ -1002,7 +1022,9 @@ def nba_meta(games: list, hist: dict, listed: dict, dvp: dict | None = None, dvp
             rows.sort(key=lambda r: -r["min"])
             carry[t] = rows[:CARRY_N]
         inj = [{"player": (i or {}).get("player") or p, "team": (hist.get(p) or {}).get("team"),
-                "status": (i or {}).get("status") or "", "injury": (i or {}).get("injury") or ""}
+                "status": (i or {}).get("status") or "", "injury": (i or {}).get("injury") or "",
+                # ESPN's blurb: the league's own word under its "Day-To-Day" (nba_word, step ABU).
+                **({"comment": str(i["comment"])[:400]} if (i or {}).get("comment") else {})}
                for p, i in (listed or {}).items() if (hist.get(p) or {}).get("team") in (a, h)]
         out[f"{a}@{h}"] = {"carry": carry, "injuries": sorted(inj, key=lambda i: (i["team"], i["player"])),
                            "injuries_read": bool(injuries_read),

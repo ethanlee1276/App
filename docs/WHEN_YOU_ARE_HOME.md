@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABU. The NBA's own word under ESPN's "Day-To-Day"** (step 860; 22 November). Nothing to run. ESPN files an NBA
+player who is probable, questionable or doubtful all as "Day-To-Day", and the blurb under it keeps the league's own
+word. This morning: "Siakam (hip) is listed as questionable for Sunday's game against New York", "Cunningham (knee)
+is probable to play Sunday in Atlanta", "Antetokounmpo (groin) is listed as questionable for Sunday's game against
+Oklahoma City". The NBA's game reports said "day-to-day" for every one of them, though probable nearly always plays
+and doubtful nearly never does. Now the report's Injuries list and its "Still to be decided" line say the league's
+word for that game ("Pascal Siakam (IND) — questionable, hip"), read only off a blurb about that game: one about
+another day's game, the rest of a game under way, or giving two words is passed by, and ESPN's status stands. The
+game page's "Since this report was written" card says a new word too ("day-to-day (hip), now listed questionable for
+the game"). Nothing moves a number: the board still holds a day-to-day player's own props until the lineup, as
+before.
+
 **ABT. A listed player's newest word reaches his game's page** (step 859; 22 November). Nothing to run. You said:
 "we need to do better on reporting on injuries, figuring out which players are in or out for all sports, for all
 game reports." What I found, on this morning's live injury file: ESPN's listed status was never behind its own news.
