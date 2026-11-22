@@ -342,7 +342,7 @@ def test_a_game_whose_props_all_sit_under_60_has_its_entry_and_fills_from_them()
     GP.from_report(b, "nfl", away, [dict(r, side="OVER") for r in fifties])
     assert len(x["threes"]) == 2 == GP.MAX_USES, x.get("threes_note")
     assert all(t.get("filled") for t in x["threes"]) and x["threes_note"].startswith("2 of 3: ")
-    assert x["threes_note"].endswith("reach 15% by our numbers with no leg on more than 2 tickets"), x["threes_note"]
+    assert x["threes_note"].endswith("reaches 15% by our numbers, with no leg on more than 2 tickets"), x["threes_note"]
 
 
 def test_the_longer_tickets_floor_and_a_short_game_says_what_stopped_it():
@@ -371,7 +371,7 @@ def test_the_longer_tickets_floor_and_a_short_game_says_what_stopped_it():
     same = [_leg("A One", m, 0.7) for m in ("receptions", "rec_yds", "rush_att")]
     none = GP.tickets_of("nfl", g, [], extra=same, picks={GP._leg_id(l) for l in same})
     assert none["threes"] == [] and none["fill_fit"] == 0 and none["fill_clear"] == 0
-    assert "reach 15% by our numbers" in GP._threes_note(dict(none, wider=3))
+    assert "reaches 15% by our numbers" in GP._threes_note(dict(none, wider=3))
     # Props the report did not pick ride one a ticket beside two of its picks,
     # and make up the game's last tickets only once those are made (ZR).
     two_picks = legs[:2]

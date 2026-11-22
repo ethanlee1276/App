@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABJ. A game short of its parlays says why in one plain sentence** (step 850; 22 November). Nothing to run. A game
+report that posts fewer than three of a kind says why under them, and it read "... make no more two that fit
+together without a conflict and reach 30% by our numbers with no leg on more than 2 of the game's parlays". It reads
+now: "2 of 3: the 7 legs at 60% or better in this game's priced props make no other two-leg ticket without a
+conflict that reaches 30% by our numbers, with no leg on more than 2 of the game's parlays" (and with no ticket at
+all, "make no three-leg ticket ..."). Every league's notes read the same way.
+
 **ABI. A game page never prints "NaN°F"** (step 849; 22 November). Nothing to run. Checking the NFL game reports in
 a browser for step ABH, the game page's header read "NaN°F · NaNmph · kickoff forecast" for a game with no weather
 on file: the header printed whatever numbers the game carried, where the game cards on the board already said

@@ -2833,7 +2833,7 @@ def _uses_words(made: dict) -> str:
     most (`choose`)."""
     n = len(made.get(_size_spec(int(made.get("size") or 3))["key"]) or [])
     where = f"{GAME_CAP_USES} of the game's parlays" if made.get("game_capped") else f"{MAX_USES} tickets"
-    return f" with no leg on more than {where}" if n and int(made.get("fill_clear") or 0) > n else ""
+    return f", with no leg on more than {where}" if n and int(made.get("fill_clear") or 0) > n else ""
 
 
 def _and(words: list) -> str:
@@ -2853,7 +2853,7 @@ def _threes_note(made: dict, whose: str = "this game's priced props") -> str:
         return (head + f"a {spec['kind']} parlay takes {spec['count']} legs at {LEG_FLOOR:.0%} or better, and "
                 f"{whose} {'make' if wider != 1 else 'makes'} {wider}")
     return (head + f"the {wider} legs at {LEG_FLOOR:.0%} or better in {whose} make no "
-            f"{'more ' if n else ''}{spec['count']} that fit together without a conflict and reach "
+            f"{'other ' if n else ''}{spec['kind']} ticket without a conflict that reaches "
             f"{spec['long'] * 100:g}% by our numbers{_uses_words(made)}")
 
 
@@ -3767,8 +3767,8 @@ def _report_note(n_ok: int, n_picks: int, made: dict) -> str:
     if wider < size:
         got = f"only {wider} leg{'' if wider == 1 else 's'}" if wider else "none"
         return head + f"a {spec['kind']} parlay takes {spec['count']} legs, and {whose} make {got}"
-    return (head + f"{whose} make no {'more ' if n else ''}{spec['count']} that fit together without a conflict "
-            f"and reach {spec['long'] * 100:g}% by our numbers{_uses_words(made)}")
+    return (head + f"{whose} make no {'other ' if n else ''}{spec['kind']} ticket without a conflict "
+            f"that reaches {spec['long'] * 100:g}% by our numbers{_uses_words(made)}")
 
 
 def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> dict | None:
