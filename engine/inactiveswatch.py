@@ -281,11 +281,16 @@ def take(rec: dict, found: dict, t: float, iv, clubs: tuple, status: str = "ok",
         cl = rec["clubs"].setdefault(club, {"men": {}, "counts": []})
         pl = rec["places"].setdefault(place, {"first": round(t, 1), "max": 0})
         pl["max"] = max(int(pl.get("max") or 0), len(men))
+        here = cl.setdefault("by_place", {}).setdefault(place, {})
         for man, info in men.items():
             counts.setdefault(club, set()).add(man)
+            pid, filed = info if isinstance(info, tuple) else (info, None)
+            # Each place's own first sighting of him too: one place of a page can mark a whole roster (the core
+            # API's `active` is false for most of a club's men on a game day) while another marks the list.
+            if man not in here:
+                here[man] = {"t": round(t, 1), "iv": None if iv is None else round(iv, 1), "id": pid or ""}
             if man in cl["men"]:
                 continue
-            pid, filed = info if isinstance(info, tuple) else (info, None)
             cl["men"][man] = {"t": round(t, 1), "iv": None if iv is None else round(iv, 1), "id": pid or "",
                               "at": place, **({"filed": round(filed, 1)} if filed is not None else {})}
             new += 1
@@ -434,6 +439,25 @@ def _telling(by_slot: dict, most: int = 20) -> dict:
     return dict(sorted(shapes.items(), key=lambda kv: (not marked(kv), kv[0]))[:most])
 
 
+def _against(men: dict, board: dict, by_id: dict) -> dict:
+    """For the men both a feed and the board carried: how many, and the middle of the minutes the feed showed
+    them ahead of the board (positive) or behind, and ahead of the board's own filing stamps."""
+    ahead, ahead_filed = [], []
+    for man, m in men.items():
+        b = board.get(man) or (by_id.get(m.get("id")) if m.get("id") else None)
+        if b is None:
+            continue
+        ahead.append((_mid(b) - _mid(m)) / 60)
+        if b.get("filed") is not None:
+            ahead_filed.append((float(b["filed"]) - _mid(m)) / 60)
+    out = {"both": len(ahead)}
+    if ahead:
+        out["ahead_min"] = round(statistics.median(ahead), 1)
+    if ahead_filed:
+        out["ahead_of_filed_min"] = round(statistics.median(ahead_filed), 1)
+    return out
+
+
 def report(st: dict) -> list:
     """Per game and club, each feed's count and first sighting, and against the board: for the men both carried,
     the middle of the minutes the feed showed them ahead of the board (positive) or behind, and of the minutes
@@ -457,19 +481,13 @@ def report(st: dict) -> list:
                     if filed:
                         d["filed_first"], d["filed_last"] = _iso(min(filed)), _iso(max(filed))
                 else:
-                    ahead, ahead_filed = [], []
-                    for man, m in men.items():
-                        b = board.get(man) or (by_id.get(m.get("id")) if m.get("id") else None)
-                        if b is None:
-                            continue
-                        ahead.append((_mid(b) - _mid(m)) / 60)
-                        if b.get("filed") is not None:
-                            ahead_filed.append((float(b["filed"]) - _mid(m)) / 60)
-                    d["both"] = len(ahead)
-                    if ahead:
-                        d["ahead_min"] = round(statistics.median(ahead), 1)
-                    if ahead_filed:
-                        d["ahead_of_filed_min"] = round(statistics.median(ahead_filed), 1)
+                    d.update(_against(men, board, by_id))
+                    # …and place by place (`take`): the place that marks the list, apart from one that marks more.
+                    places = ((rec.get("clubs") or {}).get(club) or {}).get("by_place") or {}
+                    if places:
+                        d["places"] = {pl: dict({"n": len(ms), "first": _iso(min(m["t"] for m in ms.values()))},
+                                                **_against(ms, board, by_id))
+                                       for pl, ms in sorted(places.items()) if ms}
                 row[feed] = d
             if row:
                 clubs[club] = row

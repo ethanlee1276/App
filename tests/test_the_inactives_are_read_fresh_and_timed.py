@@ -157,7 +157,9 @@ def test_the_watch_times_each_feed_against_the_board_and_publishes_no_names():
     # +55 s, 65 s after the one before it, its middle +22.5 s; filed +50 s.
     assert sf["board"]["n"] == 1 and sf["board"]["filed_first"] == filed
     assert sf["core_roster"] == {"n": 1, "first": W._iso(T0 - 90 * 60), "both": 1, "ahead_min": 0.4,
-                                 "ahead_of_filed_min": 0.8}, sf
+                                 "ahead_of_filed_min": 0.8,
+                                 "places": {"entries[].active": {"n": 1, "first": W._iso(T0 - 90 * 60), "both": 1,
+                                                                 "ahead_min": 0.4, "ahead_of_filed_min": 0.8}}}, sf
     assert g["feeds"]["gamecast"]["status"] == "HTTP 404" and g["feeds"]["core_roster"]["reads"] == 4
     assert g["feeds"]["core_roster"]["shapes"] == {"entries[].active": {"false": 1}}
     text = out.read_text(encoding="utf-8")
@@ -169,6 +171,32 @@ def test_the_watch_times_each_feed_against_the_board_and_publishes_no_names():
     _fresh()
     lines = W.report_lines(W.report(kept))
     assert any("core_roster" in ln and "+0.4 min against the board" in ln for ln in lines), lines
+
+
+def test_each_place_of_a_page_is_timed_apart():
+    # On the Sunday (the 4:25 games, read by the box): the core API's roster had `active` false for about 58 men a
+    # club and `didNotPlay` true for its seven inactives. The place that marks the list is timed on its own.
+    _fresh()
+    root, out = Path(tempfile.mkdtemp()), Path(tempfile.mkdtemp()) / "w.json"
+    now = [T0 - 90 * 60]
+    flags = {"dnp": False}
+
+    def get(url):
+        if "competitors/25/roster" not in url:
+            return "HTTP 404", None, 0
+        return "ok", {"team": {"$ref": "http://x/teams/25"}, "entries": [
+            {"playerId": 1, "displayName": "Jordan Mason", "jersey": "24", "active": False, "didNotPlay": flags["dnp"]},
+            {"playerId": 2, "displayName": "George Kittle", "jersey": "85", "active": False, "didNotPlay": False}]}, 1
+
+    kw = dict(now=lambda: now[0], scoreboard=_scoreboard(T0), board=lambda: ([], T0 - 100 * 60), get=get,
+              root=root, out=out)
+    W.watch_once(**kw)
+    flags["dnp"] = True
+    now[0] += 60
+    W.watch_once(**kw)
+    places = json.loads(out.read_text(encoding="utf-8"))["games"][0]["clubs"]["SF"]["core_roster"]["places"]
+    assert places["entries[].active"]["n"] == 2 and places["entries[].active"]["first"] == W._iso(T0 - 90 * 60)
+    assert places["entries[].didNotPlay"] == {"n": 1, "first": W._iso(T0 - 89 * 60), "both": 0}, places
 
 
 def test_a_full_slate_is_read_in_turn_and_nothing_is_asked_out_of_a_window():
