@@ -6449,6 +6449,20 @@ def _feed_latency_watcher() -> None:
         time.sleep(wait)
 
 
+def _inactives_watcher() -> None:
+    """While an NFL game is near its kickoff, ESPN's other feeds read beside its injury board
+    (engine/inactiveswatch, step ACH): which shows the game-day inactives first. Nothing on the site reads what
+    it writes, so it changes no pick; a failure never stops the site."""
+    from engine import inactiveswatch as _iw
+    while True:
+        wait = _iw.IDLE_S
+        try:
+            wait = _iw.watch_once()
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
 #: How often the billing sweep wakes. Each pass re-reads only the rows
 #: Stripe has not been asked about in billing.SWEEP_EVERY_S (six hours).
 BILLING_SWEEP_S = 30 * 60
@@ -12852,6 +12866,15 @@ def main() -> None:
         threading.Thread(target=_slip_watcher, daemon=True, name="slipwatch").start()
         print(f"  Saved slips: every {SLIP_WATCH_S}s, a slip down to its last leg "
               f"noted and emailed where a member asked.")
+        # Which of ESPN's feeds shows the NFL's inactives first (engine/inactiveswatch, step ACH).
+        try:
+            from engine import inactiveswatch as _iw
+            if _iw.on():
+                threading.Thread(target=_inactives_watcher, daemon=True, name="inactiveswatch").start()
+                print("  Inactives watch: each minute an NFL game is near its kickoff, ESPN's summary, gamecast "
+                      "and rosters read beside its injury board (python3 -m engine.inactiveswatch).")
+        except Exception:      # noqa: BLE001 — a watcher never stops the site
+            pass
         # Each game's report, watching the injury report and the news between builds.
         threading.Thread(target=_report_watcher, daemon=True, name="reportwatch").start()
         print("  Report watch: every 5 min, each game's injury moves and headlines about its "

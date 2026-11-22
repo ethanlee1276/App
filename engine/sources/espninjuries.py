@@ -66,6 +66,54 @@ LEAGUES = {
 #: on the first cycle after the cache turns.
 INJURY_TTL = 600
 
+#: AND A MINUTE IN THE INACTIVES WINDOW (step ACH, 22 November 2026). An NFL club's inactives come out 90 minutes
+#: before its kickoff, and its game's picks wait for both clubs' lists on this board
+#: (engine/gameparlays.inactives_ready). On the Sunday the 4:25 games' lists reached our picks 25 to 42 minutes
+#: after they came out, and up to ten of those minutes were this copy's age. From INACTIVES_WINDOW_MIN[0] minutes
+#: before an NFL kickoff to INACTIVES_WINDOW_MIN[1] after it, the NFL board is asked again once its copy is a
+#: minute old: at most one ask a minute while a window is open, against six an hour. Which games are near their
+#: kickoff is read off the scoreboard copy the score loop keeps (data/cache/espn_nfl_scoreboard.json), never by
+#: asking ESPN.
+#: Off without a deploy: ``sudo ./deploy/setenv.sh QB_INACTIVES_FRESH off``.
+INJURY_TTL_WINDOW = 60
+INACTIVES_WINDOW_MIN = (100, 5)
+INACTIVES_FRESH_ENV = "QB_INACTIVES_FRESH"
+
+
+def nfl_kickoffs(path=None) -> list[float]:
+    """Each game's kickoff (epoch seconds) on the NFL scoreboard copy the score loop keeps; [] without one."""
+    import json
+    from .fetch import _cache_path
+    try:
+        data = json.loads((path or _cache_path("espn_nfl_scoreboard.json")).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out = []
+    for ev in (data.get("events") or []) if isinstance(data, dict) else []:
+        t0 = _parse_iso_ts(ev.get("date")) if isinstance(ev, dict) else None
+        if t0 is not None:
+            out.append(t0)
+    return out
+
+
+def in_inactives_window(now: float | None = None, kickoffs=None) -> bool:
+    """True while an NFL game kicks off within INACTIVES_WINDOW_MIN of ``now`` (``kickoffs``: epoch seconds, by
+    default the scoreboard copy's)."""
+    now = time.time() if now is None else now
+    before, after = INACTIVES_WINDOW_MIN
+    return any(t0 - before * 60 <= now <= t0 + after * 60
+               for t0 in (nfl_kickoffs() if kickoffs is None else kickoffs))
+
+
+def ttl_for(league: str, now: float | None = None, kickoffs=None) -> int:
+    """How long ``league``'s copy is believed: INJURY_TTL_WINDOW for the NFL's in its inactives window, else
+    INJURY_TTL."""
+    import os
+    if league != "nfl" or str(os.environ.get(INACTIVES_FRESH_ENV, "on")).strip().lower() in ("off", "0", "false",
+                                                                                              "no"):
+        return INJURY_TTL
+    return INJURY_TTL_WINDOW if in_inactives_window(now, kickoffs) else INJURY_TTL
+
 
 def _cache_file(league: str):
     return CACHE_DIR / f"espn_injuries_{league}.json"
@@ -94,7 +142,7 @@ def fetch_injuries(league: str):
     """The raw board for one league. KeyError for a league with no feed
     is the right failure — callers iterate LEAGUES, they don't guess."""
     return fetch_json(LEAGUES[league], f"espn_injuries_{league}.json",
-                      ttl=INJURY_TTL, user_agent=DEFAULT_AGENT)
+                      ttl=ttl_for(league), user_agent=DEFAULT_AGENT)
 
 
 #: ESPN keeps a player in the injuries feed after he is cleared, with the
