@@ -17,7 +17,13 @@ interval (by team-game) is above zero and no more than two judged seasons are wo
   S  the average shift after any change of starter;
   R  a starter back with a club he started for before starting elsewhere (step ACJ), in his first six starts
      back: each receiver's share of the targets then, with him, blended into his share this season, as test A
-     blends. Nothing ships on it unless it passes the same bar.
+     blends. Nothing ships on it unless it passes the same bar;
+  Z  a new starter's own split of his red-zone targets (thrown from the 20 or closer) between wide receivers,
+     tight ends and backs, blended into the team's recent red-zone split, as test B blends all of them (step
+     ACL): the touchdown props' question. Nothing ships on it unless it passes.
+
+The Wednesday refit runs it on the box (engine/maintenance._run_deep_refit, step ACL); its last line says every
+test's verdict, and the heartbeat shows a weekly job's last line.
 """
 from __future__ import annotations
 
@@ -28,6 +34,8 @@ from . import qblean
 
 FIT = (2021, 2022, 2023)
 HALF = 8.0
+#: Test Z's red zone: a target thrown from the opponent's 20-yard line or closer.
+RED_ZONE = 20
 
 
 def team_games(seasons, load_pbp=None, load_roster=None) -> list:
@@ -61,9 +69,18 @@ def team_games(seasons, load_pbp=None, load_roster=None) -> list:
             if not rid:
                 continue
             g["targets"] += 1
-            rr = g["rec"].setdefault(rid, {"t": 0, "c": 0, "y": 0.0, "pos": pos.get(rid, ""), "by": collections.Counter()})
+            rr = g["rec"].setdefault(rid, {"t": 0, "c": 0, "y": 0.0, "pos": pos.get(rid, ""), "by": collections.Counter(),
+                                           "rz": 0, "rzby": collections.Counter()})
             rr["t"] += 1
             rr["by"][qb] += 1
+            # A red-zone target (test Z): thrown from the opponent's 20 or closer.
+            try:
+                inside = float(r.get("yardline_100") or 99) <= RED_ZONE
+            except ValueError:
+                inside = False
+            if inside:
+                rr["rz"] += 1
+                rr["rzby"][qb] += 1
             if str(r.get("complete_pass") or "") == "1":
                 rr["c"] += 1
                 try:
@@ -76,7 +93,8 @@ def team_games(seasons, load_pbp=None, load_roster=None) -> list:
                         "qb": qb, "qb_name": names.get(qb, ""), "qb_share": att / sum(g["qbs"].values()),
                         "targets": g["targets"],
                         "rec": {k: {"t": v["t"], "c": v["c"], "y": v["y"], "pos": v["pos"],
-                                    "by_starter": v["by"].get(qb, 0)} for k, v in g["rec"].items()}})
+                                    "by_starter": v["by"].get(qb, 0), "rz": v["rz"],
+                                    "rz_by_starter": v["rzby"].get(qb, 0)} for k, v in g["rec"].items()}})
     out.sort(key=lambda d: (d["season"], d["week"], d["team"]))
     return out
 
@@ -171,9 +189,14 @@ def pair_loss(c, k):
     return (t - share * T) ** 2
 
 
-def lean_cases(games: list) -> list:
+def lean_cases(games: list, key: str = "t", by: str = "by_starter", min_game: int = 15,
+               min_career: int | None = None) -> list:
     """Test B's cases: (season, key, the game's split, the team's split from the other starters' games, the new
-    starter's career split), in his first three starts for the team."""
+    starter's career split), in his first three starts for the team. ``key``/``by`` choose the count: every
+    target (test B), or the red-zone ones ("rz"/"rz_by_starter", test Z), a game counted from ``min_game`` of
+    them and a career from ``min_career`` (qblean.MIN_TARGETS)."""
+    min_career = qblean.MIN_TARGETS if min_career is None else min_career
+    count = key
     career = collections.defaultdict(collections.Counter)
     starts = collections.defaultdict(collections.Counter)
     team_games_ = collections.defaultdict(list)
@@ -184,11 +207,11 @@ def lean_cases(games: list) -> list:
         for r in g["rec"].values():
             grp = qblean.group(r["pos"])
             if grp:
-                split[grp] += r["t"]
+                split[grp] += r.get(count, 0)
         tot = sum(split[x] for x in qblean.GROUPS)
         others = [s for q, s in team_games_[key] if q != g["qb"]]
-        if (g["qb_share"] >= qblean.START_SHARE and starts[key][g["qb"]] < 3 and len(others) >= 3 and tot >= 15
-                and sum(career[g["qb"]].values()) >= qblean.MIN_TARGETS):
+        if (g["qb_share"] >= qblean.START_SHARE and starts[key][g["qb"]] < 3 and len(others) >= 3
+                and tot >= min_game and sum(career[g["qb"]].values()) >= min_career):
             ts = collections.Counter()
             for s in others[-qblean.RECENT_WEEKS:]:
                 ts.update(s)
@@ -203,8 +226,8 @@ def lean_cases(games: list) -> list:
             starts[key][g["qb"]] += 1
             for r in g["rec"].values():
                 grp = qblean.group(r["pos"])
-                if grp and r.get("by_starter"):
-                    career[g["qb"]][grp] += r["by_starter"]
+                if grp and r.get(by):
+                    career[g["qb"]][grp] += r[by]
         team_games_[key].append((g["qb"], split))
     return cases
 
@@ -267,6 +290,7 @@ def main(argv=None) -> int:
     last = a.last or season_of("nfl", _dt.date.today().isoformat())
     games = team_games(range(a.first, last + 1))
     print(f"{len(games)} team-games, {a.first}-{last}; settings chosen on {FIT[0]}-{FIT[-1]}")
+    verdicts = []
     for name, cases, loss, grid, base in (
             ("A  a receiver's share with this starter (k team-targets)", pair_cases(games), pair_loss,
              (10, 20, 40, 80, 160, 320), None),
@@ -274,9 +298,15 @@ def main(argv=None) -> int:
              (0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4), 0.0),
             # A starter back with a former club (step ACJ): a receiver's share with him then, into his share now.
             ("R  a returning starter's shares with his old club (k team-targets)", reunion_cases(games), pair_loss,
-             (10, 20, 40, 80, 160, 320), None)):
-        r = judge(cases, loss, grid, base, rule="one_se" if name.startswith("B") else "best")
+             (10, 20, 40, 80, 160, 320), None),
+            # A new starter's own split of his RED-ZONE targets (step ACL), as test B splits all of them: the
+            # touchdown props' question.
+            ("Z  a new starter's own red-zone split (w, one-standard-error rule)",
+             lean_cases(games, key="rz", by="rz_by_starter", min_game=4, min_career=12), lean_loss,
+             (0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4), 0.0)):
+        r = judge(cases, loss, grid, base, rule="one_se" if name[0] in "BZ" else "best")
         print(f"\n{name}: {len(cases)} cases; chosen {r['setting']}")
+        verdicts.append((name[0], len(cases), r))
         if r["setting"] is None:
             # No case in the fit seasons: nothing can be chosen, so nothing passes. Said with the cases a season.
             by = collections.Counter(c[0] for c in cases)
@@ -287,4 +317,23 @@ def main(argv=None) -> int:
             print(f"   {s}: n={n} {pct:+.2f}%")
         print(f"   interval {r['interval']}, {r['worse']} season(s) worse -> {'PASSES' if r['passes'] else 'fails'}")
     print(f"\nWhat ships: engine/qblean.LEAN_W = {qblean.LEAN_W}")
+    # THE LAST LINE SAYS EVERY VERDICT (step ACL): the Wednesday refit runs this on the box, and a job's last line
+    # is what the heartbeat shows of it (maintenance._record_job), so each test's answer can be read off the site.
+    print(verdict_line(verdicts))
     return 0
+
+
+def verdict_line(verdicts: list) -> str:
+    """"chemfit: A fails (1204 cases); B passes at 0.2 (199); R too few (3); Z ..." from [(test, cases, judged)]."""
+    bits = []
+    for test, n, r in verdicts:
+        if r.get("setting") is None:
+            bits.append(f"{test} too few ({n})")
+        else:
+            bits.append(f"{test} {'passes' if r.get('passes') else 'fails'} at {r['setting']} ({n}; "
+                        f"{r.get('worse', 0)} season(s) worse, interval {r.get('interval')})")
+    return "chemfit: " + "; ".join(bits)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

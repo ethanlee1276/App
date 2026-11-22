@@ -135,7 +135,9 @@ def test_the_builds_and_the_report_carry_it():
     assert 'if q.get("lean"):\n                text += f". {q[\'lean\']}"' in gr
     assert 'lw = _lean_words({"replacement": rep, "lean": sc["lean"]}' in gr
     mt = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
-    assert '+ _spawn_module("engine.qblean", log))' in mt
+    assert '+ _spawn_module("engine.qblean", log)\n' in mt
+    # …and the measurement itself beside it, every Wednesday (step ACL).
+    assert '+ _spawn_module("engine.chemfit", log))' in mt
     assert (ROOT / "chemfit.py").exists()
 
 
@@ -172,6 +174,27 @@ def test_the_measurement_reproduces_the_shipped_setting():
     for words in ("2017 +11.7%, 2018 +12.1%, 2019 -0.6%, 2020 +6.5%, 2024 +1.8%, 2025 +2.3%, 2026 +0.7%",
                   "a blend of 0.35, fails on the unseen seasons", "It is not in any number"):
         assert words.lower() in " ".join(src.split()).lower(), words
+
+
+def test_the_red_zone_split_is_measured_too_and_the_verdicts_reach_the_heartbeat():
+    # Test Z (step ACL): the red-zone targets counted apart, and test B's cases read off them.
+    rows = [_play("g1", "TB", "qbA", "te1", yardline_100="12")] * 3 + [_play("g1", "TB", "qbA", "wr1",
+                                                                              yardline_100="45")] * 6
+    games = F.team_games([2025], load_pbp=lambda s: rows,
+                         load_roster=lambda s: [{"gsis_id": "te1", "position": "TE"}, {"gsis_id": "wr1", "position": "WR"},
+                                                {"gsis_id": "qbA", "full_name": "Kyle Trask", "position": "QB"}])
+    rec = games[0]["rec"]
+    assert (rec["te1"]["rz"], rec["te1"]["rz_by_starter"], rec["wr1"]["rz"]) == (3, 3, 0), rec
+    # The same synthetic league as above, read in the red zone: every count goes through.
+    assert F.lean_cases([], key="rz", by="rz_by_starter", min_game=4, min_career=12) == []
+    line = F.verdict_line([("A", 1204, {"setting": 10, "passes": False, "worse": 3, "interval": (-0.1, 0.0)}),
+                           ("B", 199, {"setting": 0.2, "passes": True, "worse": 1, "interval": (0.001, 0.01)}),
+                           ("R", 3, {"setting": None})])
+    assert line == ("chemfit: A fails at 10 (1204; 3 season(s) worse, interval (-0.1, 0.0)); "
+                    "B passes at 0.2 (199; 1 season(s) worse, interval (0.001, 0.01)); R too few (3)"), line
+    src = (ROOT / "engine" / "chemfit.py").read_text(encoding="utf-8")
+    assert 'if __name__ == "__main__":\n    raise SystemExit(main())' in src and "print(verdict_line(verdicts))" in src
+    assert 'lean_cases(games, key="rz", by="rz_by_starter", min_game=4, min_career=12)' in src
 
 
 if __name__ == "__main__":

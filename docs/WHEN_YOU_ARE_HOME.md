@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACL. The chemistry measurement runs on the box every Wednesday, with two new tests** (step 877; 22 November).
+Nothing to run. ABZ's measurement (`python3 chemfit.py`) needs the box's ten seasons of play-by-play, so it only ran
+when someone ran it by hand. It now runs with the Wednesday refit, and its last line, every test's verdict, shows on
+the heartbeat's weekly jobs, so its answers can be read off the site. Two tests join A, B, C and S. R asks whether a
+returning starter's old target shares with a club (ACJ) predict his receivers' shares now, better than their own
+recent shares. Z asks whether a new starter's own split of his red-zone targets between wide receivers, tight ends
+and backs carries over the way his whole split does (test B, the lean ABZ ships): that is the touchdown props'
+question. Neither moves a number until it passes the bar the others were held to.
+
 **ACK. A receiver or back with a club he played for is read against his games there too** (step 876; 22 November).
 Nothing to run. The same as ACJ for every other man with a prop in an NFL game: a wide receiver, tight end or back
 whose club now is one he played for before playing somewhere else (four games there or more) gets a line on his
