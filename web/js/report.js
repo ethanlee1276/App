@@ -730,6 +730,11 @@
   }
   function moveWords(u) {
     const was = String(u.from || "").toLowerCase(), now = String(u.to || "").toLowerCase();
+    // A listed player's newest word, his designation unchanged (engine/reportwatch.lean, step ABT).
+    if (u.word === "in" || u.word === "out") {
+      return `${now}${u.injury ? ` (${String(u.injury).toLowerCase()})` : ""}, now expected to ${
+        u.word === "in" ? "play" : "miss the game"}${u.by ? `, per ${u.by}` : ""}`;
+    }
     if (now === "active") return was ? `cleared to play (was ${was})` : "cleared to play";
     return `${was ? `${was} to ${now}` : `newly listed ${now}`}${u.injury ? ` (${String(u.injury).toLowerCase()})` : ""}`;
   }
@@ -770,7 +775,8 @@
       return `<p class="gr-watch-quiet">${icon("check", 13)} No new injury moves or headlines since this report was written${
         when ? ` · ${when}` : ""}</p>`;
     }
-    const tone = (u) => /out|reserve|ir\b|doubtful|suspend/i.test(u.to || "") ? "down"
+    const tone = (u) => u.word === "out" ? "down" : u.word === "in" ? "up"
+      : /out|reserve|ir\b|doubtful|suspend/i.test(u.to || "") ? "down"
       : /active/i.test(u.to || "") ? "up" : "warn";
     return `<div class="card gr-watch" role="status">
       <div class="gr-watch-h"><b>Since this report was written</b>${when ? `<span>${escapeHtml(when)}</span>` : ""}</div>

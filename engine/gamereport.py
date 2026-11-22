@@ -2834,6 +2834,11 @@ def update_words(c: Ctx, u: dict) -> str:
     if now == "active":
         move = f"cleared to play (was {was})" if was else "cleared to play"
     what = f" ({str(u['injury']).lower()})" if u.get("injury") and now != "active" else ""
+    if u.get("word") in ("in", "out"):
+        # His newest word, the designation unchanged (engine/reportwatch.lean, step ABT).
+        move = f"{now}{what}, now expected to {'play' if u['word'] == 'in' else 'miss the game'}" + \
+            (f", per {u['by']}" if u.get("by") else "")
+        what = ""
     seen = et_words(u.get("at"))
     return f"{who}: {move}{what}" + (f", seen {seen} ET" if seen else "")
 

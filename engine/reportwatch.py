@@ -79,6 +79,63 @@ ROSTER_WORDS = re.compile(
     r"suspen(d|ded|sion)|benched|bench(es)?|start(s|ing)? at quarterback|named starter|demoted|promoted)\b",
     re.I)
 
+#: A LISTED PLAYER'S NEWEST WORD (step ABT, 22 November 2026). ESPN's board files a blurb with each
+#: designation, and on a Sunday morning the blurb moves while the designation stands: at 7:24 AM ET Baker
+#: Mayfield was still "Questionable" and his blurb said "Mayfield (foot/right thumb) is slated to play in
+#: Sunday's game against the Lions, Ian Rapoport of NFL Network reports"; Ladd McConkey's and Carnell Tate's
+#: said the same within the quarter hour. The watch kept only designations, so the morning's biggest news on
+#: the game never reached its page. A blurb that changes on a player still listed, and leans one way, is now
+#: an update of its own ("word": "in" or "out"), said beside his designation. Read conservatively:
+#:   * a blurb about the rest of a game under way ("ruled out for the rest of Sunday's game") is no lean;
+#:   * one that names a day other than his club's next game's ("ruled out for Saturday's game", read on the
+#:     Sunday) is about a game already played: on the Sunday morning eight NBA players read "Day-To-Day" with
+#:     a blurb like that, every one of them about the night before;
+#:   * one that leans both ways ("With Omar Cooper ruled out, Mitchell is expected to play an elevated role")
+#:     is about someone else and is no lean.
+#: Nothing here moves a number: the board reads the designation, as before.
+LEAN_OUT = re.compile(
+    r"\b(won[’']?t play|will not play|ruled out|will miss|is out for|(?:is )?not expected to play|"
+    r"isn[’']?t expected to play|not slated to play|not expected to start|won[’']?t suit up|will not suit up|"
+    r"will sit out|won[’']?t be available|will not be available|is inactive|declared inactive|listed as inactive|"
+    r"won[’']?t dress|will not dress|healthy scratch|won[’']?t travel|will not travel)\b", re.I)
+LEAN_IN = re.compile(
+    r"\b(slated to play|expected to play|set to play|plans? to play|will play|will start|expected to start|"
+    r"slated to start|cleared to play|will be available|available to play|will suit up|will dress|good to go)\b",
+    re.I)
+IN_GAME = re.compile(r"\b(rest of|remainder of|won[’']?t return|will not return|did not return|didn[’']?t return|"
+                     r"exited|left (?:the|\w+'s) (?:game|contest))\b", re.I)
+WEEKDAYS = re.compile(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", re.I)
+#: Who reported it, where the blurb says ("..., Ian Rapoport of NFL Network reports.").
+BY = re.compile(r"(?:,\s*|\bper\s+)([A-Z][\w.'’-]*(?:\s+[A-Z][\w.'’-]*){0,3}\s+of\s+(?:[Tt]he\s+)?"
+                r"[A-Z][\w.'’&-]*(?:\s+[A-Z][\w.'’&-]*){0,4})(?:\s+reports?)?\.?\s*$")
+#: A blurb this old is no Sunday-morning word: the week's filings say it.
+WORD_HOURS = 36
+#: The designations a word can sit beside: a player cleared or already ruled out has nothing left to lean.
+LEAN_ON = ("questionable", "doubtful", "day-to-day", "probable", "game-time decision", "gtd")
+
+
+def lean(comment, day: str | None = None) -> str | None:
+    """"in", "out", or None: which way a blurb leans on its player's next game. ``day``: that game's weekday
+    (Eastern), so a blurb naming another day is about another game."""
+    text = " ".join(str(comment or "").split())
+    if not text or IN_GAME.search(text):
+        return None
+    if day:
+        named = {m.lower() for m in WEEKDAYS.findall(text)}
+        if named and day.lower() not in named:
+            return None
+    out = bool(LEAN_OUT.search(text))
+    inn = bool(LEAN_IN.search(LEAN_OUT.sub(" ", text)))
+    if out == inn:
+        return None
+    return "out" if out else "in"
+
+
+def reported_by(comment) -> str:
+    """The reporter and outlet a blurb names at its end, or ""."""
+    m = BY.search(" ".join(str(comment or "").split()))
+    return m.group(1) if m else ""
+
 
 def _norm(s) -> str:
     s = unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode().lower()
@@ -126,7 +183,7 @@ def watched_games(board: dict, now: float) -> list[dict]:
         if t is None or t < now - AFTER_KICKOFF_S or t > now + AHEAD_S:
             continue
         out.append({"key": f"{g['away']}@{g['home']}", "home": str(g["home"]), "away": str(g["away"]),
-                    "kickoff": str(g.get("kickoff") or ""),
+                    "kickoff": str(g.get("kickoff") or ""), "start": t,
                     "names": {str(g["home"]): g.get("home_name") or "", str(g["away"]): g.get("away_name") or ""}})
     return out
 
@@ -177,10 +234,13 @@ def _flag(title: str) -> str | None:
     return None
 
 
-def injury_updates(rows: list, seen: dict, table: dict, now: float, first: bool) -> list:
+def injury_updates(rows: list, seen: dict, table: dict, now: float, first: bool, days: dict | None = None) -> list:
     """The designations that moved since the last look, as updates; ``seen``
     is brought up to date in place. ``first``: the league's first look, which
-    only remembers."""
+    only remembers. ``days``: {club: its next game's weekday, Eastern}; with it,
+    a listed player's blurb that changed and leans one way (``lean``) is an
+    update too, his designation the same on both sides and ``word`` saying
+    which way (step ABT)."""
     out = []
     for r in rows:
         if not isinstance(r, dict) or not r.get("player") or not r.get("status"):
@@ -190,13 +250,45 @@ def injury_updates(rows: list, seen: dict, table: dict, now: float, first: bool)
             continue
         key = f"{code}|{r['player']}"
         status = str(r["status"]).strip()
-        was = (seen.get(key) or {}).get("status")
-        seen[key] = {"status": status, "at": seen.get(key, {}).get("at", now) if was == status else now}
-        if first or was == status:
+        before = seen.get(key) or {}
+        was = before.get("status")
+        said = " ".join(str(r.get("comment") or "").split())[:240]
+        seen[key] = {"status": status, "at": before.get("at", now) if was == status else now, "said": said}
+        if first:
             continue
-        out.append({"at": _iso(now), "team": code, "player": r["player"], "pos": r.get("pos") or "",
-                    "from": was, "to": status, "injury": r.get("injury") or "",
-                    "posted": r.get("date") or None, "comment": r.get("comment") or ""})
+        if was != status:
+            out.append({"at": _iso(now), "team": code, "player": r["player"], "pos": r.get("pos") or "",
+                        "from": was, "to": status, "injury": r.get("injury") or "",
+                        "posted": r.get("date") or None, "comment": r.get("comment") or ""})
+            continue
+        # The same designation, a new blurb. A player first seen before this step carries no "said", so the
+        # look after the deploy only remembers, as a league's first look does.
+        if days is None or "said" not in before or before.get("said") == said or status.lower() not in LEAN_ON:
+            continue
+        posted = _epoch(r.get("date"))
+        if posted is None or not 0 <= now - posted <= WORD_HOURS * 3600:
+            continue
+        word = lean(said, (days or {}).get(code))
+        if word:
+            out.append({"at": _iso(now), "team": code, "player": r["player"], "pos": r.get("pos") or "",
+                        "from": was, "to": status, "word": word, "by": reported_by(said),
+                        "injury": r.get("injury") or "", "posted": r.get("date") or None,
+                        "comment": r.get("comment") or ""})
+    return out
+
+
+def next_days(games: list) -> dict:
+    """{club: the weekday of its next watched game, Eastern ("Sunday")}."""
+    from zoneinfo import ZoneInfo
+    out: dict = {}
+    for g in sorted(games or [], key=lambda g: g.get("start") or 0):
+        t = g.get("start")
+        if t is None:
+            continue
+        day = _dt.datetime.fromtimestamp(t, ZoneInfo("America/New_York")).strftime("%A")
+        for c in (g.get("home"), g.get("away")):
+            if c and c not in out:
+                out[c] = day
     return out
 
 
@@ -305,7 +397,7 @@ def run(now: float | None = None, leagues=LEAGUES, boards: dict | None = None, s
         rows = []
         try:
             rows = (fetch_injuries or _fetch_injury_rows)(league) or []
-            events += injury_updates(rows, seen, table, t, first=not st.get("looked"))
+            events += injury_updates(rows, seen, table, t, first=not st.get("looked"), days=next_days(games))
             st["looked"] = st.get("looked") or _iso(t)
         except Exception as exc:                          # noqa: BLE001
             notes.append(f"injury report not read: {type(exc).__name__}")

@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABT. A listed player's newest word reaches his game's page** (step 859; 22 November). Nothing to run. You said:
+"we need to do better on reporting on injuries, figuring out which players are in or out for all sports, for all
+game reports." What I found, on this morning's live injury file: ESPN's listed status was never behind its own news.
+Every "ruled out" blurb on a player not listed out was about a game already played or the rest of one under way
+(eight NBA players read "Day-To-Day" with a blurb about Friday's or Saturday's game). What the status misses is the
+morning lean: at 7:24 AM ET Baker Mayfield was still "Questionable" and his blurb said "slated to play in Sunday's
+game against the Lions, Ian Rapoport of NFL Network reports"; Ladd McConkey's and Carnell Tate's said the same
+within the quarter hour. The report watch, which reads the injury board every five minutes, kept only designations,
+so none of that reached a game's page. Now a listed player whose blurb changes and leans one way is an update of its
+own, on the game's "Since this report was written" card and in the next build's report: "Baker Mayfield (TB)
+questionable (foot strain), now expected to play, per Ian Rapoport of NFL Network", marked green; a lean the other
+way is marked red and names any of the report's bets on him. It reads conservatively: a blurb about another day's
+game, about the rest of a game under way, or one that leans both ways (about someone else) is no word. Every
+league's game reports get it. Nothing here moves a number; the board still reads the designation. The first look
+after the deploy only remembers each blurb, so the first words show from the next new blurb on.
+
 **ABS. A questionable starting quarterback gets both versions of his game's report** (step 858; 22 November).
 Nothing to run. You said: "today for the Lions game, it's not confirmed if Baker Mayfield is playing or not yet. So
 we should have a game report ready for if Baker Mayfield is in and one if he's not in." What the site did: a starter
