@@ -43,6 +43,26 @@ GAME = EG.GAME
 HOOPS = ("pts", "reb", "ast", "threes", "pts", "reb", "ast", "pts")
 
 
+def _uncapped(fn):
+    """The NBA caps a leg at two of a game's parlays (step ABG; tests/test_an_nba_leg_rides_two_of_a_games_parlays.py).
+    This fixture's five NBA legs at 60% or better fill its three-leg tickets twice over and leave the cap no
+    room for a two-leg one, so the tests that count three of them read the build with the cap off."""
+    import functools
+
+    @functools.wraps(fn)
+    def run(*a, **kw):
+        was = os.environ.get("QB_GAME_LEG_CAP")
+        os.environ["QB_GAME_LEG_CAP"] = "off"
+        try:
+            return fn(*a, **kw)
+        finally:
+            if was is None:
+                os.environ.pop("QB_GAME_LEG_CAP", None)
+            else:
+                os.environ["QB_GAME_LEG_CAP"] = was
+    return run
+
+
 def _hoops_board():
     """The shared football fixture's eight Most Likely rows as basketball props."""
     b = EG.board()
@@ -55,6 +75,7 @@ def _js(name):
     return (ROOT / "web" / "js" / f"{name}.js").read_text(encoding="utf-8")
 
 
+@_uncapped
 def test_basketball_posts_three_two_leg_tickets_and_football_its_three_too():
     gp = GP.build(_hoops_board(), "nba")
     g = gp["games"][0]
@@ -75,6 +96,7 @@ def test_basketball_posts_three_two_leg_tickets_and_football_its_three_too():
     assert not GP.retired("three", "nfl") and not GP.retired("scorers", "nhl")
 
 
+@_uncapped
 def test_a_report_rebuilds_them_from_its_own_picks_and_keeps_them():
     b = _hoops_board()
     b["game_parlays"] = GP.build(b, "nba")
@@ -121,6 +143,7 @@ def test_the_heartbeat_counts_them_in_every_league():
     assert (nfl["sgp_twos"], nfl["twos_short"]) == (0, 1), "a football game with none is short of its three"
 
 
+@_uncapped
 def test_the_record_keeps_every_leagues_two_leg_tickets():
     from engine import ledger
     conn = ledger.connect(":memory:")

@@ -158,6 +158,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # RANK_ERROR and rides the ranking itself (`error`), which the Best Parlays
         # page says out loud ("the ranking did not build") and no quiet day carries.
         "rank_parlays",
+        # THE LOCK ON A GAME'S POSTED PARLAYS (engine/gameparlays.hold_posted, step
+        # ABB, 2026-11-21), judged when step ABG's leg cap grew its guarded body
+        # (2026-11-22): 0 is also a game with nothing posted, so a failure prints
+        # "a game's posted parlays not held (<error>)" into the build's log, which
+        # no quiet build does.
+        "hold_posted",
         # A GAME'S REBUILD FROM ITS REPORT'S PICKS (engine/gamereport._parlays_from_picks,
         # 2026-11-19): None either way, but a failure prints, is kept on the game's
         # entry (rebuild_error) and the heartbeat counts it (threes_short_why), which

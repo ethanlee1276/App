@@ -211,6 +211,45 @@ TAKE_EDGE = 0.05
 MAX_SHARED = 1
 #: No leg rides on more than this many of a game's tickets.
 MAX_USES = 2
+#: ONE NBA LEG, AT MOST TWO OF A GAME'S PARLAYS (step ABG, 22 November 2026; Ethan's answer to
+#: decision 18: "Yes limit it"). MAX_USES holds a leg to two tickets of each list, so one NBA leg could
+#: ride four of a game's six parlays, two three-leg and two two-leg. On the NBA's tickets graded at their
+#: start (17 to 21 November), 8 legs rode four tickets each; 4 of those 8 lost and took 16 tickets with
+#: them, and 53 of the 64 tickets lost had a losing leg on another ticket too. A cap leaves how often a
+#: ticket hits as it was and stops one miss sinking most of a game's parlays: in GAME_CAP_SPORTS a leg
+#: (its player, market and side) rides at most GAME_CAP_USES of the game's three-leg and two-leg tickets
+#: together. The three-leg tickets are chosen first, as before, and the two-leg ones around them
+#: (`tickets_of` ``prior_uses``); a posted game's gaps are filled to the same cap (`hold_posted`), and
+#: what it posted stands. Off without a deploy: ``sudo ./deploy/setenv.sh QB_GAME_LEG_CAP off``.
+GAME_CAP_SPORTS = ("nba",)
+GAME_CAP_USES = 2
+GAME_CAP_ENV = "QB_GAME_LEG_CAP"
+#: The lists the cap counts across, in the order they are chosen.
+GAME_CAP_LISTS = ("threes", "twos")
+
+
+def game_cap_on(sport) -> bool:
+    """Whether a league's legs are capped across a game's lists (GAME_CAP_SPORTS; QB_GAME_LEG_CAP=off)."""
+    if os.environ.get(GAME_CAP_ENV, "on").strip().lower() in ("off", "0", "no", "false"):
+        return False
+    return str(sport or "").lower() in GAME_CAP_SPORTS
+
+
+def _cap_key(l: dict) -> tuple:
+    """A leg as the cap counts it: its player, market and side (a line the books move is the same leg)."""
+    return (str(l.get("player") or ""), str(l.get("market") or ""), str(l.get("side") or "").upper())
+
+
+def game_uses(*lists) -> dict:
+    """How many of the given tickets each leg rides (`_cap_key`)."""
+    out: dict = {}
+    for ts in lists:
+        for t in ts or []:
+            if not isinstance(t, dict):
+                continue
+            for k in {_cap_key(l) for l in t.get("legs") or [] if isinstance(l, dict)}:
+                out[k] = out.get(k, 0) + 1
+    return out
 #: BOTH SIDES OF THE GAME (Ethan, 2026-11-16, of the 49ers' game: "a lot of
 #: these parlays we are making are very one sided as in a lot of picks for
 #: both td and player props are for one team only and we need too fix that.
@@ -1759,7 +1798,7 @@ def side_bar() -> tuple:
 
 
 def choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
-           shared: tuple = (MAX_SHARED, None), keep=None) -> list[dict]:
+           shared: tuple = (MAX_SHARED, None), keep=None, prior: dict | None = None) -> list[dict]:
     """``n`` of ``tickets`` (`_choose`), and with ``keep`` the tickets the game
     posted last build first, in their order (`ident`).
 
@@ -1777,9 +1816,9 @@ def choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
     SIDE_EDGE). Never fewer tickets than a fresh choice makes, nor more that
     pull against the others (APART_NOTE: the tickets are built to win
     together first)."""
-    got = _choose(tickets, n, rank, researched, shared)
+    got = _choose(tickets, n, rank, researched, shared, prior=prior)
     if keep:
-        mine = _choose(tickets, n, rank, researched, shared, keep)
+        mine = _choose(tickets, n, rank, researched, shared, keep, prior=prior)
         apart = lambda ts: sum(APART_NOTE in (t.get("caveats") or []) for t in ts)   # noqa: E731
         if len(mine) >= len(got) and apart(mine) <= apart(got):
             return mine
@@ -1795,7 +1834,7 @@ def ident(t: dict) -> tuple:
 
 
 def _choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
-            shared: tuple = (MAX_SHARED, None), keep=()) -> list[dict]:
+            shared: tuple = (MAX_SHARED, None), keep=(), prior: dict | None = None) -> list[dict]:
     """The likeliest first (or by ``rank``, a sort key — the scorer pairs'
     research, `_by_research`); each next one shares at most MAX_SHARED legs
     with every ticket already chosen, and no leg rides on more than
@@ -1816,7 +1855,9 @@ def _choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
     tickets are chosen; it says which (`side_reason`). ``researched``: the
     tickets are scorer pairs ranked on their research, and the stronger read
     is SIDE_RESEARCH more research points. ``keep``: the identities posted
-    last build (`choose`), tried first in their order."""
+    last build (`choose`), tried first in their order. ``prior``: how many of
+    the game's other tickets each leg rides already (`game_uses`, step ABG),
+    so none rides more than GAME_CAP_USES of them all."""
     ranked = sorted(tickets, key=rank or (lambda t: (-t["joint"], -(t.get("ev_at_naive") or -9))))
     held: set = set()
     if keep:
@@ -1848,6 +1889,7 @@ def _choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
     def pick(together: bool) -> tuple:
         out: list = []
         uses: dict = {}
+        capped: dict = dict(prior or {})
         why: dict = {}
 
         def fits(t: dict, limit) -> bool:
@@ -1856,6 +1898,9 @@ def _choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
             if any(len(ids & {_leg_id(l) for l in c["legs"]}) > lim for c in out):
                 return False
             if any(uses.get(i, 0) >= MAX_USES for i in ids):
+                return False
+            # …nor more than GAME_CAP_USES of the game's tickets in every list (step ABG).
+            if prior is not None and any(capped.get(_cap_key(l), 0) >= GAME_CAP_USES for l in t["legs"]):
                 return False
             return not (together and pulls_apart(t, out))
         # The posted tickets first, under the loosest pass they could have been
@@ -1879,6 +1924,8 @@ def _choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
                 out.append(t)
                 for i in {_leg_id(l) for l in t["legs"]}:
                     uses[i] = uses.get(i, 0) + 1
+                for k in {_cap_key(l) for l in t["legs"]}:
+                    capped[k] = capped.get(k, 0) + 1
         return out, why
     together, why_t = pick(True)
     loose, why_l = pick(False) if len(together) < n else (together, why_t)
@@ -2584,7 +2631,7 @@ def _size_spec(size: int) -> dict:
 
 def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = None,
                extra: list[dict] | None = None, picks: set | None = None, posted: dict | None = None,
-               size: int = 3, books=None) -> dict:
+               size: int = 3, books=None, prior_uses: dict | None = None) -> dict:
     """A game's three-leg tickets (``threes``) from ``legs``, each with its
     backups from the same legs; those that clear THREE_FLOOR first. Beside them
     what the notes count: the legs tried (``pool``), the trios without a
@@ -2610,7 +2657,9 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     ``posted``: the game's tickets as the last build posted them ({kind:
     [identity]}, `posted_for`), each posted again while it is still one of
     these (`choose`). ``books``: `book_ranker`, so a ticket one book prices
-    whole is chosen ahead of one no book does."""
+    whole is chosen ahead of one no book does. ``prior_uses``: how many of the
+    game's tickets already chosen each leg rides (`game_uses`), where the league
+    caps a leg across them (GAME_CAP_SPORTS, step ABG)."""
     spec = _size_spec(size)
     br = books or (lambda t: 0)
     floor, long_floor, n_min, shared = spec["floor"], spec["long"], spec["min"], spec["shared"]
@@ -2629,7 +2678,7 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
               if t and placeable(t)]
     strong3 = [t for t in threes if float(t["joint"]) >= floor]
     first = lambda t: (br(t), -float(t["joint"]), -(t.get("ev_at_naive") or -9))   # noqa: E731
-    chosen = choose(strong3, spec["n"], rank=first, keep=keep, shared=shared)
+    chosen = choose(strong3, spec["n"], rank=first, keep=keep, shared=shared, prior=prior_uses)
     in_pool = {_leg_id(l) for l in pool}
     own = set(picks) if picks is not None else in_pool
     # THE REPORT'S OWN PICKS FIRST INTO THE FILL'S POOL (PARLAYWIN1, 2026-11-19).
@@ -2657,7 +2706,7 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
         fill_fit = len(every)
         fill_clear = sum(1 for t in every if float(t["joint"]) >= long_floor)
         rank = lambda t: (outside(t), br(t), -float(t["joint"]), -(t.get("ev_at_naive") or -9))  # noqa: E731
-        got = choose(cands, n_min, rank=rank, keep=keep, shared=shared)
+        got = choose(cands, n_min, rank=rank, keep=keep, shared=shared, prior=prior_uses)
         # Each wider level adds to what the one before it made, never in its
         # place: a ticket of the report's picks stays while the places it leaves
         # are filled (behind the game's posted tickets, `choose`).
@@ -2676,7 +2725,7 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
             # picks' places, on a ticket that clears THREE_FLOOR, each one named.
             board3 = [t for t in every if outside(t) > FILL_OUTSIDE_MAX and all(stands(l) for l in t["legs"])
                       and float(t["joint"]) >= floor]
-            wide = choose(cands + board3, n_min, rank=rank, keep=held(got), shared=shared) if board3 else got
+            wide = choose(cands + board3, n_min, rank=rank, keep=held(got), shared=shared, prior=prior_uses) if board3 else got
             if len(wide) > len(got):
                 got = wide
         if len(got) < n_min:
@@ -2686,7 +2735,7 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
             # any of its props the fill could try, the report's picks first and
             # the fewest of the others, down to LONG_FLOOR; each leg named.
             rest = [t for t in every if outside(t) > FILL_OUTSIDE_MAX and float(t["joint"]) >= long_floor]
-            wide = choose(cands + rest, n_min, rank=rank, keep=held(got), shared=shared) if rest else got
+            wide = choose(cands + rest, n_min, rank=rank, keep=held(got), shared=shared, prior=prior_uses) if rest else got
             if len(wide) > len(got):
                 got = wide
         if len(got) > len(chosen):
@@ -2720,7 +2769,9 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
             "board_filled": board_filled, "props_filled": props_filled,
             "fill_fit": fill_fit, "fill_clear": fill_clear,
             # The report's own picks among the legs a ticket could take (a ticket takes two at least).
-            "wider_own": sum(1 for l in wider if _leg_id(l) in own)}
+            "wider_own": sum(1 for l in wider if _leg_id(l) in own),
+            # Chosen around the game's other tickets, a leg on GAME_CAP_USES of them all (step ABG).
+            "game_capped": prior_uses is not None}
 
 
 #: HOW A FILLED TICKET WAS MADE UP (ZR, 2026-11-20), journaled with it
@@ -2781,7 +2832,8 @@ def _uses_words(made: dict) -> str:
     longer ticket's floor than it made: a leg rides on MAX_USES tickets at
     most (`choose`)."""
     n = len(made.get(_size_spec(int(made.get("size") or 3))["key"]) or [])
-    return f" with no leg on more than {MAX_USES} tickets" if n and int(made.get("fill_clear") or 0) > n else ""
+    where = f"{GAME_CAP_USES} of the game's parlays" if made.get("game_capped") else f"{MAX_USES} tickets"
+    return f" with no leg on more than {where}" if n and int(made.get("fill_clear") or 0) > n else ""
 
 
 def _and(words: list) -> str:
@@ -2826,7 +2878,8 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
     if sport in TWO_SPORTS:
         # THREE TWO-LEG TICKETS (TWO_SPORTS: every league), player props built
         # as the three-leg ones are.
-        made2 = tickets_of(sport, game, legs, memo, size=2, books=books)
+        made2 = tickets_of(sport, game, legs, memo, size=2, books=books,
+                           prior_uses=game_uses(chosen) if game_cap_on(sport) else None)
         out["twos"] = made2["twos"]
         if len(out["twos"]) < TWO_MIN:
             out["twos_note"] = _threes_note(made2)
@@ -3279,10 +3332,14 @@ def _fits_beside(chosen: list, t: dict) -> bool:
                for c in chosen)
 
 
-def hold_posted(x: dict, mine: dict) -> int:
+def hold_posted(x: dict, mine: dict, sport: str = "") -> int:
     """THE LOCK on one game's entry: each kind's tickets as the game posted them, in their order, then
     this build's choice only in a place never filled (`_fits_beside`). Returns the tickets held. A game
-    with nothing posted, or the lock off, is left as built. Never raises."""
+    with nothing posted, or the lock off, is left as built. Never raises.
+
+    Where a league caps a leg across a game's lists (`game_cap_on`, step ABG), a place is filled, and a
+    list the game never posted is kept, only with tickets whose legs ride fewer than GAME_CAP_USES of the
+    game's tickets so far, the posted ones counted first (a posted ticket itself always stands)."""
     if not lock_on() or not isinstance(x, dict) or not isinstance(mine, dict):
         return 0
     full = mine.get(POSTED_TICKETS)
@@ -3291,16 +3348,33 @@ def hold_posted(x: dict, mine: dict) -> int:
     held = 0
     try:
         import copy as _copy
+        capped = game_cap_on(sport)
+        posted_of = lambda k: [t for t in full.get(k) or [] if isinstance(t, dict) and len(t.get("legs") or []) >= 2]  # noqa: E731
+        counts = game_uses(*(posted_of(k) for k in GAME_CAP_LISTS)) if capped else {}
+
+        def admit(kind: str, t: dict) -> bool:
+            # Under the cap (step ABG): every leg on fewer than GAME_CAP_USES of the game's tickets so far.
+            if not capped or kind not in GAME_CAP_LISTS:
+                return True
+            keys = {_cap_key(l) for l in t.get("legs") or [] if isinstance(l, dict)}
+            if any(counts.get(k, 0) >= GAME_CAP_USES for k in keys):
+                return False
+            for k in keys:
+                counts[k] = counts.get(k, 0) + 1
+            return True
         for kind in LOCK_KINDS:
-            was = [t for t in full.get(kind) or [] if isinstance(t, dict) and len(t.get("legs") or []) >= 2]
+            was = posted_of(kind)
             if not was:
+                if capped and kind in GAME_CAP_LISTS and x.get(kind):
+                    # A list the game never posted, built fresh beside the posted ones: under the cap too.
+                    x[kind] = [t for t in x.get(kind) or [] if isinstance(t, dict) and admit(kind, t)]
                 continue
             out = [_copy.deepcopy(t) for t in was]
             ids = {ident(t) for t in out}
             for t in x.get(kind) or []:
                 if len(out) >= LOCK_PLACES.get(kind, len(was)):
                     break
-                if isinstance(t, dict) and ident(t) not in ids and _fits_beside(out, t):
+                if isinstance(t, dict) and ident(t) not in ids and _fits_beside(out, t) and admit(kind, t):
                     out.append(t)
                     ids.add(ident(t))
             x[kind] = out
@@ -3800,7 +3874,7 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
         # their own bars, the posted ones first; a game waiting on its props
         # says so once, under its three-leg tickets.
         made2 = tickets_of(sp, game, legs, extra=extra, picks=picked, posted=posted_for(board, game), size=2,
-                           books=books)
+                           books=books, prior_uses=_cap_prior(board, game, sp, chosen))
         x["twos"] = made2["twos"]
         if made2["filled"]:
             x["twos_filled"] = made2["filled"]
@@ -3813,6 +3887,17 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     # Each ticket's class, and the one book that prices it (`label_tickets`).
     label_tickets(x, sp, quote_index(board), carried_picks(board))
     return x
+
+
+def _cap_prior(board: dict, game: dict, sport: str, threes: list) -> dict | None:
+    """What a game's two-leg tickets are chosen around where its league caps a leg across the game's
+    lists (step ABG): the three-leg tickets it posted, which the lock holds (`hold_posted`), or else this
+    build's. None where the league has no cap."""
+    if not game_cap_on(sport):
+        return None
+    held = ((posted_for(board, game).get(POSTED_TICKETS) or {}).get("threes") or []) if lock_on() else []
+    held = [t for t in held if isinstance(t, dict) and len(t.get("legs") or []) >= 2]
+    return game_uses(held or threes)
 
 
 def report_only(board: dict) -> int:
@@ -3864,7 +3949,7 @@ def report_only(board: dict) -> int:
             elif re.match(r"\d+ of \d+: ", note):
                 x["scorers_note"] = f"{len(x['scorers'])} of {SCORER_PER_GAME}: {note.split(': ', 1)[1]}"
         # THE LOCK (step ABB): what the game posted stays exactly as posted; this build only fills a gap.
-        if hold_posted(x, mine):
+        if hold_posted(x, mine, sport=str(gp.get("sport") or "").lower()):
             x["legs_from"] = LEGS_FROM_REPORT
             label_tickets(x, str(gp.get("sport") or "").lower(), quote_index(board), carried_picks(board))
         x["posted_kept"], x["posted_replaced"] = _turnover(x, mine)

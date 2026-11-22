@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABG. An NBA leg rides at most two of a game's six parlays** (step 847; 22 November). Nothing to run. Your answer
+to decision 18: "Yes limit it". Each list already held a leg to two tickets, so one NBA leg could ride four of a
+game's six parlays, two three-leg and two two-leg. On the NBA's tickets graded at their start (17 to 21 November), 8
+legs rode four tickets each; 4 of those 8 lost and took 16 tickets with them, and 53 of the 64 tickets lost had a
+losing leg on another ticket too. Now an NBA leg rides at most two of a game's three-leg and two-leg tickets
+together. The three-leg tickets are chosen first, as before, and the two-leg ones around them (around the ones the
+game posted, once it has posted); a posted game's open places fill to the same cap, and what it posted stands as
+posted. It leaves how often a ticket hits as it was and stops one miss sinking most of a game's parlays. Replayed on
+those graded tickets, 20 of the 45 two-leg ones would have stood as they were (11 of them won) and 25 would have
+been rebuilt from picks with room left (10 of those had won). A game with few strong legs posts fewer two-leg
+tickets, and its report says the cap is why ("with no leg on more than 2 of the game's parlays"). Every other league
+is unchanged. Off without a deploy: `sudo ./deploy/setenv.sh QB_GAME_LEG_CAP off`.
+
 **ABF. A game's post time reads in your own zone, with its day** (step 846; 21 November). Nothing to run. Since step
 ABD a game's parlays post shortly before it starts, and its report and Report Picks said when in Eastern time ("post
 at Sun 11:45 AM ET") while every start on the site reads in the reader's own zone (your answer to decision 13). The

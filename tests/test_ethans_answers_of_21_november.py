@@ -65,7 +65,7 @@ def test_a_ticket_one_book_has_whole_ranks_ahead_of_one_no_book_has():
 
 def test_the_builder_asks_it_ahead_of_our_chance_and_after_the_reports_own_picks():
     assert 'first = lambda t: (br(t), -float(t["joint"]), -(t.get("ev_at_naive") or -9))' in SRC
-    assert "chosen = choose(strong3, spec[\"n\"], rank=first, keep=keep, shared=shared)" in SRC
+    assert "chosen = choose(strong3, spec[\"n\"], rank=first, keep=keep, shared=shared, prior=prior_uses)" in SRC
     # A fill keeps the report's own picks first (`outside`), then one book, then the chance.
     assert 'rank = lambda t: (outside(t), br(t), -float(t["joint"]), -(t.get("ev_at_naive") or -9))' in SRC
     # Both paths hand it in: the board build and the report's own picks.

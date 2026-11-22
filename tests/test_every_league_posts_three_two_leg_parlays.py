@@ -52,6 +52,23 @@ MARKETS = {"nba": ("pts", "reb", "ast", "threes", "pts", "reb", "ast", "pts"),
 PAIRS = ("nfl", "cfb")                                               # the fixture prices touchdown scorers
 
 
+class _Uncapped:
+    """The NBA caps a leg at two of a game's parlays (step ABG; tests/test_an_nba_leg_rides_two_of_a_games_parlays.py).
+    This fixture's five NBA legs at 60% or better fill its three-leg tickets twice over, leaving the cap no
+    room for a two-leg one, so the counts here, which ask that every league can make three of each, are
+    read with the cap off."""
+
+    def __enter__(self):
+        self.was = os.environ.get("QB_GAME_LEG_CAP")
+        os.environ["QB_GAME_LEG_CAP"] = "off"
+
+    def __exit__(self, *exc):
+        if self.was is None:
+            os.environ.pop("QB_GAME_LEG_CAP", None)
+        else:
+            os.environ["QB_GAME_LEG_CAP"] = self.was
+
+
 def _board(sport):
     b = EG.board()
     for r, m in zip(b["most_likely"], MARKETS.get(sport) or ()):
@@ -62,7 +79,8 @@ def _board(sport):
 def test_every_league_builds_three_of_each_size():
     assert GP.TWO_SPORTS == GP.SPORTS and GP.TWO_PER_GAME == GP.TWO_MIN == GP.THREE_PER_GAME == 3
     for sport in GP.SPORTS:
-        gp = GP.build(_board(sport), sport)
+        with _Uncapped():
+            gp = GP.build(_board(sport), sport)
         g = gp["games"][0]
         twos = g["twos"]
         assert len(twos) == 3 and len(g["threes"]) == 3, (sport, len(twos), len(g["threes"]), g.get("twos_note"))
@@ -87,7 +105,7 @@ def test_they_are_made_of_the_legs_the_three_leg_tickets_are():
     # A pick the parlay rules keep off (a backup back's yards, tests/test_the_v31_...) is on no
     # ticket of either size: both are built from `legs_for`.
     src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
-    assert "made2 = tickets_of(sport, game, legs, memo, size=2, books=books)" in src
+    assert "made2 = tickets_of(sport, game, legs, memo, size=2, books=books,\n" in src
 
 
 def test_a_football_report_rebuilds_them_from_its_own_picks():
@@ -106,7 +124,8 @@ def test_a_football_report_rebuilds_them_from_its_own_picks():
 def test_the_build_log_names_each_kind():
     nfl = GP.summary(GP.build(EG.board(), "nfl"))
     assert "Game parlays: 3 three-leg, 3 two-leg and 3 scorer pair(s) across 1 game(s)" in nfl, nfl
-    nba = GP.summary(GP.build(_board("nba"), "nba"))
+    with _Uncapped():
+        nba = GP.summary(GP.build(_board("nba"), "nba"))
     assert "Game parlays: 3 three-leg and 3 two-leg across 1 game(s)" in nba, nba
     nhl = GP.summary(GP.build(_board("nhl"), "nhl"))
     assert "Game parlays: 3 three-leg, 3 two-leg and 0 scorer pair(s) across 1 game(s)" in nhl, nhl
@@ -136,7 +155,8 @@ def test_the_journal_files_them_and_the_record_counts_every_leagues():
     conn = ledger.connect(":memory:")
     PL.ensure_schema(conn)
     for sport in ("nfl", "cfb", "nhl", "nba"):
-        PL.log_game_parlays(conn, GP.build(_board(sport), sport), sport, "2099-11-12")
+        with _Uncapped():
+            PL.log_game_parlays(conn, GP.build(_board(sport), sport), sport, "2099-11-12")
         n = conn.execute("SELECT count(*) FROM parlays WHERE source='game_two' AND sport=?", (sport,)).fetchone()[0]
         assert n == 3, (sport, n)
     conn.execute("UPDATE parlays SET status='won', pnl_units=1.0, at_start=1 WHERE source='game_two'")

@@ -162,7 +162,7 @@ def test_the_record_says_every_parlay_posted_apart_from_the_set_it_counts():
 
 def test_every_leagues_report_stage_runs_it_and_the_words_are_there():
     body = SRC[SRC.index("def report_only("):SRC.index("def ", SRC.index("def report_only(") + 10)]
-    assert body.index("if hold_posted(x, mine):") < body.index("x[\"posted_kept\"], x[\"posted_replaced\"] = _turnover(x, mine)")
+    assert body.index("if hold_posted(x, mine, sport=str(gp.get(\"sport\") or \"\").lower()):") < body.index("x[\"posted_kept\"], x[\"posted_replaced\"] = _turnover(x, mine)")
     for name in ("gamereport.py", "leaguereport.py"):
         src = (ROOT / "engine" / name).read_text(encoding="utf-8")
         assert "_posted_before(result, sport, out)" in src and "_report_only(result)" in src, name
