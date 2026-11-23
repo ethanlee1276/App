@@ -429,10 +429,42 @@ def build(games: list, scan_reads: dict, watch: list, props: list, sport: str = 
         for r in td + pp:
             r["game"] = key
         stamp_reads(reads, pp)
+        settle_other_side(reads)
         if td or pp:
             out.append({"game": key, "home": home, "away": away,
                         "kickoff": g.get("kickoff") or "", "td": td, "props": pp})
     return out
+
+
+def settle_other_side(reads: list) -> int:
+    """OUR NUMBER THE OTHER WAY, NOT A CANDIDATE (step ACZ, 23 November 2026;
+    Ethan: "I'm still noticing like conflicting information in the game
+    reports compared to the picks we're giving and the breakout candidates
+    we're giving"). A read whose only pick from us goes the other way — the
+    Most Likely list has him on the opposite side (gamescan.stamp_picks's
+    ``pick_other_side``) and nothing sits on the read's side, neither the
+    list nor a matchup pick — read "breakout candidate" over a card saying
+    our pick on him is the under. Such a read is mixed now, as a verdict
+    against the defense's own number has been since step ACW: neutral, its
+    first reason and the pick said side by side (gamereport.mixed_line), off
+    the breakout and fade lists and the short version's names. The pick
+    stays as it was; the read it came with is kept as ``mixed_was``.
+    Returns the reads settled."""
+    n = 0
+    for x in reads or []:
+        side = LEAN_SIDE.get(x.get("read"))
+        other = x.get("pick_other_side")
+        if not side or not isinstance(other, dict) or x.get("pick") or x.get("matchup_pick") or x.get("mixed"):
+            continue
+        lead = [str(t) for t in (x.get("pro") if side == "over" else x.get("con")) or [] if t]
+        x["mixed"] = lead[0] if lead else f"the matchup read leans the {side}"
+        x["mixed_pick"] = other
+        x["mixed_was"] = x.get("read")
+        x["read"], x["label"] = "neutral", "Neutral"
+        x.pop("spot", None)
+        x["drivers"] = []
+        n += 1
+    return n
 
 
 def stamp_reads(reads: list, picks: list) -> int:

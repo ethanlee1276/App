@@ -162,10 +162,15 @@ def tone_of(r: dict) -> tuple:
 
 
 def mixed_line(r: dict) -> str:
-    """The card's first line for a mixed read: both numbers, plainly."""
+    """The card's first line for a mixed read: both numbers, plainly — the
+    defense's own number against the verdict (step ACW), or the read's first
+    reason against our own pick the other way (matchpicks.settle_other_side,
+    step ACZ)."""
     if not (r or {}).get("mixed"):
         return ""
     other = str(r.get("mixed_with") or "").split(" · ")[0].strip()
+    if isinstance(r.get("mixed_pick"), dict):
+        other = f"our number takes {_pick_words(r['mixed_pick'])}"
     return (f"The numbers point both ways: {r['mixed']}" + (f", but {other[:1].lower() + other[1:]}" if other else "")
             + " — so neither way")
 

@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
+also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
+still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his
+card said "Our Most Likely pick on this player goes the other way: Under 25.5 points". That happened when the
+matchup read leaned one way, our own number took the other side, and nothing of ours sat on the read's side. Such a
+read is now mixed, the way a verdict against the defense's own number has been since step ACW: it reads "Neutral —
+mixed", its card opens with both sides ("The numbers point both ways: MIA allows the 2nd-most points a game, but our
+number takes Under 25.5 points (−130, 61%) — so neither way"), and it is off the breakout and fade lists and the
+short version. The pick itself stays as it was. Every league whose reports carry our picks on their reads (the NFL,
+college football, the NBA, the WNBA, college basketball and baseball) goes through the same step; hockey's reads
+never carried them.
+
 **Decision 20, for you: college football's injuries** (23 November). Nothing changes until you answer. Our college
 injury feed is ESPN's college board. On Monday afternoon it listed 1 college football injury and no college
 basketball ones, against the NFL's 797, because schools owe ESPN nothing. College football teams do publish
