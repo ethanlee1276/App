@@ -76,10 +76,21 @@ SOURCES = {
            "https://app.hdintelligence.com/?source=SEC&sport=Football&conf=SEC&type=archive"),
     "cfp": ("https://collegefootballplayoff.com/sports/2025/11/12/reports.aspx",),
 }
+#: THE NINTH LOOK: THE VENDOR'S OLDER APP. The seventh found the College Football Playoff's reports page embedding
+#: confinjrepxyz.hdintelligence-app.com/?source=CFPreports (and CFParchive), and the ACC's basketball pages
+#: par.hdintelligence-app.com?source=ACCreportsMBB: a 1.1 KB page built by one script, /static/js/main.*.js. The
+#: four conferences' football is mapped, so this look maps that app alone, for the Playoff's games (from 18 December)
+#: and college basketball (whose ESPN feed listed no injuries on 23 November).
+SOURCES = {
+    "cfp": ("https://confinjrepxyz.hdintelligence-app.com?source=CFPreports",
+            "https://confinjrepxyz.hdintelligence-app.com?source=CFParchive"),
+    "acc_mbb": ("https://par.hdintelligence-app.com?source=ACCreportsMBB",
+                "https://par.hdintelligence-app.com?source=ACCarchiveMBB"),
+}
 #: A frame worth following: a report's, not an advertiser's (the sixth look followed DoubleClick's and Google's).
 REPORT_FRAME_RE = re.compile(r"report|availab|injur|hdintelligence", re.I)
 #: A site's own app bundle: the SEC's /dist/assets/app-*.js, the vendor's /assets/index-*.js.
-BUNDLE_RE = re.compile(r"/(?:dist/)?assets/(?:app|index)[-.][^/?]*\.js(?:\?.*)?$")
+BUNDLE_RE = re.compile(r"/(?:dist/)?assets/(?:app|index)[-.][^/?]*\.js(?:\?.*)?$|/static/js/main\.[^/?]+\.js(?:\?.*)?$")
 #: A part such a bundle loads later, named in it ("assets/ReportEmbed-AbCd1234.js"); followed when its name speaks
 #: of a report, an embed, a public view or the archive.
 CHUNK_RE = re.compile(r"""["'`](?:\.{0,2}/)?((?:dist/)?assets/[A-Za-z0-9_.\-]{2,80}\.js)["'`]""")
@@ -135,10 +146,9 @@ HINT_RE = re.compile(r"""["']([^"'<>\s]{0,240}(?:availab|fbreport)[^"'<>\s]{0,24
 MAX_OUT = 600_000
 
 
-#: THE MAP IS MADE (23 November, the eighth look): the reports are the vendor's public view, and
-#: engine/cfbavailread reads them itself. The probe rests unless switched on (``QB_CFB_AVAIL_PROBE=on``), as for
-#: mapping the College Football Playoff's or the basketball reports, which the same vendor posts in an older app.
-DEFAULT = "off"
+#: THE FOUR CONFERENCES' FOOTBALL IS MAPPED (23 November, the eighth look): engine/cfbavailread reads it. The
+#: ninth look maps the vendor's older app (the Playoff's and the basketball reports); the probe then rests again.
+DEFAULT = "on"
 
 
 def on() -> bool:

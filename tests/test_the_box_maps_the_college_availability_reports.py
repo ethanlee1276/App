@@ -96,8 +96,8 @@ def test_a_page_built_by_scripts_says_where_it_fetches_the_reports_and_where_it_
                    get=lambda u: ("ok", "text/html", body) if u == "https://conf.test/fbreports" else ("HTTP 404", "", b""))
     assert "https://cdn.x.test/availability/w13.json" not in [pg["url"] for pg in found["conf"]["pages"]], \
         "another site's address is never read"
-    assert all(any("fbreport" in u.lower() or "availab" in u.lower() or "type=report" in u for u in starts)
-               for name, starts in P.SOURCES.items() if name not in ("cfp", "nba_official")), \
+    assert all(any("report" in u.lower() or "availab" in u.lower() for u in starts)
+               for name, starts in P.SOURCES.items()), \
         "each look starts where the reports are posted (since the seventh, the vendor's own embed)"
 
 
@@ -252,9 +252,12 @@ def test_the_eighth_look_asks_the_public_call_the_vendors_script_names():
     assert not any("resolve-conference" in u for u in asked), "a call the script never names is never asked"
 
 
-def test_the_seventh_look_starts_at_the_vendors_embed():
-    assert P.SOURCES["hd"][0].startswith("https://app.hdintelligence.com/?source=")
+def test_the_ninth_look_maps_the_vendors_older_app():
+    assert P.SOURCES["cfp"][0] == "https://confinjrepxyz.hdintelligence-app.com?source=CFPreports"
+    assert P.SOURCES["acc_mbb"][0] == "https://par.hdintelligence-app.com?source=ACCreportsMBB"
     assert all("&amp;" not in u for v in P.SOURCES.values() for u in v)
+    assert P.BUNDLE_RE.search("https://confinjrepxyz.hdintelligence-app.com/static/js/main.26907188.js")
+    assert P.BUNDLE_RE.search("https://app.hdintelligence.com/assets/index-CvGojbqV.js")
 
 
 def test_a_file_too_big_loses_fields_never_its_ending():
@@ -297,13 +300,13 @@ def test_it_starts_on_the_box_and_a_switch_holds_it():
     src = (ROOT / "launch.py").read_text(encoding="utf-8")
     assert 'threading.Thread(target=_cfb_avail_probe, daemon=True, name="cfbavailprobe").start()' in src
     assert "if _cp.on():" in src
-    assert not P.on(), "the map is made: the probe rests unless switched on"
-    os.environ[P.ENV] = "on"
+    assert P.on(), "the ninth look maps the vendor's older app"
+    os.environ[P.ENV] = "off"
     try:
-        assert P.on()
+        assert not P.on()
     finally:
         os.environ.pop(P.ENV, None)
-    assert not P.on()
+    assert P.on()
 
 
 if __name__ == "__main__":

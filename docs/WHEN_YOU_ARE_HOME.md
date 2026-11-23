@@ -9453,6 +9453,14 @@ picks for this game post once both schools' game-day availability reports are in
 whose schools file nothing posts at 90 minutes as before. A school's game-day report that lists nobody still counts
 as in.
 
+**ADG. The Playoff's and college basketball's reports: the box maps the vendor's older app** (step 898; 23
+November). Nothing to run. The College Football Playoff's reports page embeds the same vendor's older app
+(confinjrepxyz.hdintelligence-app.com, the Playoff's reports and archive), and so do the ACC's basketball report
+pages (par.hdintelligence-app.com). The four conferences' football is mapped, so the probe now looks at that older
+app alone, the same way as before: its page, its script and the calls the script makes for its data. That is the
+map for reading the Playoff's games (from 18 December) and college basketball, whose ESPN feed listed no injuries at
+all on 23 November. Nothing reads it and no pick moves.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his
