@@ -1014,6 +1014,13 @@ def _live_roster(sport, team):
     players = entry.get("players") or []
     if not players:
         return None
+    # ONE HEIGHT AND ONE WEIGHT ON THE ROSTER TOO (22 November 2026). The player pages say 6'2" and 190 lb in every
+    # league (engine/playerpage.nfl_height, nfl_weight), and the team page's roster table printed each feed's own
+    # spelling: the NFL's 6'2" and 190 lb beside college's and basketball's 6' 1" and 214 lbs.
+    from engine.playerpage import nfl_height, nfl_weight
+    players = [dict(p, **({"height": nfl_height(p["height"])} if p.get("height") else {}),
+                    **({"weight": nfl_weight(p["weight"])} if p.get("weight") else {}))
+               if isinstance(p, dict) else p for p in players]
     return {"players": players, "source": blob.get("source") or "",
             "generated_at": blob.get("generated_at") or "", "season": blob.get("season")}
 

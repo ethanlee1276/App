@@ -77,6 +77,26 @@ def test_the_roster_board_answers_under_either_code():
         server.ROOT = real
 
 
+def test_the_roster_says_height_and_weight_as_the_player_pages_do():
+    # College's and basketball's rosters come in ESPN's spelling (6' 1", 214 lbs), the NFL's as 6'2" and 190 lb;
+    # the team page's roster table says them all the NFL's way, as the player pages do (22 November 2026).
+    import server
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "web" / "data").mkdir(parents=True)
+    (tmp / "web" / "data" / "rosters_cfb.json").write_text(json.dumps(
+        {"source": "roster", "teams": {"OSU": {"players": [
+            {"player": "Julian Sayin", "position": "QB", "height": "6' 1\"", "weight": "214 lbs"},
+            {"player": "Walk On", "position": "WR", "height": "", "weight": None}]}}}))
+    real = server.ROOT
+    server.ROOT = tmp
+    try:
+        got = server._live_roster("cfb", "OSU")["players"]
+    finally:
+        server.ROOT = real
+    assert (got[0]["height"], got[0]["weight"]) == ("6'1\"", "214 lb"), got[0]
+    assert got[1]["height"] == "" and got[1]["weight"] is None, "blank stays blank"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     fails = 0

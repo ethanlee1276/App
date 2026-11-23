@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACR. Team rosters say height and weight the NFL's way** (step 883; 22 November). Nothing to run. The player pages
+already say 6'2" and 190 lb in every league. The team pages' roster tables still printed each feed's own spelling:
+the NFL's 6'2" and 190 lb beside college's and basketball's 6' 1" and 214 lbs (Ohio State's roster on the live
+site). Every team page's roster now says them the NFL's way. College's depth chart: no free source publishes one
+(ESPN has none for college), so its team page keeps ordering each position by who has actually played, games first
+and then the position's main stat, and says so under the chart.
+
 **ACQ. A tab you just tapped stays readable** (step 882; 22 November). Nothing to run. On a phone, the sub-tab you
 had just tapped (Report Picks' SGPX parlays or Record, and every other row of sub-tabs) turned a faint grey with
 near-black writing (measured in a phone-sized browser) until you tapped somewhere else. A phone keeps the hover look
