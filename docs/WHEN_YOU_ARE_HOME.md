@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACV. A season's averages read the games that have each number** (step 887; 23 November). Nothing to run. The
+Monday-morning check of the WNBA's nightly re-read found A'ja Wilson's 2026 line reading 3PT "0.9-0.8" and 3P% 113.2
+over 48 games. The re-read fills a season newest first, forty game days a night, and her September and October games
+now carry every column. Her older games still carry only what was kept then: points, rebounds, assists and made
+threes, with no attempts, steals, blocks or turnovers. The page divided every column by all 48 games, so made threes
+came from every game and attempts from a few. Now every league's season lines, game-log averages and headline
+numbers divide each number by the games that have it, and a percentage or a made-attempted reads only the games with
+both. A column no game has both halves of shows a dash, not a wrong number. A season whose games all carry every
+column reads exactly as before. Until the re-read reaches her May to August games, those averages come from the
+games read so far.
+
 **ACU. ESPN's game roster, watched over time** (step 886; 22 November). Nothing to run. Twelve minutes into Sunday
 night's game, ESPN's game roster flagged exactly the ten listed inactives "did not play", five a club. Before
 kickoff it had flagged eighteen. The afternoon games read the same way once they were on. So the eight extra men

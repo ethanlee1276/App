@@ -318,8 +318,9 @@ def head_value(sport: str, spec: tuple, s: dict, gp: int):
     if kind == "gp":
         return gp or None
     if kind == "sum" and per_game:
-        v = GL._first(s, how[1:])
-        return round(v / gp, 1) if v is not None and gp else None
+        # Over the games that carry it (gamelog.add_up, step ACV), as the season's lines are.
+        key = GL._first_key(s, how[1:])
+        return round(float(s[key]) / GL.games_with(s, key, gp), 1) if key is not None and gp else None
     return GL.value(sport, how, s, gp)
 
 
@@ -762,17 +763,20 @@ def averaged(sport: str, how: tuple, s: dict, gp: int):
     if not gp:
         return None
     kind = how[0]
+    # Each over the games that carry it (gamelog.add_up, step ACV): a column some of the season's box scores were
+    # read without is averaged over the ones that have it, made-tried over the games with both.
     if kind == "sum":
-        v = GL._first(s, how[1:])
-        return None if v is None else round(v / gp, 1)
+        key = GL._first_key(s, how[1:])
+        return None if key is None else round(float(s[key]) / GL.games_with(s, key, gp), 1)
     if kind == "made":
-        made, tried = s.get(how[1]), s.get(how[2])
-        return None if made is None or tried is None else f"{made / gp:.1f}-{tried / gp:.1f}"
+        made, tried, n = GL.paired(s, how[1], how[2])
+        n = n or gp
+        return None if made is None or tried is None else f"{made / n:.1f}-{tried / n:.1f}"
     if kind == "ip":
         outs = s.get(how[1])
         if outs is None:
             return None
-        o = int(round(outs / gp))
+        o = int(round(outs / GL.games_with(s, how[1], gp)))
         return f"{o // 3}.{o % 3}"
     return GL.value(sport, how, s, gp)
 

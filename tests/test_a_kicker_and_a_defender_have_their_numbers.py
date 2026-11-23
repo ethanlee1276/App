@@ -145,8 +145,9 @@ def test_the_game_log_draws_a_kickers_season_with_the_best_kick_as_the_long():
     assert t["kicking.fg50"] == 1
     week2 = next(g for g in log["games"] if g.get("week") == 2)
     assert week2["values"]["kicking.fg"] == "0-1" and week2["values"]["kicking.lng"] is None
-    assert GL.add_up({"fg_long": 52.0, "fg_att": 3.0}, {"fg_long": 47.0, "fg_att": 3.0}) == {"fg_long": 52.0,
-                                                                                             "fg_att": 6.0}
+    summed = GL.add_up({"fg_long": 52.0, "fg_att": 3.0}, {"fg_long": 47.0, "fg_att": 3.0})
+    # The season's own numbers; add_up also counts each market's games ("|n", step ACV).
+    assert {k: v for k, v in summed.items() if "|" not in k} == {"fg_long": 52.0, "fg_att": 6.0}, summed
 
 
 def test_the_game_log_draws_a_defenders_season():

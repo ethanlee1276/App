@@ -181,19 +181,63 @@ WHOLE_RATES = frozenset({"bavg", "obp", "ops", "era", "whip"})
 RUNNING = WHOLE_RATES
 
 
+def _pairs() -> frozenset:
+    """Every two markets a column reads together (a percentage, an average, made-tried), in every layout."""
+    out = set()
+    for layout in LAYOUTS.values():
+        for group in layout:
+            for c in group[-1]:
+                how = c[3]
+                if how[0] in ("pct", "avg", "made") and len(how) == 3:
+                    out.add((how[1], how[2]))
+    return frozenset(out)
+
+
+#: EACH NUMBER OVER THE GAMES THAT CARRY IT (step ACV, 23 November 2026). A season can hold games whose box score
+#: was read before a column was kept: the WNBA's older games carry made threes (the old "3PT" column) but no
+#: attempts, steals, blocks or turnovers until the nightly re-read reaches them (step ABO), and A'ja Wilson's 2026
+#: line read 3PT "0.9-0.8" and 3P% 113.2, every column divided by all 48 games. A season now counts the games each
+#: market is in ("<market>|n"), and a pair a column reads together (PAIRS) is summed over the games carrying both
+#: ("<a>|<b>|a", "<a>|<b>|b", "<a>|<b>|n"): an average divides by the games that carry it, a percentage and a
+#: made-tried read only the games with both.
+PAIRS = _pairs()
+
+
 def add_up(into: dict, stats: dict) -> dict:
     """One game's stats into a running season: summed, except a PEAK stat,
-    which keeps its most; a game with its whole line adds it again (WHOLE)."""
+    which keeps its most; a game with its whole line adds it again (WHOLE);
+    each market's games counted and each PAIR summed where both are there."""
     for m, v in stats.items():
         if m in PEAK:
             into[m] = max(into.get(m, v), v)
         else:
             into[m] = into.get(m, 0.0) + v
+        into[f"{m}|n"] = into.get(f"{m}|n", 0) + 1
     for key, marks in WHOLE.items():
         if stats.get(key) is not None:
             for m in marks:
                 into[f"{m}|whole"] = into.get(f"{m}|whole", 0.0) + (stats.get(m) or 0.0)
+    for a, b in PAIRS:
+        va, vb = stats.get(a), stats.get(b)
+        if va is not None and vb is not None:
+            into[f"{a}|{b}|a"] = into.get(f"{a}|{b}|a", 0.0) + va
+            into[f"{a}|{b}|b"] = into.get(f"{a}|{b}|b", 0.0) + vb
+            into[f"{a}|{b}|n"] = into.get(f"{a}|{b}|n", 0) + 1
     return into
+
+
+def paired(s: dict, a: str, b: str) -> tuple:
+    """(a, b, games): a season's two markets over the games carrying both (add_up, step ACV), where the stats
+    are a season's; else the two as kept, and no count (one game's line)."""
+    n = s.get(f"{a}|{b}|n")
+    if n:
+        return s.get(f"{a}|{b}|a"), s.get(f"{a}|{b}|b"), n
+    return s.get(a), s.get(b), None
+
+
+def games_with(s: dict, market: str, played: int) -> int:
+    """How many of a season's games carry ``market`` (add_up, step ACV); ``played`` where it was not counted."""
+    return int(s.get(f"{market}|n") or played or 0)
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 
@@ -287,18 +331,18 @@ def value(sport: str, how: tuple, s: dict, games: int = 1):
     if kind in ("sum", "max"):
         return _first(s, how[1:])
     if kind in ("pct", "avg"):
-        num, den = s.get(how[1]), s.get(how[2])
+        num, den, _n = paired(s, how[1], how[2])
         if num is None or not den:
             return None
         return round(100.0 * num / den, 1) if kind == "pct" else round(num / den, 1)
     if kind == "made":
-        made, tried = s.get(how[1]), s.get(how[2])
+        made, tried, _n = paired(s, how[1], how[2])
         return None if made is None or tried is None else f"{int(made)}-{int(tried)}"
     if kind == "rating":
         return _rating(sport, s)
     if kind == "toi":
         t = s.get(how[1])
-        return None if t is None else round(t / max(1, games), 2)
+        return None if t is None else round(t / max(1, games_with(s, how[1], games)), 2)
     if kind == "ip":
         outs = s.get(how[1])
         return None if outs is None else f"{int(outs) // 3}.{int(outs) % 3}"
@@ -536,7 +580,8 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
         out_games.append(line)
     out_games.sort(key=lambda x: (x.get("date") or "", x.get("week") or 0), reverse=True)
     totals = {f"{k}.{c[0]}": value(sport, c[3], summed, played) for k, _, cols in groups for c in cols}
-    per_game = {f"{k}.{c[0]}": (round(summed[_first_key(summed, c[3][1:])] / played, 1)
+    per_game = {f"{k}.{c[0]}": (round(summed[_first_key(summed, c[3][1:])]
+                                      / games_with(summed, _first_key(summed, c[3][1:]), played), 1)
                                 if c[3][0] == "sum" and played and _first_key(summed, c[3][1:]) else None)
                 for k, _, cols in groups for c in cols}
     last = max(games.values(), key=lambda g: g["period"])
