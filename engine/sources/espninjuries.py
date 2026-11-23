@@ -138,11 +138,17 @@ def cache_age_s(league: str) -> float | None:
         return None
 
 
+#: Asked of every board read (step ACT): a gzip body, which fetch_json unpacks.
+GZIP = {"Accept-Encoding": "gzip"}
+
+
 def fetch_injuries(league: str):
     """The raw board for one league. KeyError for a league with no feed
     is the right failure — callers iterate LEAGUES, they don't guess."""
+    # PACKED (step ACT, 22 November): the NFL's board is 8.8 MB a read unpacked, read every minute in an inactives
+    # window; asked for gzip, ESPN sends it packed and fetch_json unpacks it.
     return fetch_json(LEAGUES[league], f"espn_injuries_{league}.json",
-                      ttl=ttl_for(league), user_agent=DEFAULT_AGENT)
+                      ttl=ttl_for(league), user_agent=DEFAULT_AGENT, headers=GZIP)
 
 
 #: ESPN keeps a player in the injuries feed after he is cleared, with the

@@ -60,7 +60,7 @@ def test_the_board_is_believed_a_minute_in_the_window_only():
     assert E.nfl_kickoffs(copy) == [T0], "read off the copy's own dates"
     assert E.nfl_kickoffs(copy.with_name("none.json")) == [], "no copy: no window"
     src = (ROOT / "engine" / "sources" / "espninjuries.py").read_text(encoding="utf-8")
-    assert "ttl=ttl_for(league), user_agent=DEFAULT_AGENT)" in src
+    assert "ttl=ttl_for(league), user_agent=DEFAULT_AGENT, headers=GZIP)" in src
 
 
 def test_a_man_is_found_inactive_whatever_the_pages_shape():
@@ -269,6 +269,46 @@ def test_the_board_asked_fresh_is_timed_against_its_copy():
     assert mn["board"]["n"] == 1 and mn["board_fresh"]["n"] == 1 and mn["board_fresh"]["both"] == 1
     assert mn["board_fresh"]["ahead_min"] > 3, mn
     assert "pace" not in out.read_text(encoding="utf-8").lower(), "counts and times only"
+
+
+def test_the_board_is_asked_for_packed_pages():
+    # The NFL's injury board is 8.8 MB a read unpacked (the box's watcher, 22 November), read every minute in an
+    # inactives window by the build and by the watcher twice. Both now ask ESPN for gzip and unpack it (step ACT).
+    import gzip as _gz
+    import io
+    import urllib.request as U
+    from engine.sources import espninjuries as E, fetch as F
+    body = json.dumps({"injuries": []}).encode()
+    seen = []
+
+    class Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def opener(req, timeout=None):
+        seen.append(dict(req.header_items()))
+        return Resp(_gz.compress(body))
+
+    was = U.urlopen
+    U.urlopen = opener
+    cache = Path(tempfile.mkdtemp())
+    was_dir = F.CACHE_DIR
+    F.CACHE_DIR = cache
+    try:
+        assert F.fetch_json("https://x/injuries", "t_gz.json", ttl=0, user_agent=F.DEFAULT_AGENT,
+                            headers=E.GZIP) == {"injuries": []}
+        status, page, size = W._get("https://x/summary")
+    finally:
+        U.urlopen = was
+        F.CACHE_DIR = was_dir
+    assert {k.lower(): v for k, v in seen[0].items()}.get("accept-encoding") == "gzip", seen
+    assert {k.lower(): v for k, v in seen[1].items()}.get("accept-encoding") == "gzip", seen
+    assert status == "ok" and page == {"injuries": []} and size == len(body)
+    src = (ROOT / "engine" / "sources" / "espninjuries.py").read_text(encoding="utf-8")
+    assert "user_agent=DEFAULT_AGENT, headers=GZIP)" in src, "the board read asks for it"
 
 
 def _lists(clubs, filed):

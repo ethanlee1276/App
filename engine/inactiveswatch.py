@@ -247,7 +247,9 @@ def _games(rows, now: float) -> list:
 def _get(url: str):
     """(status, page or None, bytes): one read, as fetch_json asks ESPN (no User-Agent of ours), never cached."""
     try:
-        with urllib.request.urlopen(urllib.request.Request(url), timeout=TIMEOUT_S) as resp:
+        # Packed (step ACT): the board alone is 8.8 MB a read unpacked; a gzip body is unpacked just below.
+        req = urllib.request.Request(url, headers={"Accept-Encoding": "gzip"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
             raw = resp.read()
         if raw[:2] == b"\x1f\x8b":
             raw = gzip.decompress(raw)

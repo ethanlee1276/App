@@ -9338,6 +9338,11 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACT. ESPN's injury board, asked for packed** (step 885; 22 November). Nothing to run. The watcher's first fresh
+reads measured ESPN's NFL injury board at 8.8 MB a read, and in an inactives window the build reads it every minute
+and the watcher twice more. None of them asked ESPN to pack it, though each already unpacks a packed page. They ask
+now, so the same reads cost the box a fraction of the download. Nothing else changes.
+
 **ACS. An SGPX ticket names its games one way** (step 884; 22 November). Nothing to run. Each SGPX leg names its
 game "AUB at ALA", and the same ticket's warning and the section's opening line named them "AUB@ALA" (on college's
 Best Parlays, checked in a phone-sized browser). Both now say "at", the NFL's and college's.

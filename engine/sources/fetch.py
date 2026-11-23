@@ -204,7 +204,7 @@ def fetch_text(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
 
 
 def fetch_json(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
-               timeout: int = 45, user_agent=USER_AGENT):
+               timeout: int = 45, user_agent=USER_AGENT, headers: dict | None = None):
     """Fetch JSON, and refuse to cache anything that isn't.
 
     ``fetch_text`` writes whatever the server returned straight to disk. If
@@ -228,9 +228,12 @@ def fetch_json(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
             path.unlink(missing_ok=True)          # poisoned — go to the wire
 
     try:
-        headers = ({} if user_agent is DEFAULT_AGENT
-                   else {"User-Agent": user_agent})
-        req = urllib.request.Request(url, headers=headers)
+        sent = ({} if user_agent is DEFAULT_AGENT
+                else {"User-Agent": user_agent})
+        # ``headers`` beside it, as fetch_text takes them: ESPN's injury board is 8.8 MB a read unpacked, and asked
+        # for gzip (step ACT) it comes packed; a gzip body is unpacked just below whoever asked.
+        sent.update(headers or {})
+        req = urllib.request.Request(url, headers=sent)
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read()
         if raw[:2] == b"\x1f\x8b":
