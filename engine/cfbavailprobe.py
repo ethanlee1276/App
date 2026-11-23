@@ -49,23 +49,39 @@ FOLLOW = 8
 DEPTH = 2
 #: The most of a page read (a conference front page can be large; the reports are small).
 MAX_BYTES = 3_000_000
-#: Where each conference's look starts: its front page and its football page.
+#: Where each conference's look starts. The first look (23 November) read the front and football pages: those
+#: are built in the reader's browser by scripts (the Big Ten's football page held 22 words of text), and three
+#: front pages answered 404 to a plain request, so no link to a report showed. Each conference's own page on its
+#: reporting rules (ACC, Big 12) and its reports page as the press names it (SEC, Big Ten: "FBReports") are where
+#: the reports are said to be posted, so the look starts there, with the football pages behind them.
 SOURCES = {
-    "big_ten": ("https://bigten.org/", "https://bigten.org/sports/football"),
-    "sec": ("https://www.secsports.com/", "https://www.secsports.com/sport/football"),
-    "acc": ("https://theacc.com/", "https://theacc.com/sports/football"),
-    "big_12": ("https://big12sports.com/", "https://big12sports.com/sports/football"),
+    "big_ten": ("https://bigten.org/fbreports", "https://bigten.org/fb/article/60284/",
+                "https://bigten.org/sports/football"),
+    "sec": ("https://www.secsports.com/FBreports", "https://www.secsports.com/fbreports",
+            "https://www.secsports.com/sport/football"),
+    "acc": ("https://theacc.com/sports/2025/8/28/availability-reporting.aspx", "https://theacc.com/fbreports",
+            "https://theacc.com/sports/football"),
+    "big_12": ("https://big12sports.com/sports/2025/8/21/availability-reporting.aspx",
+               "https://big12sports.com/fbreports", "https://big12sports.com/sports/football"),
     "cfp": ("https://collegefootballplayoff.com/",),
     # THE NBA'S OWN INJURY REPORT: the league posts it as a PDF through every game day, ahead of ESPN's board
     # (which the NBA build reads, with its blurbs' words, step ABU). Mapped the same way, for the same reader.
     "nba_official": ("https://official.nba.com/nba-injury-report-2026-27-season/",),
 }
+#: THE NBA'S REPORT ITSELF. Its index page turned the first look away (403), and each report is a PDF at an
+#: address made of its own time, posted every quarter hour on game days ("Injury-Report_2026-04-06_08_15AM.pdf",
+#: Eastern time): the look asks for the newest quarter hour, then each before it, back NBA_BACK_SLOTS slots.
+NBA_PDF = "https://ak-static.cms.nba.com/referee/injury/Injury-Report_{day}_{hhmm}.pdf"
+NBA_BACK_SLOTS = 16
 #: A link worth following: its address or its words speak of availability or injuries.
-LINK_WORDS = re.compile(r"availab|injur", re.I)
+LINK_WORDS = re.compile(r"availab|injur|fbreport", re.I)
 #: The strongest of them, followed first.
-STRONG_WORDS = re.compile(r"availability[-_ ]?report|availability", re.I)
+STRONG_WORDS = re.compile(r"availability[-_ ]?report|fbreport|availability", re.I)
 #: A data address a page's scripts name (a JSON feed the page fills itself from).
 API_RE = re.compile(r"""["'](https?://[^"'\s]{6,300}?(?:api|json|feed)[^"'\s]{0,200})["']""", re.I)
+#: Any quoted text in a page (its scripts included) that names the reports: where a page built by scripts
+#: fetches them from.
+HINT_RE = re.compile(r"""["']([^"'<>\s]{0,240}(?:availab|fbreport)[^"'<>\s]{0,240})["']""", re.I)
 #: The output's own ceiling, so a strange page can never fill the box's disk or the site.
 MAX_OUT = 600_000
 
@@ -153,10 +169,12 @@ def _get(url: str):
         req = urllib.request.Request(url, headers={"Accept-Encoding": "gzip"})
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
             ctype = resp.headers.get("Content-Type") or ""
+            final = resp.geturl()
             raw = resp.read(MAX_BYTES)
         if raw[:2] == b"\x1f\x8b":
             raw = gzip.decompress(raw)
-        return "ok", ctype, raw
+        # A page that answered from somewhere else says where (a short address that redirects to the reports).
+        return "ok", (ctype + (f"; landed={final}" if final and final != url else "")), raw
     except urllib.error.HTTPError as exc:
         return f"HTTP {exc.code}", "", b""
     except Exception as exc:                                   # noqa: BLE001
@@ -215,6 +233,9 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     """(what one page says, the links on it worth following)."""
     status, ctype, raw = get(url)
     rec = {"url": url, "status": status, "type": ctype.split(";")[0].strip(), "bytes": len(raw)}
+    landed = re.search(r"landed=(\S+)", ctype)
+    if landed:
+        rec["landed"] = landed.group(1)
     if status != "ok":
         return rec, []
     if "pdf" in ctype.lower() or raw[:5] == b"%PDF-":
@@ -251,11 +272,38 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
                           if LINK_WORDS.search(m.group(1)) or "football" in m.group(1).lower()})[:20]
     rec["snippets"] = _snippets(p.text)
     rec["words"] = len(p.text)
+    hints = list(dict.fromkeys(m.group(1) for m in HINT_RE.finditer(body)))
+    if hints:
+        rec["hints"] = hints[:25]
     nd = _next_data(body)
     if nd:
         rec["next_data"] = nd
     follow = sorted(rec["links"], key=lambda x: (not STRONG_WORDS.search(x["href"] + " " + x["text"]),))
     return rec, [x["href"] for x in follow]
+
+
+def nba_pdf_urls(now: float, back: int = NBA_BACK_SLOTS) -> list:
+    """The NBA report's addresses for the newest ``back`` quarter hours, newest first (Eastern time)."""
+    from zoneinfo import ZoneInfo
+    t = _dt.datetime.fromtimestamp(float(now), ZoneInfo("America/New_York"))
+    t = t.replace(minute=t.minute - t.minute % 15, second=0, microsecond=0)
+    out = []
+    for i in range(back):
+        x = t - _dt.timedelta(minutes=15 * i)
+        out.append(NBA_PDF.format(day=x.strftime("%Y-%m-%d"), hhmm=x.strftime("%I_%M%p")))
+    return out
+
+
+def look_nba_pdf(now: float, get=_get) -> dict:
+    """The newest NBA report found (its address, size and the text a simple PDF draws), and every address asked."""
+    asked = []
+    for url in nba_pdf_urls(now):
+        rec, _links = look_page(url, get)
+        asked.append(f"{rec['status']} {url.rsplit('/', 1)[-1]}")
+        if rec["status"] == "ok":
+            rec["asked"] = asked
+            return rec
+    return {"url": "", "status": "none found", "asked": asked}
 
 
 def _home(url: str) -> str:
@@ -323,12 +371,15 @@ def watch_once(now=None, get=_get, out=None) -> float:
     if now - _LAST["at"] < EVERY_S:
         return min(IDLE_S, EVERY_S - (now - _LAST["at"]))
     _LAST["at"] = now
-    write(look(get=get), now, out)
+    found = look(get=get)
+    found["nba_report_pdf"] = {"pages": [look_nba_pdf(now, get)]}
+    write(found, now, out)
     return IDLE_S
 
 
 def main(argv=None) -> int:
     found = look()
+    found["nba_report_pdf"] = {"pages": [look_nba_pdf(time.time())]}
     p = write(found, time.time())
     for name, v in found.items():
         print(f"\n=== {name}")

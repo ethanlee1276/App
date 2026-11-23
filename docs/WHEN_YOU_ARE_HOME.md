@@ -9341,12 +9341,17 @@ the boards keep sweeping`.
 **ADA. College availability reports, step one: the box maps them** (step 892; 23 November). Nothing to run. Your yes
 to decision 20. The conferences' sites can't be reached from where I build (ESPN's can't either), so the box looks
 for me. Every three hours it reads the Big Ten's, the SEC's, the ACC's, the Big 12's and the College Football
-Playoff's front and football pages, follows the links that speak of availability or injuries on each conference's
-own site two steps deep, and writes what it found to a file on our site: each page's tables, any PDF's text, the
-addresses a page loads its data from, and the words around "availability". Nothing reads that file and no pick
-moves. From it I write each conference's reader, check it against this week's published reports (rivalry week, 28
-and 29 November), and only then put its players into college picks, game reports and the Injuries page. Switch:
-`QB_CFB_AVAIL_PROBE=off`.
+Playoff's pages where the reports are posted (each conference's reports page and its page on its reporting rules)
+and their football pages, follows the links that speak of availability or injuries on each conference's own site two
+steps deep, and writes what it found to a file on our site: each page's tables, any PDF's text, the addresses a page
+loads its data from, and the words around "availability". Its first look, from the front pages, found no report:
+those pages are built by scripts in the reader's browser (the Big Ten's football page held 22 words) and three front
+pages turned a plain request away, so it now starts at the report pages and also notes any address a page's scripts
+name for the reports. It maps the NBA's own injury report too: the league posts it as a PDF every quarter hour on
+game days at an address made of its time, ahead of ESPN's board, so the box asks for the newest one directly (the
+index page turned the first look away). Nothing reads that file and no pick moves. From it I write each conference's
+reader, check it against this week's published reports (rivalry week, 28 and 29 November), and only then put its
+players into college picks, game reports and the Injuries page. Switch: `QB_CFB_AVAIL_PROBE=off`.
 
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
