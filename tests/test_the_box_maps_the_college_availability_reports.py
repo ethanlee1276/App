@@ -217,6 +217,41 @@ def test_a_bundles_report_calls_are_kept_before_its_library_calls():
     assert any("/v1/public/report" in c for c in got["js_calls"]), "the report's own call survives the cap"
 
 
+def test_the_eighth_look_asks_the_public_call_the_vendors_script_names():
+    """The seventh look found /api/public-load named in the vendor's script and its report parts named beside it
+    ("./PublishScreen-sAWBiOrJ.js"). The eighth keeps the text around each API name, reads the report parts, and
+    asks the public call once with the embed's own query, keeping the answer's shape."""
+    start = "https://app.hdintelligence.com/?source=B10&sport=Football&conf=B10&type=report"
+    shell = b'<div id="root"></div><script type="module" src="/assets/index-CvGojbqV.js"></script>'
+    bundle = (b'const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["./PublishScreen-sAWBiOrJ.js",'
+              b'"./sortReportsByKickoff-Dw-8FNwp.js","./HDIAdminScreen-CC181VXP.js"])))=>i.map(i=>d[i]);'
+              b'async function L(q){const r=await Qe.get("/api/public-load",{params:q});return r.data}')
+    data = json.dumps({"reports": [{"school": "Ohio State", "players": [{"name": "A B", "status": "Out"}]}]})
+    site = {start: ("ok", "text/html", shell),
+            "https://app.hdintelligence.com/assets/index-CvGojbqV.js": ("ok", "text/javascript", bundle),
+            "https://app.hdintelligence.com/assets/PublishScreen-sAWBiOrJ.js": ("ok", "text/javascript", b"x"),
+            "https://app.hdintelligence.com/assets/sortReportsByKickoff-Dw-8FNwp.js": ("ok", "text/javascript", b"y"),
+            "https://app.hdintelligence.com/api/public-load?source=B10&sport=Football&conf=B10&type=report":
+                ("ok", "application/json", data.encode())}
+    asked = []
+
+    def get(u):
+        asked.append(u)
+        return site.get(u, ("HTTP 404", "", b""))
+    found = P.look({"hd": (start,)}, get=get)
+    pages = {pg["url"]: pg for pg in found["hd"]["pages"]}
+    js = pages["https://app.hdintelligence.com/assets/index-CvGojbqV.js"]
+    assert js["js_chunks"] == ["PublishScreen-sAWBiOrJ.js", "sortReportsByKickoff-Dw-8FNwp.js",
+                               "HDIAdminScreen-CC181VXP.js"]
+    assert any('Qe.get("/api/public-load"' in b for b in js["js_api"]), "how the call is asked"
+    assert "https://app.hdintelligence.com/assets/PublishScreen-sAWBiOrJ.js" in pages
+    assert "https://app.hdintelligence.com/assets/HDIAdminScreen-CC181VXP.js" not in asked
+    api = pages["https://app.hdintelligence.com/api/public-load?source=B10&sport=Football&conf=B10&type=report"]
+    assert api["step"] == "api" and api["json_shape"] == {"reports": [1, {"school": "str:Ohio State", "players": [
+        1, {"name": "str:A B", "status": "str:Out"}]}]}
+    assert not any("resolve-conference" in u for u in asked), "a call the script never names is never asked"
+
+
 def test_the_seventh_look_starts_at_the_vendors_embed():
     assert P.SOURCES["hd"][0].startswith("https://app.hdintelligence.com/?source=")
     assert all("&amp;" not in u for v in P.SOURCES.values() for u in v)

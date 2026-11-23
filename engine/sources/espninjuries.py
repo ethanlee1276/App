@@ -158,8 +158,9 @@ _ACTIVE = re.compile(r"^\s*active\s*$", re.I)
 
 
 def is_return(row: dict) -> bool:
-    """True for a cleared-to-play notice rather than a designation."""
-    return bool(_ACTIVE.match(row.get("status") or "")) and not row.get("injury")
+    """True for a cleared-to-play notice rather than a designation: ESPN's "Active" with no injury, or a school's
+    own report saying he is available (engine/sources/cfbavail marks that row ``cleared``)."""
+    return (bool(_ACTIVE.match(row.get("status") or "")) and not row.get("injury")) or row.get("cleared") is True
 
 
 #: How long a cleared-to-play notice stays news. A DESIGNATION is a

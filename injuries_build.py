@@ -91,6 +91,20 @@ def main(argv=None) -> int:
                     f"{league}: served from cache — these rows are "
                     f"{_age_text(age)} old, so the feed has been declining. "
                     f"Run `python3 launch.py --injuries` to see the error.")
+    # THE SCHOOLS' OWN FILINGS (decision 20, step ADC): each school's newest conference availability report, from
+    # the box's cache, laid over ESPN's college rows by the rule the college build uses (engine/sources/cfbavail).
+    # Read even when ESPN's college board failed; a cache that cannot be read is a note, never the board.
+    try:
+        from engine.sources import cfbavail as _ca
+        _cache = _ca.load() if _ca.on() else {}
+        if _cache.get("reports"):
+            from engine.sources import cfbdata as _cd
+            _teams = _cd.parse_teams(_cd.fetch_teams())
+            sports["cfb"], _n = _ca.page_rows(sports.get("cfb") or [], _cache, _cd.team_lookup(_teams), _teams)
+            if _n:
+                print(f"  College availability reports: {_n} row(s) from the schools' own filings")
+    except Exception as exc:                                 # noqa: BLE001
+        notes.append(f"cfb: the schools' availability reports not read ({exc})")
     board = {
         "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
         "status": "live" if sports else "unavailable",

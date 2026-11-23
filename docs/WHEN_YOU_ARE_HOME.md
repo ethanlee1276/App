@@ -9379,8 +9379,28 @@ newer filing leaves off is dropped. ESPN's out stays (a school's report covers o
 A man only the school lists is added: Game Time Decision reads as a game-time decision, Unavailable as out. A
 school with no filing keeps ESPN's board as it is. The build log says how many schools filed and what their filings
 added, changed, cleared and dropped, and the Injuries page now colours a school's "Unavailable" as out (its letters
-held "available") and "Game Time Decision" as questionable. Until the reader writes the cache, nothing changes.
-Switch: `QB_CFB_AVAIL=off`.
+held "available") and "Game Time Decision" as questionable. Nothing changes until the reading is checked (step
+ADC). Switch: `QB_CFB_AVAIL=on` puts it on early, `off` keeps it off.
+
+**ADC. College availability reports, step three: the box reads them** (step 894; 23 November). Nothing to run. The
+seventh look read the vendor's script (1.46 MB) and found its data call, /api/public-load, beside
+/api/get-conference-teams and /api/resolve-conference, and its report screens loaded as separate parts
+(PublishScreen, ArchiveScreen). It also found the College Football Playoff's reports page embedding the same vendor
+(an older app of theirs), and the ACC's basketball reports too. So the box now reads the four conferences' reports
+itself: on Saturdays every ten minutes from 9 AM Eastern (each school's last report comes about 90 minutes before
+kickoff), on weekday evenings from 5 PM every twenty minutes (the Wednesday, Thursday and Friday reports), otherwise
+every three hours, one request per conference, asking as a plain reader. Each school's filing is kept in a cache on
+the box; last week's reports (the vendor's archive) are read every six hours for checking. What it saw goes to a
+check file on our site. It finds each school's players in whatever shape the answer comes in. None of it reaches a
+pick, a report or the Injuries page yet: first I check the reading against the archive and the games' own box
+scores. The box does that check itself each time it reads the archive: of the men a past filing listed out, how many
+have stats in their school's game that week (each one is a reading the game contradicts), and of those listed
+available, how many played; with how many schools and men our records could match. Only when that holds up do I
+switch it on. When it is on, the
+Injuries page shows each school's filing in place of ESPN's older row ("ACC availability report"), keeping ESPN's
+injury and photo, and a school's "Available" counts as cleared, never as listed. The eighth look asks the data call
+once with the embed's own question and keeps the answer's shape, so the reading can be checked from here. Switch for
+the reading: `QB_CFB_AVAIL_READ=off`.
 
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they

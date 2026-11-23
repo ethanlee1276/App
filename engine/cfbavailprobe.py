@@ -83,7 +83,16 @@ BUNDLE_RE = re.compile(r"/(?:dist/)?assets/(?:app|index)[-.][^/?]*\.js(?:\?.*)?$
 #: A part such a bundle loads later, named in it ("assets/ReportEmbed-AbCd1234.js"); followed when its name speaks
 #: of a report, an embed, a public view or the archive.
 CHUNK_RE = re.compile(r"""["'`](?:\.{0,2}/)?((?:dist/)?assets/[A-Za-z0-9_.\-]{2,80}\.js)["'`]""")
-CHUNK_WORDS = re.compile(r"report|embed|public|archive|availab", re.I)
+#: …and the same parts named beside the bundle itself, as Vite's map of them does ("./PublishScreen-sAWBiOrJ.js",
+#: the seventh look).
+SIBLING_RE = re.compile(r"""["'`]\./([A-Za-z][A-Za-z0-9_]{2,60}-[A-Za-z0-9_\-]{6,12}\.js)["'`]""")
+CHUNK_WORDS = re.compile(r"report|embed|public|archive|availab|publish|summary", re.I)
+#: A rooted API address a bundle names ("/api/public-load"): the text around its first naming is kept.
+API_NAME_RE = re.compile(r"""["'`](/api/[A-Za-z0-9_\-/]{2,80})["'`]""")
+#: THE PUBLIC DATA CALL (the eighth look). The seventh found the vendor's script naming /api/public-load beside
+#: /api/get-conference-teams and /api/resolve-conference; the embed's own query (conf, sport, type, source) is
+#: what its public view is asked with, so the look asks these once each with each start page's query.
+PUBLIC_API = ("/api/public-load", "/api/resolve-conference")
 #: Where a bundle asks for its data: the text around these is kept.
 CALL_RE = re.compile(r"fetch\(|axios|baseURL|VITE_[A-Z_]{3,}|/public/|/embed|/reports?\b|conf=|createClient\(|graphql"
                      r"|supabase|firestore|execute-api|\.functions\b|URLSearchParams"
@@ -335,7 +344,11 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
         return rec, []
     body = raw.decode("utf-8", errors="replace")
     if "json" in ctype.lower() or body.lstrip()[:1] in ("{", "["):
-        rec["json_head"] = body[:3000]
+        rec["json_head"] = body[:6000]
+        try:
+            rec["json_shape"] = shape(json.loads(body))
+        except ValueError:
+            pass
         return rec, []
     if "javascript" in ctype.lower() or url.split("?")[0].endswith(".js"):
         # A script: the addresses it fetches (those that read like a report's first, then the rest), and the text
@@ -360,9 +373,21 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
         rec["js_call_count"] = len(calls)
         # The app's own code sits at a bundle's end, after the libraries it imports.
         rec["js_tail"] = body[-4000:]
-        chunks = list(dict.fromkeys(m.group(1) for m in CHUNK_RE.finditer(body)))
+        chunks = list(dict.fromkeys([m.group(1) for m in CHUNK_RE.finditer(body)]
+                                    + [m.group(1) for m in SIBLING_RE.finditer(body)]))
         rec["js_chunks"] = chunks[:80]
-        later = [urllib.parse.urljoin(url, "/" + c) for c in chunks if CHUNK_WORDS.search(c.rsplit("/", 1)[-1])]
+        later = [urllib.parse.urljoin(url, ("/" + c) if c.startswith(("assets/", "dist/")) else c)
+                 for c in chunks if CHUNK_WORDS.search(c.rsplit("/", 1)[-1])]
+        # Each API address the bundle names, with the text around its first naming: how it is asked.
+        seen_api, bits = set(), []
+        for m in API_NAME_RE.finditer(body):
+            if m.group(1) in seen_api:
+                continue
+            seen_api.add(m.group(1))
+            bits.append(body[max(0, m.start() - 500):m.start() + 700])
+            if len(bits) >= 16:
+                break
+        rec["js_api"] = bits
         return rec, later[:8]
     p = _Page()
     try:
@@ -442,6 +467,20 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     return rec, list(dict.fromkeys(canon(u) for u in [x["href"] for x in follow] + named + feature + bundles))
 
 
+def shape(v, depth: int = 0):
+    """A JSON answer's structure, small: each key's kind down to six levels, a list as its length and first item,
+    a string as its first 60 characters."""
+    if depth >= 6:
+        return "…"
+    if isinstance(v, dict):
+        return {str(k): shape(x, depth + 1) for k, x in list(v.items())[:40]}
+    if isinstance(v, list):
+        return [len(v), shape(v[0], depth + 1)] if v else [0]
+    if isinstance(v, str):
+        return "str:" + v[:60]
+    return v
+
+
 def canon(url: str) -> str:
     """One page, one address: no "#part", and https where the page gave http (the third look read the Big Ten's
     report page nine times over as #main-content, #events, #results and its http twin)."""
@@ -515,6 +554,22 @@ def look(sources=None, get=_get, follow: int = FOLLOW, depth: int = DEPTH) -> di
             step = list(dict.fromkeys(nxt))[:follow]
             if not step:
                 break
+        # THE PUBLIC DATA CALL, asked with each start page's own query (the eighth look).
+        named = {u for pg in pages for u in pg.get("js_urls") or []}
+        for api in PUBLIC_API:
+            if api not in named:
+                continue
+            for start in starts:
+                q = urllib.parse.urlparse(start).query
+                if not q:
+                    continue
+                url = urllib.parse.urljoin(start, api) + "?" + q
+                if url in seen:
+                    continue
+                seen.add(url)
+                rec, _links = look_page(url, get)
+                rec["step"] = "api"
+                pages.append(rec)
         out[name] = {"pages": pages}
     return out
 
@@ -526,7 +581,7 @@ def write(found: dict, now: float, out=None) -> Path:
     # TOO BIG: fields go, least needed first, and never a cut through the middle (the fifth look's file was cut at
     # 600,000 characters and could not be read).
     for trim in (("inline_inventory",), ("inline",), ("js_bits", "js_head"), ("snippets",), ("pdf_text",), ("app",),
-                 ("js_chunks", "js_tail"),
+                 ("js_chunks", "js_tail"), ("js_calls",),
                  ("scripts", "apis", "headings"), ("links", "pdfs", "hints")):
         if len(text) <= MAX_OUT:
             break

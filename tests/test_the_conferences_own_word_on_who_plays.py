@@ -112,6 +112,48 @@ def test_no_filings_leave_the_board_alone():
     assert merged == espn and note["schools"] == 0
 
 
+def test_the_injuries_page_shows_each_schools_filing_over_espns_rows():
+    look = {"clemson": "CLEM", "clemson tigers": "CLEM", "ohio state": "OSU", "ohio state buckeyes": "OSU"}
+    espn = [{"team": "Clemson Tigers", "player": "Cade Klubnik", "pos": "QB", "status": "Questionable",
+             "date": "2026-11-24T12:00Z", "injury": "Ankle", "face": "x.png"},
+            {"team": "Clemson Tigers", "player": "Antonio Williams", "pos": "WR", "status": "Questionable",
+             "date": "2026-11-24T12:00Z", "injury": "Hamstring"},
+            {"team": "Clemson Tigers", "player": "Phil Mafah", "pos": "RB", "status": "Out",
+             "date": "2026-10-01T12:00Z", "injury": "Shoulder"},
+            {"team": "Clemson Tigers", "player": "T.J. Parker", "pos": "DE", "status": "Questionable",
+             "date": "2026-11-26T06:00Z"},
+            {"team": "Ohio State Buckeyes", "player": "Caleb Downs", "pos": "S", "status": "Questionable",
+             "date": "2026-11-24T12:00Z"}]
+    cache = _cache(_rep("Clemson University", "2026-11-26T00:00:00Z", [
+        ("Klubnik, Cade", "QB", "AVAILABLE"), ("Bryant Wesco", "WR", "Doubtful")]),
+        _rep("Clemson", "2026-11-12T00:00:00Z", [("Old, Filing", "RB", "Out")]))
+    rows, n = CA.page_rows(espn, cache, look, now=CA._ts("2026-11-26T12:00:00Z"))
+    got = {(r["team"], r["player"]): r for r in rows}
+    k = got[("Clemson Tigers", "Cade Klubnik")]
+    assert k["status"] == "Available" and k["cleared"] is True and k["injury"] == "Ankle" and k["face"] == "x.png"
+    assert k["comment"] == "ACC availability report" and k["date"] == "2026-11-26T00:00:00Z"
+    assert ("Clemson Tigers", "Antonio Williams") not in got, "ESPN's older tag the school left off"
+    assert got[("Clemson Tigers", "Phil Mafah")]["status"] == "Out", "ESPN's out stays"
+    assert got[("Clemson Tigers", "T.J. Parker")]["status"] == "Questionable", "ESPN's newer tag stands"
+    w = got[("Clemson Tigers", "Bryant Wesco")]
+    assert w["status"] == "Doubtful" and w["cleared"] is False and w["source"] == "acc"
+    assert got[("Ohio State Buckeyes", "Caleb Downs")]["status"] == "Questionable", "no filing, ESPN's board"
+    assert ("Clemson Tigers", "Filing Old") not in got and n == 2
+    from engine.sources.espninjuries import is_return
+    assert is_return(k) and not is_return(w), "an Available row counts as cleared, never as listed"
+
+
+def test_the_injuries_builder_reads_the_schools_filings_even_when_espn_fails():
+    src = (ROOT / "injuries_build.py").read_text(encoding="utf-8")
+    i = src.index("THE SCHOOLS' OWN FILINGS")
+    body = src[i:src.index("board = {", i)]
+    assert 'sports["cfb"], _n = _ca.page_rows(sports.get("cfb") or [], _cache' in body
+    assert src.index("for league in LEAGUES:") < i, "after ESPN's boards, whatever they did"
+    js = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    fn = js[js.index("function isReturnRow"):]
+    assert "(r || {}).cleared === true" in fn[:fn.index("\n}")]
+
+
 def test_the_injuries_page_reads_the_schools_words_in_the_right_tier():
     import json
     import shutil

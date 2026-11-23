@@ -17,8 +17,8 @@ filing per school per game, newest kept), and the rule that lays a school's fili
   * a man only ESPN lists out: kept — a school's report is about one game, the board's out is often longer;
   * a man only the school lists: added.
 
-A school with no filing for its game keeps ESPN's board as it was. Off without a deploy:
-``sudo ./deploy/setenv.sh QB_CFB_AVAIL off``.
+A school with no filing for its game keeps ESPN's board as it was. Used only once `TRUSTED` (below) says the
+reading has been checked; ``sudo ./deploy/setenv.sh QB_CFB_AVAIL off`` (or ``on``) overrides it without a deploy.
 """
 from __future__ import annotations
 
@@ -47,8 +47,19 @@ WORDS = (
 SUFFIX = re.compile(r"^(jr|sr|ii|iii|iv|v)\.?$", re.I)
 
 
+#: THE SCHOOLS' FILINGS REACH PICKS AND THE INJURIES PAGE ONLY ONCE CHECKED (decision 20: "a yes if it helps").
+#: The box's reader keeps its cache from its first read; this stays False until that reading is checked against a
+#: week of the vendor's own archive and the games' box scores. ``QB_CFB_AVAIL=on`` or ``off`` overrides it.
+TRUSTED = False
+
+
 def on() -> bool:
-    return str(os.environ.get(ENV, "on")).strip().lower() not in ("off", "0", "false", "no")
+    v = str(os.environ.get(ENV, "")).strip().lower()
+    if v in ("off", "0", "false", "no"):
+        return False
+    if v in ("on", "1", "true", "yes"):
+        return True
+    return TRUSTED
 
 
 def status_of(word) -> str | None:
@@ -237,3 +248,84 @@ def overlay(espn: list[Injury], dates: dict, filed: list[dict]) -> tuple[list[In
                                  role=POSITION_ROLE.get(r["pos"], r["pos"].lower()), status=r["status"]))
             note["added"] += 1
     return merged, note
+
+
+# --- the Injuries page ---------------------------------------------------------------------------------------------
+#: How the page names each conference's report.
+LABELS = {"b10": "Big Ten", "sec": "SEC", "acc": "ACC", "b12": "Big 12", "cfp": "College Football Playoff"}
+#: The page shows a school's newest filing this long (a game week and a day).
+PAGE_DAYS = 8
+
+
+def page_rows(espn_rows: list[dict], cache: dict, lookup: dict, teams: dict | None = None,
+              now: float | None = None) -> tuple[list[dict], int]:
+    """The Injuries page's college rows (ESPN's, as parse_injuries gives them) with each school's newest filing
+    from the last PAGE_DAYS laid over them by the same rule as the build: the school's row in place of ESPN's
+    older one (keeping ESPN's injury and photo), ESPN's older questionable or doubtful tag on a man the school
+    left off dropped, ESPN's out kept. Each school row says whose report it is. Returns (rows, school rows)."""
+    import time as _time
+    from .oddsapi import normalize_name
+    now = _time.time() if now is None else float(now)
+    best: dict[str, dict] = {}
+    for rep in (cache or {}).get("reports") or []:
+        at = _ts(rep.get("filed_at"))
+        team = school_key(str(rep.get("school") or ""), lookup)
+        if not team or at is None or at < now - PAGE_DAYS * 86400 or at > now + 3600:
+            continue
+        if team not in best or at > best[team]["_at"]:
+            best[team] = {**rep, "_at": at}
+    if not best:
+        return list(espn_rows), 0
+    shown = {}
+    for r in espn_rows:
+        t = school_key(r.get("team") or "", lookup)
+        if t and t not in shown:
+            shown[t] = r.get("team")
+    out, mine_by = [], {}
+    for team, rep in best.items():
+        for p in rep.get("players") or []:
+            name = player_name(p.get("player"))
+            if name and status_of(p.get("word")) is not None:
+                mine_by[(team, normalize_name(name))] = (name, p, rep)
+    used = set()
+    for r in espn_rows:
+        t = school_key(r.get("team") or "", lookup)
+        rep = best.get(t)
+        if rep is None:
+            out.append(r)
+            continue
+        key = (t, normalize_name(r.get("player") or ""))
+        espn_at = _ts(r.get("date"))
+        newer = espn_at is not None and espn_at > rep["_at"]
+        if key in mine_by and not newer:
+            used.add(key)
+            name, p, _ = mine_by[key]
+            out.append(_school_row(r.get("team"), name, p, rep, r))
+            continue
+        if key not in mine_by and not newer and status_of(r.get("status")) in ("QUESTIONABLE", "DOUBTFUL", "GTD"):
+            continue
+        if key in mine_by:
+            used.add(key)
+        out.append(r)
+    added = 0
+    for key, (name, p, rep) in mine_by.items():
+        if key in used:
+            continue
+        team = key[0]
+        display = shown.get(team) or ((teams or {}).get(team) or {}).get("name") or rep.get("school")
+        out.append(_school_row(display, name, p, rep, None))
+        added += 1
+    return out, added + len(used)
+
+
+def _school_row(team: str, name: str, p: dict, rep: dict, espn: dict | None) -> dict:
+    word = " ".join(str(p.get("word") or "").split())
+    label = LABELS.get(str(rep.get("conference") or "").lower(), str(rep.get("conference") or "").upper())
+    return {"team": team, "player": name, "pos": (p.get("pos") or (espn or {}).get("pos") or None),
+            "status": word.title() if word.isupper() or word.islower() else word,
+            "date": rep.get("filed_at"), "injury": (espn or {}).get("injury"), "side": (espn or {}).get("side"),
+            "return_date": None, "face": (espn or {}).get("face"),
+            "comment": f"{label} availability report" + (", game day" if rep.get("final") else ""),
+            "source": str(rep.get("conference") or "").lower(),
+            # Cleared to play: the page's "Active" return notice, in the school's word.
+            "cleared": status_of(word) == "" and not re.search(r"probable", word, re.I)}

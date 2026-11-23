@@ -6575,6 +6575,20 @@ def _cfb_avail_probe() -> None:
         time.sleep(wait)
 
 
+def _cfb_avail_reader() -> None:
+    """The conferences' football availability reports, read on a clock set to when they post (engine/cfbavailread,
+    decision 20): each school's filing kept in data/cfb_availability.json, which college injuries and the Injuries
+    page lay over ESPN's board. A failure never stops the site."""
+    from engine import cfbavailread as _cr
+    while True:
+        wait = _cr.IDLE_S
+        try:
+            wait = _cr.read_once()
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
 #: How often the billing sweep wakes. Each pass re-reads only the rows
 #: Stripe has not been asked about in billing.SWEEP_EVERY_S (six hours).
 BILLING_SWEEP_S = 30 * 60
@@ -12995,6 +13009,15 @@ def main() -> None:
                 print("  College availability probe: every 3 h, the conferences' report pages mapped "
                       "(python3 -m engine.cfbavailprobe).")
         except Exception:      # noqa: BLE001 — a probe never stops the site
+            pass
+        # The conferences' availability reports themselves (engine/cfbavailread, decision 20).
+        try:
+            from engine import cfbavailread as _cr
+            if _cr.on():
+                threading.Thread(target=_cfb_avail_reader, daemon=True, name="cfbavailread").start()
+                print("  College availability reports: the four conferences' filings read on game days every "
+                      "10 min, report evenings every 20 (python3 -m engine.cfbavailread).")
+        except Exception:      # noqa: BLE001 — a reader never stops the site
             pass
         # Each game's report, watching the injury report and the news between builds.
         threading.Thread(target=_report_watcher, daemon=True, name="reportwatch").start()

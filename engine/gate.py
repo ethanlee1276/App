@@ -471,6 +471,9 @@ FREE_FILES = (
     # Where the conferences (and the NBA) publish their availability reports, mapped from the box
     # (engine/cfbavailprobe, decision 20): the public pages' own tables and words, no model output.
     "cfb_availability_probe.json",
+    # What the box's reader of the conferences' availability reports saw on its last read (engine/cfbavailread,
+    # decision 20): each conference's answer, its size and a few of the schools' public filings, no model output.
+    "cfb_availability_read.json",
     # The refresher's liveness stamp: when the last cycle finished and
     # how long cycles take on this box. Every visitor's stale bar reads
     # it, signed in or not, so gating it would break the one line on the
@@ -545,6 +548,7 @@ KNOWN_BOARDS = (
     "predmarkets.json",
     "record.json", "record_head.json", "injuries.json", "news.json", "fantasy.json",
     "memecoins.json", "report_watch.json", "inactives_watch.json", "cfb_availability_probe.json",
+    "cfb_availability_read.json",
     # The races, written by cfb_build, nba_build and nfl_build
     # (engine/cfprace, engine/nbacup, engine/nflrace), and the NCAA
     # tournament's by nba_build for college (engine/ncaarace). Mixed: see

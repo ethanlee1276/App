@@ -20247,7 +20247,8 @@ async function loadStandings(sport) {
    named — and every surface that treats those as injuries reports healthy
    players as hurt. Mirrors engine/sources/espninjuries.is_return. */
 function isReturnRow(r) {
-  return /^\s*active\s*$/i.test((r || {}).status || "") && !(r || {}).injury;
+  // A school's own report saying "Available" is the same news (decision 20, step ADC): the builder marks it cleared.
+  return (/^\s*active\s*$/i.test((r || {}).status || "") && !(r || {}).injury) || (r || {}).cleared === true;
 }
 
 function injTone(status) {
