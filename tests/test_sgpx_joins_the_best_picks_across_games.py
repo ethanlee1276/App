@@ -391,6 +391,102 @@ def test_one_book_first_and_its_price_on_the_card():
     assert 'sgpx_day_props: "SGPX day parlays", sgpx_day_td: "SGPX day touchdown parlays" };' in rj
 
 
+#: A college Saturday still to come (step ACO).
+SAT = "2030-11-23"
+
+
+def _cfb_leg(player, team, home, away, market, p, odds=-150, line=0.5, side="Over", pos="WR"):
+    return dict(_leg(player, team, home, away, market, p, odds, line, side, pos), game_date=SAT)
+
+
+def _cfb_game(away, home, kickoff, props, tds, **kw):
+    return dict(_game(away, home, kickoff, props, tds, **kw), date=SAT)
+
+
+def _cfb_slate():
+    """A noon window that has posted (OSU and UGA), a 3:30 one and a night one still to post."""
+    osu = _cfb_game("MICH", "OSU", "12:00",
+                    [_cfb_leg("Jeremiah Smith", "OSU", "OSU", "MICH", "receptions", 0.77),
+                     _cfb_leg("Carnell Tate", "OSU", "OSU", "MICH", "rec_yds", 0.64, line=49.5)],
+                    [_cfb_leg("Jeremiah Smith", "OSU", "OSU", "MICH", "anytime_td", 0.52, 110, side="Yes")])
+    uga = _cfb_game("GT", "UGA", "12:00",
+                    [_cfb_leg("Gunner Stockton", "UGA", "UGA", "GT", "pass_yds", 0.71, line=219.5, pos="QB")],
+                    [_cfb_leg("Nate Frazier", "UGA", "UGA", "GT", "anytime_td", 0.57, -105, side="Yes", pos="RB")])
+    bama = _cfb_game("AUB", "ALA", "15:30",
+                     [_cfb_leg("Ryan Williams", "ALA", "ALA", "AUB", "receptions", 0.74)],
+                     [_cfb_leg("Ryan Williams", "ALA", "ALA", "AUB", "anytime_td", 0.5, 120, side="Yes")],
+                     post_at="2030-11-23T19:00:00Z")
+    lsu = _cfb_game("OKLA", "LSU", "19:30",
+                    [_cfb_leg("Aaron Anderson", "LSU", "LSU", "OKLA", "receptions", 0.72)],
+                    [_cfb_leg("Caden Durham", "LSU", "LSU", "OKLA", "anytime_td", 0.55, -110, side="Yes", pos="RB")],
+                    post_at="2030-11-24T23:00:00Z")
+    return [osu, uga, bama, lsu]
+
+
+def test_a_college_saturday_gets_them_too():
+    assert S.SPORTS == ("nfl", "cfb")
+    was = _stub_pairs()
+    try:
+        games = _cfb_slate()
+        r = {"date": SAT, "games": [{"away": g["away"], "home": g["home"], "kickoff": g["kickoff"], "date": SAT}
+                                    for g in games],
+             "game_parlays": {"sport": "cfb", "games": games}}
+        held = {f"{x['away']}@{x['home']}": x for x in _cfb_slate()}
+        r[GP.HELD_KEY] = {k: {"threes": held[k]["threes"], "scorers": held[k]["scorers"]}
+                          for k in ("AUB@ALA", "OKLA@LSU")}
+        out = _public(tempfile.mkdtemp())
+        noon = dt.datetime(2030, 11, 23, 16, 40, tzinfo=UTC)
+        S.attach(r, "cfb", out, now=noon)
+        sg = r["sgpx"]
+        assert sg["sport"] == "cfb" and sg["early_words"] == "picked before its game posted"
+        root = Path(out).parents[2]
+        kept = json.loads((root / "data" / "built" / "sgpx_cfb.json").read_text(encoding="utf-8"))
+        assert kept and not (root / "data" / "built" / "sgpx_nfl.json").exists(), \
+            "college keeps its posted tickets in its own file"
+        day = next(e for e in sg["slots"] if e.get("day"))
+        assert day["label"] == "Saturday" and day["posted"] and day.get("inactives") is False
+        noon_slot = next(e for e in sg["slots"] if not e.get("day") and "MICH@OSU" in e["games"])
+        assert noon_slot["posted"] and noon_slot["props"], "the noon window posts across its two games"
+        early = [t for k in S.KINDS for t in day[k] if any(l.get("sgpx_early") for l in t["legs"])]
+        assert early, "a later game's legs ride the day's tickets"
+        for t in early:
+            assert t["caveats"][0].startswith("Picked before ") and "inactives" not in t["caveats"][0], t["caveats"]
+            assert " posted its own picks: " in t["caveats"][0] or " posted their own picks: " in t["caveats"][0]
+            assert all(l["sgpx_early_words"] == "picked before its game posted" for l in t["legs"] if l.get("sgpx_early"))
+        sec = S.section([day])
+        lead = sec["blocks"][0]["text"]
+        assert lead.endswith("so a later game's legs were picked before that game posted its own."), lead
+        legs = [l for b in sec["blocks"] if b.get("type") == "parlays" for i in b["items"] for l in i["legs"]]
+        assert {l["early"] for l in legs if l.get("early")} == {"picked before its game posted"}
+        # A college window still to post says so with no word of inactives.
+        r2 = {"date": SAT, "games": r["games"], "game_parlays": {"sport": "cfb", "games": _cfb_slate()}}
+        r2["game_parlays"]["games"][0]["post_at"] = "2030-11-23T16:30:00Z"
+        S.attach(r2, "cfb", None, now=dt.datetime(2030, 11, 23, 16, 0, tzinfo=UTC))
+        wait = next(e for e in r2["sgpx"]["slots"] if not e.get("day") and "MICH@OSU" in e["games"])
+        assert "post_note" in wait and "inactives" not in wait["post_note"], wait
+        # The NFL's words are the NFL's still.
+        assert S.early_words("nfl") == "picked before its inactives"
+        js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
+        assert 'typeof l.early === "string" ? l.early : "picked before its inactives"' in js
+        bp = (ROOT / "web" / "js" / "bestparlays.js").read_text(encoding="utf-8")
+        assert 'l.sgpx_early_words || "picked before its inactives"' in bp
+        # Report Picks offers a signed-out visitor the locked SGPX tab only where SGPX is made.
+        rp = (ROOT / "web" / "js" / "reportpicks.js").read_text(encoding="utf-8")
+        assert f"const RP_SGPX_SPORTS = {json.dumps(list(S.SPORTS)).replace(', ', ', ')};" in rp
+        assert "sgpxLocked || (!locked && sgpxSlots.length) ? sgpx" in rp
+    finally:
+        GP.ticket = was
+
+
+def test_a_long_window_counts_its_games():
+    e = {"key": "2030-11-23T17:00Z", "label": "Sat 12:00 PM ET", "games": [f"A{i}@B{i}" for i in range(9)],
+         "props": [{"joint": 0.3, "legs": [], "games": []}]}
+    lead = S.section([e])["blocks"][0]["text"]
+    assert "(9 games)" in lead and "A0@B0" not in lead, lead
+    e["games"] = e["games"][:3]
+    assert "(A0@B0, A1@B1, A2@B2)" in S.section([e])["blocks"][0]["text"]
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     fails = 0

@@ -837,6 +837,9 @@ function rpOnShow(host, id, fill) {
     b.addEventListener(ev, () => setTimeout(go, 0))));
   go();
 }
+/* The leagues that make SGPX tickets (engine/sgpx.SPORTS: the NFL since step ACI, college since step ACO). */
+const RP_SGPX_SPORTS = ["nfl", "cfb"];
+
 async function renderReportPicks() {
   const host = document.getElementById("reportpicks-body");
   if (!host) return;
@@ -876,8 +879,11 @@ async function renderReportPicks() {
      so the button that stood here, a second door to the same page on the same screen, is gone. */
   /* THE SGPX PARLAYS (engine/sgpx, step ACI; Ethan, 22 November: "We can have those as a separate tab as same
      game parlay X, SGPX parlays"): our strongest picks from different games in each kickoff window, combined,
-     drawn the way each game's report draws them. A tab only on a day that has them. */
+     drawn the way each game's report draws them. A tab only on a day that has them. A signed-out visitor, who
+     cannot see the day's tickets, is shown the locked tab only in a league that makes them (RP_SGPX_SPORTS,
+     engine/sgpx.SPORTS, step ACO): the NBA's page never offered an SGPX tab it has no tickets for. */
   const sgpxSlots = ((d.sgpx || {}).slots || []).filter((e) => e && (e.blocks || []).length);
+  const sgpxLocked = locked && RP_SGPX_SPORTS.includes(state.sport);
   const sgpx = locked
     ? memberLockHTML("SGPX parlays are for members", "Our strongest picks from different games, combined, each with "
       + "its price and our chance.")
@@ -887,7 +893,7 @@ async function renderReportPicks() {
   host.innerHTML = `${paper}${subtabbedHTML("reportpicks", [
       ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", `<div data-rpk-slate></div>${today}`],
       ["sgpx", "SGPX parlays", "Our strongest picks from different games, combined",
-        locked || sgpxSlots.length ? sgpx : ""],
+        sgpxLocked || (!locked && sgpxSlots.length) ? sgpx : ""],
       ["record", "Record", "Every report pick and parlay, won or lost", `<div class="rpk-book" data-rpk-book="1"></div>`],
       ["facts", "How our reports did", "Every finished game’s report, fact-checked", rpFactsHTML()]])}`;
   bindSubtabs(host);

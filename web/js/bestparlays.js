@@ -174,7 +174,8 @@ function bpSgpxCardHTML(row, n) {
     </div>
     <ol class="bp-legs">${(t.legs || []).map((l) => `<li>
       <span class="bp-leg-what">${bpLegWords(l)}<span class="bp-leg-game">${escapeHtml(
-        String(l.sgpx_game || "").replace("@", " at "))}${l.sgpx_early ? " · picked before its inactives" : ""}</span></span>
+        String(l.sgpx_game || "").replace("@", " at "))}${l.sgpx_early
+          ? ` · ${escapeHtml(l.sgpx_early_words || "picked before its inactives")}` : ""}</span></span>
       <span class="bp-leg-price">${escapeHtml([bpOdds(l.odds), l.book || ""].filter(Boolean).join(" "))}</span>
       <span class="bp-leg-p">${bpPct(l.p)}</span></li>`).join("")}</ol>
     <p class="bp-line">${t.take_words ? `Take it at <b>${escapeHtml(t.take_words)}</b> or better` : ""}${

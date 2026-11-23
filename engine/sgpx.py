@@ -39,6 +39,14 @@ ONE BOOK FIRST (step ACM). An SGPX is one bet at one sportsbook, so among the ti
 those one book prices at every leg's number rank first (gameparlays.book_ranker, as each game's own parlays rank),
 and the card says the book and its prices (gameparlays.one_book).
 
+COLLEGE FOOTBALL TOO (step ACO, 22 November). Ethan wants every league run the way the NFL runs, and a college
+Saturday is the NFL's Sunday many times over: a noon window, a 3:30 one, a night one, a late one. College's games
+post their picks 90 minutes before kickoff with no inactives to wait for (gameparlays.POST_WAIT_SPORTS is the
+NFL's alone), so a college slot posts once every game in it has reached its post time, and a later game's legs on
+a day ticket are the ones it would post as built at that moment: picked before that game posted its own, and each
+such ticket and leg says so in those words (EARLY_WORDS). The tickets, their journal kinds, the Record, the Live
+tab and Report Picks are the NFL's, unchanged.
+
 Off without a deploy: ``sudo ./deploy/setenv.sh QB_SGPX off``.
 """
 
@@ -50,7 +58,7 @@ import json
 import os
 from pathlib import Path
 
-SPORTS = ("nfl",)
+SPORTS = ("nfl", "cfb")
 KEY = "sgpx"
 ENV = "QB_SGPX"
 SLOT_SPAN_MIN = 45
@@ -69,14 +77,31 @@ SOURCES = {"props": "sgpx_props", "tds": "sgpx_td"}
 DAY_SOURCES = {"props": "sgpx_day_props", "tds": "sgpx_day_td"}
 TITLES = {"props": "SGPX parlay", "tds": "SGPX touchdown parlay"}
 DAY_TITLES = {"props": "SGPX day parlay", "tds": "SGPX day touchdown parlay"}
+#: A window's or a day's opening line names its games up to this many, and counts them past it (step ACO).
+LEAD_GAMES = 6
 #: A day ticket's legs span this many kickoff windows or more.
 DAY_MIN_WINDOWS = 2
 HEADS = {"props": "Player props from different games", "tds": "Touchdown scorers from different games"}
 KEEP_DAYS = 14
+#: A day ticket's leg from a game that had not posted yet, in words (step ACO): an NFL game posts after both clubs'
+#: inactives, a college game 90 minutes before kickoff with none to wait for.
+EARLY_WORDS = {"nfl": "picked before its inactives"}
+EARLY_DEFAULT = "picked before its game posted"
 NOTE = ("Each SGPX ticket joins our strongest picks from different games in this kickoff window, the legs each "
         "game's own report posted. Legs from different games are counted as unrelated; two legs from one game are "
         "counted the way that game's own parlays count them. Tracked and graded on the record at the price each "
         "card says to take it at, staked at nothing.")
+
+
+def early_words(sport: str) -> str:
+    """How a day ticket's early leg says why it is early (EARLY_WORDS)."""
+    return EARLY_WORDS.get(str(sport or "").lower(), EARLY_DEFAULT)
+
+
+def _waits_for_inactives(sport: str) -> bool:
+    """Does this league's game post after its inactives (gameparlays.POST_WAIT_SPORTS)?"""
+    from .gameparlays import POST_WAIT_SPORTS
+    return str(sport or "").lower() in POST_WAIT_SPORTS
 
 
 def on() -> bool:
@@ -298,7 +323,9 @@ def build_day(sport: str, d: dict, result: dict, memo: dict | None = None, books
     window = {_label(x): i for i, s in enumerate(d["slots"]) for x in s["games"]}
     memo = {} if memo is None else memo
     rank = (books or (None, None, None))[2]
-    out = {"key": d["key"], "label": d["label"], "games": [_label(x) for x in d["games"]], "day": True}
+    out = {"key": d["key"], "label": d["label"], "games": [_label(x) for x in d["games"]], "day": True,
+           # Whether a later game's legs were picked before its inactives (the NFL) or before it posted (step ACO).
+           **({} if _waits_for_inactives(sport) else {"inactives": False})}
     for kind in KINDS:
         pool = []
         for x in d["games"]:
@@ -307,6 +334,8 @@ def build_day(sport: str, d: dict, result: dict, memo: dict | None = None, books
             for leg in legs_of(src, kind, sport, game=game):
                 if window.get(game, 0) > 0:
                     leg["sgpx_early"] = not _posted(x)
+                    if leg["sgpx_early"]:
+                        leg["sgpx_early_words"] = early_words(sport)
                 pool.append(leg)
         pool = sorted(pool, key=lambda leg: -float(leg["p"]))[:MAX_POOL]
         made = []
@@ -317,9 +346,12 @@ def build_day(sport: str, d: dict, result: dict, memo: dict | None = None, books
             if t:
                 early = sorted({leg["sgpx_game"] for leg in t["legs"] if leg.get("sgpx_early")})
                 if early:
-                    t["caveats"].insert(0, (f"Picked before the inactives of {', '.join(early)}: "
-                                            f"{'that game starts' if len(early) == 1 else 'those games start'} "
-                                            f"later in the day, and a leg on a player who sits is void"))
+                    later = (f"{'that game starts' if len(early) == 1 else 'those games start'} later in the day, "
+                             f"and a leg on a player who sits is void")
+                    t["caveats"].insert(0, (f"Picked before the inactives of {', '.join(early)}: {later}"
+                                            if _waits_for_inactives(sport) else
+                                            f"Picked before {', '.join(early)} posted "
+                                            f"{'its' if len(early) == 1 else 'their'} own picks: {later}"))
                 made.append(t)
         out[kind] = choose(made, rank=rank)
         _price_books(out[kind], books)
@@ -412,8 +444,9 @@ def attach(result: dict, sport: str, out=None, now=None) -> str:
             if not all(_posted(x) for x in s["games"]):
                 entries.append({"key": s["key"], "label": s["label"], "games": [_label(x) for x in s["games"]],
                                 "post_note": (f"These SGPX parlays post once all {len(s['games'])} games kicking "
-                                              f"off at {s['label']} have posted their own picks, after their "
-                                              f"inactives, and before the first of them starts")})
+                                              f"off at {s['label']} have posted their own picks, "
+                                              + ("after their inactives, " if _waits_for_inactives(sp) else "")
+                                              + "and before the first of them starts")})
                 continue
             e = build_slot(sp, s, result.get("games") or [], memo, books)
             if any(e.get(k) for k in KINDS):
@@ -428,7 +461,7 @@ def attach(result: dict, sport: str, out=None, now=None) -> str:
             sec = section([e])
             if sec:
                 e["blocks"] = sec["blocks"]
-        result[KEY] = {"sport": sp, "slots": entries, "note": NOTE}
+        result[KEY] = {"sport": sp, "slots": entries, "note": NOTE, "early_words": early_words(sp)}
         n = {k: sum(len(e.get(k) or []) for e in entries) for k in KINDS}
         return (f"SGPX parlays: {n['props']} player-prop and {n['tds']} touchdown ticket(s) across "
                 f"{sum(1 for e in entries if e.get('posted') and not e.get('day'))} kickoff slot(s)"
@@ -455,7 +488,7 @@ def card(t: dict, n: int, kind: str, day: bool = False) -> dict:
     if t.get("naive_words"):
         price += f" · the legs' own prices multiplied pay {t['naive_words']}"
     legs = [{"pick": pick_words(leg), "game": leg.get("sgpx_game") or "", "player": leg.get("player"),
-             **({"early": True} if leg.get("sgpx_early") else {}),
+             **({"early": leg.get("sgpx_early_words") or EARLY_WORDS["nfl"]} if leg.get("sgpx_early") else {}),
              "team": leg.get("team"),
              "price": " ".join(x for x in (_odds_words(leg.get("odds")), leg.get("book") or "") if x),
              "chance": round(float(leg.get("p") or 0), 4), "why": list(leg.get("why") or []),
@@ -489,9 +522,13 @@ def _entry_blocks(entry: dict) -> list:
                        {"type": "parlays", "kind": "sgpx", "items": cards}]
     if not blocks:
         return []
-    others = ", ".join(entry.get("games") or [])
+    # The games by name while they fit on a line; a college Saturday's dozens by their count (step ACO).
+    gs = list(entry.get("games") or [])
+    others = ", ".join(gs) if len(gs) <= LEAD_GAMES else f"{len(gs)} games"
     lead = (f"Our strongest picks across {entry.get('label')}'s kickoff windows ({others}), combined; posted "
-            f"with the first of them, so a later game's legs were picked before its inactives were out."
+            f"with the first of them, so a later game's legs were "
+            + ("picked before its inactives were out." if entry.get("inactives", True)
+               else "picked before that game posted its own.")
             if day else f"Our strongest picks from the games kicking off at {entry.get('label')} ({others}), "
                         f"combined across games.")
     return [{"type": "p", "text": lead}] + blocks

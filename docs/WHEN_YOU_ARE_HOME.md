@@ -9338,6 +9338,35 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**Decision 19, for you: NBA chances that say less than they win** (22 November). Nothing changes until you answer.
+The NBA's Most Likely picks win more often than they say. Over 3,371 graded picks the board said 61.2% and won
+64.2%. The list's overs said 61.3% and won 65.5% (1,375 picks); its unders said 61.8% and won 64.3% (1,711). Both
+gaps are past chance (the Record's "beats its claim"). Your yes to (8) on 21 November lets the record raise an NBA
+pick toward its price, never past it, and that can't reach these picks. On the unders the price says less than we do
+(59.4%), so there is nothing to raise toward. On the overs the price (63.0%) is still under what they won, and that
+raise, tried on held-out games, gained too little to pass the bar. Why it happens: the NBA's numbers are tuned
+toward 50% by a fit on 25,000 to 29,000 past games a market, most of them priced against each player's recent
+average as a stand-in line, not a sportsbook's. Football had the same problem and now tunes against real lines.
+Simply un-tuning the NBA would be wrong, though: the NBA's Edge bets, where we disagree with the price, said 51.2%
+and won 48.3% (451 bets), so the model is already too sure there. When our number and the price agree on a side, the
+pick wins more than either says; when they disagree, it wins less than ours says. The fix I would make on a yes: let
+the record put a Most Likely pick's chance above both our number and the price when the two agree, by as much as
+held-out games prove and never more, on the same bar as every other correction. NBA first, and hockey only if its
+own record shows the same. It would change the chance shown, the tier a pick earns and the order of the list, not
+which picks are on the board. Yes or no?
+
+**ACO. SGPX for college football** (step 880; 22 November). Nothing to run. You want every league run the way the
+NFL runs, and a college Saturday is the NFL's Sunday many times over. College football now gets SGPX tickets too:
+each kickoff window's three player-prop and three touchdown tickets across its games, and the day's tickets across
+the day's windows, built, posted, kept, followed live and counted on the Record the way the NFL's are. College picks
+post 90 minutes before kickoff with no inactives to wait for, so a college window posts once every game in it has
+reached that time. On a day ticket, a later game's legs are the ones that game would post as built at that moment,
+and the card says "picked before its game posted" where the NFL's says "picked before its inactives". A window or a
+day with more than six games now counts them on its opening line instead of listing every one. They start with this
+week's college games. Switch: `QB_SGPX=off` turns off every league's. A signed-out visitor's Report Picks showed a
+locked SGPX tab in every league, the NBA's and hockey's included, which make none; it now shows only in the NFL and
+college.
+
 **ACN. SGPX tickets are followed live** (step 879; 22 November). Nothing to run. The Live tab follows each game
 report's tickets leg by leg; an SGPX ticket spans games, so it had no game to sit under. Every posted SGPX ticket, a
 window's or the day's, is now followed once any of its games is under way: one "SGPX parlays" card on the Live tab,
