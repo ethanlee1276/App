@@ -25,6 +25,18 @@ web/data/inactives_watch.json after each tick in a window (counts and times, no 
 included, stay in data/cache/inactiveswatch/. Nothing on the site reads either: a feed that proves faster is
 switched in by a later step. Off without a deploy: ``sudo ./deploy/setenv.sh QB_INACTIVES_WATCH off``.
 ``python3 -m engine.inactiveswatch`` prints the report, read-only.
+
+THE BOARD, ASKED FRESH (step ACP, 22 November). Sunday night's reads: the Vikings' five inactives carried ESPN's
+filing stamp of 00:00 UTC and the 49ers' five 00:02. The game's summary showed the Vikings' at 00:01 and the
+49ers' one by one from 00:08; the injury board, read every minute, showed the Vikings' at 00:07 and the 49ers' at
+00:17, fifteen minutes after their stamp. The summary is no substitute for the board: on every club read that day
+it showed five inactives at most, where the board showed the whole list (six or seven). The core API's roster
+flagged every one of the ten ``didNotPlay`` 17 and 27 minutes before the board (10 and 12 before the stamps), but
+eight more men with them, so as it stands it is not the list. So the question is whether the board is late or
+only a copy of it on the way is. Each tick now also asks the board's own page with a query of its own
+(``fresh_url``), which no copy on the way can answer for, as the feed ``board_fresh``, timed against the board
+like the others. A board that shows a list sooner asked this way is the faster source, whole: a later step
+switches the build's own read in the window to it.
 """
 
 from __future__ import annotations
@@ -68,6 +80,14 @@ SHORT = 40
 _WORD = re.compile(r"\binactive\b", re.I)
 
 _STATE: dict = {}       # day -> that day's notes
+
+
+def fresh_url(now: float) -> str:
+    """The injury board's page with a query of its own (step ACP): a copy on the way keyed on the address cannot
+    answer for it."""
+    from .sources.espninjuries import LEAGUES
+    url = LEAGUES["nfl"]
+    return f"{url}{'&' if '?' in url else '?'}_={int(now)}"
 _TURN = [0]
 _PRUNED = [""]
 
@@ -352,6 +372,30 @@ def _tick(clock, scoreboard, board, get, root, out) -> float:
     except Exception as exc:                                   # noqa: BLE001
         for g in games:
             _feed(st, g, "board")["status"] = type(exc).__name__
+    # The board asked fresh (step ACP): its own page, past any copy on the way, once a tick for every game.
+    try:
+        status, page, size = (get or _get)(fresh_url(now))
+        t = clock()
+        rows = None
+        if page is not None:
+            from .sources.espninjuries import parse_injuries
+            rows = parse_injuries(page)
+        found = board_marks(rows, games, t) if rows is not None else {}
+        for g in games:
+            rec = _feed(st, g, "board_fresh")
+            seen = rec.setdefault("seen", {})
+            iv = (t - seen["*"]) if "*" in seen else None
+            seen["*"] = round(t, 1)
+            if rows is None:
+                rec["reads"] = int(rec.get("reads") or 0) + 1
+                rec["status"] = status
+                continue
+            rec["bytes"] = size
+            take(rec, {k: v for k, v in found.items() if k[0] in (g["home"], g["away"])}, t, iv,
+                 (g["home"], g["away"]), status)
+    except Exception as exc:                                   # noqa: BLE001
+        for g in games:
+            _feed(st, g, "board_fresh")["status"] = type(exc).__name__
     # The other feeds, in turn.
     jobs = []
     for g in games:
@@ -503,7 +547,7 @@ def report(st: dict) -> list:
 def _publish(st: dict, now: float, out=None) -> None:
     p = Path(out or OUT)
     doc = {"generated_at": _iso(now), "day": st.get("day"), "window_min": list(WINDOW_MIN),
-           "feeds": ["board", *FEEDS], "games": report(st)}
+           "feeds": ["board", "board_fresh", *FEEDS], "games": report(st)}
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")

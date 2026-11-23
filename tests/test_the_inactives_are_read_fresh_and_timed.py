@@ -142,7 +142,8 @@ def test_the_watch_times_each_feed_against_the_board_and_publishes_no_names():
 
     kw = dict(now=lambda: now[0], scoreboard=_scoreboard(T0), board=read_board, get=get, root=root, out=out)
     assert W.watch_once(**kw) == W.TICK_S
-    assert len(asked) == 5 and sum("roster" in u for u in asked) == 2, asked
+    assert len(asked) == 6 and sum("roster" in u for u in asked) == 2, asked
+    assert sum("/injuries?_=" in u for u in asked) == 1, "the board asked fresh, once a tick (step ACP)"
     board["rows"] = [{"team": "San Francisco 49ers", "player": "Jordan Mason", "status": "Out", "date": filed,
                       "comment": "Mason is inactive for Sunday's game.",
                       "face": "https://a.espncdn.com/i/headshots/nfl/players/full/11.png"}]
@@ -210,9 +211,11 @@ def test_a_full_slate_is_read_in_turn_and_nothing_is_asked_out_of_a_window():
 
     kw = dict(scoreboard=_scoreboard(T0, T0, T0, T0), board=lambda: ([], T0), get=get, root=root, out=out)
     W.watch_once(now=lambda: T0 - 60 * 60, **kw)
-    assert len(asked) == W.PER_TICK == 16
+    assert len(asked) == W.PER_TICK + 1 == 17, "the pages in turn, and the board asked fresh"
     W.watch_once(now=lambda: T0 - 59 * 60, **kw)
-    assert len(asked) == 32 and len(set(asked)) == 20, "the second tick goes on where the first stopped"
+    pages = [u for u in asked if "/injuries?_=" not in u]
+    assert len(pages) == 32 and len(set(pages)) == 20, "the second tick goes on where the first stopped"
+    assert len({u for u in asked if "/injuries?_=" in u}) == 2, "each fresh read its own address"
     asked.clear()
     assert W.watch_once(now=lambda: T0 - 3 * 3600, **kw) == W.IDLE_S and asked == [], "out of the window"
     assert W.watch_once(now=lambda: T0 + 21 * 60, **kw) == W.IDLE_S and asked == []
@@ -225,6 +228,47 @@ def test_a_full_slate_is_read_in_turn_and_nothing_is_asked_out_of_a_window():
         assert W.watch_once(now=lambda: T0 - 60 * 60, **kw) == W.IDLE_S and asked == []
     finally:
         os.environ.pop(W.ENV, None)
+
+
+def test_the_board_asked_fresh_is_timed_against_its_copy():
+    # Sunday night, 22 November: the Vikings' list carried a filing stamp of 00:00 UTC, the game's summary showed it
+    # at 00:01 and the board we read at 00:07. The board's own page, asked with a query of its own, is timed as a
+    # feed of its own (step ACP).
+    _fresh()
+    root, out = Path(tempfile.mkdtemp()), Path(tempfile.mkdtemp()) / "w.json"
+    now = [T0 - 80 * 60]
+    filed = dt.datetime.fromtimestamp(T0 - 80 * 60 - 30, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    page = {"injuries": [{"displayName": "Minnesota Vikings", "injuries": [
+        {"athlete": {"displayName": "Ivan Pace Jr.", "headshot": {"href": "https://a.espncdn.com/x/full/4.png"}},
+         "status": "Out", "date": filed, "shortComment": "Pace is inactive for Sunday's game.", "details": {}}]}]}
+    asked = []
+
+    def get(url):
+        asked.append(url)
+        if "/injuries?_=" in url:
+            return "ok", page, 5000
+        return "HTTP 404", None, 0
+
+    copy = {"rows": [], "t": now[0] - 20}
+    kw = dict(now=lambda: now[0], scoreboard=_scoreboard(T0), board=lambda: (copy["rows"], copy["t"]), get=get,
+              root=root, out=out)
+    W.watch_once(**kw)
+    assert asked[0] == W.fresh_url(T0 - 80 * 60) and asked[0].startswith(
+        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries?_=")
+    # The copy the build reads, fetched afresh every minute, shows him only six minutes later.
+    from engine.sources.espninjuries import parse_injuries
+    for i in range(1, 7):
+        now[0] += 60
+        copy["t"] = now[0] - 5
+        if i == 6:
+            copy["rows"] = parse_injuries(page)
+        W.watch_once(**kw)
+    doc = json.loads(out.read_text(encoding="utf-8"))
+    assert "board_fresh" in doc["feeds"]
+    mn = doc["games"][0]["clubs"]["MIN"]
+    assert mn["board"]["n"] == 1 and mn["board_fresh"]["n"] == 1 and mn["board_fresh"]["both"] == 1
+    assert mn["board_fresh"]["ahead_min"] > 3, mn
+    assert "pace" not in out.read_text(encoding="utf-8").lower(), "counts and times only"
 
 
 def _lists(clubs, filed):
