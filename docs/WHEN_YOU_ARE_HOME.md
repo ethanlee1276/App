@@ -9338,6 +9338,27 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACQ. A tab you just tapped stays readable** (step 882; 22 November). Nothing to run. On a phone, the sub-tab you
+had just tapped (Report Picks' SGPX parlays or Record, and every other row of sub-tabs) turned a faint grey with
+near-black writing (measured in a phone-sized browser) until you tapped somewhere else. A phone keeps the hover look
+on the last thing touched, and a site-wide hover style added in the "no hard lines" pass came later than the
+selected tab's gold and won over it. The Fantasy room cards had the same bug in September, and their fix stayed;
+this is every other sub-tab row. The selected tab now keeps its gold whatever the pointer does.
+
+**ACP. Sunday night's inactives, and the board asked fresh** (step 881; 22 November). Nothing to run. The watcher's
+first whole window, Vikings at 49ers. The Vikings' five inactives carry ESPN's filing stamp of 7:00 PM ET and the
+49ers' five 7:02. ESPN's game summary showed the Vikings' at 7:01 and the 49ers' one by one from 7:08. The injury
+board our picks wait for, read every minute, showed the Vikings' at 7:07 and the 49ers' at 7:17, fifteen minutes
+after their stamp, so the game's picks could not post before then. ESPN's game roster had marked all ten "did not
+play" well before: 17 and 27 minutes before the board, and 10 to 12 minutes before ESPN's own stamps. But it marked
+eight more men the same way (five Vikings, three 49ers), so as it stands it can't be read as the list; an in-game
+read tonight says whether those eight clear once the game is on, as the afternoon games' did. The summary can't
+replace the board either: on every club read Sunday it showed five inactives at most, where the board showed the
+whole list (six or seven). So the board is the complete list but slow, and the question is whether ESPN's board
+itself is slow or only a copy of it on the way. The watcher now also asks the board's own page with an address of
+its own every minute (no copy on the way can answer for it) and times it against our usual read. If Monday night's
+game shows the lists sooner that way, the next step points the picks' own read at it.
+
 **Decision 19, for you: NBA chances that say less than they win** (22 November). Nothing changes until you answer.
 The NBA's Most Likely picks win more often than they say. Over 3,371 graded picks the board said 61.2% and won
 64.2%. The list's overs said 61.3% and won 65.5% (1,375 picks); its unders said 61.8% and won 64.3% (1,711). Both

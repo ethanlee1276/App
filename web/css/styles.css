@@ -10951,6 +10951,11 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
 .btn, .btn.ghost, .chip, .subnav-btn, .ob-pill, .ob-tier-chip, .ob-filter, .ob-view-btn, .mode-btn,
 .hd-o, .ob-odds, .gc-mk { border-color: transparent; background-color: var(--fill-tone); }
 .btn:hover, .btn.ghost:hover, .subnav-btn:hover, .mode-btn:hover { border-color: transparent; background-color: var(--fill-tone-2); }
+/* …and the selected sub-tab keeps its fill whatever the pointer does (22 November 2026). The hover just above comes
+   later than `.subnav-btn.active` and out-ranked it, and a phone keeps :hover on the last thing touched: the tab
+   just tapped sat in the hover grey wearing brand-ink text, the one tab on the page that could not be read. The room
+   cards had the same bug on 14 September (`.room-card.active:hover`); this is every other sub-tab row. */
+.subnav-btn.active:hover { background-color: var(--brand); color: var(--brand-ink); }
 .prof-tab, .tf-btn, .stk-namebox button, .msg-tabs, .rec-scope, .hd-chip, .lb-chip, .more-pill, .mbc-chip, .al-cat,
 .pbp-parkchip, .ask-chip, .gs-chip, .theme-toggle { border-color: transparent; background-color: var(--fill-tone); }
 .lg-badge, .ml-tag, .ms-read-tag, .status-badge, .hd-ribbon { border-color: transparent; }
