@@ -76,6 +76,8 @@ LINK_WORDS = re.compile(r"availab|injur|fbreport", re.I)
 STRONG_WORDS = re.compile(r"availability[-_ ]?report|fbreport|availability", re.I)
 #: A data address a page's scripts name (a JSON feed the page fills itself from).
 API_RE = re.compile(r"""["']((?:https?://[^"'\s]{6,300}?|/)(?:api|json|feed)[^"'\s]{0,200})["']""", re.I)
+#: A page's embedded frames (an iframe, embed or object): a report page may show a sheet published elsewhere.
+FRAME_RE = re.compile(r"""<(?:iframe|embed|object)[^>]+(?:src|data)=["']([^"']+)["']""", re.I)
 #: A page's own script files (a page built by scripts reads its data from one of them).
 SCRIPT_RE = re.compile(r"""<script[^>]+src=["']([^"']+)["']""", re.I)
 #: Any address a script names: quoted, absolute or rooted.
@@ -259,6 +261,36 @@ def _next_data(body: str, limit: int = 3) -> list:
     return out or [data[:600]]
 
 
+#: AN APP'S OWN PAGE DATA. The SEC's site is an Inertia app (its bundle, read by the fifth look, names
+#: vendor-inertiajs and an EmbedIframe component): such a page carries its whole data in one attribute,
+#: <div id="app" data-page="{&quot;component&quot;:...,&quot;props&quot;:{...}}">.
+DATA_PAGE_RE = re.compile(r'data-page="([^"]{20,})"', re.S)
+
+
+def app_data(body: str) -> dict | None:
+    """What an app page's data-page attribute says: its component, its props' keys, the text around a report's
+    words, and the whole of it when it is small. None when the page has none."""
+    import html as _html
+    m = DATA_PAGE_RE.search(body)
+    if not m:
+        return None
+    raw = _html.unescape(m.group(1))
+    out = {"len": len(raw)}
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        out["head"] = raw[:3000]
+        return out
+    props = data.get("props") if isinstance(data, dict) else None
+    out["component"] = data.get("component") if isinstance(data, dict) else None
+    out["props_keys"] = sorted(props)[:40] if isinstance(props, dict) else []
+    out["bits"] = [raw[max(0, x.start() - 300):x.start() + 900]
+                   for x in re.finditer(r"availab|Questionable|Doubtful|Game[- ]Time|iframe|embed", raw, re.I)][:8]
+    if len(raw) <= 40000:
+        out["whole"] = raw
+    return out
+
+
 def look_page(url: str, get=_get) -> tuple[dict, list]:
     """(what one page says, the links on it worth following)."""
     status, ctype, raw = get(url)
@@ -317,6 +349,13 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     hints = list(dict.fromkeys(m.group(1) for m in HINT_RE.finditer(body)))
     if hints:
         rec["hints"] = hints[:25]
+    app = app_data(body)
+    if app:
+        rec["app"] = app
+    frames = list(dict.fromkeys(urllib.parse.urljoin(url, m.group(1)) for m in FRAME_RE.finditer(body)
+                                if not m.group(1).startswith(("about:", "javascript:"))))
+    if frames:
+        rec["frames"] = frames[:12]
     if rec["words"] < 200:                                     # a page its scripts build: name the scripts
         rec["scripts"] = list(dict.fromkeys(urllib.parse.urljoin(url, m.group(1))
                                             for m in SCRIPT_RE.finditer(body)))[:25]
@@ -332,13 +371,13 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
             status = bool(STATUS_RE.search(x))
             feature = bool(re.search(r"feature-pages|availab|fbreport", x, re.I)) and not x.startswith("(function(i,s,o,g")
             inv.append({"len": len(x), "types": types, "status_words": status, "feature": feature})
-            if status or feature or any(t not in NAV_TYPES for t in types):
+            if status or feature:
                 scored.append((status, feature, x))
         rec["inline_count"] = len(inv)
         rec["inline_inventory"] = inv[:40]
-        keep = [x[:6000] for _st, _ft, x in sorted(scored, key=lambda t: (not t[0], not t[1]))]
+        keep = [x[:4000] for _st, _ft, x in sorted(scored, key=lambda t: (not t[0], not t[1]))]
         if keep:
-            rec["inline"] = keep[:8]
+            rec["inline"] = keep[:4]
     nd = _next_data(body)
     if nd:
         rec["next_data"] = nd
@@ -352,6 +391,7 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     feature = [re.sub(r"\.css(\?.*)?$", ".js", h) for h in named if "feature-pages" in h and ".css" in h]
     # A SITE'S OWN APP BUNDLE (the SEC's /dist/assets/app-*.js): the page's data addresses are in it.
     bundles = [x for x in rec.get("scripts") or [] if re.search(r"/dist/assets/app[-.][^/]*\.js", x)]
+    rec["_frames"] = [canon(u) for u in frames if u.startswith("http")]
     return rec, list(dict.fromkeys(canon(u) for u in [x["href"] for x in follow] + named + feature + bundles))
 
 
@@ -417,7 +457,10 @@ def look(sources=None, get=_get, follow: int = FOLLOW, depth: int = DEPTH) -> di
                 rec, links = look_page(url, get)
                 rec["step"] = level
                 pages.append(rec)
-                nxt += [u for u in links if u not in seen and mine(u, homes)]
+                # A FRAME THE CONFERENCE'S OWN PAGE EMBEDS is read wherever it lives (a published sheet is
+                # usually on another site): the page chose to show it.
+                embedded = rec.pop("_frames", [])
+                nxt += [u for u in links if u not in seen and mine(u, homes)] + [u for u in embedded if u not in seen]
             step = list(dict.fromkeys(nxt))[:follow]
             if not step:
                 break
@@ -429,13 +472,22 @@ def write(found: dict, now: float, out=None) -> Path:
     p = Path(out or OUT)
     doc = {"generated_at": _iso(now), "every_s": EVERY_S, "sources": found}
     text = json.dumps(doc, separators=(",", ":"))
-    if len(text) > MAX_OUT:                                    # the snippets and tables go first, then pages
+    # TOO BIG: fields go, least needed first, and never a cut through the middle (the fifth look's file was cut at
+    # 600,000 characters and could not be read).
+    for trim in (("inline_inventory",), ("inline",), ("js_bits", "js_head"), ("snippets",), ("pdf_text",), ("app",),
+                 ("scripts", "apis", "headings"), ("links", "pdfs", "hints")):
+        if len(text) <= MAX_OUT:
+            break
         for v in found.values():
             for pg in v.get("pages") or []:
-                pg.pop("snippets", None)
-                for t in pg.get("tables") or []:
-                    t["first"] = t["first"][:4]
-        text = json.dumps(doc, separators=(",", ":"))[:MAX_OUT]
+                for k in trim:
+                    pg.pop(k, None)
+        text = json.dumps(doc, separators=(",", ":"))
+    while len(text) > MAX_OUT and any(len(v.get("pages") or []) > 1 for v in found.values()):
+        for v in found.values():
+            if len(v.get("pages") or []) > 1:
+                v["pages"] = v["pages"][:-1]
+        text = json.dumps(doc, separators=(",", ":"))
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
     tmp.write_text(text, encoding="utf-8")

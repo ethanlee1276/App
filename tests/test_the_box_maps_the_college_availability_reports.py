@@ -173,6 +173,41 @@ def test_every_inline_script_is_counted_and_the_report_bearing_ones_kept_and_an_
     assert got["js_bits"] and "availability-reports" in got["js_bits"][0]
 
 
+def test_a_frame_the_report_page_embeds_is_read_wherever_it_lives():
+    page = b"<p>Availability</p><iframe src='https://docs.google.com/spreadsheets/d/e/2PACX/pubhtml?widget=true'></iframe>"
+    sheet = b"<table><tr><td>Team</td><td>Player</td><td>Status</td></tr><tr><td>Clemson</td><td>A Back</td><td>Out</td></tr></table>"
+    site = {"https://conf.test/fb.aspx": ("ok", "text/html", page),
+            "https://docs.google.com/spreadsheets/d/e/2PACX/pubhtml?widget=true": ("ok", "text/html", sheet)}
+    found = P.look({"conf": ("https://conf.test/fb.aspx",)}, get=lambda u: site.get(u, ("HTTP 404", "", b"")))
+    pages = {pg["url"]: pg for pg in found["conf"]["pages"]}
+    assert pages["https://conf.test/fb.aspx"]["frames"] == ["https://docs.google.com/spreadsheets/d/e/2PACX/pubhtml?widget=true"]
+    sheet_pg = pages["https://docs.google.com/spreadsheets/d/e/2PACX/pubhtml?widget=true"]
+    assert sheet_pg["tables"][0]["first"][1] == ["Clemson", "A Back", "Out"], "the embedded sheet's rows, read"
+    assert all("_frames" not in pg for pg in found["conf"]["pages"])
+
+
+def test_a_file_too_big_loses_fields_never_its_ending():
+    import tempfile as _t
+    big = {"x": {"pages": [{"url": str(i), "inline": ["a" * 5000] * 4, "pdf_text": "b" * 4000} for i in range(60)]}}
+    out = Path(_t.mkdtemp()) / "p.json"
+    P.write(big, 0, out)
+    text = out.read_text()
+    doc = json.loads(text)                                     # whole JSON, always
+    assert len(text) <= P.MAX_OUT and len(doc["sources"]["x"]["pages"]) == 60, "fields went, not pages"
+    assert "inline" not in doc["sources"]["x"]["pages"][0]
+
+
+def test_an_app_page_gives_its_own_data_from_its_data_page_attribute():
+    import html as _h
+    data = {"component": "Reports/Show", "props": {"report": {"teams": [{"name": "Alabama", "players": [
+        {"name": "A Back", "status": "Questionable"}]}]}, "menus": []}, "version": "abc"}
+    body = f'<div id="app" data-page="{_h.escape(json.dumps(data))}"></div>'.encode()
+    rec, _links = P.look_page("https://www.secsports.com/fbreports", get=lambda u: ("ok", "text/html", body))
+    app = rec["app"]
+    assert app["component"] == "Reports/Show" and app["props_keys"] == ["menus", "report"]
+    assert any("Questionable" in b for b in app["bits"]) and json.loads(app["whole"]) == data
+
+
 def test_the_file_is_written_whole_and_small_and_the_clock_holds_it_to_every_three_hours():
     out = Path(tempfile.mkdtemp()) / "probe.json"
     P._LAST["at"] = 0.0
