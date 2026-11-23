@@ -54,7 +54,9 @@ def test_it_follows_the_availability_links_two_steps_and_keeps_what_a_reader_nee
                                                               ("ok", "application/pdf", pdf)}))
     pages = {pg["url"]: pg for pg in found["conf"]["pages"]}
     assert set(pages) == {"https://conf.test/", "https://conf.test/fb/availability-report",
-                          "https://cdn.store.test/osu-mich.pdf", "https://conf.test/fb/availability/osu-mich"}, pages
+                          "https://cdn.store.test/osu-mich.pdf", "https://conf.test/fb/availability/osu-mich",
+                          # the data address its script names, on the conference's own site
+                          "https://api.conf.test/football/availability.json"}, pages
     rep = pages["https://conf.test/fb/availability-report"]
     assert rep["step"] == 1 and rep["tables"][0]["first"] == [["Player", "Pos", "Status"], ["John Smith", "WR", "Out"]]
     assert rep["apis"] == ["https://api.conf.test/football/availability.json"]
@@ -87,7 +89,13 @@ def test_a_page_built_by_scripts_says_where_it_fetches_the_reports_and_where_it_
     assert rec["landed"] == "https://conf.test/fb/reports"
     assert rec["hints"] == ["/api/v2/fbreports?week=13", "https://cdn.x.test/availability/w13.json",
                             "/fbreports/2026/11/22/osu-mich"]
-    assert links == ["https://conf.test/fbreports/2026/11/22/osu-mich"], "a reports page's own links are followed"
+    assert links == ["https://conf.test/fbreports/2026/11/22/osu-mich", "https://conf.test/api/v2/fbreports?week=13",
+                     "https://cdn.x.test/availability/w13.json"], "its links, then the addresses its scripts name"
+    assert rec["scripts"] == [] and rec["words"] < 200
+    found = P.look({"conf": ("https://conf.test/fbreports",)},
+                   get=lambda u: ("ok", "text/html", body) if u == "https://conf.test/fbreports" else ("HTTP 404", "", b""))
+    assert "https://cdn.x.test/availability/w13.json" not in [pg["url"] for pg in found["conf"]["pages"]], \
+        "another site's address is never read"
     assert all(any("fbreport" in u.lower() or "availab" in u.lower() for u in starts)
                for name, starts in P.SOURCES.items() if name not in ("cfp", "nba_official")), \
         "each conference's look starts where its reports are posted"
@@ -106,6 +114,24 @@ def test_the_nbas_own_report_is_asked_for_by_its_time_newest_first():
     assert rec["url"] == urls[1] and rec["pdf_text"] == "Injury Report: 11/23/26 05:30 PM"
     assert rec["asked"] == ["HTTP 404 Injury-Report_2026-11-23_05_45PM.pdf", "ok Injury-Report_2026-11-23_05_30PM.pdf"]
     assert P.look_nba_pdf(now, get=lambda u: ("HTTP 404", "", b""))["status"] == "none found"
+
+
+def test_a_page_that_turns_the_plain_request_away_is_asked_once_more_under_a_plain_reader_name():
+    calls = []
+
+    def fake(url, agent):
+        calls.append(agent)
+        return ("HTTP 404", "", b"") if agent is None else ("ok", "text/html", b"<title>ACC</title>")
+    real = P._get_as
+    P._get_as = fake
+    try:
+        status, ctype, raw = P._get("https://theacc.com/x")
+    finally:
+        P._get_as = real
+    assert status == "ok" and ctype.endswith("; agent=plain") and calls == [None, P.PLAIN_AGENT]
+    assert "qellys" not in P.PLAIN_AGENT.lower(), "nothing that names this site goes out in a header"
+    rec, _ = P.look_page("https://theacc.com/x", get=lambda u: ("ok", "text/html; agent=plain", b"<p>x</p>"))
+    assert rec["agent"] == "plain"
 
 
 def test_the_file_is_written_whole_and_small_and_the_clock_holds_it_to_every_three_hours():

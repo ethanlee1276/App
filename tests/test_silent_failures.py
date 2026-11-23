@@ -137,6 +137,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # error's own name as its status ("URLError", "HTTP 404"), kept on the feed and published beside its
         # counts; a quiet read returns "ok", so the two never look alike.
         "_get",
+        # THE AVAILABILITY PROBE'S ONE READ (engine/cfbavailprobe._get_as, decision 20): the same contract — a failed
+        # read returns its error's name as its status ("HTTP 403", "URLError"), kept on the page's record in the
+        # published file; a quiet read returns "ok".
+        "_get_as",
         # THE REPORTS' SGPX SECTION (engine/gamereport._sgpx, step ACI): it returns nothing either way, and a
         # failure prints its own line in the build log ("the SGPX parlays not added to the reports"), the
         # reports kept as they were.

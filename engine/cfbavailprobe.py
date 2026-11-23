@@ -55,14 +55,13 @@ MAX_BYTES = 3_000_000
 #: reporting rules (ACC, Big 12) and its reports page as the press names it (SEC, Big Ten: "FBReports") are where
 #: the reports are said to be posted, so the look starts there, with the football pages behind them.
 SOURCES = {
-    "big_ten": ("https://bigten.org/fbreports", "https://bigten.org/fb/article/60284/",
+    # The second look (18:11 UTC) found each of these two named in its football page's scripts.
+    "big_ten": ("https://bigten.org/sports/2026/9/10/FB_Availability_Reports.aspx",
                 "https://bigten.org/sports/football"),
-    "sec": ("https://www.secsports.com/FBreports", "https://www.secsports.com/fbreports",
-            "https://www.secsports.com/sport/football"),
+    "sec": ("https://www.secsports.com/fbreports", "https://www.secsports.com/sport/football"),
     "acc": ("https://theacc.com/sports/2025/8/28/availability-reporting.aspx", "https://theacc.com/fbreports",
             "https://theacc.com/sports/football"),
-    "big_12": ("https://big12sports.com/sports/2025/8/21/availability-reporting.aspx",
-               "https://big12sports.com/fbreports", "https://big12sports.com/sports/football"),
+    "big_12": ("https://big12sports.com/sports/2025/8/14/FBreporting.aspx", "https://big12sports.com/sports/football"),
     "cfp": ("https://collegefootballplayoff.com/",),
     # THE NBA'S OWN INJURY REPORT: the league posts it as a PDF through every game day, ahead of ESPN's board
     # (which the NBA build reads, with its blurbs' words, step ABU). Mapped the same way, for the same reader.
@@ -78,7 +77,9 @@ LINK_WORDS = re.compile(r"availab|injur|fbreport", re.I)
 #: The strongest of them, followed first.
 STRONG_WORDS = re.compile(r"availability[-_ ]?report|fbreport|availability", re.I)
 #: A data address a page's scripts name (a JSON feed the page fills itself from).
-API_RE = re.compile(r"""["'](https?://[^"'\s]{6,300}?(?:api|json|feed)[^"'\s]{0,200})["']""", re.I)
+API_RE = re.compile(r"""["']((?:https?://[^"'\s]{6,300}?|/)(?:api|json|feed)[^"'\s]{0,200})["']""", re.I)
+#: A page's own script files (a page built by scripts reads its data from one of them).
+SCRIPT_RE = re.compile(r"""<script[^>]+src=["']([^"']+)["']""", re.I)
 #: Any quoted text in a page (its scripts included) that names the reports: where a page built by scripts
 #: fetches them from.
 HINT_RE = re.compile(r"""["']([^"'<>\s]{0,240}(?:availab|fbreport)[^"'<>\s]{0,240})["']""", re.I)
@@ -163,10 +164,29 @@ class _Page(HTMLParser):
             self.text.append(s)
 
 
+#: A PLAIN CLIENT NAME, asked under when a page turns urllib's own User-Agent away. The second look found the
+#: ACC's every page answering 404 and the NBA's report files 403 to it, while the Big Ten's and the Big 12's
+#: football pages answered it. A generic reader's name: no browser's, and nothing that names this site.
+PLAIN_AGENT = "availability-reader/1.0"
+
+
 def _get(url: str):
-    """(status, content type, body bytes): one plain GET, no User-Agent of ours, packed bodies unpacked."""
+    """(status, content type, body bytes): one plain GET (urllib's own User-Agent), packed bodies unpacked; a page
+    that answers 403 or 404 is asked once more under PLAIN_AGENT, and the type says so ("; agent=plain")."""
+    status, ctype, raw = _get_as(url, None)
+    if status in ("HTTP 403", "HTTP 404"):
+        s2, c2, r2 = _get_as(url, PLAIN_AGENT)
+        if s2 == "ok":
+            return s2, c2 + "; agent=plain", r2
+    return status, ctype, raw
+
+
+def _get_as(url: str, agent):
     try:
-        req = urllib.request.Request(url, headers={"Accept-Encoding": "gzip"})
+        headers = {"Accept-Encoding": "gzip"}
+        if agent:
+            headers["User-Agent"] = agent
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
             ctype = resp.headers.get("Content-Type") or ""
             final = resp.geturl()
@@ -233,9 +253,11 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     """(what one page says, the links on it worth following)."""
     status, ctype, raw = get(url)
     rec = {"url": url, "status": status, "type": ctype.split(";")[0].strip(), "bytes": len(raw)}
-    landed = re.search(r"landed=(\S+)", ctype)
+    landed = re.search(r"landed=([^;\s]+)", ctype)
     if landed:
         rec["landed"] = landed.group(1)
+    if "agent=plain" in ctype:
+        rec["agent"] = "plain"
     if status != "ok":
         return rec, []
     if "pdf" in ctype.lower() or raw[:5] == b"%PDF-":
@@ -275,11 +297,18 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     hints = list(dict.fromkeys(m.group(1) for m in HINT_RE.finditer(body)))
     if hints:
         rec["hints"] = hints[:25]
+    if rec["words"] < 200:                                     # a page its scripts build: name the scripts
+        rec["scripts"] = list(dict.fromkeys(urllib.parse.urljoin(url, m.group(1))
+                                            for m in SCRIPT_RE.finditer(body)))[:25]
     nd = _next_data(body)
     if nd:
         rec["next_data"] = nd
     follow = sorted(rec["links"], key=lambda x: (not STRONG_WORDS.search(x["href"] + " " + x["text"]),))
-    return rec, [x["href"] for x in follow]
+    # A report page a script names (the second look found the Big Ten's and the Big 12's this way) is followed
+    # after the links, when it reads like a page: an address, not a word.
+    named = [urllib.parse.urljoin(url, h) for h in rec.get("hints") or []
+             if (h.startswith("/") or h.startswith("http")) and STRONG_WORDS.search(h)]
+    return rec, list(dict.fromkeys([x["href"] for x in follow] + named))
 
 
 def nba_pdf_urls(now: float, back: int = NBA_BACK_SLOTS) -> list:

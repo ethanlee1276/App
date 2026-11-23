@@ -9349,9 +9349,13 @@ those pages are built by scripts in the reader's browser (the Big Ten's football
 pages turned a plain request away, so it now starts at the report pages and also notes any address a page's scripts
 name for the reports. It maps the NBA's own injury report too: the league posts it as a PDF every quarter hour on
 game days at an address made of its time, ahead of ESPN's board, so the box asks for the newest one directly (the
-index page turned the first look away). Nothing reads that file and no pick moves. From it I write each conference's
-reader, check it against this week's published reports (rivalry week, 28 and 29 November), and only then put its
-players into college picks, game reports and the Injuries page. Switch: `QB_CFB_AVAIL_PROBE=off`.
+index page turned the first look away). The second look found the Big Ten's and the Big 12's report pages named in
+their football pages' scripts, and the SEC's reports page (built by scripts); the ACC's pages and the NBA's files
+turned the plain request away. So the third look follows any report page a script names, lists a script-built page's
+script files, and asks a page that turns it away once more under a plain reader's name (no browser's, and nothing
+that names this site). Nothing reads that file and no pick moves. From it I write each conference's reader, check it
+against this week's published reports (rivalry week, 28 and 29 November), and only then put its players into college
+picks, game reports and the Injuries page. Switch: `QB_CFB_AVAIL_PROBE=off`.
 
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
