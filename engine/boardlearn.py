@@ -12,7 +12,10 @@ had to type on the box:
     from the same maker (the list, the matchup picks, the scenarios, the
     bold picks) on the same side have earned;
   * engine/likelyctx (NFL): the same for the scout's football flags,
-    stacked on likelycal.
+    stacked on likelycal;
+  * engine/likelycal's agreement correction (the NBA and hockey, decision
+    19): where our number and the price agree on a side, the chance those
+    picks have actually won, above both where the record proves it.
 
 Both were built to be safe to automate: they fit on the RAW claim the
 journal keeps (so a refit never learns its own correction), they score
@@ -170,6 +173,22 @@ def learn_sport(lconn, hconn, sport: str, log=print) -> dict:
     elif _drop(likelycal, sport):
         log(f"  board learning ({sport}): the record no longer proves its correction — removed")
     entry["calibration"] = {**_verdict(cal), "groups": cal.get("groups") or {}}
+    # WHEN OUR NUMBER AND THE PRICE AGREE (decision 19; Ethan, 23 November:
+    # "All I want is picks that win the most on there, and we need to be
+    # truthful"): in a league where the record may raise a chance, the picks
+    # where the two agree learn what they win, on the same held-out bar,
+    # against the number the k above leaves them at. Before the scout's fit,
+    # which stacks on whatever the board shows after this.
+    # Switched off (QB_RECORD_AGREE=off), nothing is fitted, saved or removed:
+    # the board reads no agreement store while it is off.
+    if likelycal.agree_on(sport):
+        ag = likelycal.fit_agree(lconn, sport, cal)
+        if ag["passed"]:
+            likelycal.save_agree(ag)
+            log(f"  board learning ({sport}): agreement correction adopted for {len(ag['groups'])} maker(s)")
+        elif likelycal.drop_agree(sport):
+            log(f"  board learning ({sport}): the record no longer proves its agreement correction — removed")
+        entry["agree"] = {**_verdict(ag), "on": ag["on"], "agreeing": ag["agreeing"], "groups": ag["groups"]}
     if sport in likelyctx.LEARNS and hconn is not None:
         flagged = likelyctx.flagged_journal(lconn, hconn, sport)
         ctx = likelyctx.fit(lconn, hconn, sport, flagged=flagged)
@@ -256,6 +275,10 @@ def main(argv=None) -> int:
                 print(f"    {cut:8} {s['key']:38} n {s['n']:4}  hit {s['hit']:.0%}  said {s['said']:.0%}  {s['verdict']}")
         c = e["calibration"]
         print(f"    record correction: {'ADOPTED' if c['passed'] else 'not proven'}")
+        if "agree" in e:
+            ag = e["agree"]
+            print(f"    when ours and the price agree ({ag['agreeing']} picks): "
+                  f"{'ADOPTED' if ag['passed'] else 'not proven'}")
         if "scout" in e:
             print(f"    scout correction:  {'ADOPTED' if e['scout']['passed'] else 'not proven'} "
                   f"({e['scout']['matched']} picks matched to their game)")

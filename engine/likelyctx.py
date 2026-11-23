@@ -456,25 +456,35 @@ def maker(sources) -> str:
     return "list"
 
 
-def _cal_base(r: dict, q: float, cal: dict) -> float:
+def _cal_base(r: dict, q: float, cal: dict, sport: str = "", agree: dict | None = None) -> float:
     """What the board shows once likelycal has run — the number this
-    correction is stacked on, so the two never correct the same loss twice."""
-    from .likelycal import k_for, side_of
+    correction is stacked on, so the two never correct the same loss twice.
+    In a league where the record may raise a chance that includes the raise
+    toward the price and, where our number and the price agree, the
+    agreement correction (``agree``: its groups for this league), as
+    likelycal.apply shows them."""
+    from .likelycal import agree_chance, agree_group, agrees, k_for, raises, side_of
+    group = f"{maker(r.get('sources'))}|{side_of(r.get('side'))}"
+    p = float(r["p"])
+    a = (agree or {}).get(agree_group(group))
+    if a and agrees(p, q):
+        return agree_chance(p, q, a["w"])
     # The market too: where the record's correction is kept by market
     # (likelycal, BY MARKET TOO), the board shows that group's number.
-    g = k_for(cal, f"{maker(r.get('sources'))}|{side_of(r.get('side'))}", r.get("market")) or {}
+    g = k_for(cal, group, r.get("market")) or {}
     k = g.get("k", 1.0)
-    return float(r["p"]) if k >= 1.0 else shrink(float(r["p"]), q, k)
+    return p if k >= 1.0 else shrink(p, q, k, raises(sport))
 
 
-def _rows_for_fit(flagged: list[dict], cal: dict | None = None) -> list[dict]:
+def _rows_for_fit(flagged: list[dict], cal: dict | None = None, sport: str = "",
+                  agree: dict | None = None) -> list[dict]:
     out = []
     for r in flagged:
         q = price_chance(r.get("odds"))
         if q is None:
             continue
         game = f"{r['day']}|{(r.get('ctx') or {}).get('game_id') or r.get('team') or r['player']}"
-        out.append({"flags": list(r["flags"]), "p": _cal_base(r, q, cal or {}), "q": q,
+        out.append({"flags": list(r["flags"]), "p": _cal_base(r, q, cal or {}, sport, agree), "q": q,
                     "won": bool(r["won"]), "game": game})
     return out
 
@@ -533,15 +543,21 @@ def held_out(rows: list[dict], folds=FOLDS, seed=SEED) -> dict:
             "lo": round(boots[int(0.025 * BOOT)], 5), "hi": round(boots[int(0.975 * BOOT) - 1], 5)}
 
 
-def fit(ledger, hist, sport: str = "nfl", cal: dict | None = None, flagged: list | None = None) -> dict:
+def fit(ledger, hist, sport: str = "nfl", cal: dict | None = None, flagged: list | None = None,
+        agree: dict | None = None) -> dict:
     """``cal`` = the likelycal groups the board applies first (default: its
-    store), so "raw" below means what the board shows after likelycal."""
+    store), so "raw" below means what the board shows after likelycal;
+    ``agree`` the same for its agreement correction (default: its store,
+    where that runs; none when the caller hands its own ``cal``)."""
+    from . import likelycal
+    if agree is None:
+        agree = ((likelycal.load_agree().get(sport) or {}).get("groups") or {}) \
+            if (cal is None and likelycal.agree_on(sport)) else {}
     if cal is None:
-        from . import likelycal
         cal = (likelycal.load().get(sport) or {}).get("groups") or {}
     if flagged is None:
         flagged = flagged_journal(ledger, hist, sport)
-    rows = _rows_for_fit(flagged, cal)
+    rows = _rows_for_fit(flagged, cal, sport, agree)
     ho = held_out(rows) if rows else {"n": 0}
     flags = fit_flags(rows)
     seen = defaultdict(int)

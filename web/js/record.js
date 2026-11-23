@@ -2393,6 +2393,15 @@ function recBoardLearningSection(bl, sport) {
         ? moved.map(([g, v]) => `<div class="rec-note">${escapeHtml(g.split("|").join(" · "))}: hit ${pct(v.hit)} of ${v.n} where we said ${pct(v.claimed)} — now pulled ${Math.round((1 - v.k) * 100)}% of the way to the price</div>`).join("")
         : `<div class="rec-note">The record backs every group’s numbers as they are — nothing pulled.</div>`)
       : `<div class="rec-note">No correction proven yet on games the fit never saw — the board shows its own numbers.</div>`;
+    /* WHEN OUR NUMBER AND THE PRICE AGREE (decision 19, the NBA and hockey):
+       what those picks have won, shown in place of either number once games
+       the fit never saw prove it. */
+    const ag = e.agree;
+    const agree = ag && ag.on ? `
+      <div class="mini" style="padding:8px 14px 2px;opacity:.75">When our number and the price agree (${(ag.agreeing ?? 0).toLocaleString()} graded picks)</div>
+      ${ag.passed && Object.keys(ag.groups || {}).length
+        ? Object.entries(ag.groups).map(([g, v]) => `<div class="rec-note">${escapeHtml(g.split("|").join(" · "))}: hit ${pct(v.hit)} of ${(v.n ?? 0).toLocaleString()} where we said ${pct(v.claimed)} and the price ${pct(v.price)} — now shown at what they win, ${pct(v.shown)} on average</div>`).join("")
+        : `<div class="rec-note">Not proven on games the fit never saw — these picks keep the numbers above.</div>`}` : "";
     const h = e.held || {};
     const held = h.n ? `
       <div class="mini" style="padding:8px 14px 2px;opacity:.75">Picks the board held back (our record and the matchup both said no)</div>
@@ -2412,7 +2421,7 @@ function recBoardLearningSection(bl, sport) {
           <span style="color:${tone(r.verdict)}">${escapeHtml(r.verdict || "")}</span></div>
         ${cuts}${scout}${held}
         <div class="mini" style="padding:8px 14px 2px;opacity:.75">What it corrected by itself · last run ${escapeHtml((e.at || "").replace("T", " "))} UTC</div>
-        ${corrected}
+        ${corrected}${agree}
       </div>`;
   }).join("");
   return `

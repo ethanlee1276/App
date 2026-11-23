@@ -190,7 +190,12 @@ def held_reason(r: dict, checks: dict) -> str | None:
         return r["paper_hold"]
     if r.get("idea_hold"):
         return r["idea_hold"]
-    proven = r.get("ctx_note") or r.get("cal_note")
+    # A RAISE IS NOT AN OVER-CLAIM (decision 19, 23 November). In the NBA and
+    # hockey the record may raise a chance (likelycal: toward its price, or
+    # above both numbers where the two agree), and that note says picks like
+    # it win MORE than we said. Read as "proven to over-claim" it held an
+    # NBA pick the record had just raised, whenever the matchup leaned away.
+    proven = r.get("ctx_note") or (None if r.get("cal_raised") else r.get("cal_note"))
     prob = r.get("model_prob")
     if (proven and lane_of(r) != "td" and prob is not None and float(prob) < DROP_FLOOR
             and checks.get("matchup") is not True):
@@ -1312,6 +1317,9 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     # side have earned in the journal, so the checks, the tier and the
     # order all read the honest number. Nothing leaves the pool. No store
     # (or a correction that failed its held-out test) changes nothing.
+    # In the NBA (and hockey, once its own record proves it) a pick where our
+    # number and the price agree shows what agreeing picks like it have won,
+    # above both where the record says so (likelycal.fit_agree, decision 19).
     try:
         from .likelycal import apply as _calibrate
         _calibrate([pool[k] for k in order], sport, calibration)
