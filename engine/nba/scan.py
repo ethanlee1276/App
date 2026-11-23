@@ -504,7 +504,8 @@ def read_player(name: str, h: dict, team: str, opp: str, *, dvp: dict | None = N
            "headshot": headshot, "usage": usage}
     if status and status not in OUT:
         out["own_status"] = status.upper()
-    return out
+    # A SPOT, NOT A MATCHUP (readlogic.mark_spot): a read the defence did not carry says so.
+    return RL.mark_spot(out, fam)
 
 
 def scan(games: list, hist: dict, prof: dict, *, dvp: dict | None = None, spots: list | None = None,

@@ -221,11 +221,12 @@ def read_hitter(prop, game, park, arsenal: dict | None = None) -> dict:
     key, label = _label(pro, con, breakout, fam,
                         featured=bool(prop.lineup_spot) and prop.lineup_spot <= 4)
     lean = HITTER_LEANS + (POWER_LEANS if power else [])
-    return {"player": prop.player, "team": team, "opp": opp, "pos": prop.position or "",
-            "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
-            "headshot": getattr(prop, "headshot", "") or "",
-            "usage": {"lineup_spot": prop.lineup_spot or None, "bats": prop.bats},
-            "vs": {"pitcher": sp.name if sp else "", "throws": sp.throws if sp else ""}}
+    # A SPOT, NOT A MATCHUP (readlogic.mark_spot): a read the starter he faces did not carry says so.
+    return RL.mark_spot({"player": prop.player, "team": team, "opp": opp, "pos": prop.position or "",
+                         "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
+                         "headshot": getattr(prop, "headshot", "") or "",
+                         "usage": {"lineup_spot": prop.lineup_spot or None, "bats": prop.bats},
+                         "vs": {"pitcher": sp.name if sp else "", "throws": sp.throws if sp else ""}}, fam)
 
 
 def read_starter(prop, game, park) -> dict:
@@ -278,10 +279,10 @@ def read_starter(prop, game, park) -> dict:
     if prop.streak_note:
         notes.append(prop.streak_note)
     key, label = _label(pro, con, breakout, fam, featured=True)
-    return {"player": prop.player, "team": team, "opp": opp, "pos": "SP",
-            "read": key, "label": label, "pro": pro, "con": con, "notes": notes,
-            "lean": list(PITCHER_LEANS), "headshot": getattr(prop, "headshot", "") or "",
-            "usage": {"throws": prop.throws}}
+    return RL.mark_spot({"player": prop.player, "team": team, "opp": opp, "pos": "SP",
+                         "read": key, "label": label, "pro": pro, "con": con, "notes": notes,
+                         "lean": list(PITCHER_LEANS), "headshot": getattr(prop, "headshot", "") or "",
+                         "usage": {"throws": prop.throws}}, fam)
 
 
 def lineup_vs_hand(props, team: str, hand: str) -> dict | None:

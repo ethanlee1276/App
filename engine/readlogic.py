@@ -85,6 +85,19 @@ SPECIAL_TEAMS = "special_teams"  # the power play
 #: The key ladder every league shares, best first.
 KEYS = ("breakout", "good", "neutral", "tough", "avoid")
 
+#: THE MATCHUP ITSELF (step ACY, 23 November 2026; football since step ACW):
+#: the families that are the opponent a player faces — its defence, the goalie
+#: he shoots at, the starter he bats against and how that starter's hand meets
+#: his bat, how often it hands his team power plays. A verdict none of them
+#: carried is the night's, not the opponent's (the schedule, the pace, the
+#: points the lines expect, a blowout, his own role), and in every league it
+#: says "spot", not "matchup" — Ethan, 23 November, on a "tough matchup" beside
+#: a defence giving up the 2nd-most: "It doesn't really make much sense compared
+#: to the data we're giving out."
+MATCHUP_FAMILIES = frozenset({DEFENSE, GOALIE, PITCHER, PLATOON, SPECIAL_TEAMS})
+#: A spot's label, as football's reads say it (engine/gamescan.SPOT_LABELS).
+SPOT_LABELS = {"good": "Good spot", "tough": "Tough spot", "avoid": "Avoid"}
+
 
 def score(pro, con, fam: dict | None = None) -> int:
     """The read's count, one vote a family: each family scores +1 when
@@ -100,6 +113,41 @@ def score(pro, con, fam: dict | None = None) -> int:
         k = fam.get(text) or ("con", text)
         net[k] = net.get(k, 0) - 1
     return sum(1 if v > 0 else -1 if v < 0 else 0 for v in net.values())
+
+
+def carried_by(key: str, pro, con, fam: dict | None) -> list[str]:
+    """The families whose vote went the verdict's way, one vote a family as
+    `score` counts them: for a good or breakout read the families more for
+    him than against, for a tough or avoid read the other way. A reason with
+    no family is no family's."""
+    sign = 1 if key in ("breakout", "good") else -1 if key in ("tough", "avoid") else 0
+    if not sign:
+        return []
+    net: dict = {}
+    for text in pro or []:
+        f = (fam or {}).get(text)
+        if f:
+            net[f] = net.get(f, 0) + 1
+    for text in con or []:
+        f = (fam or {}).get(text)
+        if f:
+            net[f] = net.get(f, 0) - 1
+    return sorted(f for f, v in net.items() if v * sign > 0)
+
+
+def mark_spot(read: dict, fam: dict | None) -> dict:
+    """A good, tough or avoid read the opponent did not carry (no family in
+    MATCHUP_FAMILIES among `carried_by`) takes SPOT_LABELS' word and carries
+    ``spot``; every read carries ``drivers``, the families that carried it —
+    what the reports and the cards read, as football's reads have since step
+    ACW. Returns the read."""
+    key = str(read.get("read") or "")
+    drivers = carried_by(key, read.get("pro"), read.get("con"), fam)
+    read["drivers"] = drivers
+    if key in SPOT_LABELS and drivers and not set(drivers) & MATCHUP_FAMILIES:
+        read["label"] = SPOT_LABELS[key]
+        read["spot"] = True
+    return read
 
 
 def ladder(n: int, *, featured: bool = False, breakout_ok: bool = False,

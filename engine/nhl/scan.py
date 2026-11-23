@@ -192,9 +192,11 @@ def read_skater(name: str, p: dict, team: str, opp: str, teams: dict, ctx: dict,
     top_pp = bool(pp and pp.get("unit") == 1)
     key, label = _label(pro, con, volume, fam, featured=volume or top_pp)
     toi = sum(t5) / len(t5) if t5 else None
-    return {"player": name, "team": team, "opp": opp, "pos": p.get("position") or "",
-            "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": list(SKATER_LEANS),
-            "headshot": headshot, "usage": {"toi": round(toi, 1) if toi else None}}
+    # A SPOT, NOT A MATCHUP (readlogic.mark_spot): a read the opponent did not carry says so.
+    return RL.mark_spot({"player": name, "team": team, "opp": opp, "pos": p.get("position") or "",
+                         "read": key, "label": label, "pro": pro, "con": con, "notes": notes,
+                         "lean": list(SKATER_LEANS), "headshot": headshot,
+                         "usage": {"toi": round(toi, 1) if toi else None}}, fam)
 
 
 def read_goalie(name: str, team: str, opp: str, teams: dict, ctx: dict, headshot: str = "") -> dict:
@@ -228,9 +230,9 @@ def read_goalie(name: str, team: str, opp: str, teams: dict, ctx: dict, headshot
     if me.get("gsax") is not None:
         notes.append(gsax_words(me["gsax"])[:1].upper() + gsax_words(me["gsax"])[1:])
     key, label = _label(pro, con, False, fam, featured=bool(me.get("starter_sure")))
-    return {"player": name, "team": team, "opp": opp, "pos": "G", "read": key, "label": label,
-            "pro": pro, "con": con, "notes": notes, "lean": list(GOALIE_LEANS), "headshot": headshot,
-            "usage": {"starter_share": me.get("starter_share")}}
+    return RL.mark_spot({"player": name, "team": team, "opp": opp, "pos": "G", "read": key, "label": label,
+                         "pro": pro, "con": con, "notes": notes, "lean": list(GOALIE_LEANS), "headshot": headshot,
+                         "usage": {"starter_share": me.get("starter_share")}}, fam)
 
 
 def scan(games: list[dict], players: dict, teams: dict, ctx: dict, league: dict,

@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACY. Every league says "spot" when the opponent didn't decide it** (step 890; 23 November). Nothing to run. Last
+step made a football verdict that the defense had no say in read "Tough spot" or "Favorable spot" instead of "Tough
+matchup". The NBA's, the WNBA's, college basketball's, hockey's and baseball's reads still said "Tough matchup" when
+only the schedule, a blowout spread, the points the lines expect or the player's own role put it there. They now
+follow the same rule: a verdict that nothing about the opponent carried (its defense, the goalie, the starting
+pitcher and his hand against the hitter, how many power plays it gives up) says "Good spot" or "Tough spot" ("Avoid"
+keeps its word) on the report cards, the Players to watch lists and the picks' cards. A verdict the opponent did
+carry still says "matchup". Which way each verdict leans and every pick stay as they were; only the word changes.
+
 **ACX. The NBA's chances say what its picks win** (step 889; 23 November). Nothing to run. Your answer to decision
 19: "do whatever you think. All I want is picks that win the most on there, and we need to be truthful about our
 shit." Built as proposed. In the NBA, and in hockey only if its own record shows the same, a Most Likely pick where
