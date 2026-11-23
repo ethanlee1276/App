@@ -9402,6 +9402,18 @@ injury and photo, and a school's "Available" counts as cleared, never as listed.
 once with the embed's own question and keeps the answer's shape, so the reading can be checked from here. Switch for
 the reading: `QB_CFB_AVAIL_READ=off`.
 
+**ADD. College availability reports, step four: the vendor's own public calls** (step 895; 23 November). Nothing to
+run. The reader's first read (21:26 UTC) was turned away: /api/public-load answers only a POST, and the eighth look
+showed why. It is the embed's permission check, and its answer only switches the public view on. The rows come from
+the report screens' own calls, which the vendor's public view makes with no key and no sign-in: get-publish-public for
+the current reports and get-archive-public for the weeks before, each asked with the sport, the conference and its
+own name. So the reader now asks those, the same way the public view does. Their answer is an object of reports, each
+with a footer holding its game's date and time (the vendor's own sort reads it so), and the reading now takes that
+footer as the game, never as the time the report was filed, reads keys like "Team" and "Player" however they are
+capitalised, and, in a table with a column for each report, takes a man's last column as his word. The map is made,
+so the probe rests (`QB_CFB_AVAIL_PROBE=on` wakes it, as for mapping the College Football Playoff's and the basketball
+reports, which the same vendor posts in an older app). Still nothing reaches a pick until the check holds up.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

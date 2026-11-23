@@ -297,12 +297,13 @@ def test_it_starts_on_the_box_and_a_switch_holds_it():
     src = (ROOT / "launch.py").read_text(encoding="utf-8")
     assert 'threading.Thread(target=_cfb_avail_probe, daemon=True, name="cfbavailprobe").start()' in src
     assert "if _cp.on():" in src
-    os.environ[P.ENV] = "off"
+    assert not P.on(), "the map is made: the probe rests unless switched on"
+    os.environ[P.ENV] = "on"
     try:
-        assert not P.on()
+        assert P.on()
     finally:
         os.environ.pop(P.ENV, None)
-    assert P.on()
+    assert not P.on()
 
 
 if __name__ == "__main__":

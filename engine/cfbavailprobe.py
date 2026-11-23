@@ -135,8 +135,14 @@ HINT_RE = re.compile(r"""["']([^"'<>\s]{0,240}(?:availab|fbreport)[^"'<>\s]{0,24
 MAX_OUT = 600_000
 
 
+#: THE MAP IS MADE (23 November, the eighth look): the reports are the vendor's public view, and
+#: engine/cfbavailread reads them itself. The probe rests unless switched on (``QB_CFB_AVAIL_PROBE=on``), as for
+#: mapping the College Football Playoff's or the basketball reports, which the same vendor posts in an older app.
+DEFAULT = "off"
+
+
 def on() -> bool:
-    return str(os.environ.get(ENV, "on")).strip().lower() not in ("off", "0", "false", "no")
+    return str(os.environ.get(ENV, DEFAULT)).strip().lower() in ("on", "1", "true", "yes")
 
 
 def _iso(t: float) -> str:

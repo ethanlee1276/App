@@ -8,8 +8,8 @@ minutes, since each school's last report comes about 90 minutes before its kicko
 current report, reads each school's filing out of whatever shape the data comes in (`filings`), and keeps them in
 data/cfb_availability.json, which engine/sources/cfbavail lays over ESPN's college board.
 
-It asks as a plain reader ("availability-reader/1.0"), never as a browser and never naming this site, one request
-per conference per read. Off without a deploy: ``sudo ./deploy/setenv.sh QB_CFB_AVAIL_READ off``.
+It asks as a plain reader ("availability-reader/1.0"), never as a browser and never naming this site, with the
+same public calls the vendor's own public view makes (no key, no sign-in), one request per conference per read. Off without a deploy: ``sudo ./deploy/setenv.sh QB_CFB_AVAIL_READ off``.
 """
 from __future__ import annotations
 
@@ -62,22 +62,32 @@ def due_every(now: float, game_days=None) -> int:
 
 # --- the shape-free read -----------------------------------------------------------------------------------------
 NAME_KEYS = ("player", "name", "playerName", "player_name", "fullName", "full_name", "displayName",
-             "display_name", "athlete", "studentAthlete", "student_athlete", "athleteName", "athlete_name")
-FIRST_KEYS = ("firstName", "first_name", "first")
-LAST_KEYS = ("lastName", "last_name", "last")
+             "display_name", "athlete", "studentAthlete", "student_athlete", "athleteName", "athlete_name",
+             "student-athlete", "student_athlete_name", "playerFullName")
+FIRST_KEYS = ("firstName", "first_name", "first", "fname")
+LAST_KEYS = ("lastName", "last_name", "last", "lname")
 STATUS_KEYS = ("status", "availability", "availabilityStatus", "availability_status", "designation",
-               "participationStatus", "participation_status", "playerStatus", "player_status", "state")
+               "participationStatus", "participation_status", "playerStatus", "player_status", "state",
+               "current_status", "currentStatus")
 POS_KEYS = ("position", "pos", "positionAbbreviation", "position_abbreviation")
 SCHOOL_KEYS = ("school", "team", "teamName", "team_name", "schoolName", "school_name", "institution",
                "organization", "program", "club")
-TIME_KEYS = ("released_at", "releasedAt", "published_at", "publishedAt", "submitted_at", "submittedAt",
-             "report_time", "reportTime", "updated_at", "updatedAt", "created_at", "createdAt", "timestamp",
-             "time", "date")
-GAME_KEYS = ("game", "matchup", "event", "title", "opponent", "game_date", "gameDate", "kickoff", "start")
+#: WHEN A REPORT WAS FILED: only keys that say so. A bare "date" or "time" is the game's own (the vendor's
+#: reports carry their kickoff as footer.date and footer.time), and a filing dated by its game would lose to
+#: every older ESPN row filed on game day.
+TIME_KEYS = ("released_at", "releasedAt", "published_at", "publishedAt", "publish_datetime", "submitted_at",
+             "submittedAt", "report_time", "reportTime", "report_datetime", "updated_at", "updatedAt",
+             "created_at", "createdAt", "timestamp", "last_updated", "lastUpdated")
+GAME_KEYS = ("game", "matchup", "event", "title", "opponent", "game_name", "gameName")
+#: Keys of a player row that are never his status (scanned when no status key names one).
+NOT_STATUS = {k.lower() for k in NAME_KEYS + FIRST_KEYS + LAST_KEYS + POS_KEYS + SCHOOL_KEYS + TIME_KEYS
+              + GAME_KEYS} | {"jersey", "number", "num", "class", "year", "injury", "notes", "note", "comment"}
 FINAL_RE = re.compile(r"game[\s-]*day|final|pre[\s-]*game|90", re.I)
-_KNOWN = set(NAME_KEYS + FIRST_KEYS + LAST_KEYS + STATUS_KEYS + POS_KEYS + SCHOOL_KEYS + TIME_KEYS + GAME_KEYS) | {
+_KNOWN = {k.lower() for k in NAME_KEYS + FIRST_KEYS + LAST_KEYS + STATUS_KEYS + POS_KEYS + SCHOOL_KEYS
+          + TIME_KEYS + GAME_KEYS} | {
     "players", "rows", "items", "data", "results", "reports", "report", "teams", "games", "entries", "list",
-    "athletes", "roster", "availability_reports", "availabilityReports", "records", "content", "payload"}
+    "athletes", "roster", "availability_reports", "availabilityreports", "records", "content", "payload",
+    "footer", "header", "home", "away", "report_days", "columns"}
 
 
 def _text(v) -> str:
@@ -89,23 +99,39 @@ def _text(v) -> str:
     return " ".join(str(v).split()) if isinstance(v, (str, int, float)) and not isinstance(v, bool) else ""
 
 
+def _lower(d: dict) -> dict:
+    """The dict's keys, folded: the vendor writes "Team" and "Player" where another writes "team"."""
+    return {str(k).lower(): v for k, v in d.items()}
+
+
 def _first(d: dict, keys) -> str:
+    low = _lower(d)
     for k in keys:
-        if k in d:
-            t = _text(d[k])
+        k = k.lower()
+        if k in low:
+            t = _text(low[k])
             if t:
                 return t
     return ""
 
 
 def _player(d: dict) -> dict | None:
-    """A player row in any of the shapes a report might use, or None."""
+    """A player row in any of the shapes a report might use, or None. Its status is a status key's word, else the
+    last status word among its other columns (a table with one column per report reads left to right)."""
+    low = _lower(d)
     word = ""
     for k in STATUS_KEYS:
-        t = _text(d.get(k)) if k in d else ""
+        t = _text(low.get(k.lower())) if k.lower() in low else ""
         if t and CA.status_of(t) is not None:
             word = t
             break
+    if not word:
+        for k, v in low.items():
+            if k in NOT_STATUS or k.endswith("_id") or isinstance(v, (dict, list)):
+                continue
+            t = _text(v)
+            if t and len(t) <= 40 and CA.status_of(t) is not None:
+                word = t
     if not word:
         return None
     name = _first(d, NAME_KEYS)
@@ -115,6 +141,17 @@ def _player(d: dict) -> dict | None:
     if not name or len(name) > 60:
         return None
     return {"player": name, "pos": _first(d, POS_KEYS), "word": word}
+
+
+def _kickoff(node: dict) -> str:
+    """A report's game time, where it carries one as footer {date, time} (the vendor's) or game_date/game_time."""
+    low = _lower(node)
+    foot = low.get("footer") if isinstance(low.get("footer"), dict) else {}
+    day = _text(_lower(foot).get("date")) if foot else _text(low.get("game_date"))
+    hm = _text(_lower(foot).get("time")) if foot else _text(low.get("game_time"))
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", day or ""):
+        return ""
+    return day + (f" {hm}" if re.match(r"^\d{1,2}:\d{2}", hm or "") else "")
 
 
 def _walk(node, ctx: dict, out: list) -> None:
@@ -130,32 +167,40 @@ def _walk(node, ctx: dict, out: list) -> None:
         own_at = _first(node, TIME_KEYS)
         at = own_at if CA._ts(own_at) is not None else ctx.get("at", "")
         out.append({**row, "school": school, "at": at, "game": _first(node, GAME_KEYS) or ctx.get("game", ""),
-                    "kind": ctx.get("kind", "")})
+                    "kickoff": _kickoff(node) or ctx.get("kickoff", ""), "kind": ctx.get("kind", "")})
         return
     here = dict(ctx)
+    low = _lower(node)
     school = _first(node, SCHOOL_KEYS)
-    if school and not any(isinstance(node.get(k), (list, dict)) and k in SCHOOL_KEYS for k in node):
+    if school and not any(isinstance(low.get(k.lower()), (list, dict)) for k in SCHOOL_KEYS):
         here["school"] = school
-    elif isinstance(node.get("school") or node.get("team"), dict):
-        here["school"] = _text(node.get("school") or node.get("team")) or here.get("school", "")
+    else:
+        for k in ("school", "team"):
+            if isinstance(low.get(k), dict) and _text(low[k]):
+                here["school"] = _text(low[k])
+                break
     at = _first(node, TIME_KEYS)
     if at and CA._ts(at) is not None:
         here["at"] = at
     game = _first(node, GAME_KEYS)
     if game:
         here["game"] = game
-    for k in ("type", "report_type", "reportType", "kind", "label", "version"):
-        if isinstance(node.get(k), str) and node[k].strip():
-            here["kind"] = node[k].strip()
+    kick = _kickoff(node)
+    if kick:
+        here["kickoff"] = kick
+    for k in ("report_type", "reporttype", "type", "kind", "label", "version"):
+        if isinstance(low.get(k), str) and low[k].strip():
+            here["kind"] = low[k].strip()
             break
     # A dict that holds the rows under it and has a "name" is most likely the school (the nearest one wins).
-    if isinstance(node.get("name"), str) and any(isinstance(v, list) for v in node.values()):
-        here["maybe_school"] = node["name"]
+    if isinstance(low.get("name"), str) and any(isinstance(v, list) for v in node.values()):
+        here["maybe_school"] = low["name"]
     for k, v in node.items():
         if isinstance(v, (list, dict)):
-            # …and a key that is no field name at all, holding rows, is most likely a school's name.
-            sub = here if k in _KNOWN or not isinstance(v, list) else {**here, "maybe_school": k}
-            _walk(v, sub, out)
+            # …and a key that is no field name at all, holding rows, is most likely a school's name (a report id,
+            # all digits, never is).
+            named = str(k).lower() not in _KNOWN and isinstance(v, list) and not str(k).isdigit()
+            _walk(v, {**here, "maybe_school": k} if named else here, out)
 
 
 def filings(doc, conf: str, now: float) -> list[dict]:
@@ -168,25 +213,44 @@ def filings(doc, conf: str, now: float) -> list[dict]:
     for r in rows:
         if not r["school"]:
             continue
-        at = r["at"] if CA._ts(r["at"]) is not None else _dt.datetime.fromtimestamp(
-            float(now), _dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        dated = CA._ts(r["at"]) is not None
+        at = r["at"] if dated else _dt.datetime.fromtimestamp(float(now), _dt.timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
         key = (r["school"], at)
         f = by.setdefault(key, {"conference": conf.lower(), "school": r["school"], "game": r["game"],
-                                "filed_at": at, "final": bool(FINAL_RE.search(r["kind"] or "")), "players": []})
+                                "kickoff": r.get("kickoff", ""), "filed_at": at, "seen": not dated,
+                                "final": bool(FINAL_RE.search(r["kind"] or "")), "players": []})
         f["players"].append({"player": r["player"], "pos": r["pos"], "word": r["word"]})
     return list(by.values())
 
 
 # --- the cache -----------------------------------------------------------------------------------------------------
+def _same(a: dict, b: dict) -> bool:
+    """Two reads of one school's filing for one game that say the same thing, man for man."""
+    def words(r):
+        return sorted((CA.player_name(p.get("player")), " ".join(str(p.get("word") or "").split()).lower())
+                      for p in r.get("players") or [])
+    return a.get("kickoff") == b.get("kickoff") and words(a) == words(b)
+
+
 def merge(cache: dict, new: list[dict], now: float) -> dict:
     """The cache with ``new`` filings in: one per (conference, school, filed_at), the newest read of it kept,
-    nothing older than KEEP_S."""
+    nothing older than KEEP_S. A filing with no time of its own is dated by the read that first saw it ("seen"):
+    a later read that finds the school's filing for that game unchanged adds nothing, so its time stays the first
+    sight of it, and only a changed filing is a new one."""
     by = {}
+    latest: dict = {}
     for rep in (cache.get("reports") or []) + list(new):
         at = CA._ts(rep.get("filed_at"))
         if at is None or at < now - KEEP_S:
             continue
+        game = (rep.get("conference"), rep.get("school"), rep.get("kickoff"))
+        prev = latest.get(game)
+        if rep.get("seen") and prev is not None and _same(prev, rep):
+            continue
         by[(rep.get("conference"), rep.get("school"), rep.get("filed_at"))] = rep
+        if prev is None or at >= CA._ts(prev.get("filed_at")):
+            latest[game] = rep
     reports = sorted(by.values(), key=lambda r: (CA._ts(r["filed_at"]), r.get("school") or ""))
     return {**cache, "reports": reports}
 
@@ -221,17 +285,39 @@ def _get(url: str):
 
 #: What the box saw on its last read, on our site for checking from where I build (no browser or user reads it).
 SEEN = Path(__file__).resolve().parent.parent / "web" / "data" / "cfb_availability_read.json"
-#: THE DATA ADDRESS. The seventh look of engine/cfbavailprobe found the vendor's script naming /api/public-load;
-#: it is asked with the embed's own query, as the conference pages embed it (type report: the current reports;
-#: type archive: the weeks before, read every ARCHIVE_EVERY_S for checking the reading, never for picks).
-DATA_URL = "https://app.hdintelligence.com/api/public-load?source={conf}&sport=Football&conf={conf}&type={kind}"
+#: THE DATA CALLS (the eighth look, 21:26 UTC). /api/public-load answered 405 to a GET: it is the embed's
+#: permission check, asked by POST, whose answer only switches the public view on. The rows come from the report
+#: screens' own calls, which the vendor's public view makes with no key and no sign-in: POST
+#: /api/get-publish-public (the current reports) and /api/get-archive-public (the weeks before, read every
+#: ARCHIVE_EVERY_S for checking the reading, never for picks), each with {sport, organization, conference}: the
+#: embed's own sport, source and conf.
+BASE = "https://app.hdintelligence.com"
+DATA = {"report": "/api/get-publish-public", "archive": "/api/get-archive-public"}
 ARCHIVE_EVERY_S = 6 * 3600
 
 
-def read_conf(conf: str, now: float, get=_get, kind: str = "report") -> tuple[list[dict], dict]:
+def _post(url: str, body: dict):
+    """(status, content type, body) of one plain JSON POST; a failure is its name, never an exception."""
+    try:
+        req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                     headers={"User-Agent": AGENT, "Accept": "application/json",
+                                              "Content-Type": "application/json", "Accept-Encoding": "gzip"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+            ctype = resp.headers.get("Content-Type") or ""
+            raw = resp.read(MAX_BYTES)
+        if raw[:2] == b"\x1f\x8b":
+            raw = gzip.decompress(raw)
+        return "ok", ctype, raw
+    except urllib.error.HTTPError as exc:
+        return f"HTTP {exc.code}", "", b""
+    except Exception as exc:                                   # noqa: BLE001
+        return type(exc).__name__, "", b""
+
+
+def read_conf(conf: str, now: float, post=_post, kind: str = "report") -> tuple[list[dict], dict]:
     """(each school's filing in one conference's report data of ``kind``, what the read saw)."""
-    url = DATA_URL.format(conf=conf, kind=kind)
-    status, ctype, raw = get(url)
+    url = BASE + DATA[kind]
+    status, ctype, raw = post(url, {"sport": "Football", "organization": conf, "conference": conf})
     seen = {"url": url, "status": status, "type": ctype.split(";")[0].strip(), "bytes": len(raw)}
     if status != "ok":
         return [], seen
@@ -263,11 +349,11 @@ def box_check(archive: list[dict]) -> dict:
         conn.close()
 
 
-def read_once(now=None, get=_get, out=None, seen_out=None, game_days=None, checker=None) -> float:
+def read_once(now=None, post=_post, out=None, seen_out=None, game_days=None, checker=None) -> float:
     """Read every conference when its clock says so; the seconds until the next check."""
     now = time.time() if now is None else float(now)
     every = due_every(now, game_days)
-    if now - _LAST["at"] < every or not DATA_URL:
+    if now - _LAST["at"] < every:
         return min(IDLE_S, max(60, every - (now - _LAST["at"])))
     _LAST["at"] = now
     kinds = ["report"] + (["archive"] if now - _LAST.get("archive", 0.0) >= ARCHIVE_EVERY_S else [])
@@ -276,7 +362,7 @@ def read_once(now=None, get=_get, out=None, seen_out=None, game_days=None, check
     new, archive, seen = [], [], {}
     for conf in CONFS:
         for kind in kinds:
-            got, saw = read_conf(conf, now, get, kind)
+            got, saw = read_conf(conf, now, post, kind)
             (new if kind == "report" else archive).extend(got)
             seen[conf if kind == "report" else f"{conf} archive"] = saw
     cache = merge(CA.load(out), new, now)
@@ -321,7 +407,18 @@ def check_archive(archive: list[dict], conn, lookup: dict) -> dict:
                 by.setdefault(normalize_name(r[0] or ""), set()).add(day)
             logs[(team, season)] = by
         return logs[(team, season)]
+    # EACH SCHOOL'S LAST WORD ON EACH GAME: an early "Out" can turn "Available" by game day, so only the last
+    # filing a school made in a game's week is held to the game.
+    last: dict = {}
     for f in archive or []:
+        at = CA._ts(f.get("filed_at"))
+        if at is None:
+            continue
+        wk = _dt.datetime.fromtimestamp(at, _dt.timezone.utc).isocalendar()[:2]
+        key = (f.get("conference"), f.get("school"), wk)
+        if key not in last or at > CA._ts(last[key].get("filed_at")):
+            last[key] = f
+    for f in last.values():
         c = out.setdefault(f.get("conference") or "?", {"filings": 0, "keyed": 0, "men": 0, "known": 0,
                                                        "out": 0, "out_played": 0, "avail": 0, "avail_played": 0,
                                                        "contradicted": []})

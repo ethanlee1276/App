@@ -61,6 +61,23 @@ def test_each_schools_filing_is_found_in_any_shape():
     assert R.filings({"title": "Football", "status": "published"}, "B12", 0) == [], "no rows, no filing"
 
 
+def test_the_vendors_own_shape_reads_each_schools_last_column():
+    """The vendor's sort helper (sortReportsByKickoff) reads an object of reports keyed by id, each with a footer
+    holding its game's date and time, and "_" keys beside them; a table with a column per report reads its last
+    column as the man's word, and the footer is the game, never the filing."""
+    doc = {"101": {"footer": {"date": "2026-11-28", "time": "12:00"},
+                   "home": {"name": "Ohio State", "players": [
+                       {"Player": "Jeremiah Smith", "Position": "WR", "Thursday": "Questionable", "Friday": "Out",
+                        "Thursday_id": 9}]},
+                   "away": {"name": "Michigan", "players": [{"Player": "Bryce Underwood", "Wednesday": "Probable"}]}},
+           "_nextReportDate": "2026-11-26"}
+    got = R.filings(doc, "B10", CA._ts("2026-11-27T01:00:00Z"))
+    assert [(f["school"], f["players"][0]["player"], f["players"][0]["word"]) for f in got] == [
+        ("Ohio State", "Jeremiah Smith", "Out"), ("Michigan", "Bryce Underwood", "Probable")]
+    assert got[0]["kickoff"] == "2026-11-28 12:00" and got[0]["filed_at"] == "2026-11-27T01:00:00Z"
+    assert got[0]["players"][0]["pos"] == "WR"
+
+
 def test_a_row_with_no_time_of_its_own_takes_the_reads():
     got = R.filings([{"school": "Clemson", "player": "A B", "status": "Out"}], "ACC", 1795000000)
     assert got[0]["filed_at"] == "2026-11-18T11:06:40Z"
@@ -76,36 +93,49 @@ def test_the_cache_keeps_one_of_each_filing_and_nothing_old():
     assert cache["reports"] == [again]
 
 
+def test_an_unchanged_filing_keeps_the_time_it_was_first_seen():
+    def seen(at, word, kick="2026-11-28 12:00"):
+        return {"conference": "b10", "school": "Ohio State", "kickoff": kick, "filed_at": at, "seen": True,
+                "players": [{"player": "Jeremiah Smith", "word": word}]}
+    now = CA._ts("2026-11-27T12:00:00Z")
+    cache = R.merge({}, [seen("2026-11-25T23:10:00Z", "Questionable")], now)
+    cache = R.merge(cache, [seen("2026-11-25T23:30:00Z", "Questionable")], now)
+    assert [r["filed_at"] for r in cache["reports"]] == ["2026-11-25T23:10:00Z"], "the same filing, read again"
+    cache = R.merge(cache, [seen("2026-11-26T23:30:00Z", "Out")], now)
+    assert [r["filed_at"] for r in cache["reports"]] == ["2026-11-25T23:10:00Z", "2026-11-26T23:30:00Z"]
+    cache = R.merge(cache, [seen("2026-11-27T00:00:00Z", "Out")], now)
+    assert len(cache["reports"]) == 2, "unchanged since the last one"
+    cache = R.merge(cache, [seen("2026-11-27T00:00:00Z", "Out", kick="2026-12-05 20:00")], now)
+    assert len(cache["reports"]) == 3, "another game's filing is its own"
+
+
 def test_a_read_writes_the_cache_and_what_it_saw():
     tmp = Path(tempfile.mkdtemp())
     body = json.dumps([{"school": "Clemson", "player": "Cade Klubnik", "status": "Probable",
                         "updated_at": "2026-11-26T00:00:00Z"}]).encode()
     asked = []
 
-    def get(u):
-        asked.append(u)
-        return ("ok", "application/json", body) if "ACC" in u else ("HTTP 404", "", b"")
+    def post(u, b):
+        asked.append((u.rsplit("/", 1)[-1], b["conference"]))
+        assert b == {"sport": "Football", "organization": b["conference"], "conference": b["conference"]}
+        return ("ok", "application/json", body) if b["conference"] == "ACC" else ("HTTP 404", "", b"")
     R._LAST.update(at=0.0, archive=0.0)
-    was = R.DATA_URL
-    R.DATA_URL = "https://data.test/load?conf={conf}&type={kind}"
-    try:
-        R.read_once(now=CA._ts("2026-11-26T01:00:00Z"), get=get, out=tmp / "c.json", seen_out=tmp / "s.json",
-                    checker=lambda archive: {"acc": {"filings": len(archive)}})
-        assert asked == [f"https://data.test/load?conf={c}&type={k}" for c in R.CONFS for k in ("report", "archive")]
-        asked.clear()
-        R._LAST["at"] = 0.0
-        R.read_once(now=CA._ts("2026-11-26T02:00:00Z"), get=get, out=tmp / "c.json", seen_out=tmp / "s.json",
-                    checker=lambda archive: 1 / 0)
-        assert asked == [f"https://data.test/load?conf={c}&type=report" for c in R.CONFS], "the archive, 6-hourly"
-    finally:
-        R.DATA_URL = was
+    R.read_once(now=CA._ts("2026-11-26T01:00:00Z"), post=post, out=tmp / "c.json", seen_out=tmp / "s.json",
+                checker=lambda archive: {"acc": {"filings": len(archive)}})
+    assert asked == [(k, c) for c in R.CONFS for k in ("get-publish-public", "get-archive-public")]
+    asked.clear()
+    R._LAST["at"] = 0.0
+    R.read_once(now=CA._ts("2026-11-26T02:00:00Z"), post=post, out=tmp / "c.json", seen_out=tmp / "s.json",
+                checker=lambda archive: 1 / 0)
+    assert asked == [("get-publish-public", c) for c in R.CONFS], "the archive, 6-hourly"
     cache = json.loads((tmp / "c.json").read_text())
     assert [r["school"] for r in cache["reports"]] == ["Clemson"] and cache["read_at"]
     seen = json.loads((tmp / "s.json").read_text())
     assert seen["conferences"]["ACC"]["filings"] == 1 and seen["conferences"]["SEC"]["status"] == "HTTP 404"
     assert seen["conferences"]["ACC"]["shape"][0] == 1, "the answer's shape, for checking the reading"
     assert seen["check"] == {"acc": {"filings": 1}} and seen["trusted"] is False, "the first read's check, kept"
-    assert R.DATA_URL.startswith("https://app.hdintelligence.com/api/public-load?source={conf}&sport=Football")
+    assert R.BASE == "https://app.hdintelligence.com" and R.DATA == {"report": "/api/get-publish-public",
+                                                                    "archive": "/api/get-archive-public"}
 
 
 def test_the_check_holds_past_reports_to_the_games_box_scores():
@@ -125,7 +155,10 @@ def test_the_check_holds_past_reports_to_the_games_box_scores():
                 "players": [{"player": "Anyway, Played", "word": "Out"}, {"player": "Sat Out", "word": "Out"},
                             {"player": "Was Available", "word": "Available"},
                             {"player": "Never Logged", "word": "Questionable"}]},
-               {"conference": "b10", "school": "Nowhere State", "filed_at": "2026-11-19T23:00:00Z", "players": []}]
+               {"conference": "b10", "school": "Nowhere State", "filed_at": "2026-11-19T23:00:00Z", "players": []},
+               # An earlier filing the school's last one replaced: never held to the game.
+               {"conference": "b10", "school": "The Ohio State University", "filed_at": "2026-11-18T23:00:00Z",
+                "players": [{"player": "Was Available", "word": "Out"}]}]
     got = R.check_archive(archive, conn, {"ohio state": "OSU"})["b10"]
     assert (got["filings"], got["keyed"], got["men"], got["known"]) == (2, 1, 4, 3)
     assert (got["out"], got["out_played"], got["avail"], got["avail_played"]) == (2, 1, 1, 1)
