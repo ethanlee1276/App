@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**Decision 20, for you: college football's injuries** (23 November). Nothing changes until you answer. Our college
+injury feed is ESPN's college board. On Monday afternoon it listed 1 college football injury and no college
+basketball ones, against the NFL's 797, because schools owe ESPN nothing. College football teams do publish
+availability reports for conference games now, through their conferences: the Big Ten requires four a week for 2026,
+and the SEC, ACC and Big 12 publish theirs too; the College Football Playoff posts its teams' reports for playoff
+games. There is no single feed: each conference posts its own page in its own format. Reading them would put a
+missing quarterback or running back into college picks and reports the way the NFL's inactives are. Those sites
+can't be reached from where I build, so I would write a reader for each conference, run it on the box, and check it
+against a Saturday's published reports before it changes any pick. Yes or no?
+
 **ACY. Every league says "spot" when the opponent didn't decide it** (step 890; 23 November). Nothing to run. Last
 step made a football verdict that the defense had no say in read "Tough spot" or "Favorable spot" instead of "Tough
 matchup". The NBA's, the WNBA's, college basketball's, hockey's and baseball's reads still said "Tough matchup" when
