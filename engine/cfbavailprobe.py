@@ -56,16 +56,14 @@ MAX_BYTES = 3_000_000
 #: the reports are said to be posted, so the look starts there, with the football pages behind them.
 SOURCES = {
     # The second look (18:11 UTC) found each of these two named in its football page's scripts.
-    "big_ten": ("https://bigten.org/sports/2026/9/10/FB_Availability_Reports.aspx",
-                "https://bigten.org/sports/football"),
-    "sec": ("https://www.secsports.com/fbreports", "https://www.secsports.com/sport/football"),
-    "acc": ("https://theacc.com/sports/2025/8/28/availability-reporting.aspx", "https://theacc.com/fbreports",
-            "https://theacc.com/sports/football"),
-    "big_12": ("https://big12sports.com/sports/2025/8/14/FBreporting.aspx", "https://big12sports.com/sports/football"),
+    "big_ten": ("https://bigten.org/sports/2026/9/10/FB_Availability_Reports.aspx",),
+    "sec": ("https://www.secsports.com/fbreports",),
+    # The third look (18:48 UTC) found these: each conference's current football report page, all built by scripts
+    # from a "feature page" on the conference's static site.
+    "acc": ("https://theacc.com/sports/2025/8/28/availability-reporting-football.aspx",
+            "https://theacc.com/sports/2025/8/28/availability-reporting.aspx"),
+    "big_12": ("https://big12sports.com/sports/2025/8/14/FBreporting.aspx",),
     "cfp": ("https://collegefootballplayoff.com/",),
-    # THE NBA'S OWN INJURY REPORT: the league posts it as a PDF through every game day, ahead of ESPN's board
-    # (which the NBA build reads, with its blurbs' words, step ABU). Mapped the same way, for the same reader.
-    "nba_official": ("https://official.nba.com/nba-injury-report-2026-27-season/",),
 }
 #: THE NBA'S REPORT ITSELF. Its index page turned the first look away (403), and each report is a PDF at an
 #: address made of its own time, posted every quarter hour on game days ("Injury-Report_2026-04-06_08_15AM.pdf",
@@ -80,6 +78,11 @@ STRONG_WORDS = re.compile(r"availability[-_ ]?report|fbreport|availability", re.
 API_RE = re.compile(r"""["']((?:https?://[^"'\s]{6,300}?|/)(?:api|json|feed)[^"'\s]{0,200})["']""", re.I)
 #: A page's own script files (a page built by scripts reads its data from one of them).
 SCRIPT_RE = re.compile(r"""<script[^>]+src=["']([^"']+)["']""", re.I)
+#: Any address a script names: quoted, absolute or rooted.
+JS_URL_RE = re.compile(r"""["'`]((?:https?:)?//[^"'`\s]{4,300}|/[A-Za-z0-9_\-./]{3,200}\.(?:json|ashx|aspx|csv)[^"'`\s]{0,120})["'`]""")
+#: A page's inline scripts, and the words that mark one that sets a feature page up.
+INLINE_RE = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.I | re.S)
+FEATURE_RE = re.compile(r"feature-pages|availab|fbreport|\.json|/api/|endpoint|dataUrl|data_url|sheet", re.I)
 #: Any quoted text in a page (its scripts included) that names the reports: where a page built by scripts
 #: fetches them from.
 HINT_RE = re.compile(r"""["']([^"'<>\s]{0,240}(?:availab|fbreport)[^"'<>\s]{0,240})["']""", re.I)
@@ -268,6 +271,11 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     if "json" in ctype.lower() or body.lstrip()[:1] in ("{", "["):
         rec["json_head"] = body[:3000]
         return rec, []
+    if "javascript" in ctype.lower() or url.split("?")[0].endswith(".js"):
+        # A script: the addresses it fetches, and its first lines.
+        rec["js_head"] = body[:2500]
+        rec["js_urls"] = list(dict.fromkeys(m.group(1) for m in JS_URL_RE.finditer(body)))[:40]
+        return rec, []
     p = _Page()
     try:
         p.feed(body)
@@ -300,6 +308,11 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     if rec["words"] < 200:                                     # a page its scripts build: name the scripts
         rec["scripts"] = list(dict.fromkeys(urllib.parse.urljoin(url, m.group(1))
                                             for m in SCRIPT_RE.finditer(body)))[:25]
+        # …and keep its own inline scripts that set the page up (where a feature page is told what to load).
+        inline = [m.group(1).strip() for m in INLINE_RE.finditer(body)]
+        keep = [x[:3000] for x in inline if x and FEATURE_RE.search(x)]
+        if keep:
+            rec["inline"] = keep[:6]
     nd = _next_data(body)
     if nd:
         rec["next_data"] = nd
@@ -308,7 +321,17 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     # after the links, when it reads like a page: an address, not a word.
     named = [urllib.parse.urljoin(url, h) for h in rec.get("hints") or []
              if (h.startswith("/") or h.startswith("http")) and STRONG_WORDS.search(h)]
-    return rec, list(dict.fromkeys([x["href"] for x in follow] + named))
+    # A FEATURE PAGE'S OWN SCRIPT: the third look found the ACC's and the Big 12's report pages loading a stylesheet
+    # from <static site>/feature-pages/availability-reporting/; the script beside it is what fills the page.
+    feature = [re.sub(r"\.css(\?.*)?$", ".js", h) for h in named if "feature-pages" in h and ".css" in h]
+    return rec, list(dict.fromkeys(canon(u) for u in [x["href"] for x in follow] + named + feature))
+
+
+def canon(url: str) -> str:
+    """One page, one address: no "#part", and https where the page gave http (the third look read the Big Ten's
+    report page nine times over as #main-content, #events, #results and its http twin)."""
+    u = url.split("#", 1)[0]
+    return "https://" + u[len("http://"):] if u.startswith("http://") else u
 
 
 def nba_pdf_urls(now: float, back: int = NBA_BACK_SLOTS) -> list:
@@ -359,6 +382,7 @@ def look(sources=None, get=_get, follow: int = FOLLOW, depth: int = DEPTH) -> di
         for level in range(depth + 1):
             nxt = []
             for url in step:
+                url = canon(url)
                 if url in seen:
                     continue
                 seen.add(url)
@@ -400,15 +424,16 @@ def watch_once(now=None, get=_get, out=None) -> float:
     if now - _LAST["at"] < EVERY_S:
         return min(IDLE_S, EVERY_S - (now - _LAST["at"]))
     _LAST["at"] = now
+    # THE NBA'S REPORT FILES are left out since the third look (18:48 UTC): their index and every report file
+    # answered 403 to urllib's own User-Agent and to a plain reader's name alike, so only a browser's name would be
+    # let in, and this site asks as what it is. `look_nba_pdf` stays for the day the league lets readers in.
     found = look(get=get)
-    found["nba_report_pdf"] = {"pages": [look_nba_pdf(now, get)]}
     write(found, now, out)
     return IDLE_S
 
 
 def main(argv=None) -> int:
     found = look()
-    found["nba_report_pdf"] = {"pages": [look_nba_pdf(time.time())]}
     p = write(found, time.time())
     for name, v in found.items():
         print(f"\n=== {name}")

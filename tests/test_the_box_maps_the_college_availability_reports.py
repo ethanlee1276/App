@@ -134,13 +134,37 @@ def test_a_page_that_turns_the_plain_request_away_is_asked_once_more_under_a_pla
     assert rec["agent"] == "plain"
 
 
+def test_a_feature_page_is_read_through_its_own_script_and_each_page_once():
+    page = (b"<link href='https://static.conf.test/feature-pages/availability-reporting/availability_reporting.css'>"
+            b"<script>var cfg = {dataUrl: 'https://static.conf.test/feature-pages/availability-reporting/fb.json'};"
+            b"</script><a href='https://conf.test/fb-availability-archive.aspx#top'>Archive</a>")
+    js = b"fetch('https://static.conf.test/feature-pages/availability-reporting/fb.json'); var u='/services/avail.ashx';"
+    site = {"https://conf.test/fb-availability.aspx": ("ok", "text/html", page),
+            "https://static.conf.test/feature-pages/availability-reporting/availability_reporting.js":
+                ("ok", "application/javascript", js),
+            "https://static.conf.test/feature-pages/availability-reporting/fb.json":
+                ("ok", "application/json", b'{"games": [{"player": "A", "status": "Out"}]}')}
+    found = P.look({"conf": ("https://conf.test/fb-availability.aspx", "http://conf.test/fb-availability.aspx#x")},
+                   get=lambda u: site.get(u, ("HTTP 404", "", b"")))
+    pages = {pg["url"]: pg for pg in found["conf"]["pages"]}
+    assert list(pages).count("https://conf.test/fb-availability.aspx") == 1, "one page, one address"
+    first = pages["https://conf.test/fb-availability.aspx"]
+    assert first["inline"] == ["var cfg = {dataUrl: 'https://static.conf.test/feature-pages/availability-reporting/fb.json'};"]
+    script = pages["https://static.conf.test/feature-pages/availability-reporting/availability_reporting.js"]
+    assert script["js_urls"] == ["https://static.conf.test/feature-pages/availability-reporting/fb.json",
+                                 "/services/avail.ashx"]
+    assert pages["https://static.conf.test/feature-pages/availability-reporting/fb.json"]["json_head"].startswith(
+        '{"games"'), "the data itself, read"
+    assert P.canon("http://bigten.org/x.aspx#events") == "https://bigten.org/x.aspx"
+
+
 def test_the_file_is_written_whole_and_small_and_the_clock_holds_it_to_every_three_hours():
     out = Path(tempfile.mkdtemp()) / "probe.json"
     P._LAST["at"] = 0.0
     wait = P.watch_once(now=1_000_000.0, get=_get(), out=out)
     doc = json.loads(out.read_text())
     assert doc["generated_at"].startswith("1970-01-12") and doc["every_s"] == P.EVERY_S == 3 * 3600
-    assert set(doc["sources"]) == set(P.SOURCES) | {"nba_report_pdf"}, "every source looked at (404s here)"
+    assert set(doc["sources"]) == set(P.SOURCES), "every source looked at (each page a 404 here)"
     assert wait == P.IDLE_S
     mtime = out.stat().st_mtime
     assert P.watch_once(now=1_000_000.0 + 3600, get=_get(), out=out) <= P.IDLE_S
