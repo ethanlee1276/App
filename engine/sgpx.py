@@ -41,8 +41,9 @@ and the card says the book and its prices (gameparlays.one_book).
 
 COLLEGE FOOTBALL TOO (step ACO, 22 November). Ethan wants every league run the way the NFL runs, and a college
 Saturday is the NFL's Sunday many times over: a noon window, a 3:30 one, a night one, a late one. College's games
-post their picks 90 minutes before kickoff with no inactives to wait for (gameparlays.POST_WAIT_SPORTS is the
-NFL's alone), so a college slot posts once every game in it has reached its post time, and a later game's legs on
+post their picks 90 minutes before kickoff with no inactives to wait for (gameparlays.INACTIVES_SPORTS is the
+NFL's alone; since step ADF a game between two reporting schools waits for their game-day availability reports),
+so a college slot posts once every game in it has posted, and a later game's legs on
 a day ticket are the ones it would post as built at that moment: picked before that game posted its own, and each
 such ticket and leg says so in those words (EARLY_WORDS). The tickets, their journal kinds, the Record, the Live
 tab and Report Picks are the NFL's, unchanged.
@@ -99,9 +100,11 @@ def early_words(sport: str) -> str:
 
 
 def _waits_for_inactives(sport: str) -> bool:
-    """Does this league's game post after its inactives (gameparlays.POST_WAIT_SPORTS)?"""
-    from .gameparlays import POST_WAIT_SPORTS
-    return str(sport or "").lower() in POST_WAIT_SPORTS
+    """Does this league's game post after its inactives (gameparlays.INACTIVES_SPORTS)? College's games wait for
+    their schools' game-day availability reports where both file (step ADF), and not every game does, so its
+    tickets keep saying a later game's legs were picked before that game posted its own."""
+    from .gameparlays import INACTIVES_SPORTS
+    return str(sport or "").lower() in INACTIVES_SPORTS
 
 
 def on() -> bool:

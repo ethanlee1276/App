@@ -3422,20 +3422,48 @@ POST_LEAD_DEFAULT = 90
 #: clubs' lists are on the board (``INACTIVES_IN_KEY``, written by the NFL build), else the first build after they
 #: are, else at POST_DEADLINE_MIN before its start. A board that does not say (another league, or a build that
 #: could not read ESPN's board) posts at its POST_LEAD as before.
-POST_WAIT_SPORTS = ("nfl",)
+#: COLLEGE'S POST WAITS FOR ITS GAME-DAY AVAILABILITY REPORTS (step ADF, decision 20). The four conferences' schools
+#: post a last report on game day, the Big Ten's and the ACC's two hours before kickoff, the SEC's and the Big 12's
+#: 90 minutes before, which is when college's games post. So a college game between two schools that file
+#: (``AVAILABILITY_DUE_KEY``, written by the college build from the schools' own filings) posts at its POST_LEAD
+#: only once both schools' game-day reports are in (``AVAILABILITY_IN_KEY``), else the first build after they
+#: are, else at POST_DEADLINE_MIN; a game whose schools file nothing posts at its POST_LEAD as before.
+POST_WAIT_SPORTS = ("nfl", "cfb")
+#: The leagues whose wait is for inactives (the SGPX tickets' words).
+INACTIVES_SPORTS = ("nfl",)
 POST_DEADLINE_MIN = 50
 INACTIVES_IN_KEY = "inactives_in"
+AVAILABILITY_IN_KEY = "availability_in"
+AVAILABILITY_DUE_KEY = "availability_due"
+#: Each waiting league's list of whose word is in, and, where only some teams owe it, the list of those that do.
+READY_KEYS = {"nfl": INACTIVES_IN_KEY, "cfb": AVAILABILITY_IN_KEY}
+DUE_KEYS = {"cfb": AVAILABILITY_DUE_KEY}
+#: What each waiting league waits for, in the reader's words.
+WAIT_WORDS = {"nfl": "both teams' inactives are in",
+              "cfb": "both schools' game-day availability reports are in"}
 
 
 def inactives_ready(board, g, sport) -> bool | None:
-    """True when both of the game's clubs' inactives are on ESPN's board, False when the board says they are
-    not yet, None when it does not say (post as before)."""
-    if str(sport or "").lower() not in POST_WAIT_SPORTS or not isinstance(board, dict) or not isinstance(g, dict):
+    """True when both of the game's teams' word is in (the NFL: both clubs' inactives on ESPN's board; college:
+    both schools' game-day availability reports), False when the board says it is not yet, None when it does not
+    say or the game owes no wait (post as before)."""
+    sp = str(sport or "").lower()
+    if sp not in POST_WAIT_SPORTS or not isinstance(board, dict) or not isinstance(g, dict):
         return None
-    ins = board.get(INACTIVES_IN_KEY)
+    ins = board.get(READY_KEYS[sp])
     if not isinstance(ins, list):
         return None
-    return {g.get("home"), g.get("away")} <= set(ins)
+    teams = {g.get("home"), g.get("away")}
+    if sp in DUE_KEYS:
+        due = board.get(DUE_KEYS[sp])
+        teams &= set(due) if isinstance(due, list) else set()
+        if not teams:
+            return None
+    return teams <= set(ins)
+
+
+def wait_words(sport: str) -> str:
+    return WAIT_WORDS.get(str(sport or "").lower(), WAIT_WORDS["nfl"])
 
 
 def post_due(start, sport: str, now, ready=None) -> tuple:
@@ -3528,8 +3556,8 @@ def hold_until_post(x: dict, sport: str, now=None, ready=None, stash: dict | Non
     x["post_at"] = at.strftime("%Y-%m-%dT%H:%M:%SZ")
     words = _et_clock(at)
     if waiting:
-        # Both clubs' inactives not yet on the board (step ACB).
-        x["post_note"] = (f"This game's parlays post once both teams' inactives are in, "
+        # Both clubs' inactives not yet on the board (step ACB), or both schools' game-day reports (step ADF).
+        x["post_note"] = (f"This game's parlays post once {wait_words(sport)}, "
                           f"{('at ' + words) if words else 'before it starts'} at the latest, built then from the "
                           f"newest injury news, lineups and lines; once posted they never change, and they are the "
                           f"ones the Record counts")

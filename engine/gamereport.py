@@ -3997,7 +3997,7 @@ def picks_wait(sport: str, g: dict, now=None, ready=None) -> dict | None:
     if waiting:
         # Both teams' inactives not yet on the board (engine/gameparlays.post_due, step ACB).
         return {"post_at": at.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "text": (f"Our picks for this game post once both teams' inactives are in, "
+                "text": (f"Our picks for this game post once {gameparlays.wait_words(sport)}, "
                          f"{('at ' + words) if words else 'before it starts'} at the latest, with its parlays, built "
                          "then from the newest injury news, lineups and lines; once posted they never change, and "
                          "they are the ones the Record counts")}

@@ -52,7 +52,8 @@ def test_it_posts_once_both_are_in_or_at_the_deadline():
                                  (49, False, (True, _at(75), False))):       # past the deadline: posts
         assert GP.post_due(START, "nfl", _at(minutes), ready) == want, (minutes, ready)
     assert GP.post_due(START, "nba", _at(80), False)[0] is True, "another league never waits"
-    assert GP.POST_DEADLINE_MIN == 50 and GP.POST_WAIT_SPORTS == ("nfl",)
+    assert GP.POST_DEADLINE_MIN == 50 and GP.INACTIVES_SPORTS == ("nfl",)
+    assert GP.POST_WAIT_SPORTS == ("nfl", "cfb"), "college waits for its schools' game-day reports (step ADF)"
 
 
 def test_waiting_the_report_and_its_parlays_say_so():

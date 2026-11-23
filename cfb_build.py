@@ -2278,6 +2278,14 @@ def main() -> None:
                   + ("" if _avail_note.get("espn_read") else " (ESPN's board unread)"))
         out["availability_reports"] = {k: _avail_note.get(k) for k in ("schools", "added", "changed", "dropped")} | {
             "cleared": [{"team": t, "player": n, "was": w} for t, n, w in _avail_note.get("cleared") or []]}
+        # WHOSE GAME-DAY REPORT IS IN (step ADF): a game between two schools that file posts its picks and parlays
+        # once both schools' game-day reports are in (engine/gameparlays.post_due), as an NFL game waits for its
+        # inactives; a school that files nothing owes nothing, and its game posts as before.
+        from engine.gameparlays import AVAILABILITY_DUE_KEY as _adk, AVAILABILITY_IN_KEY as _aik
+        out[_adk] = list(_avail_note.get("due") or [])
+        out[_aik] = list(_avail_note.get("final") or [])
+        if out[_aik]:
+            print(f"  Game-day availability reports in for: {', '.join(out[_aik])}")
     except Exception as _iexc:                               # noqa: BLE001
         print(f"  ⚠️  college injuries unavailable: {_iexc}")
     _t = _clock.lap("injuries + lineup + prop pricing", "injuries", _t)

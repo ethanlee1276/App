@@ -301,7 +301,10 @@ def load_cfb_injuries(games: list[dict], lookup: dict, note: dict | None = None)
     board = live_injuries(rows, since=since, team_key=key)
     merged, said = cfbavail.overlay(board, cfbavail.espn_dates(rows, key), filed)
     if note is not None:
-        note.update(said, espn=len(board), espn_read=bool(rows))
+        # Whose game-day report is in (step ADF): every school that filed for its game owes one, and its newest
+        # filing is it once that filing is the game-day report.
+        note.update(said, espn=len(board), espn_read=bool(rows), due=sorted({r["team"] for r in filed}),
+                    final=sorted({r["team"] for r in filed if r.get("final")}))
     return merged
 
 

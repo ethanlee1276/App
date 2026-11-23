@@ -9429,6 +9429,30 @@ posts and 85 and 40 minutes before each of its kickoffs, from the times the repo
 safety net between (every two hours on game days, three on weekday evenings, six otherwise). A posted report is dated
 by its own post time. Still off picks until the check holds up.
 
+**ADF. College availability reports, step six: the check holds up, and college waits for game-day reports** (step
+897; 23 November). Nothing to run. The box's check of the whole season's archive (22:24 UTC), each school's last
+report before each game held to that week's box scores:
+
+| Conference | Reports (games) | Schools matched | Men listed out (in our records) | of them, with stats that week | Listed available | of them, played |
+|---|---|---|---|---|---|---|
+| Big Ten | 143 | 143 | 211 | 0 | 76 | 49 |
+| SEC | 132 | 132 | 152 | 0 | 72 | 50 |
+| ACC | 136 | 128 | 241 | 4 | 82 | 50 |
+| Big 12 | 128 | 128 | 151 | 0 | 114 | 67 |
+
+So 4 of 755 men the reports listed out have stats in that game (0.5%: two Boston College men and two Syracuse
+rows), and the reading of the reports is right. The one school not matched, Pittsburgh, is now matched (the board
+calls it Pitt). What is still unseen is a current report with rows in it: this week's all read "Report Pending" until
+the first posts, the Big Ten's on Tuesday at 7 PM Central. I check that first real one before the switch goes on
+(cfbavail.TRUSTED), so the first picks it can move are Black Friday's. Ready for then: a college game between two
+schools that file waits to post its picks and parlays until both schools' game-day reports are in, the way an NFL
+game waits for both clubs' inactives. The Big Ten's and the ACC's come two hours before kickoff and change nothing
+about when their games post (90 minutes before); the SEC's and the Big 12's come 90 minutes before, so their games
+post at the first build after both are in, 50 minutes before kickoff at the latest, and the report says so ("Our
+picks for this game post once both schools' game-day availability reports are in, at ... at the latest"). A game
+whose schools file nothing posts at 90 minutes as before. A school's game-day report that lists nobody still counts
+as in.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

@@ -133,12 +133,24 @@ FORMAL = (re.compile(r"^\s*the\s+", re.I), re.compile(r"^\s*university\s+of\s+(?
           re.compile(r"\s+university\s*$", re.I), re.compile(r",?\s+(?:inc\.?|athletics)\s*$", re.I))
 
 
+#: A report's name for a school where the board knows it by another (exact names only, tried last): the vendor's
+#: archive wrote "Pittsburgh", which the board knows as Pitt, the one school of 66 the first check could not key.
+ALIASES = {"pittsburgh": "pitt", "miami fl": "miami", "miami fla": "miami", "north carolina state": "nc state",
+           "southern methodist": "smu", "central florida": "ucf", "brigham young": "byu",
+           "texas christian": "tcu", "louisiana state": "lsu", "mississippi": "ole miss", "connecticut": "uconn"}
+
+
 def school_key(name: str, lookup: dict) -> str:
     """The board's key for a report's school name, or "" when none fits."""
-    from .cfbdata import resolve_team
+    from .cfbdata import name_key, resolve_team
     hit = resolve_team(name, lookup)
     if hit:
         return hit
+    alias = ALIASES.get(name_key(str(name or "")))
+    if alias:
+        hit = resolve_team(alias, lookup)
+        if hit:
+            return hit
     s = str(name or "")
     for rx in FORMAL:
         s = rx.sub("", s)

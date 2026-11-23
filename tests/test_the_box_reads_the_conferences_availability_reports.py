@@ -157,9 +157,18 @@ def test_a_posted_report_is_dated_by_its_own_post_time():
     rows = [{"Player": "Dylan Raiola", "Number": "#15", "Status": "Questionable"}]
     doc = {"1": _report("2026-11-24", "19:00:00", "2026-11-27", "11:00:00", kind="Initial", rows=rows)}
     got = R.filings(doc, "B10", CA._ts("2026-11-25T03:00:00Z"))
-    assert [(f["school"], f["filed_at"], f["kickoff"], f["players"][0]["word"]) for f in got] == [
-        ("Nebraska", "2026-11-25T01:00:00Z", "2026-11-27 11:00:00", "Questionable")]
+    assert [(f["school"], f["filed_at"], f["kickoff"], [p["word"] for p in f["players"]]) for f in got] == [
+        ("Nebraska", "2026-11-25T01:00:00Z", "2026-11-27 11:00:00", ["Questionable"]),
+        ("Iowa", "2026-11-25T01:00:00Z", "2026-11-27 11:00:00", [])], "Iowa posted too, listing nobody"
     assert got[0]["seen"] is False
+
+
+def test_a_posted_report_that_lists_nobody_is_still_filed():
+    doc = {"1": _report("2026-11-28", "09:30:00", "2026-11-28", "11:00:00", kind="Game Day",
+                        rows=[{"Player": "Dylan Raiola", "Status": "Available"}])}
+    got = {f["school"]: f for f in R.filings(doc, "B10", CA._ts("2026-11-28T15:40:00Z"))}
+    assert set(got) == {"Nebraska", "Iowa"} and got["Iowa"]["players"] == [] and got["Iowa"]["final"] is True
+    assert got["Nebraska"]["players"] == [{"player": "Dylan Raiola", "pos": "", "word": "Available"}]
 
 
 def test_the_archives_rows_read_game_day_over_the_updates():

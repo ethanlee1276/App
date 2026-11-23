@@ -56,6 +56,9 @@ def test_a_schools_formal_name_finds_the_boards_school():
     assert CA.school_key("Clemson University", LOOKUP) == "CLEM"
     assert CA.school_key("University of South Carolina", LOOKUP) == "SC"
     assert CA.school_key("Wake Forest University", LOOKUP) == "", "a school the board does not know is left out"
+    assert CA.school_key("Pittsburgh", {"pitt": "PITT", "pittsburgh panthers": "PITT"}) == "PITT", \
+        "the vendor's Pittsburgh is the board's Pitt"
+    assert CA.school_key("Mississippi St.", {"ole miss": "MISS", "mississippi st": "MSST"}) == "MSST"
 
 
 def test_each_school_keeps_its_newest_filing_for_this_game():

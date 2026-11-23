@@ -302,6 +302,11 @@ def _walk(node, ctx: dict, out: list) -> None:
     # A dict that holds the rows under it and has a "name" is most likely the school (the nearest one wins).
     if isinstance(low.get("name"), str) and any(isinstance(v, list) for v in node.values()):
         here["maybe_school"] = low["name"]
+    # A SCHOOL'S POSTED REPORT THAT LISTS NOBODY is still its report: a team entry of a posted report (its name and
+    # its list of rows) is marked as filed even when the list is empty, so a healthy team's game-day report counts.
+    if here.get("school") and here.get("at") and any(isinstance(low.get(k), list) for k in ("rows", "players")):
+        out.append({"player": "", "pos": "", "word": "", "school": here["school"], "at": here["at"],
+                    "game": here.get("game", ""), "kickoff": here.get("kickoff", ""), "kind": here.get("kind", "")})
     for k, v in node.items():
         if isinstance(v, (list, dict)):
             # …and a key that is no field name at all, holding rows, is most likely a school's name (a report id,
@@ -329,7 +334,8 @@ def filings(doc, conf: str, now: float) -> list[dict]:
         f = by.setdefault(key, {"conference": conf.lower(), "school": r["school"], "game": r["game"],
                                 "kickoff": r.get("kickoff", ""), "filed_at": at, "seen": not dated,
                                 "final": bool(FINAL_RE.search(r["kind"] or "")), "players": []})
-        f["players"].append({"player": r["player"], "pos": r["pos"], "word": r["word"]})
+        if r["player"]:
+            f["players"].append({"player": r["player"], "pos": r["pos"], "word": r["word"]})
     return list(by.values())
 
 
