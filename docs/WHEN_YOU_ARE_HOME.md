@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ADA. College availability reports, step one: the box maps them** (step 892; 23 November). Nothing to run. Your yes
+to decision 20. The conferences' sites can't be reached from where I build (ESPN's can't either), so the box looks
+for me. Every three hours it reads the Big Ten's, the SEC's, the ACC's, the Big 12's and the College Football
+Playoff's front and football pages, follows the links that speak of availability or injuries on each conference's
+own site two steps deep, and writes what it found to a file on our site: each page's tables, any PDF's text, the
+addresses a page loads its data from, and the words around "availability". Nothing reads that file and no pick
+moves. From it I write each conference's reader, check it against this week's published reports (rivalry week, 28
+and 29 November), and only then put its players into college picks, game reports and the Injuries page. Switch:
+`QB_CFB_AVAIL_PROBE=off`.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his
@@ -9350,15 +9360,16 @@ short version. The pick itself stays as it was. Every league whose reports carry
 college football, the NBA, the WNBA, college basketball and baseball) goes through the same step; hockey's reads
 never carried them.
 
-**Decision 20, for you: college football's injuries** (23 November). Nothing changes until you answer. Our college
-injury feed is ESPN's college board. On Monday afternoon it listed 1 college football injury and no college
-basketball ones, against the NFL's 797, because schools owe ESPN nothing. College football teams do publish
-availability reports for conference games now, through their conferences: the Big Ten requires four a week for 2026,
-and the SEC, ACC and Big 12 publish theirs too; the College Football Playoff posts its teams' reports for playoff
-games. There is no single feed: each conference posts its own page in its own format. Reading them would put a
-missing quarterback or running back into college picks and reports the way the NFL's inactives are. Those sites
-can't be reached from where I build, so I would write a reader for each conference, run it on the box, and check it
-against a Saturday's published reports before it changes any pick. Yes or no?
+**Decision 20, answered: college football's injuries** (23 November; answered the same day). Our college injury feed
+is ESPN's college board. On Monday afternoon it listed 1 college football injury and no college basketball ones,
+against the NFL's 797, because schools owe ESPN nothing. College football teams do publish availability reports for
+conference games now, through their conferences: the Big Ten requires four a week for 2026, and the SEC, ACC and Big
+12 publish theirs too; the College Football Playoff posts its teams' reports for playoff games. There is no single
+feed: each conference posts its own page in its own format. Reading them would put a missing quarterback or running
+back into college picks and reports the way the NFL's inactives are. Those sites can't be reached from where I
+build, so I would write a reader for each conference, run it on the box, and check it against a Saturday's published
+reports before it changes any pick. Your answer: "decision 20 is a yes if it helps and get us more up to date info
+for the users". Being built from step ADA.
 
 **ACY. Every league says "spot" when the opponent didn't decide it** (step 890; 23 November). Nothing to run. Last
 step made a football verdict that the defense had no say in read "Tough spot" or "Favorable spot" instead of "Tough

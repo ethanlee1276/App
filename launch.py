@@ -6561,6 +6561,20 @@ def _inactives_watcher() -> None:
         time.sleep(wait)
 
 
+def _cfb_avail_probe() -> None:
+    """Where the conferences publish their football availability reports, looked up from the box every few
+    hours (engine/cfbavailprobe, decision 20): the map the college reader is written from. Nothing on the site
+    reads what it writes, so it changes no pick; a failure never stops the site."""
+    from engine import cfbavailprobe as _cp
+    while True:
+        wait = _cp.IDLE_S
+        try:
+            wait = _cp.watch_once()
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
 #: How often the billing sweep wakes. Each pass re-reads only the rows
 #: Stripe has not been asked about in billing.SWEEP_EVERY_S (six hours).
 BILLING_SWEEP_S = 30 * 60
@@ -12972,6 +12986,15 @@ def main() -> None:
                 print("  Inactives watch: each minute an NFL game is near its kickoff, ESPN's summary, gamecast "
                       "and rosters read beside its injury board (python3 -m engine.inactiveswatch).")
         except Exception:      # noqa: BLE001 — a watcher never stops the site
+            pass
+        # Where the conferences publish their availability reports (engine/cfbavailprobe, decision 20).
+        try:
+            from engine import cfbavailprobe as _cp
+            if _cp.on():
+                threading.Thread(target=_cfb_avail_probe, daemon=True, name="cfbavailprobe").start()
+                print("  College availability probe: every 3 h, the conferences' report pages mapped "
+                      "(python3 -m engine.cfbavailprobe).")
+        except Exception:      # noqa: BLE001 — a probe never stops the site
             pass
         # Each game's report, watching the injury report and the news between builds.
         threading.Thread(target=_report_watcher, daemon=True, name="reportwatch").start()
