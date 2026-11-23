@@ -158,6 +158,21 @@ def test_a_feature_page_is_read_through_its_own_script_and_each_page_once():
     assert P.canon("http://bigten.org/x.aspx#events") == "https://bigten.org/x.aspx"
 
 
+def test_every_inline_script_is_counted_and_the_report_bearing_ones_kept_and_an_app_bundle_read():
+    body = ('<script>var component = {"type":"main-navigation","data":[]};</script>'
+            '<script>var component = {"type":"story-content","data":{"html":"<td>John Smith</td><td>Questionable</td>"}};'
+            '</script><script src="/dist/assets/app-CRAW0Srj.js"></script>').encode()
+    rec, links = P.look_page("https://www.secsports.com/fbreports", get=lambda u: ("ok", "text/html", body))
+    assert rec["inline_count"] == 2 and [x["types"] for x in rec["inline_inventory"]] == [["main-navigation"],
+                                                                                           ["story-content"]]
+    assert rec["inline_inventory"][1]["status_words"] and len(rec["inline"]) == 1 and "John Smith" in rec["inline"][0]
+    assert links == ["https://www.secsports.com/dist/assets/app-CRAW0Srj.js"], "the site's own app bundle is read"
+    js = b"fetch('/api/availability-reports?sport=football');var y='https://cdn.x.test/a.png';"
+    got, _ = P.look_page(links[0], get=lambda u: ("ok", "application/javascript", js))
+    assert got["js_urls"] == ["/api/availability-reports?sport=football", "https://cdn.x.test/a.png"]
+    assert got["js_bits"] and "availability-reports" in got["js_bits"][0]
+
+
 def test_the_file_is_written_whole_and_small_and_the_clock_holds_it_to_every_three_hours():
     out = Path(tempfile.mkdtemp()) / "probe.json"
     P._LAST["at"] = 0.0

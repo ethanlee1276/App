@@ -79,7 +79,14 @@ API_RE = re.compile(r"""["']((?:https?://[^"'\s]{6,300}?|/)(?:api|json|feed)[^"'
 #: A page's own script files (a page built by scripts reads its data from one of them).
 SCRIPT_RE = re.compile(r"""<script[^>]+src=["']([^"']+)["']""", re.I)
 #: Any address a script names: quoted, absolute or rooted.
-JS_URL_RE = re.compile(r"""["'`]((?:https?:)?//[^"'`\s]{4,300}|/[A-Za-z0-9_\-./]{3,200}\.(?:json|ashx|aspx|csv)[^"'`\s]{0,120})["'`]""")
+JS_URL_RE = re.compile(r"""["'`]((?:https?:)?//[^"'`\s]{4,300}|/[A-Za-z0-9_\-./]{3,200}\.(?:json|ashx|aspx|csv)[^"'`\s]{0,120}"""
+                       r"""|/(?:api|services|v\d)/[^"'`\s]{2,200}|/[^"'`\s]{0,120}availab[^"'`\s]{0,120})["'`]""", re.I)
+#: A component a page declares inline ("var component = {"type":"sport-navigation",...}"), and the site's own
+#: navigation types, which never hold a report.
+COMPONENT_RE = re.compile(r'"type"\s*:\s*"([a-z0-9_\-]{2,40})"', re.I)
+NAV_TYPES = {"main-navigation", "sport-navigation", "footer-navigation", "social-media", "sponsor", "ad"}
+#: The words a report's rows carry.
+STATUS_RE = re.compile(r"\b(?:Questionable|Doubtful|Game[- ]Time Decision|Probable|Out for (?:the )?season)\b", re.I)
 #: A page's inline scripts, and the words that mark one that sets a feature page up.
 INLINE_RE = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.I | re.S)
 FEATURE_RE = re.compile(r"feature-pages|availab|fbreport|\.json|/api/|endpoint|dataUrl|data_url|sheet", re.I)
@@ -272,9 +279,14 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
         rec["json_head"] = body[:3000]
         return rec, []
     if "javascript" in ctype.lower() or url.split("?")[0].endswith(".js"):
-        # A script: the addresses it fetches, and its first lines.
-        rec["js_head"] = body[:2500]
-        rec["js_urls"] = list(dict.fromkeys(m.group(1) for m in JS_URL_RE.finditer(body)))[:40]
+        # A script: the addresses it fetches (those that read like a report's first, then the rest), and the text
+        # around the words a report page would use.
+        urls = list(dict.fromkeys(m.group(1) for m in JS_URL_RE.finditer(body)))
+        rec["js_head"] = body[:1500]
+        rec["js_urls"] = ([u for u in urls if re.search(r"availab|report|injur|api", u, re.I)]
+                          + [u for u in urls if not re.search(r"availab|report|injur|api", u, re.I)])[:60]
+        rec["js_bits"] = [body[max(0, m.start() - 400):m.start() + 600]
+                          for m in re.finditer(r"availab|fbreport", body, re.I)][:6]
         return rec, []
     p = _Page()
     try:
@@ -308,11 +320,25 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     if rec["words"] < 200:                                     # a page its scripts build: name the scripts
         rec["scripts"] = list(dict.fromkeys(urllib.parse.urljoin(url, m.group(1))
                                             for m in SCRIPT_RE.finditer(body)))[:25]
-        # …and keep its own inline scripts that set the page up (where a feature page is told what to load).
+        # …and its own inline scripts: every one counted (its length, the component types it declares, whether it
+        # carries a report's words or names the feature page), and the ones that matter kept whole. The fourth
+        # look kept the first six that named anything, and on every report page those were the site's navigation.
         inline = [m.group(1).strip() for m in INLINE_RE.finditer(body)]
-        keep = [x[:3000] for x in inline if x and FEATURE_RE.search(x)]
+        inv, scored = [], []
+        for x in inline:
+            if not x:
+                continue
+            types = sorted(set(COMPONENT_RE.findall(x)))[:8]
+            status = bool(STATUS_RE.search(x))
+            feature = bool(re.search(r"feature-pages|availab|fbreport", x, re.I)) and not x.startswith("(function(i,s,o,g")
+            inv.append({"len": len(x), "types": types, "status_words": status, "feature": feature})
+            if status or feature or any(t not in NAV_TYPES for t in types):
+                scored.append((status, feature, x))
+        rec["inline_count"] = len(inv)
+        rec["inline_inventory"] = inv[:40]
+        keep = [x[:6000] for _st, _ft, x in sorted(scored, key=lambda t: (not t[0], not t[1]))]
         if keep:
-            rec["inline"] = keep[:6]
+            rec["inline"] = keep[:8]
     nd = _next_data(body)
     if nd:
         rec["next_data"] = nd
@@ -324,7 +350,9 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     # A FEATURE PAGE'S OWN SCRIPT: the third look found the ACC's and the Big 12's report pages loading a stylesheet
     # from <static site>/feature-pages/availability-reporting/; the script beside it is what fills the page.
     feature = [re.sub(r"\.css(\?.*)?$", ".js", h) for h in named if "feature-pages" in h and ".css" in h]
-    return rec, list(dict.fromkeys(canon(u) for u in [x["href"] for x in follow] + named + feature))
+    # A SITE'S OWN APP BUNDLE (the SEC's /dist/assets/app-*.js): the page's data addresses are in it.
+    bundles = [x for x in rec.get("scripts") or [] if re.search(r"/dist/assets/app[-.][^/]*\.js", x)]
+    return rec, list(dict.fromkeys(canon(u) for u in [x["href"] for x in follow] + named + feature + bundles))
 
 
 def canon(url: str) -> str:
