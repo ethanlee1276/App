@@ -14008,7 +14008,9 @@ const SCAN_READ_WORD = { breakout: "Breakout candidate", good: "Good matchup", n
                          tough: "Tough matchup", avoid: "Worst matchup" };
 function scanReadForBet(x, side) {
   if (!x || !x.read) return null;
-  const word = SCAN_READ_WORD[x.read] || x.label || "";
+  /* A read the defense had no vote in is a spot, not a matchup (engine/gamescan SPOT_LABELS, step ACW): its own
+     words, "Tough spot", where the matchup word would blame the defense for the wind. */
+  const word = (x.spot && x.label) || SCAN_READ_WORD[x.read] || x.label || "";
   const want = SCAN_READ_SIDE[x.read];
   const s0 = String(side || "").toLowerCase();
   const mine = s0 === "yes" ? "over" : s0 === "no" ? "under" : s0;

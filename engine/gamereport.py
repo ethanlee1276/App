@@ -129,6 +129,45 @@ VERDICT = {"breakout": ("favorable", "FAVORABLE — breakout candidate"),
            "neutral": ("neutral", "NEUTRAL"),
            "tough": ("unfavorable", "UNFAVORABLE"),
            "avoid": ("unfavorable", "UNFAVORABLE — avoid")}
+#: A SPOT, NOT A MATCHUP (step ACW, 23 November 2026). A read the defence he faces had no vote in (the wind, the
+#: points the lines expect, a teammate out: gamescan's ``spot``) says so, where its card's title reads "vs CIN's
+#: coverage": the Commanders' tight end was UNFAVORABLE "vs CIN's coverage" on a 9 mph wind alone, beside the
+#: Bengals giving up the 2nd-most yards to tight ends. And a read that pointed against what the defence gives up to
+#: his own position is said as mixed (gamescan's ``mixed``).
+VERDICT_SPOT = {"good": ("favorable", "FAVORABLE SPOT"), "tough": ("unfavorable", "TOUGH SPOT"),
+                "avoid": ("unfavorable", "TOUGH SPOT — avoid")}
+NAME_TONE_SPOT = {"good": ("up", "Favorable spot"), "tough": ("down", "Tough spot"),
+                  "avoid": ("down", "Tough spot — avoid")}
+MIXED_LABEL = ("neutral", "NEUTRAL — MIXED")
+
+
+def verdict_of(r: dict) -> tuple:
+    """(tone, label) for a read's card: a spot's and a mixed read's own words (VERDICT_SPOT, MIXED_LABEL)."""
+    read = str((r or {}).get("read") or "")
+    if (r or {}).get("mixed"):
+        return MIXED_LABEL
+    if (r or {}).get("spot") and read in VERDICT_SPOT:
+        return VERDICT_SPOT[read]
+    return VERDICT.get(read, ("neutral", "NEUTRAL"))
+
+
+def tone_of(r: dict) -> tuple:
+    """(tone, words) for a named player (NAME_TONE), a spot's own words (NAME_TONE_SPOT)."""
+    read = str((r or {}).get("read") or "")
+    if (r or {}).get("mixed"):
+        return "", "Neutral matchup — the numbers point both ways"
+    if (r or {}).get("spot") and read in NAME_TONE_SPOT:
+        return NAME_TONE_SPOT[read]
+    return NAME_TONE.get(read, ("", ""))
+
+
+def mixed_line(r: dict) -> str:
+    """The card's first line for a mixed read: both numbers, plainly."""
+    if not (r or {}).get("mixed"):
+        return ""
+    other = str(r.get("mixed_with") or "").split(" · ")[0].strip()
+    return (f"The numbers point both ways: {r['mixed']}" + (f", but {other[:1].lower() + other[1:]}" if other else "")
+            + " — so neither way")
 
 #: Inactives post this long before kickoff.
 INACTIVES_BEFORE_MIN = 90
@@ -863,7 +902,7 @@ def name_tones(c: "Ctx", team: str, players) -> dict:
     for p in players or []:
         name = str((p.get("player") if isinstance(p, dict) else p) or "")
         r = reads.get(_key(name)) if name else None
-        tone, label = NAME_TONE.get(str((r or {}).get("read") or ""), ("", ""))
+        tone, label = tone_of(r) if r else ("", "")
         if label:
             out[name] = {"tone": tone, "label": label}
     return out
@@ -1803,8 +1842,9 @@ def _corner_line(cn: dict, grade: dict | None = None) -> str:
 
 
 def funnel_lines(c: Ctx, dfn: str) -> list:
-    """Where ``dfn`` leaks and where it holds, by position, off the
-    defense-vs-position ratings the props were priced against."""
+    """Where ``dfn`` leaks and where it holds, by position, off the defense-vs-position ratings: a back's and a
+    quarterback's are the ones their props are priced against; a receiver's and a tight end's are priced against
+    the defense's passing yards overall (engine/defensevs.MODEL_STAT), and the lines say so (step ACW)."""
     r = c.allowed.get(dfn) or {}
     if not r:
         return []
@@ -1836,6 +1876,16 @@ def funnel_lines(c: Ctx, dfn: str) -> list:
         out.append(f"Where {dfn}'s defense is weakest{over}: it gives up {'; '.join(leaks)}")
     if holds:
         out.append(f"Where it's strongest: it gives up {'; '.join(holds)}")
+    # WHICH NUMBER THE CATCHERS' PROJECTIONS READ (step ACW): a funnel to receivers or tight ends is where the
+    # yards went, not what predicts the next game, and a reader set it against the matchup verdicts.
+    catchers = any(f"to {g}" in line for line in out for g in ("wide receivers", "tight ends"))
+    py = r.get("qb_pass_yds") or {}
+    if catchers and py.get("rank") and py.get("of") and _f(py.get("pg")) is not None:
+        rk, of = int(py["rank"]), int(py["of"])
+        where = (f"the {_ord(rk)}-most of {of}" if rk <= (of + 1) / 2 else f"the {_ord(of - rk + 1)}-fewest of {of}")
+        out.append(f"Our receiver and tight end numbers read the passing yards {dfn} allows overall "
+                   f"({_num(_f(py['pg']), 0)} a game, {where}): over the last four seasons that number predicted "
+                   f"their next games, and what a defense allowed to one position did not")
     return out
 
 
@@ -1892,7 +1942,11 @@ def sec_matchups(c: Ctx) -> dict | None:
             sub.append(_p(f"True for every {off} player below: {text}"))
         items = []
         for r, why in zip(keys, whys):
-            tone, label = VERDICT.get(r.get("read"), ("neutral", "NEUTRAL"))
+            tone, label = verdict_of(r)
+            # A spot or a mixed read says what the defence itself says, first (step ACW).
+            first = [mixed_line(r)] if r.get("mixed") else []
+            if (r.get("mixed") or r.get("spot")) and r.get("defense_line"):
+                first.append(f"{r['defense_line']} — the number our projection reads for this matchup")
             scorer = scorer_words(c, r, lead=True) if _go_to(r) else ""
             if scorer and tone == "unfavorable":
                 # Duke's back at Miami (engine/readlogic rule 3): the yards
@@ -1909,6 +1963,7 @@ def sec_matchups(c: Ctx) -> dict | None:
                           **({"lean": list(r.get("lean") or [])} if r.get("lean") else {}),
                           "title": f"{r.get('player')} vs {against}", "role": _role_line(r),
                           "why": ([_sentence(cap(scorer))] if scorer else [])
+                          + [_sentence(cap(w)) for w in first if w]
                           + [_sentence(w) for w in why if w not in common][:4],
                           "form": form_lines(c, r),
                           # His pick on the read's side (`read_pick`), and the
@@ -3469,14 +3524,15 @@ def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_
     # his card says why, in Players to watch.
     reads = [r for r in reads if not r.get("availability")]
     shine = [r for r in reads if r.get("read") in ("breakout", "good")]
-    shine.sort(key=lambda r: (r.get("read") != "breakout", -_volume(r), -len(r.get("pro") or [])))
+    # The matchups first, a spot after (step ACW: the wind or the lines are every player's in the game).
+    shine.sort(key=lambda r: (r.get("read") != "breakout", bool(r.get("spot")), -_volume(r), -len(r.get("pro") or [])))
     if shine:
         out.append("Who could have a big day: " + ". ".join(player_clause(c, r, "up") for r in shine[:shine_n]))
     # A go-to scorer is not a man to have a hard day (engine/readlogic rule
     # 3): his card says the yards are tough and the touchdowns still his.
     struggle = [r for r in reads if r.get("read") in ("tough", "avoid") and (not key_only or _is_key(r))
                 and not _go_to(r)]
-    struggle.sort(key=lambda r: (r.get("read") != "avoid", -_volume(r), -len(r.get("con") or [])))
+    struggle.sort(key=lambda r: (r.get("read") != "avoid", bool(r.get("spot")), -_volume(r), -len(r.get("con") or [])))
     if struggle:
         out.append("Who could have a hard day: " + ". ".join(player_clause(c, r, "down")
                                                              for r in struggle[:struggle_n]))

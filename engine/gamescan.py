@@ -896,6 +896,8 @@ def _ord(n) -> str:
 #: The reads, in order. A score is a count of the reasons for and against.
 READS = (("breakout", "Breakout candidate"), ("good", "Good matchup"), ("neutral", "Neutral"),
          ("tough", "Tough matchup"), ("avoid", "Avoid"))
+#: A lean the defence had no vote in (step ACW): the weather, the points the lines expect, a teammate out.
+SPOT_LABELS = {"good": "Good spot", "tough": "Tough spot", "avoid": "Avoid"}
 
 
 def _label(score: int, volume: bool, lead: bool = False) -> tuple[str, str]:
@@ -1726,6 +1728,38 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     score = RL.score(pro, con, fam)
     key, label = _label(score, volume,
                         lead=group == "rb" and float(u.get("carry_share") or 0.0) >= LEAD_CARRY_SHARE)
+    # WHAT CARRIED IT (step ACW): the families of the reasons on the winning side. A lean the defence he faces
+    # had no vote in is a SPOT, not a matchup: the wind, the points the lines expect, a teammate out.
+    winning0 = pro if score > 0 else con if score < 0 else []
+    drivers = sorted({fam.get(t) for t in winning0 if fam.get(t)})
+    # NEVER AGAINST HIS POSITION'S OWN NUMBERS (step ACW, 23 November 2026). Ethan, the Bengals at the
+    # Commanders: the report said the Bengals give up 76 receiving yards and 6.2 catches a game to tight ends,
+    # the 2nd-most, and called Washington's tight end a tough matchup. A pass catcher's count reads the
+    # defence's OVERALL pass defence (defensevs.MODEL_STAT: re-measured that morning on 2022-2025, each season
+    # held out, the overall number still predicted tight ends' and receivers' yards and catches and what a
+    # defence allowed to the position itself did not), and his read leaned tough on the forecast wind alone.
+    # The count stands; a read that leans against what this defence gives up to his own position, at the
+    # league's ends, is said as mixed and leans neither way, so no card, pick or headline runs against the
+    # numbers printed beside it.
+    mixed, mixed_with, mixed_was = "", "", ""
+    if measured and group in ("wr", "te") and key != "neutral":
+        own_sign, own_text = _allowed_line(allowed, f"{group}_rec_yds", opp, n_teams)
+        if own_text and ((own_sign > 0 and key in READ_DOWN) or (own_sign < 0 and key in READ_UP)):
+            mixed, mixed_with, mixed_was = own_text, (winning0[0] if winning0 else ""), key
+            key, label = "neutral", dict(READS)["neutral"]
+            drivers = []
+    spot = bool(key in SPOT_LABELS and drivers and RL.DEFENSE not in drivers)
+    if spot:
+        label = SPOT_LABELS[key]
+    # The number his projection reads for this matchup, in words (defensevs.MODEL_STAT), for a card that leans
+    # on something else or says mixed: what the defence itself says.
+    defense_line = ""
+    if measured and group in ("wr", "te", "qb", "rb"):
+        from . import defensevs as _D
+        head = {"wr": "rec_yds", "te": "rec_yds", "qb": "pass_yds", "rb": "rush_yds"}[group]
+        mstat = _D.model_stat((pos or "").upper(), head)
+        if mstat:
+            defense_line = rank_fact(allowed, mstat, opp, n_teams)[1]
     # His share is said with what was noticed and not counted, first.
     notes = role + notes
     # A LEAN THAT RESTS ON THE WEATHER ALONE points only at the markets the
@@ -1758,6 +1792,10 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     return {"player": name, "team": team, "opp": opp, "pos": (pos or "").upper(),
             "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
             "role": role, "facts": facts,
+            # What carried the read, and whether it is a spot or mixed (step ACW).
+            **({"drivers": drivers} if drivers else {}), **({"spot": True} if spot else {}),
+            **({"mixed": mixed, "mixed_with": mixed_with, "mixed_was": mixed_was} if mixed else {}),
+            **({"defense_line": defense_line} if defense_line else {}),
             "usage": {k: u.get(k) for k in ("tgt_share", "targets_pg", "carry_share",
                                             "carries_pg", "rec_yds_pg", "rush_yds_pg",
                                             "snap_pct", "games", "rec_pg", "share_of",

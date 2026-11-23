@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACW. A matchup verdict never argues with the numbers beside it** (step 888; 23 November). Nothing to run. You saw
+it on tonight's Bengals at Commanders report: the Bengals give up 76 receiving yards and 6.2 catches a game to tight
+ends, 2nd-most in the league, and the report still called the Commanders' tight end a tough matchup. Rebuilt from
+this season's box scores, here is what happened. A receiver's or tight end's verdict counts how many passing yards
+the defense allows overall, because that is the number that has predicted their games. Re-tested this morning on
+2022 to 2025, each season held out, it improved predictions of tight ends' yards and catches (+0.15% and +0.40%),
+while what a defense allowed to tight ends themselves made them slightly worse (-0.12% and -0.17%); receivers came
+out the same way. The Bengals are 15th in passing yards allowed, dead middle, so the defense had no vote, and the
+verdict leaned tough on the forecast 9 mph wind alone, which takes about 3% off receiving yards. Three changes. (1)
+A verdict that points against what the defense gives up to the player's own position, in the top or bottom quarter
+of the league, now reads "Neutral — mixed": it names both numbers, leans neither way, and makes no matchup pick or
+"hard day" headline. (2) A verdict the defense had no say in is called a spot, "Tough spot" or "Favorable spot",
+with its reason first, instead of "UNFAVORABLE" under "vs CIN's coverage"; the defense's own number is said on the
+card. (3) Under "Where the defense is weakest" the report now says which number our receiver and tight end
+projections read and why. Tonight the Commanders' tight end reads mixed. The numbers themselves are this season's,
+through last week.
+
 **ACV. A season's averages read the games that have each number** (step 887; 23 November). Nothing to run. The
 Monday-morning check of the WNBA's nightly re-read found A'ja Wilson's 2026 line reading 3PT "0.9-0.8" and 3P% 113.2
 over 48 games. The re-read fills a season newest first, forty game days a night, and her September and October games
