@@ -116,6 +116,11 @@ def _label(x: dict) -> str:
     return f"{x.get('away')}@{x.get('home')}"
 
 
+def _said(game: str) -> str:
+    """A game as a sentence says it, the way each leg names its game: "AUB at ALA" (step ACS)."""
+    return str(game or "").replace("@", " at ")
+
+
 def legs_of(x: dict, kind: str, sport: str = "nfl", game: str | None = None) -> list[dict]:
     """One game's posted legs of ``kind`` ("props": its three-leg and two-leg parlays' player props; "tds": its
     touchdown pairs' scorers), each once, each with its game (``sgpx_game``: ``game``, else the entry's own)."""
@@ -348,9 +353,10 @@ def build_day(sport: str, d: dict, result: dict, memo: dict | None = None, books
                 if early:
                     later = (f"{'that game starts' if len(early) == 1 else 'those games start'} later in the day, "
                              f"and a leg on a player who sits is void")
-                    t["caveats"].insert(0, (f"Picked before the inactives of {', '.join(early)}: {later}"
+                    named = ", ".join(_said(g) for g in early)
+                    t["caveats"].insert(0, (f"Picked before the inactives of {named}: {later}"
                                             if _waits_for_inactives(sport) else
-                                            f"Picked before {', '.join(early)} posted "
+                                            f"Picked before {named} posted "
                                             f"{'its' if len(early) == 1 else 'their'} own picks: {later}"))
                 made.append(t)
         out[kind] = choose(made, rank=rank)
@@ -524,7 +530,7 @@ def _entry_blocks(entry: dict) -> list:
         return []
     # The games by name while they fit on a line; a college Saturday's dozens by their count (step ACO).
     gs = list(entry.get("games") or [])
-    others = ", ".join(gs) if len(gs) <= LEAD_GAMES else f"{len(gs)} games"
+    others = ", ".join(_said(g) for g in gs) if len(gs) <= LEAD_GAMES else f"{len(gs)} games"
     lead = (f"Our strongest picks across {entry.get('label')}'s kickoff windows ({others}), combined; posted "
             f"with the first of them, so a later game's legs were "
             + ("picked before its inactives were out." if entry.get("inactives", True)

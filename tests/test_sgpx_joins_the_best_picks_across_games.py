@@ -328,6 +328,7 @@ def test_the_day_posts_with_its_first_window_across_the_later_ones():
         assert early and {l["sgpx_game"] for l in early} <= {"PIT@PHI", "MIN@SF"}, "a held game's legs, marked"
         late = [t for k in S.KINDS for t in day[k] if any(l.get("sgpx_early") for l in t["legs"])]
         assert all(t["caveats"][0].startswith("Picked before the inactives of ") for t in late)
+        assert all("@" not in t["caveats"][0] for t in late), "the games named as each leg names its game"
         assert not any(l.get("sgpx_early") for k in S.KINDS for t in day[k] for l in t["legs"]
                        if l["sgpx_game"] == "NYJ@LAC"), "a later game that posted is no early leg"
         # Kept as posted: the next build reads the same day, whatever the legs do.
@@ -484,7 +485,7 @@ def test_a_long_window_counts_its_games():
     lead = S.section([e])["blocks"][0]["text"]
     assert "(9 games)" in lead and "A0@B0" not in lead, lead
     e["games"] = e["games"][:3]
-    assert "(A0@B0, A1@B1, A2@B2)" in S.section([e])["blocks"][0]["text"]
+    assert "(A0 at B0, A1 at B1, A2 at B2)" in S.section([e])["blocks"][0]["text"], "as each leg names its game"
 
 
 if __name__ == "__main__":

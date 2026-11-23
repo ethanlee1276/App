@@ -9338,6 +9338,10 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACS. An SGPX ticket names its games one way** (step 884; 22 November). Nothing to run. Each SGPX leg names its
+game "AUB at ALA", and the same ticket's warning and the section's opening line named them "AUB@ALA" (on college's
+Best Parlays, checked in a phone-sized browser). Both now say "at", the NFL's and college's.
+
 **ACR. Team rosters say height and weight the NFL's way** (step 883; 22 November). Nothing to run. The player pages
 already say 6'2" and 190 lb in every league. The team pages' roster tables still printed each feed's own spelling:
 the NFL's 6'2" and 190 lb beside college's and basketball's 6' 1" and 214 lbs (Ohio State's roster on the live
