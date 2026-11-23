@@ -198,6 +198,16 @@ def test_each_place_of_a_page_is_timed_apart():
     places = json.loads(out.read_text(encoding="utf-8"))["games"][0]["clubs"]["SF"]["core_roster"]["places"]
     assert places["entries[].active"]["n"] == 2 and places["entries[].active"]["first"] == W._iso(T0 - 90 * 60)
     assert places["entries[].didNotPlay"] == {"n": 1, "first": W._iso(T0 - 89 * 60), "both": 0}, places
+    # …and the count each place marks NOW, as it changes (step ACU): Sunday night's roster flagged eighteen men
+    # before kickoff and the ten listed inactives once the game was on. A flag that clears is a change too.
+    flags["dnp"] = False
+    now[0] += 60
+    W.watch_once(**kw)
+    W.watch_once(**kw)
+    log = json.loads(out.read_text(encoding="utf-8"))["games"][0]["feeds"]["core_roster"]["marks_log"]["SF"]
+    assert log == [[W._iso(T0 - 90 * 60), {"entries[].active": 2}],
+                   [W._iso(T0 - 89 * 60), {"entries[].active": 2, "entries[].didNotPlay": 1}],
+                   [W._iso(T0 - 88 * 60), {"entries[].active": 2}]], log
 
 
 def test_a_full_slate_is_read_in_turn_and_nothing_is_asked_out_of_a_window():

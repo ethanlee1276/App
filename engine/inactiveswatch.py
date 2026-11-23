@@ -37,6 +37,13 @@ only a copy of it on the way is. Each tick now also asks the board's own page wi
 (``fresh_url``), which no copy on the way can answer for, as the feed ``board_fresh``, timed against the board
 like the others. A board that shows a list sooner asked this way is the faster source, whole: a later step
 switches the build's own read in the window to it.
+
+THE ROSTER'S MARKS OVER TIME (step ACU). Twelve minutes into Sunday night's game the core API's roster flagged
+exactly the ten listed inactives ``didNotPlay``; before kickoff it had flagged eighteen. The afternoon games read the
+same way: in play, the flags were the board's lists to the man. So the eight extra men were cleared at some time
+between the lists and the kickoff, and if it was the moment the lists came out, the roster's count falling is
+itself the sign that a club's list is in, sooner than the board. Each page's marking counts are kept as they change
+(``marks_log``, counts and times only) and published per feed and slot.
 """
 
 from __future__ import annotations
@@ -324,7 +331,33 @@ def take(rec: dict, found: dict, t: float, iv, clubs: tuple, status: str = "ok",
     if shapes is not None:
         # What the newest page looks like: every place it carries an `active`, a `didNotPlay` or the word.
         rec.setdefault("shapes", {})[slot] = shapes
+        # …and how many each place marks NOW, each time that changes (step ACU): a count that falls shows when a
+        # page stops marking men it marked before.
+        now_marks = _marking(shapes)
+        log = rec.setdefault("marks_log", {}).setdefault(slot, [])
+        if now_marks and (not log or log[-1][1] != now_marks):
+            log.append([round(t, 1), now_marks])
+            del log[:-MARKS_LOG_KEEP]
     return new
+
+
+#: The changes of a page's marking counts kept, a slot (step ACU).
+MARKS_LOG_KEEP = 60
+
+
+def _marking(shapes: dict) -> dict:
+    """{place: how many men it marks}: an `active` false, a `didNotPlay` true, the word inactive."""
+    out = {}
+    for place, vals in (shapes or {}).items():
+        if place.endswith("didNotPlay"):
+            n = vals.get("true", 0)
+        elif place.endswith("active"):
+            n = vals.get("false", 0)
+        else:
+            n = vals.get("inactive", 0)
+        if n:
+            out[place] = n
+    return out
 
 
 def watch_once(now=None, scoreboard=None, board=None, get=None, root=None, out=None) -> float:
@@ -541,7 +574,11 @@ def report(st: dict) -> list:
                       "feeds": {f: {"reads": r.get("reads", 0), "status": r.get("status"),
                                     **({"bytes": r["bytes"]} if r.get("bytes") else {}),
                                     "places": {p: v for p, v in sorted((r.get("places") or {}).items())[:20]},
-                                    **({"shapes": _telling(r.get("shapes"))} if r.get("shapes") else {})}
+                                    **({"shapes": _telling(r.get("shapes"))} if r.get("shapes") else {}),
+                                    # Each slot's marking counts as they changed (step ACU), in times.
+                                    **({"marks_log": {sl: [[_iso(t), m] for t, m in lg]
+                                                      for sl, lg in sorted(r["marks_log"].items())}}
+                                       if r.get("marks_log") else {})}
                                 for f, r in sorted(feeds.items())}})
     return games
 

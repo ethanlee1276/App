@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ACU. ESPN's game roster, watched over time** (step 886; 22 November). Nothing to run. Twelve minutes into Sunday
+night's game, ESPN's game roster flagged exactly the ten listed inactives "did not play", five a club. Before
+kickoff it had flagged eighteen. The afternoon games read the same way once they were on. So the eight extra men
+were cleared somewhere between the lists coming out and the kickoff. If that happens the moment a club's list is
+filed, the roster's count falling is itself the sign the list is in, and the roster had every inactive 17 to 27
+minutes before the injury board did. The watcher now keeps how many men each page flags as that number changes
+(counts and times only), so Monday night says when the extras clear. Decision 19 above now also carries the chance
+the site shows next to what the picks won.
+
 **ACT. ESPN's injury board, asked for packed** (step 885; 22 November). Nothing to run. The watcher's first fresh
 reads measured ESPN's NFL injury board at 8.8 MB a read, and in an inactives window the build reads it every minute
 and the watcher twice more. None of them asked ESPN to pack it, though each already unpacks a packed page. They ask
@@ -9378,19 +9387,21 @@ game shows the lists sooner that way, the next step points the picks' own read a
 **Decision 19, for you: NBA chances that say less than they win** (22 November). Nothing changes until you answer.
 The NBA's Most Likely picks win more often than they say. Over 3,371 graded picks the board said 61.2% and won
 64.2%. The list's overs said 61.3% and won 65.5% (1,375 picks); its unders said 61.8% and won 64.3% (1,711). Both
-gaps are past chance (the Record's "beats its claim"). Your yes to (8) on 21 November lets the record raise an NBA
-pick toward its price, never past it, and that can't reach these picks. On the unders the price says less than we do
-(59.4%), so there is nothing to raise toward. On the overs the price (63.0%) is still under what they won, and that
-raise, tried on held-out games, gained too little to pass the bar. Why it happens: the NBA's numbers are tuned
-toward 50% by a fit on 25,000 to 29,000 past games a market, most of them priced against each player's recent
-average as a stand-in line, not a sportsbook's. Football had the same problem and now tunes against real lines.
-Simply un-tuning the NBA would be wrong, though: the NBA's Edge bets, where we disagree with the price, said 51.2%
-and won 48.3% (451 bets), so the model is already too sure there. When our number and the price agree on a side, the
-pick wins more than either says; when they disagree, it wins less than ours says. The fix I would make on a yes: let
-the record put a Most Likely pick's chance above both our number and the price when the two agree, by as much as
-held-out games prove and never more, on the same bar as every other correction. NBA first, and hockey only if its
-own record shows the same. It would change the chance shown, the tier a pick earns and the order of the list, not
-which picks are on the board. Yes or no?
+gaps are past chance (the Record's "beats its claim"). The chance the site actually shows, after the record's own
+correction, tells the same story: 61.6% shown and 64.8% won over 3,085 picks, and on the picks shown at 45 to 60%,
+57.2% shown and 62.4% won (1,311). The NFL's (62.3% shown, 61.9% won), college's and hockey's shown chances match
+their results. Your yes to (8) on 21 November lets the record raise an NBA pick toward its price, never past it, and
+that can't reach these picks. On the unders the price says less than we do (59.4%), so there is nothing to raise
+toward. On the overs the price (63.0%) is still under what they won, and that raise, tried on held-out games, gained
+too little to pass the bar. Why it happens: the NBA's numbers are tuned toward 50% by a fit on 25,000 to 29,000 past
+games a market, most of them priced against each player's recent average as a stand-in line, not a sportsbook's.
+Football had the same problem and now tunes against real lines. Simply un-tuning the NBA would be wrong, though: the
+NBA's Edge bets, where we disagree with the price, said 51.2% and won 48.3% (451 bets), so the model is already too
+sure there. When our number and the price agree on a side, the pick wins more than either says; when they disagree,
+it wins less than ours says. The fix I would make on a yes: let the record put a Most Likely pick's chance above
+both our number and the price when the two agree, by as much as held-out games prove and never more, on the same bar
+as every other correction. NBA first, and hockey only if its own record shows the same. It would change the chance
+shown, the tier a pick earns and the order of the list, not which picks are on the board. Yes or no?
 
 **ACO. SGPX for college football** (step 880; 22 November). Nothing to run. You want every league run the way the
 NFL runs, and a college Saturday is the NFL's Sunday many times over. College football now gets SGPX tickets too:
