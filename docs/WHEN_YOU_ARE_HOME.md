@@ -9414,6 +9414,21 @@ capitalised, and, in a table with a column for each report, takes a man's last c
 so the probe rests (`QB_CFB_AVAIL_PROBE=on` wakes it, as for mapping the College Football Playoff's and the basketball
 reports, which the same vendor posts in an older app). Still nothing reaches a pick until the check holds up.
 
+**ADE. College availability reports, step five: reading what they really say** (step 896; 23 November). Nothing to
+run. The first real read (21:47 UTC) came back with the whole season in the archive: the Big Ten 1,615 player rows,
+the SEC 1,010, the ACC 1,817, the Big 12 1,089, each row a school, a player, his opponent, the week, and one column
+for each report (Initial, Update 1, Update 2, Game Day). This week's reports read "Report Pending", each with the
+time it posts (the Big Ten's first, for Nebraska at Iowa on Friday, posts Tuesday at 7 PM Central). Four things were
+wrong and are fixed: the columns come in alphabetical order, so the reading took Update 2 where Game Day is the last
+word (it now follows the reports' own order); the week of a past row was not read, so a school's whole season
+counted as one filing and the check had nothing to hold to a game (each week is now its own filing, held to that
+week's games); the SEC's and the ACC's current reports were cut off at 4 MB, because every report carries the
+schools' logos as pictures inside the data (the limit is now 40 MB); and at about 12 MB a read across the four, a
+fast clock would be a burden on the vendor. So each conference is now read two minutes after each of its reports
+posts and 85 and 40 minutes before each of its kickoffs, from the times the reports themselves give, with a slow
+safety net between (every two hours on game days, three on weekday evenings, six otherwise). A posted report is dated
+by its own post time. Still off picks until the check holds up.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

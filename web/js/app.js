@@ -20388,6 +20388,8 @@ function injRow(r, withTeam) {
   const what = [
     withTeam ? escapeHtml(r.team) : "",
     escapeHtml(r.injury || "undisclosed") + (r.side ? ` (${escapeHtml(r.side)})` : ""),
+    // A school's own report says whose it is, where a phone can read it (decision 20: "ACC availability report").
+    r.source && r.comment ? escapeHtml(r.comment) : "",
     `<span title="${escapeHtml(r.date || "")}">filed ${injWhen(r.ts)}</span>`,
   ].filter(Boolean).join(" · ");
   return `<div class="inj-line"${r.comment ? ` title="${escapeHtml(r.comment)}"` : ""}>

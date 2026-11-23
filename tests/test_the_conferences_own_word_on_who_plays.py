@@ -152,6 +152,9 @@ def test_the_injuries_builder_reads_the_schools_filings_even_when_espn_fails():
     js = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     fn = js[js.index("function isReturnRow"):]
     assert "(r || {}).cleared === true" in fn[:fn.index("\n}")]
+    row = js[js.index("function injRow"):]
+    assert 'r.source && r.comment ? escapeHtml(r.comment) : ""' in row[:row.index("\n}")], \
+        "a school's row names its report on the line itself, not only on hover"
 
 
 def test_the_injuries_page_reads_the_schools_words_in_the_right_tier():

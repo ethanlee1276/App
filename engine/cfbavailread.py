@@ -28,17 +28,32 @@ from .sources import cfbavail as CA
 ENV = "QB_CFB_AVAIL_READ"
 AGENT = "availability-reader/1.0"
 CONFS = ("B10", "SEC", "ACC", "B12")
-TIMEOUT_S = 20
-MAX_BYTES = 4_000_000
+TIMEOUT_S = 60
+#: The vendor's current reports carry every school's logo and the network's as images inside the data: the
+#: SEC's and the ACC's ran past 4 MB on the first read (21:47 UTC) and came back cut.
+MAX_BYTES = 40_000_000
 #: A filing kept this long (the cache holds the current week and the one before it, for checking).
 KEEP_S = 10 * 86400
-#: The clock (Eastern time): on game days every ten minutes from 9 AM, on report evenings (from 5 PM, Monday to
-#: Friday) every twenty, otherwise every three hours.
-GAME_DAY_S = 10 * 60
-EVENING_S = 20 * 60
-QUIET_S = 3 * 3600
+#: THE CLOCK. Each current report says when it posts (publishDate and postedTime, in its conference's time) and
+#: when its game kicks off (footer), so each conference is read two minutes after each of its reports posts and
+#: 85 and 40 minutes before each of its kickoffs (the game-day report comes about 90 minutes before), and between
+#: those only as a safety net (Eastern time): every two hours on a game day from 9 AM, every three on a weekday
+#: evening from 5 PM, every six otherwise. A read is about 12 MB across the four (the reports carry their logos as
+#: images), so the clock is the reports' own, not a fast poll.
+GAME_DAY_S = 2 * 3600
+EVENING_S = 3 * 3600
+QUIET_S = 6 * 3600
 IDLE_S = 300
-_LAST = {"at": 0.0, "archive": 0.0}
+AFTER_POST_S = 120
+BEFORE_KICK_S = (85 * 60, 40 * 60)
+_LAST = {"at": {}, "archive": 0.0}
+#: {conference: [epoch seconds a read is due]} from its last read.
+_NEXT: dict = {}
+#: What each conference's last read saw, kept between reads for the check file.
+_SEEN: dict = {}
+ZONES = {"ET": "America/New_York", "EST": "America/New_York", "EDT": "America/New_York", "CT": "America/Chicago",
+         "CST": "America/Chicago", "CDT": "America/Chicago", "MT": "America/Denver", "MST": "America/Phoenix",
+         "PT": "America/Los_Angeles", "PST": "America/Los_Angeles", "AZ": "America/Phoenix"}
 
 
 def on() -> bool:
@@ -126,12 +141,13 @@ def _player(d: dict) -> dict | None:
             word = t
             break
     if not word:
-        for k, v in low.items():
+        best = (-1, -1)
+        for i, (k, v) in enumerate(low.items()):
             if k in NOT_STATUS or k.endswith("_id") or isinstance(v, (dict, list)):
                 continue
             t = _text(v)
-            if t and len(t) <= 40 and CA.status_of(t) is not None:
-                word = t
+            if t and len(t) <= 40 and CA.status_of(t) is not None and (_col_rank(k), i) > best:
+                best, word = (_col_rank(k), i), t
     if not word:
         return None
     name = _first(d, NAME_KEYS)
@@ -143,15 +159,101 @@ def _player(d: dict) -> dict | None:
     return {"player": name, "pos": _first(d, POS_KEYS), "word": word}
 
 
+def _col_rank(name: str) -> int:
+    """Which of a row's report columns is the newest: the vendor names them Initial, Update 1, Update 2 and Game Day,
+    and sends them in alphabetical order (the first read took Update 2 for Game Day's word)."""
+    n = str(name or "").strip().lower()
+    if re.search(r"game[\s_-]*day|final|pre[\s_-]*game", n):
+        return 100
+    m = re.search(r"update\s*(\d+)", n)
+    if m:
+        return 10 + int(m.group(1))
+    if "initial" in n:
+        return 1
+    return 0
+
+
+def _iso_day(text: str) -> str:
+    """A date as YYYY-MM-DD from "2026-11-21" or "11/21/2026" (or "11/21/26"); "" when it is neither."""
+    t = str(text or "").strip()
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", t)
+    if m:
+        return m.group(0)[:10]
+    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{2,4})$", t)
+    if m:
+        y = int(m.group(3)) + (2000 if len(m.group(3)) == 2 else 0)
+        return f"{y:04d}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
+    if re.match(r"^[A-Za-z]{3}, \d{1,2} [A-Za-z]{3} \d{4}", t):         # "Sat, 26 Sep 2026 00:00:00 GMT"
+        from email.utils import parsedate_to_datetime
+        try:
+            return parsedate_to_datetime(t).date().isoformat()
+        except (TypeError, ValueError):
+            return ""
+    return ""
+
+
 def _kickoff(node: dict) -> str:
-    """A report's game time, where it carries one as footer {date, time} (the vendor's) or game_date/game_time."""
+    """A report's game day (and time), where it carries one: footer {date, time} (the vendor's current reports),
+    game_date/game_time, or a past week's row's own Date (its archive)."""
     low = _lower(node)
-    foot = low.get("footer") if isinstance(low.get("footer"), dict) else {}
-    day = _text(_lower(foot).get("date")) if foot else _text(low.get("game_date"))
-    hm = _text(_lower(foot).get("time")) if foot else _text(low.get("game_time"))
-    if not re.match(r"^\d{4}-\d{2}-\d{2}$", day or ""):
+    foot = _lower(low["footer"]) if isinstance(low.get("footer"), dict) else {}
+    day = hm = ""
+    for src, dk, tk in ((foot, "date", "time"), (low, "game_date", "game_time"), (low, "gamedate", "gametime"),
+                        (low, "game date", "game time"), (low, "date", "time"), (low, "week", "")):
+        day = _iso_day(_text(src.get(dk))) if src else ""
+        if day:
+            hm = _text(src.get(tk)) if tk else ""
+            break
+    if not day:
         return ""
     return day + (f" {hm}" if re.match(r"^\d{1,2}:\d{2}", hm or "") else "")
+
+
+def _zone(node: dict) -> str:
+    return ZONES.get(str(_lower(node).get("conferencetimezone") or "").strip().upper(), "America/Chicago")
+
+
+def _local(day: str, hm: str, zone: str) -> float | None:
+    """Epoch seconds of a local date and time in ``zone``, or None."""
+    from zoneinfo import ZoneInfo
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", day or "") or not re.match(r"^\d{1,2}:\d{2}", hm or ""):
+        return None
+    h, m = (int(x) for x in hm.split(":")[:2])
+    try:
+        d = _dt.datetime.fromisoformat(day).replace(hour=h, minute=m, tzinfo=ZoneInfo(zone))
+    except ValueError:
+        return None
+    return d.timestamp()
+
+
+def _posted(node: dict) -> str:
+    """When a current report was posted (publishDate and postedTime, in its conference's time), as UTC ISO, for a
+    report that has posted; "" for one still pending or with no such fields."""
+    low = _lower(node)
+    if re.search(r"pending", _text(low.get("reporttype")) or "", re.I):
+        return ""
+    t = _local(_text(low.get("publishdate")), _text(low.get("postedtime")), _zone(node))
+    return "" if t is None else _dt.datetime.fromtimestamp(t, _dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def due_times(doc, now: float) -> list[float]:
+    """When a conference's current reports next want reading: two minutes after each report still to post, and
+    85 and 40 minutes before each kickoff still to come."""
+    out = []
+    for rep in (doc.values() if isinstance(doc, dict) else []):
+        if not isinstance(rep, dict):
+            continue
+        low = _lower(rep)
+        zone = _zone(rep)
+        post = _local(_text(low.get("publishdate")), _text(low.get("postedtime")), zone)
+        if post is not None and post + AFTER_POST_S > now:
+            out.append(post + AFTER_POST_S)
+        foot = _lower(low["footer"]) if isinstance(low.get("footer"), dict) else {}
+        kick = _local(_text(foot.get("date")), _text(foot.get("time")), zone)
+        for lead in BEFORE_KICK_S:
+            if kick is not None and kick - lead > now:
+                out.append(kick - lead)
+    return sorted(set(out))
 
 
 def _walk(node, ctx: dict, out: list) -> None:
@@ -182,6 +284,11 @@ def _walk(node, ctx: dict, out: list) -> None:
     at = _first(node, TIME_KEYS)
     if at and CA._ts(at) is not None:
         here["at"] = at
+    posted = _posted(node)
+    if posted:
+        here["at"] = posted
+    if re.search(r"pending", _text(low.get("reporttype")) or "", re.I):
+        return                                                 # not posted yet: nothing in it is a filing
     game = _first(node, GAME_KEYS)
     if game:
         here["game"] = game
@@ -216,7 +323,9 @@ def filings(doc, conf: str, now: float) -> list[dict]:
         dated = CA._ts(r["at"]) is not None
         at = r["at"] if dated else _dt.datetime.fromtimestamp(float(now), _dt.timezone.utc).strftime(
             "%Y-%m-%dT%H:%M:%SZ")
-        key = (r["school"], at)
+        # One filing per school per read per game: a past week's reports carry no time of their own, and without
+        # their game's day every one of a school's weeks would read as one filing.
+        key = (r["school"], at, r.get("kickoff", "")[:10])
         f = by.setdefault(key, {"conference": conf.lower(), "school": r["school"], "game": r["game"],
                                 "kickoff": r.get("kickoff", ""), "filed_at": at, "seen": not dated,
                                 "final": bool(FINAL_RE.search(r["kind"] or "")), "players": []})
@@ -314,27 +423,35 @@ def _post(url: str, body: dict):
         return type(exc).__name__, "", b""
 
 
-def read_conf(conf: str, now: float, post=_post, kind: str = "report") -> tuple[list[dict], dict]:
-    """(each school's filing in one conference's report data of ``kind``, what the read saw)."""
+def read_conf(conf: str, now: float, post=_post, kind: str = "report") -> tuple[list[dict], dict, object]:
+    """(each school's filing in one conference's report data of ``kind``, what the read saw, the data itself)."""
     url = BASE + DATA[kind]
     status, ctype, raw = post(url, {"sport": "Football", "organization": conf, "conference": conf})
-    seen = {"url": url, "status": status, "type": ctype.split(";")[0].strip(), "bytes": len(raw)}
+    seen = {"url": url, "status": status, "type": ctype.split(";")[0].strip(), "bytes": len(raw),
+            "at": _dt.datetime.fromtimestamp(float(now), _dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
     if status != "ok":
-        return [], seen
+        return [], seen, None
     text = raw.decode("utf-8", errors="replace")
-    seen["head"] = text[:3000]
+    seen["head"] = re.sub(r"data:image/[a-z]+;base64,[A-Za-z0-9+/=]{40,}", "data:image…", text[:20000])[:3000]
     try:
         doc = json.loads(text)
     except ValueError:
         seen["error"] = "not JSON"
-        return [], seen
+        return [], seen, None
     from .cfbavailprobe import shape
     seen["shape"] = shape(doc)
     got = filings(doc, conf, now)
     seen["filings"] = len(got)
     seen["players"] = sum(len(f["players"]) for f in got)
     seen["sample"] = got[:3]
-    return got, seen
+    if kind == "report" and isinstance(doc, dict):
+        reps = [r for r in doc.values() if isinstance(r, dict)]
+        seen["reports"] = [{"type": r.get("ReportType"), "posts": f"{r.get('publishDate')} {r.get('postedTime')}",
+                            "kickoff": f"{(r.get('footer') or {}).get('date')} {(r.get('footer') or {}).get('time')}",
+                            "teams": [g.get("teamName") for g in r.get("games") or [] if isinstance(g, dict)],
+                            "rows": [len(g.get("rows") or []) for g in r.get("games") or [] if isinstance(g, dict)]}
+                           for r in reps][:40]
+    return got, seen, doc
 
 
 def box_check(archive: list[dict]) -> dict:
@@ -350,23 +467,32 @@ def box_check(archive: list[dict]) -> dict:
 
 
 def read_once(now=None, post=_post, out=None, seen_out=None, game_days=None, checker=None) -> float:
-    """Read every conference when its clock says so; the seconds until the next check."""
+    """Read each conference whose clock says so (its reports' own post times and kickoffs, or the safety net), and
+    every conference's archive every ARCHIVE_EVERY_S; the seconds until the next check."""
     now = time.time() if now is None else float(now)
     every = due_every(now, game_days)
-    if now - _LAST["at"] < every:
-        return min(IDLE_S, max(60, every - (now - _LAST["at"])))
-    _LAST["at"] = now
-    kinds = ["report"] + (["archive"] if now - _LAST.get("archive", 0.0) >= ARCHIVE_EVERY_S else [])
-    if "archive" in kinds:
+    last = _LAST["at"]
+    due = [c for c in CONFS if now - last.get(c, 0.0) >= every
+           or any(last.get(c, 0.0) < t <= now for t in _NEXT.get(c, ()))]
+    archive_due = now - _LAST.get("archive", 0.0) >= ARCHIVE_EVERY_S
+    if not due and not archive_due:
+        soon = [t - now for c in CONFS for t in _NEXT.get(c, ()) if t > now]
+        return max(60.0, min([float(IDLE_S)] + soon))
+    new, archive = [], []
+    for conf in due:
+        last[conf] = now
+        got, saw, doc = read_conf(conf, now, post, "report")
+        new += got
+        _SEEN[conf] = saw
+        _NEXT[conf] = due_times(doc, now) if doc is not None else []
+    if archive_due:
         _LAST["archive"] = now
-    new, archive, seen = [], [], {}
-    for conf in CONFS:
-        for kind in kinds:
-            got, saw = read_conf(conf, now, post, kind)
-            (new if kind == "report" else archive).extend(got)
-            seen[conf if kind == "report" else f"{conf} archive"] = saw
+        for conf in CONFS:
+            got, saw, _doc = read_conf(conf, now, post, "archive")
+            archive += got
+            _SEEN[f"{conf} archive"] = saw
     cache = merge(CA.load(out), new, now)
-    if "archive" in kinds:
+    if archive_due:
         cache["archive"] = archive
         # THE CHECK, beside it: the past reports against the games' own box scores (never stops the read).
         try:
@@ -374,11 +500,12 @@ def read_once(now=None, post=_post, out=None, seen_out=None, game_days=None, che
         except Exception as exc:                               # noqa: BLE001
             cache["check"] = {"error": f"{type(exc).__name__}: {exc}"[:300]}
     write(cache, now, out)
+    stamp = lambda t: _dt.datetime.fromtimestamp(t, _dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
     p = Path(seen_out or SEEN)
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps({"read_at": _dt.datetime.fromtimestamp(now, _dt.timezone.utc)
-                               .strftime("%Y-%m-%dT%H:%M:%SZ"), "every_s": every, "conferences": seen,
+    tmp.write_text(json.dumps({"read_at": stamp(now), "every_s": every, "conferences": _SEEN,
+                               "next": {c: [stamp(t) for t in _NEXT.get(c, ())[:12]] for c in CONFS},
                                "kept": len(cache.get("reports") or []), "check": cache.get("check"),
                                "trusted": CA.on()}, separators=(",", ":")), encoding="utf-8")
     os.replace(tmp, p)
@@ -414,7 +541,8 @@ def check_archive(archive: list[dict], conn, lookup: dict) -> dict:
         at = CA._ts(f.get("filed_at"))
         if at is None:
             continue
-        wk = _dt.datetime.fromtimestamp(at, _dt.timezone.utc).isocalendar()[:2]
+        game_day = _iso_day((f.get("kickoff") or "")[:10])
+        wk = game_day or _dt.datetime.fromtimestamp(at, _dt.timezone.utc).isocalendar()[:2]
         key = (f.get("conference"), f.get("school"), wk)
         if key not in last or at > CA._ts(last[key].get("filed_at")):
             last[key] = f
@@ -426,10 +554,22 @@ def check_archive(archive: list[dict], conn, lookup: dict) -> dict:
         team = CA.school_key(str(f.get("school") or ""), lookup)
         at = CA._ts(f.get("filed_at"))
         if not team or at is None:
+            miss = c.setdefault("unkeyed", [])
+            if f.get("school") not in miss and len(miss) < 10:
+                miss.append(f.get("school"))
             continue
         c["keyed"] += 1
-        d0 = _dt.datetime.fromtimestamp(at, _dt.timezone.utc).date()
-        window = {(d0 + _dt.timedelta(days=i)).isoformat() for i in range(6)}
+        game_day = _iso_day((f.get("kickoff") or "")[:10])
+        if game_day:
+            # Its own game: the day and the one either side (a late kickoff is the next day in UTC); a past week's
+            # row names only its week's Saturday, so its Wednesday to Sunday.
+            g = _dt.date.fromisoformat(game_day)
+            d0 = g
+            span = (-1, 0, 1) if len((f.get("kickoff") or "").strip()) > 10 else (-3, -2, -1, 0, 1)
+            window = {(g + _dt.timedelta(days=i)).isoformat() for i in span}
+        else:
+            d0 = _dt.datetime.fromtimestamp(at, _dt.timezone.utc).date()
+            window = {(d0 + _dt.timedelta(days=i)).isoformat() for i in range(6)}
         season = d0.year if d0.month >= 7 else d0.year - 1
         by = played(team, season)
         for p in f.get("players") or []:

@@ -78,6 +78,14 @@ def test_the_vendors_own_shape_reads_each_schools_last_column():
     assert got[0]["players"][0]["pos"] == "WR"
 
 
+def test_a_past_weeks_reports_stay_apart_by_their_games_day():
+    rows = [{"Team": "Ohio State", "Player": "Jeremiah Smith", "Date": "11/21/2026", "Wed": "Out", "Game Day": "Out"},
+            {"Team": "Ohio State", "Player": "Caleb Downs", "Date": "2026-11-14", "Game Day": "Available"}]
+    got = R.filings({"data": rows, "report_days": ["Wed", "Game Day"]}, "B10", CA._ts("2026-11-23T21:00:00Z"))
+    assert sorted((f["kickoff"], f["players"][0]["player"]) for f in got) == [
+        ("2026-11-14", "Caleb Downs"), ("2026-11-21", "Jeremiah Smith")]
+
+
 def test_a_row_with_no_time_of_its_own_takes_the_reads():
     got = R.filings([{"school": "Clemson", "player": "A B", "status": "Out"}], "ACC", 1795000000)
     assert got[0]["filed_at"] == "2026-11-18T11:06:40Z"
@@ -109,6 +117,67 @@ def test_an_unchanged_filing_keeps_the_time_it_was_first_seen():
     assert len(cache["reports"]) == 3, "another game's filing is its own"
 
 
+def _report(post_day, post_time, kick_day, kick_time, kind="Report Pending", rows=None, zone="CT"):
+    return {"ReportType": kind, "conferenceTimeZone": zone, "publishDate": post_day, "postedTime": post_time,
+            "footer": {"date": kick_day, "time": kick_time, "location": "Iowa City, IA"},
+            "games": [{"teamName": "Nebraska", "teamDisplayName": "Nebraska", "rows": rows or []},
+                      {"teamName": "Iowa", "teamDisplayName": "Iowa", "rows": []}]}
+
+
+def test_each_conference_is_read_on_its_own_reports_clock():
+    """The first live read (21:47 UTC, 23 November): Nebraska at Iowa's report "Report Pending", posting
+    2026-11-24 at 19:00 CT, kickoff 2026-11-27 at 11:00 CT. The reader is due two minutes after the post and 85 and
+    40 minutes before the kickoff, and only the conference whose time came is read."""
+    doc = {"10003526": _report("2026-11-24", "19:00:00", "2026-11-27", "11:00:00"), "_nextReportDate": "x"}
+    now = CA._ts("2026-11-23T21:47:12Z")
+    assert R.due_times(doc, now) == [CA._ts("2026-11-25T01:02:00Z"), CA._ts("2026-11-27T15:35:00Z"),
+                                     CA._ts("2026-11-27T16:20:00Z")]
+    assert R.filings(doc, "B10", now) == [], "a pending report is no filing"
+    asked = []
+
+    def post(u, b):
+        asked.append(b["conference"])
+        return "ok", "application/json", json.dumps(doc).encode()
+    tmp = Path(tempfile.mkdtemp())
+    just_read = CA._ts("2026-11-25T00:20:00Z")                    # the safety net read every conference then
+    R._LAST.update(at={c: just_read for c in R.CONFS}, archive=just_read)
+    R._NEXT.clear()
+    R._NEXT["B10"] = R.due_times(doc, now)
+    assert R.read_once(now=CA._ts("2026-11-25T00:30:00Z"), post=post, out=tmp / "c.json",
+                       seen_out=tmp / "s.json") <= R.IDLE_S and asked == []
+    R.read_once(now=CA._ts("2026-11-25T01:03:00Z"), post=post, out=tmp / "c.json", seen_out=tmp / "s.json")
+    assert asked == ["B10"], "only the conference whose report posted"
+    seen = json.loads((tmp / "s.json").read_text())
+    assert seen["conferences"]["B10"]["reports"][0] == {"type": "Report Pending", "posts": "2026-11-24 19:00:00",
+                                                        "kickoff": "2026-11-27 11:00:00",
+                                                        "teams": ["Nebraska", "Iowa"], "rows": [0, 0]}
+
+
+def test_a_posted_report_is_dated_by_its_own_post_time():
+    rows = [{"Player": "Dylan Raiola", "Number": "#15", "Status": "Questionable"}]
+    doc = {"1": _report("2026-11-24", "19:00:00", "2026-11-27", "11:00:00", kind="Initial", rows=rows)}
+    got = R.filings(doc, "B10", CA._ts("2026-11-25T03:00:00Z"))
+    assert [(f["school"], f["filed_at"], f["kickoff"], f["players"][0]["word"]) for f in got] == [
+        ("Nebraska", "2026-11-25T01:00:00Z", "2026-11-27 11:00:00", "Questionable")]
+    assert got[0]["seen"] is False
+
+
+def test_the_archives_rows_read_game_day_over_the_updates():
+    """The archive's rows, as the first live read returned them (21:47 UTC): their columns come in alphabetical
+    order, so Game Day sits before Initial and Update 2 last; the game is the row's Week."""
+    row = {"Game Day": "Out", "Initial": "Doubtful", "Number": "#1", "Opponent": "at Ohio St.",
+           "OpponentDisplay": "at Ohio State", "Player": "Jayshon Platt", "Team": "Illinois", "TeamDisplay": "Illinois",
+           "Update 1": "Doubtful", "Update 2": "Doubtful", "Week": "Sat, 26 Sep 2026 00:00:00 GMT", "WeekNum": 4}
+    early = dict(row, **{"Game Day": "", "Player": "Pending Man", "Update 2": "Questionable"})
+    doc = {"data": [row, early, dict(row, Week="Sat, 03 Oct 2026 00:00:00 GMT", Player="Another Week")],
+           "report_days": ["Initial", "Update 1", "Update 2", "Game Day"], "loaded": True}
+    got = R.filings(doc, "B10", CA._ts("2026-11-23T21:47:12Z"))
+    words = {(f["kickoff"], p["player"]): p["word"] for f in got for p in f["players"]}
+    assert words == {("2026-09-26", "Jayshon Platt"): "Out", ("2026-09-26", "Pending Man"): "Questionable",
+                     ("2026-10-03", "Another Week"): "Out"}
+    assert {f["game"] for f in got} == {"at Ohio St."}
+
+
 def test_a_read_writes_the_cache_and_what_it_saw():
     tmp = Path(tempfile.mkdtemp())
     body = json.dumps([{"school": "Clemson", "player": "Cade Klubnik", "status": "Probable",
@@ -119,12 +188,13 @@ def test_a_read_writes_the_cache_and_what_it_saw():
         asked.append((u.rsplit("/", 1)[-1], b["conference"]))
         assert b == {"sport": "Football", "organization": b["conference"], "conference": b["conference"]}
         return ("ok", "application/json", body) if b["conference"] == "ACC" else ("HTTP 404", "", b"")
-    R._LAST.update(at=0.0, archive=0.0)
+    R._LAST.update(at={}, archive=0.0)
+    R._NEXT.clear()
     R.read_once(now=CA._ts("2026-11-26T01:00:00Z"), post=post, out=tmp / "c.json", seen_out=tmp / "s.json",
                 checker=lambda archive: {"acc": {"filings": len(archive)}})
-    assert asked == [(k, c) for c in R.CONFS for k in ("get-publish-public", "get-archive-public")]
+    assert asked == [("get-publish-public", c) for c in R.CONFS] + [("get-archive-public", c) for c in R.CONFS]
     asked.clear()
-    R._LAST["at"] = 0.0
+    R._LAST["at"] = {}
     R.read_once(now=CA._ts("2026-11-26T02:00:00Z"), post=post, out=tmp / "c.json", seen_out=tmp / "s.json",
                 checker=lambda archive: 1 / 0)
     assert asked == [("get-publish-public", c) for c in R.CONFS], "the archive, 6-hourly"
@@ -152,17 +222,22 @@ def test_the_check_holds_past_reports_to_the_games_box_scores():
                  " 'rush_yds', 10)")
     conn.execute("INSERT INTO games VALUES ('cfb', 2026, '9', 'g0', '2026-10-24')")
     archive = [{"conference": "b10", "school": "The Ohio State University", "filed_at": "2026-11-19T23:00:00Z",
+                "kickoff": "2026-11-21 12:00",
                 "players": [{"player": "Anyway, Played", "word": "Out"}, {"player": "Sat Out", "word": "Out"},
                             {"player": "Was Available", "word": "Available"},
                             {"player": "Never Logged", "word": "Questionable"}]},
                {"conference": "b10", "school": "Nowhere State", "filed_at": "2026-11-19T23:00:00Z", "players": []},
                # An earlier filing the school's last one replaced: never held to the game.
                {"conference": "b10", "school": "The Ohio State University", "filed_at": "2026-11-18T23:00:00Z",
-                "players": [{"player": "Was Available", "word": "Out"}]}]
+                "kickoff": "2026-11-21 12:00", "players": [{"player": "Was Available", "word": "Out"}]},
+               # A filing read with the read's own time, held to its own game's day (24 October), not the read's.
+               {"conference": "b10", "school": "Ohio State", "filed_at": "2026-11-23T21:00:00Z",
+                "kickoff": "2026-10-24", "players": [{"player": "Sat Out", "word": "Out"}]}]
     got = R.check_archive(archive, conn, {"ohio state": "OSU"})["b10"]
-    assert (got["filings"], got["keyed"], got["men"], got["known"]) == (2, 1, 4, 3)
-    assert (got["out"], got["out_played"], got["avail"], got["avail_played"]) == (2, 1, 1, 1)
-    assert got["contradicted"] == ["The Ohio State University: Anyway, Played (2026-11-19T23:00:00Z)"]
+    assert (got["filings"], got["keyed"], got["men"], got["known"]) == (3, 2, 5, 4)
+    assert (got["out"], got["out_played"], got["avail"], got["avail_played"]) == (3, 2, 1, 1)
+    assert got["contradicted"] == ["The Ohio State University: Anyway, Played (2026-11-19T23:00:00Z)",
+                                   "Ohio State: Sat Out (2026-11-23T21:00:00Z)"]
 
 
 def test_nothing_reaches_picks_or_the_injuries_page_until_the_reading_is_checked():
