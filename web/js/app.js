@@ -20252,8 +20252,10 @@ function isReturnRow(r) {
 
 function injTone(status) {
   const s = (status || "").toLowerCase();
-  if (/(^|\b)(out|injured reserve|ir\b|60-day|suspension|season)/.test(s)) return "var(--bad)";
-  if (/(doubtful|questionable|day-to-day|10-day|15-day|7-day|game-time)/.test(s)) return "var(--warn)";
+  // A school's own report says "Unavailable" and "Game Time Decision" (decision 20, step ADB): the first is out,
+  // never the "available" tier its letters hold; the second is the questionable tier however it is spaced.
+  if (/(^|\b)(out|injured reserve|ir\b|60-day|suspension|season|unavailable|not available)/.test(s)) return "var(--bad)";
+  if (/(doubtful|questionable|day-to-day|10-day|15-day|7-day|game[- ]time)/.test(s)) return "var(--warn)";
   if (/(probable|available|active)/.test(s)) return "var(--good)";
   return "var(--text-dim)";
 }

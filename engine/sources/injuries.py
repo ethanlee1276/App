@@ -261,16 +261,23 @@ def live_injuries(rows: list[dict], now: float | None = None,
     return [i for i in out if i.player]
 
 
-def load_cfb_injuries(games: list[dict], lookup: dict) -> list[Injury]:
+def load_cfb_injuries(games: list[dict], lookup: dict, note: dict | None = None) -> list[Injury]:
     """ESPN's college-football injury board as `Injury` objects keyed the way
     the college board keys schools (cfbdata.resolve_team), aged against each
     school's game week. College had the feed (espninjuries.LEAGUES["cfb"],
     drawn on the Injuries page) and its build never read it — Ethan,
     2026-09-26: "every single issue we ran into ... make sure every single
-    thing is done for college football". Raises what the fetch raises."""
+    thing is done for college football".
+
+    THE SCHOOLS' OWN FILINGS LAID OVER IT (decision 20, step ADB): each
+    school's newest conference availability report for its game, from the
+    box's cache, by the rule in engine/sources/cfbavail. ``note``, when
+    given, is filled with what the filings did. Raises what ESPN's fetch
+    raises only when no school has filed either."""
     import datetime as _dt
     from .espninjuries import fetch_injuries, parse_injuries
     from .cfbdata import resolve_team
+    from . import cfbavail
     since: dict[str, float] = {}
     for g in games or []:
         try:
@@ -282,8 +289,20 @@ def load_cfb_injuries(games: list[dict], lookup: dict) -> list[Injury]:
         for t in (g.get("home"), g.get("away")):
             if t:
                 since[t] = start
-    return live_injuries(parse_injuries(fetch_injuries("cfb")), since=since,
-                         team_key=lambda name: resolve_team(name, lookup))
+    def key(name):
+        return resolve_team(name, lookup)
+    filed = cfbavail.filed_for(games, lookup) if cfbavail.on() else []
+    try:
+        rows = parse_injuries(fetch_injuries("cfb"))
+    except Exception:                                        # noqa: BLE001
+        if not filed:
+            raise
+        rows = []
+    board = live_injuries(rows, since=since, team_key=key)
+    merged, said = cfbavail.overlay(board, cfbavail.espn_dates(rows, key), filed)
+    if note is not None:
+        note.update(said, espn=len(board), espn_read=bool(rows))
+    return merged
 
 
 def status_by_player(injuries: list[Injury]) -> dict:

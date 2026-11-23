@@ -9357,10 +9357,30 @@ that names this site). The third look found every conference's current football 
 12's with an archive beside it, the ACC's for basketball too), each built in the browser from a "feature page" on
 the conference's own static site; so the fourth reads each page's own setup scripts and the feature page's script,
 and reads each page once (the third read the Big Ten's nine times as its #parts). The NBA's report files turn away
-every client but a browser, and this site asks as what it is, so they are out of the look. Nothing reads that file
-and no pick moves. From it I write each conference's reader, check it against this week's published reports (rivalry
-week, 28 and 29 November), and only then put its players into college picks, game reports and the Injuries page.
-Switch: `QB_CFB_AVAIL_PROBE=off`.
+every client but a browser, and this site asks as what it is, so they are out of the look. The fifth look read the
+SEC's site script (an app that keeps each page's data inside the page) and counted the ACC's report page's 34 setup
+scripts: none held a report, so the rows had to come from somewhere the page embeds. The sixth look followed what
+the pages embed and found it: the Big Ten's, the ACC's and the Big 12's report pages and the SEC's page data all show
+one vendor's public report, HD Intelligence's (app.hdintelligence.com, one address per conference: source and conf
+B10, SEC, ACC or B12, sport Football, type report, or archive for past weeks). So one reader can cover all four
+conferences. That page is built in the browser by one script, so the seventh look starts there and reads that script,
+the report parts it loads later, and the text around the calls it makes for its data. Nothing reads that file and no
+pick moves. From it I write the reader, check it against this week's published reports (rivalry week, 28 and 29
+November), and only then put its players into college picks, game reports and the Injuries page. Switch:
+`QB_CFB_AVAIL_PROBE=off`.
+
+**ADB. College availability reports, step two: the rule that lays a school's filing over ESPN's board** (step 893;
+23 November). Nothing to run. Before the reader exists, the part that doesn't depend on how the reports arrive is in
+place and tested: college injuries now read a cache of each school's filings (written by the box once the reader
+runs) and lay each school's newest filing for its game over ESPN's college board, the way an NFL club's own report
+already overrides ESPN's stale tags. On a man both list, the newer word wins. A man the school lists Available or
+Probable is cleared and his props are priced. ESPN's questionable, doubtful or game-time tag on a man the school's
+newer filing leaves off is dropped. ESPN's out stays (a school's report covers one game; ESPN's out is often longer).
+A man only the school lists is added: Game Time Decision reads as a game-time decision, Unavailable as out. A
+school with no filing keeps ESPN's board as it is. The build log says how many schools filed and what their filings
+added, changed, cleared and dropped, and the Injuries page now colours a school's "Unavailable" as out (its letters
+held "available") and "Game Time Decision" as questionable. Until the reader writes the cache, nothing changes.
+Switch: `QB_CFB_AVAIL=off`.
 
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they

@@ -43,7 +43,7 @@ def test_the_espn_board_keys_to_college_schools():
 
 
 def test_the_college_build_reads_it_everywhere_the_nfl_does():
-    for bit in ("_cfb_inj = load_cfb_injuries(out.get(\"games\") or [], lookup)",
+    for bit in ("_cfb_inj = load_cfb_injuries(out.get(\"games\") or [], lookup, note=_avail_note)",
                 "_pg.injuries = [i for i in _cfb_inj if i.team in (_pg.home, _pg.away)]",
                 '_r["injury_status"] = _st',
                 "usage=_cfb_use, watch=watch, injuries=_cfb_inj)"):

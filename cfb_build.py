@@ -2265,10 +2265,19 @@ def main() -> None:
     _cfb_status: dict = {}
     try:
         from engine.sources.injuries import load_cfb_injuries, status_by_player
-        _cfb_inj = load_cfb_injuries(out.get("games") or [], lookup)
+        _avail_note: dict = {}
+        _cfb_inj = load_cfb_injuries(out.get("games") or [], lookup, note=_avail_note)
         _cfb_status = status_by_player(_cfb_inj)
         print(f"  Injuries: {len(_cfb_inj)} designation(s) on tonight's schools "
               f"({sum(1 for i in _cfb_inj if i.status in ('OUT', 'IR', 'DOUBTFUL'))} out or doubtful)")
+        # THE SCHOOLS' OWN FILINGS (decision 20, step ADB): what each conference availability report changed.
+        if _avail_note.get("schools"):
+            print(f"  Availability reports: {_avail_note['schools']} school(s) filed — "
+                  f"{_avail_note['added']} added, {_avail_note['changed']} changed, "
+                  f"{len(_avail_note['cleared'])} cleared to play, {_avail_note['dropped']} stale tag(s) dropped"
+                  + ("" if _avail_note.get("espn_read") else " (ESPN's board unread)"))
+        out["availability_reports"] = {k: _avail_note.get(k) for k in ("schools", "added", "changed", "dropped")} | {
+            "cleared": [{"team": t, "player": n, "was": w} for t, n, w in _avail_note.get("cleared") or []]}
     except Exception as _iexc:                               # noqa: BLE001
         print(f"  ⚠️  college injuries unavailable: {_iexc}")
     _t = _clock.lap("injuries + lineup + prop pricing", "injuries", _t)

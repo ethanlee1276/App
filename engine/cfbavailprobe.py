@@ -65,6 +65,33 @@ SOURCES = {
     "big_12": ("https://big12sports.com/sports/2025/8/14/FBreporting.aspx",),
     "cfp": ("https://collegefootballplayoff.com/",),
 }
+#: THE SIXTH LOOK (20:18 UTC) FOUND THE REPORTS: the Big Ten's, the ACC's and the Big 12's report pages, and the
+#: SEC's page data, each embed one vendor's public report, app.hdintelligence.com/?source=<B10|SEC|ACC|B12>&
+#: sport=Football&conf=<same>&type=report (and type=archive), a 7.6 KB page built in the browser by one script,
+#: /assets/index-*.js. The conferences' own pages are mapped, so the seventh look starts at the embed itself: its
+#: script, the parts that script loads later, and the text around the calls it makes for its data. The College
+#: Football Playoff's reports page is looked at too (its front page holds no report).
+SOURCES = {
+    "hd": ("https://app.hdintelligence.com/?source=B10&sport=Football&conf=B10&type=report",
+           "https://app.hdintelligence.com/?source=SEC&sport=Football&conf=SEC&type=archive"),
+    "cfp": ("https://collegefootballplayoff.com/sports/2025/11/12/reports.aspx",),
+}
+#: A frame worth following: a report's, not an advertiser's (the sixth look followed DoubleClick's and Google's).
+REPORT_FRAME_RE = re.compile(r"report|availab|injur|hdintelligence", re.I)
+#: A site's own app bundle: the SEC's /dist/assets/app-*.js, the vendor's /assets/index-*.js.
+BUNDLE_RE = re.compile(r"/(?:dist/)?assets/(?:app|index)[-.][^/?]*\.js(?:\?.*)?$")
+#: A part such a bundle loads later, named in it ("assets/ReportEmbed-AbCd1234.js"); followed when its name speaks
+#: of a report, an embed, a public view or the archive.
+CHUNK_RE = re.compile(r"""["'`](?:\.{0,2}/)?((?:dist/)?assets/[A-Za-z0-9_.\-]{2,80}\.js)["'`]""")
+CHUNK_WORDS = re.compile(r"report|embed|public|archive|availab", re.I)
+#: Where a bundle asks for its data: the text around these is kept.
+CALL_RE = re.compile(r"fetch\(|axios|baseURL|VITE_[A-Z_]{3,}|/public/|/embed|/reports?\b|conf=|createClient\(|graphql"
+                     r"|supabase|firestore|execute-api|\.functions\b|URLSearchParams"
+                     r"|\.get\([\"'](?:conf|sport|source|type)[\"']\)", re.I)
+#: The words that mark a call as the report's own: such calls are kept first (a bundle is mostly library code).
+CALL_WORDS = re.compile(r"conf|sport|report|hdintelligence|public|embed|archive|availab|source", re.I)
+#: The hosts a data address lives on, read first.
+DATA_HOST_RE = re.compile(r"hdintelligence|api|supabase|amazonaws|firebase|graphql|functions|azure|vercel|render", re.I)
 #: THE NBA'S REPORT ITSELF. Its index page turned the first look away (403), and each report is a PDF at an
 #: address made of its own time, posted every quarter hour on game days ("Injury-Report_2026-04-06_08_15AM.pdf",
 #: Eastern time): the look asks for the newest quarter hour, then each before it, back NBA_BACK_SLOTS slots.
@@ -315,11 +342,28 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
         # around the words a report page would use.
         urls = list(dict.fromkeys(m.group(1) for m in JS_URL_RE.finditer(body)))
         rec["js_head"] = body[:1500]
-        rec["js_urls"] = ([u for u in urls if re.search(r"availab|report|injur|api", u, re.I)]
-                          + [u for u in urls if not re.search(r"availab|report|injur|api", u, re.I)])[:60]
+        rec["js_urls"] = sorted(urls, key=lambda u: (0 if DATA_HOST_RE.search(u) else
+                                                     1 if re.search(r"availab|report|injur", u, re.I) else 2))[:80]
         rec["js_bits"] = [body[max(0, m.start() - 400):m.start() + 600]
                           for m in re.finditer(r"availab|fbreport", body, re.I)][:6]
-        return rec, []
+        # THE CALLS FOR ITS DATA (the seventh look): the text around each, overlapping runs kept once, those that
+        # speak the report's own words first (a bundle is mostly library code), then in the bundle's own order.
+        calls, last = [], -10_000
+        for m in CALL_RE.finditer(body):
+            if m.start() - last < 500:
+                continue
+            last = m.start()
+            bit = body[max(0, m.start() - 300):m.start() + 500]
+            calls.append((len(CALL_WORDS.findall(bit)), m.start(), bit))
+        best = sorted(calls, key=lambda c: (-c[0], c[1]))[:40]
+        rec["js_calls"] = [c[2] for c in sorted(best, key=lambda c: c[1])]
+        rec["js_call_count"] = len(calls)
+        # The app's own code sits at a bundle's end, after the libraries it imports.
+        rec["js_tail"] = body[-4000:]
+        chunks = list(dict.fromkeys(m.group(1) for m in CHUNK_RE.finditer(body)))
+        rec["js_chunks"] = chunks[:80]
+        later = [urllib.parse.urljoin(url, "/" + c) for c in chunks if CHUNK_WORDS.search(c.rsplit("/", 1)[-1])]
+        return rec, later[:8]
     p = _Page()
     try:
         p.feed(body)
@@ -352,7 +396,10 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     app = app_data(body)
     if app:
         rec["app"] = app
-    frames = list(dict.fromkeys(urllib.parse.urljoin(url, m.group(1)) for m in FRAME_RE.finditer(body)
+    import html as _html
+    # "&amp;" in a frame's address is the page's markup, not the address (the sixth look asked for the Big Ten's
+    # embed as "?source=B10&amp;sport=Football").
+    frames = list(dict.fromkeys(urllib.parse.urljoin(url, _html.unescape(m.group(1))) for m in FRAME_RE.finditer(body)
                                 if not m.group(1).startswith(("about:", "javascript:"))))
     if frames:
         rec["frames"] = frames[:12]
@@ -390,8 +437,8 @@ def look_page(url: str, get=_get) -> tuple[dict, list]:
     # from <static site>/feature-pages/availability-reporting/; the script beside it is what fills the page.
     feature = [re.sub(r"\.css(\?.*)?$", ".js", h) for h in named if "feature-pages" in h and ".css" in h]
     # A SITE'S OWN APP BUNDLE (the SEC's /dist/assets/app-*.js): the page's data addresses are in it.
-    bundles = [x for x in rec.get("scripts") or [] if re.search(r"/dist/assets/app[-.][^/]*\.js", x)]
-    rec["_frames"] = [canon(u) for u in frames if u.startswith("http")]
+    bundles = [x for x in rec.get("scripts") or [] if BUNDLE_RE.search(x)]
+    rec["_frames"] = [canon(u) for u in frames if u.startswith("http") and REPORT_FRAME_RE.search(u)]
     return rec, list(dict.fromkeys(canon(u) for u in [x["href"] for x in follow] + named + feature + bundles))
 
 
@@ -460,6 +507,10 @@ def look(sources=None, get=_get, follow: int = FOLLOW, depth: int = DEPTH) -> di
                 # A FRAME THE CONFERENCE'S OWN PAGE EMBEDS is read wherever it lives (a published sheet is
                 # usually on another site): the page chose to show it.
                 embedded = rec.pop("_frames", [])
+                # …and the site it lives on is the look's own from then on (the vendor's script and its parts).
+                homes |= {_home(u) for u in embedded}
+                if level == 0:
+                    homes |= {_home(url)}
                 nxt += [u for u in links if u not in seen and mine(u, homes)] + [u for u in embedded if u not in seen]
             step = list(dict.fromkeys(nxt))[:follow]
             if not step:
@@ -475,6 +526,7 @@ def write(found: dict, now: float, out=None) -> Path:
     # TOO BIG: fields go, least needed first, and never a cut through the middle (the fifth look's file was cut at
     # 600,000 characters and could not be read).
     for trim in (("inline_inventory",), ("inline",), ("js_bits", "js_head"), ("snippets",), ("pdf_text",), ("app",),
+                 ("js_chunks", "js_tail"),
                  ("scripts", "apis", "headings"), ("links", "pdfs", "hints")):
         if len(text) <= MAX_OUT:
             break

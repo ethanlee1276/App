@@ -96,9 +96,9 @@ def test_a_page_built_by_scripts_says_where_it_fetches_the_reports_and_where_it_
                    get=lambda u: ("ok", "text/html", body) if u == "https://conf.test/fbreports" else ("HTTP 404", "", b""))
     assert "https://cdn.x.test/availability/w13.json" not in [pg["url"] for pg in found["conf"]["pages"]], \
         "another site's address is never read"
-    assert all(any("fbreport" in u.lower() or "availab" in u.lower() for u in starts)
+    assert all(any("fbreport" in u.lower() or "availab" in u.lower() or "type=report" in u for u in starts)
                for name, starts in P.SOURCES.items() if name not in ("cfp", "nba_official")), \
-        "each conference's look starts where its reports are posted"
+        "each look starts where the reports are posted (since the seventh, the vendor's own embed)"
 
 
 def test_the_nbas_own_report_is_asked_for_by_its_time_newest_first():
@@ -174,16 +174,52 @@ def test_every_inline_script_is_counted_and_the_report_bearing_ones_kept_and_an_
 
 
 def test_a_frame_the_report_page_embeds_is_read_wherever_it_lives():
-    page = b"<p>Availability</p><iframe src='https://docs.google.com/spreadsheets/d/e/2PACX/pubhtml?widget=true'></iframe>"
-    sheet = b"<table><tr><td>Team</td><td>Player</td><td>Status</td></tr><tr><td>Clemson</td><td>A Back</td><td>Out</td></tr></table>"
-    site = {"https://conf.test/fb.aspx": ("ok", "text/html", page),
-            "https://docs.google.com/spreadsheets/d/e/2PACX/pubhtml?widget=true": ("ok", "text/html", sheet)}
-    found = P.look({"conf": ("https://conf.test/fb.aspx",)}, get=lambda u: site.get(u, ("HTTP 404", "", b"")))
+    """The sixth look: the conferences' report pages embed one vendor's public report. The seventh: the embed's
+    address is read without the page's "&amp;", an advertiser's frame is noted and never followed, and the vendor's
+    own script, the report part it loads later, and the text around its data calls are read."""
+    hd = "https://app.hdintelligence.com/?source=B10&sport=Football&conf=B10&type=report"
+    ad = "https://6037123.fls.doubleclick.net/activityi;src=6037123"
+    page = (b"<p>Availability</p><iframe src='" + ad.encode() + b"'></iframe><iframe src="
+            b"'https://app.hdintelligence.com/?source=B10&amp;sport=Football&amp;conf=B10&amp;type=report'></iframe>")
+    shell = b'<div id="root"></div><script type="module" src="/assets/index-CvGojbqV.js"></script>'
+    bundle = (b'const A="https://api.hd.test";const m=()=>import("./assets/ReportEmbed-Ab12Cd34.js");'
+              b'const n=()=>import("./assets/Login-Zz99Yy88.js");'
+              b'function g(c,s){return fetch(`${A}/public/reports?${new URLSearchParams({conf:c,sport:s})}`)}')
+    part = b'export const cols=["player","position","status"];fetch(A+"/public/archive")'
+    site = {"https://conf.test/fb.aspx": ("ok", "text/html", page), hd: ("ok", "text/html", shell),
+            "https://app.hdintelligence.com/assets/index-CvGojbqV.js": ("ok", "application/javascript", bundle),
+            "https://app.hdintelligence.com/assets/ReportEmbed-Ab12Cd34.js": ("ok", "text/javascript", part)}
+    asked = []
+
+    def get(u):
+        asked.append(u)
+        return site.get(u, ("HTTP 404", "", b""))
+    found = P.look({"conf": ("https://conf.test/fb.aspx",)}, get=get, depth=3)
     pages = {pg["url"]: pg for pg in found["conf"]["pages"]}
-    assert pages["https://conf.test/fb.aspx"]["frames"] == ["https://docs.google.com/spreadsheets/d/e/2PACX/pubhtml?widget=true"]
-    sheet_pg = pages["https://docs.google.com/spreadsheets/d/e/2PACX/pubhtml?widget=true"]
-    assert sheet_pg["tables"][0]["first"][1] == ["Clemson", "A Back", "Out"], "the embedded sheet's rows, read"
+    assert pages["https://conf.test/fb.aspx"]["frames"] == [ad, hd], "the embed's address, unescaped"
+    assert ad not in asked, "an advertiser's frame is never followed"
+    js = pages["https://app.hdintelligence.com/assets/index-CvGojbqV.js"]
+    assert js["js_urls"][0] == "https://api.hd.test"
+    assert any("/public/reports" in c for c in js["js_calls"]), js["js_calls"]
+    assert js["js_tail"].endswith("sport:s})}`)}") and js["js_call_count"] >= 1
+    assert js["js_chunks"] == ["assets/ReportEmbed-Ab12Cd34.js", "assets/Login-Zz99Yy88.js"]
+    assert "https://app.hdintelligence.com/assets/ReportEmbed-Ab12Cd34.js" in pages, "the report part is read"
+    assert "https://app.hdintelligence.com/assets/Login-Zz99Yy88.js" not in asked, "a part with no report is not"
     assert all("_frames" not in pg for pg in found["conf"]["pages"])
+
+
+def test_a_bundles_report_calls_are_kept_before_its_library_calls():
+    lib = "".join(f"function l{i}(u){{return fetch(u+'/x{i}')}}" + " " * 600 for i in range(60))
+    app = "const q=new URLSearchParams(location.search);fetch(`${B}/v1/public/report?conf=${q.get('conf')}`)"
+    got, _ = P.look_page("https://app.hdintelligence.com/assets/index-X.js",
+                         get=lambda u: ("ok", "application/javascript", (lib + app).encode()))
+    assert len(got["js_calls"]) == 40 and got["js_call_count"] > 40
+    assert any("/v1/public/report" in c for c in got["js_calls"]), "the report's own call survives the cap"
+
+
+def test_the_seventh_look_starts_at_the_vendors_embed():
+    assert P.SOURCES["hd"][0].startswith("https://app.hdintelligence.com/?source=")
+    assert all("&amp;" not in u for v in P.SOURCES.values() for u in v)
 
 
 def test_a_file_too_big_loses_fields_never_its_ending():
