@@ -501,7 +501,8 @@ def attach_plays(games: list[dict], league: str,
                 continue
             else:
                 every = espnplays.hoops_plays(payload, league, 0, sides=sides)
-                g["plays"] = every[-PLAYS_PER_GAME:]
+                # The card's few plays are plays: no substitution or dead-ball rebound (espnplays.card_noise).
+                g["plays"] = [r for r in every if not espnplays.card_noise(r)][-PLAYS_PER_GAME:]
                 big = [r for r in every if espnplays.big_play(r)][-BIG_PER_GAME:]
                 if big:
                     g["big"] = big

@@ -9461,6 +9461,16 @@ app alone, the same way as before: its page, its script and the calls the script
 map for reading the Playoff's games (from 18 December) and college basketball, whose ESPN feed listed no injuries at
 all on 23 November. Nothing reads it and no pick moves.
 
+**ADH. College basketball's live plays read in words** (step 899; 23 November). Nothing to run. Looking at every
+league's Live tab side by side with tonight's games (the repo's own page, signed in as a free member, with the site's
+public data): the college basketball cards read ESPN's codes as written, "SF · Ben Oosterbaan — LayUpShot +2" and
+"NEV · Elijah Price — MadeFreeThrow miss", where the NBA's read as phrases ("Driving Floating Jump Shot"), and a dead
+ball's substitutions and its dead-ball rebound took three of a card's six rows. A code now reads as its words
+("Layup", "Free Throw", "Jump Shot", "TV Timeout"), and the card's six rows are plays: substitutions and dead-ball
+rebounds stay on the game's own page, which keeps every play. The ninth look also told the probe what it needed (the
+Playoff's and the basketball reports sit in the vendor's older apps, read in December), so it rests again
+(`QB_CFB_AVAIL_PROBE=on` wakes it).
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

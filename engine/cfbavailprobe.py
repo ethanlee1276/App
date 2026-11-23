@@ -147,8 +147,12 @@ MAX_OUT = 600_000
 
 
 #: THE FOUR CONFERENCES' FOOTBALL IS MAPPED (23 November, the eighth look): engine/cfbavailread reads it. The
-#: ninth look maps the vendor's older app (the Playoff's and the basketball reports); the probe then rests again.
-DEFAULT = "on"
+#: ninth look (23:27 UTC) mapped the vendor's older apps: par.hdintelligence-app.com is a basketball app (the NCAA
+#: tournament's reports, GET /api/ncaa-publish-mbb, by region; each conference's own in parts named
+#: ExWptweMv<conf>mbb, not yet read), and confinjrepxyz.hdintelligence-app.com the Playoff's (its calls in parts the
+#: look did not follow). The probe rests until those are next needed (conference basketball from January, the
+#: Playoff from 18 December): ``QB_CFB_AVAIL_PROBE=on`` wakes it.
+DEFAULT = "off"
 
 
 def on() -> bool:

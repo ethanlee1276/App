@@ -898,6 +898,43 @@ def _sides_from_boxscore(payload: dict, league: str) -> dict[str, str]:
     return out
 
 
+#: COLLEGE BASKETBALL'S PLAY CODES, IN WORDS (23 November). ESPN names the NBA's and the WNBA's plays as phrases
+#: ("Driving Floating Jump Shot", "Defensive Rebound") and college basketball's as codes run together ("LayUpShot",
+#: "MadeFreeThrow", "OfficialTVTimeOut"), and the Live tab's cards drew college's as written: "SF · Ben Oosterbaan —
+#: LayUpShot +2", "NEV · Elijah Price — MadeFreeThrow miss". A code now reads as its words, and the few whose words
+#: mislead read as the NBA's do: a free throw is "Free Throw" (the row's own chip says whether it went in), a lay-up
+#: "Layup", a dunk "Dunk", a timeout "Timeout".
+_EVENT_FIX = ((re.compile(r"^(?:made|missed)\s+free\s+throw\b", re.I), "Free Throw"),
+              (re.compile(r"\blay\s*up\s+shot\b", re.I), "Layup"),
+              (re.compile(r"\bdunk\s+shot\b", re.I), "Dunk"),
+              (re.compile(r"\btime\s+out\b", re.I), "Timeout"),
+              (re.compile(r"\bofficial\s+tv\s+timeout\b", re.I), "TV Timeout"))
+_CAMEL = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+
+
+def event_label(text) -> str:
+    """ESPN's play type label as words: a code run together is split ("JumpShot" -> "Jump Shot") and the misleading
+    ones read as the NBA's do (`_EVENT_FIX`); a phrase is left as it is."""
+    t = " ".join(str(text or "").split())
+    if not t:
+        return "Play"
+    t = _CAMEL.sub(" ", t)
+    for rx, to in _EVENT_FIX:
+        t = rx.sub(to, t)
+    return " ".join(t.split())
+
+
+#: THE CARD'S FEW PLAYS ARE PLAYS (23 November). The Live tab's card keeps a game's last PLAYS_PER_GAME rows; a
+#: basketball dead ball brings a run of substitutions and a dead-ball rebound, and on a college card they were half
+#: of the six. Bookkeeping like that stays on the game's own page (its full list) and off the card.
+_CARD_NOISE = re.compile(r"^(?:substitution|dead\s*ball\s*rebound)$", re.I)
+
+
+def card_noise(row: dict) -> bool:
+    """A basketball row the Live tab's card leaves out: a substitution or a dead-ball rebound."""
+    return (row or {}).get("kind") == "hoops" and bool(_CARD_NOISE.match(str((row or {}).get("event") or "")))
+
+
 def hoops_plays(payload: dict, league: str = "wnba", limit: int = 6,
                 sides: dict[str, str] | None = None) -> list[dict]:
     """The last plays of a basketball game, newest last, as STRUCTURED rows.
@@ -950,7 +987,7 @@ def hoops_plays(payload: dict, league: str = "wnba", limit: int = 6,
             "clock": str((p.get("clock") or {}).get("displayValue") or ""),
             "team": (teams.get(tid) or (f"espn:{tid}" if tid else "")),
             "player": names.get(aid, ""),
-            "event": (ptype.get("text") or "Play"),
+            "event": event_label(ptype.get("text")),
             "scoring": bool(p.get("scoringPlay")),
             "shot": bool(p.get("shootingPlay")),
             "points": _int(p.get("scoreValue")) or 0,
