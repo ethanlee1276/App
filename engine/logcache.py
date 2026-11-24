@@ -160,6 +160,26 @@ def generations(conn, sport: str, seasons):
     return int(epoch[0]), tuple((s, got.get(s, 0)) for s in seasons)
 
 
+def stored_seasons(conn, sport: str) -> tuple[list, bool]:
+    """(a sport's stored seasons in player_game_logs, ascending; whether it has rows filed with no season): each a
+    seek on the table's key (sport, season, ...), never a read of its rows (step AEI, 24 November 2026).
+    engine/hoops_fit._stored_seasons is the same read, written first; it is left as it is so its kept values are
+    not read again for a change that moves none of them."""
+    out: list = []
+    last = None
+    while True:
+        r = conn.execute("SELECT MIN(season) FROM player_game_logs WHERE sport=? AND season IS NOT NULL"
+                         + ("" if last is None else " AND season > ?"),
+                         (sport,) if last is None else (sport, last)).fetchone()
+        if r is None or r[0] is None:
+            break
+        last = int(r[0])
+        out.append(last)
+    nulls = conn.execute("SELECT 1 FROM player_game_logs WHERE sport=? AND season IS NULL LIMIT 1",
+                         (sport,)).fetchone()
+    return out, nulls is not None
+
+
 def folder() -> str:
     from . import feedstate
     return os.path.join(feedstate.directory(), DIRNAME)

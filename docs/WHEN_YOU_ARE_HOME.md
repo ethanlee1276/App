@@ -9810,8 +9810,13 @@ this season's rows had landed. Each was kept on every season it reads at once, s
 last season with them, and college basketball's last season is about four times this one so far. Each season is now
 kept on its own (the NBA's and the WNBA's too): a night's rows read this season's alone, last season's stay kept
 while its rows hold, and the profiles and the spreads come out the same as one read of every season. The fantasy
-file's season means (95 seconds of a healthy 368-second college build at 13:03 ET) are kept the same way. The first
-college build after this deploy still reads both seasons once, and may run long that one time.
+file's season means (95 seconds of a healthy 368-second college build at 13:03 ET) are kept the same way, and so
+are the league's shot totals over the last year that the shooting read takes its percentages from (summed on every
+build until now, about 44 seconds of college's). The first college build on the new code, at 13:22 ET, read both
+seasons once and still finished in 345 seconds: the team profiles took 69 seconds where they had taken 268, and
+each season is kept from there. Still read on every college build, and left as they are: the player histories (55
+seconds, both seasons' rows for tonight's schools, which no index on the table serves) and the comps (each market's
+whole history read again when a night's rows land).
 
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:

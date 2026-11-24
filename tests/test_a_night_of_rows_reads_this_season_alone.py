@@ -15,6 +15,7 @@ read of every season. What this holds:
   * the stat spreads' values are one read's, in season and day order, rows filed with no season first, and a
     night's rows read this season's again and no other;
   * the fantasy file's season means read this season's rows alone on a night, and come out the same;
+  * so do the league's shot totals over the last year (the shooting read's percentages);
   * the league's stored seasons are found by seeks, rows with no season said.
 
 Offline. Run directly: `python3 tests/test_a_night_of_rows_reads_this_season_alone.py`
@@ -167,6 +168,25 @@ def test_the_fantasy_means_read_this_season_alone_on_a_night():
         finally:
             logcache.enabled_for = keep
         assert got == plain and got["BOS P0"]["_games"] > 0
+
+
+def test_the_leagues_shot_totals_read_this_season_alone_on_a_night():
+    from engine.nba import shooting as SH
+    with _Sandbox() as sb:
+        _two_seasons(sb.conn)
+        since = "2025-11-05"
+        want = SH._shot_sums(sb.conn, "nba", since)
+        assert SH._league_shots(sb.conn, "nba", since) == want, "the totals of one read"
+        assert want["fga"] > 0 and SH._league_shots(sb.conn, "nba", None) == SH._shot_sums(sb.conn, "nba")
+        calls, undo = _counting(SH, "_shot_sums")
+        try:
+            _night(sb.conn)
+            got = SH._league_shots(sb.conn, "nba", since)
+            read = [c for c in calls]
+        finally:
+            undo()
+        assert read == [((since,), (("season", 2026),))], f"this season's rows alone: {read}"
+        assert got == SH._shot_sums(sb.conn, "nba", since) and got["fga"] > want["fga"]
 
 
 def test_values_keep_season_and_day_order_and_a_seasonless_row_comes_first():

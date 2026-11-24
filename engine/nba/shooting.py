@@ -235,16 +235,47 @@ def _longrun(conn, sport: str, players, n: int = LONG_GAMES, before: str | None 
     return out
 
 
-def league_pcts(conn, sport: str, since: str | None = None) -> dict:
-    """The league's 2P%, 3P% and FT% from the stored logs (``since`` an ISO
-    date), or {} when there are too few shots to say."""
+def _shot_sums(conn, sport: str, since: str | None = None, season=None, null_season: bool = False) -> dict:
+    """``{market: total}`` of the shot columns, off the table: every season, one season, or the rows filed with no
+    season; from ``since`` (an ISO date) when given."""
     q = ("SELECT market, SUM(value) FROM player_game_logs WHERE sport=? "
          "AND market IN (%s)" % ",".join("?" * len(SHOT_KEYS)))
     args: list = [sport, *SHOT_KEYS]
+    if null_season:
+        q += " AND season IS NULL"
+    elif season is not None:
+        q += " AND season=?"
+        args.append(int(season))
     if since:
         q += " AND period >= ?"
         args.append(since)
-    tot = {r[0]: float(r[1] or 0.0) for r in conn.execute(q + " GROUP BY market", args)}
+    return {r[0]: float(r[1] or 0.0) for r in conn.execute(q + " GROUP BY market", args)}
+
+
+def _league_shots(conn, sport: str, since: str | None = None) -> dict:
+    """The shot columns' totals from ``since``, each season's kept on its own for the day's window (step AEI, 24
+    November 2026: college basketball summed a year of every player's shots on every build, about 44 seconds of
+    its "context reads", for percentages a night barely moves). A night's rows read this season's again; the
+    totals are the one read's, sums of whole makes and tries."""
+    from .. import logcache
+    if not since or not logcache.enabled_for(conn):
+        return _shot_sums(conn, sport, since)
+    seasons, nulls = logcache.stored_seasons(conn, sport)
+    parts = [_shot_sums(conn, sport, since, null_season=True)] if nulls else []
+    parts += [logcache.memo(conn, "nba_shot_sums", sport, [s],
+                            lambda s=s: _shot_sums(conn, sport, since, season=s),
+                            code=__file__, extra={"since": str(since)}) for s in seasons]
+    tot: dict = {}
+    for part in parts:
+        for k, v in part.items():
+            tot[k] = tot.get(k, 0.0) + float(v)
+    return tot
+
+
+def league_pcts(conn, sport: str, since: str | None = None) -> dict:
+    """The league's 2P%, 3P% and FT% from the stored logs (``since`` an ISO
+    date), or {} when there are too few shots to say."""
+    tot = _league_shots(conn, sport, since)
     if tot.get("fg3a", 0) < 5000 or tot.get("fga", 0) < 20000 or tot.get("fta", 0) < 5000:
         return {}
     return {"p3": tot["fg3m"] / tot["fg3a"],
