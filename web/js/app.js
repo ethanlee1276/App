@@ -433,8 +433,10 @@ const SPORT_META = {
                    + "on the night’s biggest. Tracked on paper until its own "
                    + "record earns a stake",
          api: "/api/cbb/recommendations", fallback: "data/cbb.json" },
+  // "This week's", as the NFL's: the board carries Tuesday's and Wednesday's MAC games, Thursday's and Friday's and
+  // Saturday's (it read "Saturday's board" over Tuesday night's two MAC games, 2026-11-24).
   cfb: { logo: "🏈",
-         gamesTitle: "Saturday’s board",
+         gamesTitle: "This week’s board",
          gamesSub: "every game with its lines. Books price a Wednesday MAC "
                    + "game less carefully than Ohio State–Michigan, so how far "
                    + "we trust our own number changes game by game",

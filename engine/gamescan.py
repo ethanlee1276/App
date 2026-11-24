@@ -2840,19 +2840,27 @@ def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None =
     no key or no answer scans nothing and says so to the caller."""
     if fetch is None:
         from .sources.cfbd import fetch_advanced as fetch
+    # WHAT CFBD ANSWERED, ON THE BOARD (2026-11-24): on 24 November no college game carried a scan and nothing said
+    # why: a missing key, a refused one and a spent month all read as nothing. `scan_census` says each season's
+    # answer (the error's own words, never the key) and how many games were scanned.
+    why: dict = {}
+    census = out.setdefault("scan_census", {})
 
     def keyed(year):
         try:
             raw = fetch(year)
-        except Exception:                                    # noqa: BLE001
+        except Exception as exc:                             # noqa: BLE001
+            why[str(year)] = f"{type(exc).__name__}: {str(exc)[:200]}"
             return {}
         got = {}
         for school, v in (raw or {}).items():
             k = resolve(school)
             if k:
                 got[k] = v
+        why[str(year)] = f"{len(got)} of {len(raw or {})} schools read"
         return got
     cur, pri = keyed(int(season)), keyed(int(season) - 1)
+    census.update(cfbd=why, games=len(out.get("games") or []), scanned=0)
     if not cur and not pri:
         return 0
     ratings = cfb_ratings(cur, pri)
@@ -2884,6 +2892,7 @@ def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None =
             scan["redzone"] = rz
         gd["scan"] = scan
         n += 1
+    census.update(rated=len(ratings), scanned=n)
     # Every read gets his touchdown chance and price, from the WHOLE ranked
     # scorer list (the page's shelf is sliced later), as attach_nfl does.
     stamp_touchdowns(reads, {"long_shots": out.get("long_shots") or [],

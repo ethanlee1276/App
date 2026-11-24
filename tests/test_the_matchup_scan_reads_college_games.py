@@ -107,6 +107,17 @@ def test_no_key_scans_nothing_and_says_so():
         raise cfbd.DataUnavailable("no CFBD key")
     assert G.attach_cfb(out, 2026, keys.get, fetch=down) == 0
     assert "scan" not in out["games"][0] and "scan_reads" not in out
+    # And says so on the board (2026-11-24): each season's answer in CFBD's own words, never a key.
+    assert out["scan_census"] == {"cfbd": {"2026": "DataUnavailable: no CFBD key", "2025": "DataUnavailable: no CFBD key"},
+                                  "games": len(out["games"]), "scanned": 0}
+
+
+def test_a_scan_counts_what_it_read_on_the_board():
+    out, rows, keys = _board()
+    G.attach_cfb(out, 2026, keys.get, fetch=lambda year: cfbd.parse_advanced(rows))
+    c = out["scan_census"]
+    assert c["scanned"] == 1 and c["games"] == len(out["games"]) and c["rated"] >= 2
+    assert all(v.endswith("schools read") for v in c["cfbd"].values()), c
 
 
 def test_the_build_scans_and_never_fails_on_it():

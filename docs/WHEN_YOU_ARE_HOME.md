@@ -9585,6 +9585,15 @@ defence ratings already define it, and in college basketball the schools with 15
 either of the two before (a Division I school plays about thirty; a school from below one to three of them). Every
 league's game page now carries the radar, but baseball's, which comes with its builder when the season does.
 
+**ADS. The college board names its week, and its scan says what CFBD answered** (step 910; 24 November). Nothing to
+run. The college Picks page was headed "Saturday's board" over tonight's two Tuesday MAC games; it reads "This week's
+board" now, as the NFL's reads "This week's stadiums" (the board carries the week's Tuesday to Saturday). Every other
+league's Picks page also lists "Who could shine, who could struggle"; college football's does only when CFBD's scan
+runs, and tonight it scanned nothing with no word why: a missing key, a refused one and a spent month all read the
+same. The college board now carries `scan_census` in its public file: each season's answer from CFBD in its own words
+(never the key), how many schools it read, and how many games it scanned. If it says the key is missing or refused, a
+new free key from collegefootballdata.com in `secrets.local` brings the scan and the player reads back.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his
