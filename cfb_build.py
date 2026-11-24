@@ -2655,6 +2655,20 @@ def main() -> None:
                       f"({_tape_prof.get('n', 0)} FBS teams ranked).")
             except Exception as _tx:                          # noqa: BLE001
                 print(f"  ⚠️  matchup tape skipped: {_tx}")
+            # TEAM SHAPES, AS THE NFL'S GAME PAGE DRAWS THEM (engine/teamshape; step ADQ's radar): games between FBS
+            # schools only, ranked among the FBS (engine/cfb/defense.fbs_teams), this season blended with last.
+            try:
+                from engine import teamshape as _tshape
+                from engine.cfb.defense import fbs_teams as _shape_fbs
+                from engine.seasons import season_of as _shape_season_of
+                _shape_season = _shape_season_of("cfb", args.date)
+                _shapes = _tshape.blended_shapes(conn, "cfb", _shape_season, members=_shape_fbs(conn, _shape_season))
+                if _shapes:
+                    out["team_shapes"] = _shapes
+                    out["team_shapes_season"] = _shape_season
+                    print(f"  Team shapes: {len(_shapes)} FBS team(s), {_shape_season} blended with {_shape_season - 1}.")
+            except Exception as _shx:                         # noqa: BLE001
+                print(f"  ⚠️  team shapes skipped: {_shx}")
             _t = _clock.lap("long shots + Most Likely board", "matchup scan", _t)
             from engine.likely import build as _likely
             from engine import boards as _boards

@@ -986,6 +986,10 @@ def _board_lines_cached(league: str) -> bool:
         return False
 
 
+#: A Division I school plays about thirty stored games a season, a school from below one to three of them: this many
+#: in a season (or either of the two before) puts a school among college basketball's own for the Team shapes radar.
+CBB_SHAPE_GAMES = 15
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("date", nargs="?",
@@ -2019,14 +2023,17 @@ def main() -> None:
         # each other ... NFL is kind of like the one we want to go off of"). Five measured axes a side — points
         # scored and allowed, the last five margins, home edge, steadiness — as league percentiles off the scores
         # table, this season blended with last (engine/teamshape). The radar is any league's; the NBA's and the
-        # WNBA's are whole leagues. College basketball's scores mix in schools outside Division I, whose few games
-        # would bend every percentile, so it waits for a filter of its own.
-        if args.league in ("nba", "wnba"):
+        # WNBA's are whole leagues. College basketball's scores mix in schools outside Division I, whose one or two
+        # games a year would bend every percentile: only games between schools with CBB_SHAPE_GAMES stored finals in
+        # a season (engine/teamshape.regulars) count, and only they are ranked.
+        if args.league in ("nba", "wnba", "cbb"):
             try:
                 from engine import teamshape as _tshape
                 from engine.seasons import season_of as _shape_season_of
                 _shape_season = _shape_season_of(args.league, args.date)
-                _shapes = _tshape.blended_shapes(conn, args.league, _shape_season)
+                _members = (_tshape.regulars(conn, "cbb", _shape_season, CBB_SHAPE_GAMES)
+                            if args.league == "cbb" else None)
+                _shapes = _tshape.blended_shapes(conn, args.league, _shape_season, members=_members)
                 if _shapes:
                     out["team_shapes"] = _shapes
                     out["team_shapes_season"] = _shape_season

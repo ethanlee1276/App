@@ -154,7 +154,22 @@ def _season_stats(rows) -> dict:
     return out
 
 
-def blended_shapes(conn, sport: str, season: int, changes: dict | None = None) -> dict:
+def regulars(conn, sport: str, season: int, min_games: int) -> set:
+    """The league's own schools: those with ``min_games`` stored finals in this season or either of the two before
+    it (2026-11-24). College scores mix in schools from below the top division, who play one or two of its teams a
+    year; their few games would bend every percentile (college football's FBS rule, engine/cfb/defense.fbs_teams)."""
+    out: set = set()
+    for s in (season, season - 1, season - 2):
+        counts: dict = {}
+        for _period, home, away, _hs, _as in _finals(conn, sport, s):
+            for t in (home, away):
+                counts[t] = counts.get(t, 0) + 1
+        out |= {t for t, n in counts.items() if n >= min_games}
+    return out
+
+
+def blended_shapes(conn, sport: str, season: int, changes: dict | None = None,
+                   members: set | None = None) -> dict:
     """The radar on THIS season and last, blended the way the matchup scan
     blends its unit ranks (Ethan, 2026-09-27: "this chart should now be
     updated since it says 2025 and we use a mix of 2025 and 2026").
@@ -169,10 +184,16 @@ def blended_shapes(conn, sport: str, season: int, changes: dict | None = None) -
     the league on the blended numbers, as before.
 
     ``{team: {"pct", "raw", "games" (this season), "games_last",
-    "blend": {"off", "def"}}}``; {} when the league cannot be ranked."""
+    "blend": {"off", "def"}}}``; {} when the league cannot be ranked.
+
+    ``members`` (college, 2026-11-24): only games between two of these count, and only they are ranked."""
     from .gamescan import unit_share
-    now = _season_stats(_finals(conn, sport, season))
-    last = _season_stats(_finals(conn, sport, season - 1))
+
+    def finals(s):
+        rows = _finals(conn, sport, s)
+        return rows if members is None else [r for r in rows if r[1] in members and r[2] in members]
+    now = _season_stats(finals(season))
+    last = _season_stats(finals(season - 1))
     mean = lambda xs: sum(xs) / len(xs) if xs else None       # noqa: E731
 
     def mix(a, b, w):

@@ -9577,6 +9577,14 @@ division, whose few games would bend every percentile, so they wait for a filter
 (it is built on the football scan's units), and Lines & insights shows on any league's page when its lines are not
 already on the page.
 
+**ADR. College football's and college basketball's game pages draw the Team shapes radar too** (step 909; 24
+November). Nothing to run. Step ADQ left the colleges out because their scores mix in schools from below the top
+division, who play one or two of its teams a year and lose by forty; counted in, they would bend every percentile.
+Now only games between the league's own schools count, and only they are ranked: college football's FBS, as its
+defence ratings already define it, and in college basketball the schools with 15 or more stored games in a season or
+either of the two before (a Division I school plays about thirty; a school from below one to three of them). Every
+league's game page now carries the radar, but baseball's, which comes with its builder when the season does.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his
