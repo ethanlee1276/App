@@ -9670,6 +9670,20 @@ published, after the Pick of the Day is chosen, so nothing that picks or journal
 had crept 115 bytes past its size budget with steps ADT to ADY; three functions only the More pages draw moved to
 the file those pages load, and it is back under, as you chose on 19 November (trim, not raise).
 
+**ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
+Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
+
+| | Filed | ESPN board | Board, read fresh | Game summary | Game roster |
+|---|---|---|---|---|---|
+| Bengals | 23:47 | 23:57 | 23:57 | 23:50:49 (6.2 min ahead of the board) | 23:37, before the filing |
+| Commanders | 23:50 | 00:01:29 | 00:01:30 | 23:58:02 (3.3 min ahead) | 23:37, before the filing |
+
+Reading the board with a fresh copy, which the build already does in the window, gains nothing: ESPN's board itself
+takes 10 to 11 minutes after the filing. The game's summary is 3 to 6 minutes ahead of it. The game roster's
+did-not-play marks come early but are not a list: they went 4, 6, 5 for the Bengals and 8, 10, 9, 6 for the
+Commanders over the evening. One game is two teams, so nothing switches yet: Thanksgiving's three games give six more,
+and if the summary leads again the picks start reading it in the inactives window before Sunday.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his
