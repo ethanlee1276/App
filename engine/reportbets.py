@@ -139,6 +139,11 @@ def bets_of(sections, rows: dict | None = None) -> list:
                 if b.get("read_only"):
                     # A read, not a bet (gameresults.bet_of): shown, never journaled.
                     out["read_only"] = True
+                # The teammate step it was priced with (engine/stepup, step AEC), for the record to measure.
+                from .stepup import mate_mult
+                mm = mate_mult(row)
+                if mm is not None:
+                    out["mate_mult"] = mm
                 out["sources"] = [src]
                 seen[k] = out
     return list(seen.values())

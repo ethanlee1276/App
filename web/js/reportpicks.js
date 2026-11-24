@@ -291,7 +291,7 @@ function rpShare(pair) {
 //: How each kind of read is said, in the order the reports' summary says them (engine/reportgrade.GROUPS).
 const RP_KINDS = [["matchups", "Matchup reads"], ["candidates", "Breakout candidates"], ["fades", "Fades"],
   ["starters", "Starters"], ["angles", "The angles"], ["units", "Offense against defense"],
-  ["script", "How the game would go"]];
+  ["stepup", "Who steps up"], ["script", "How the game would go"]];
 //: [right, of] for the players a report listed: the record's pair less the regulars who sat off it.
 function rpListed(x) {
   const inj = (x || {}).injuries;

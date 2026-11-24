@@ -874,7 +874,11 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
                 # (likelyboard.trust_price, 2026-10-17), NULL where it did
                 # not: `hit_prob` is what the page showed, and this is what
                 # pricetrust.py re-tests the rule on, picks made after it.
-                "trust_from"):
+                "trust_from",
+                # WHO STEPS UP (engine/stepup, step AEC, 24 November 2026): the teammate step the pick was priced
+                # with (engine/teammates' `mate_card`, applied), NULL where none moved it, so the record says how
+                # the picks a teammate's absence raised have done. Stamped by `_stamp_team`; nothing back-fills.
+                "mate_mult"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError as exc:
@@ -1389,6 +1393,12 @@ def _stamp_team(conn, cur, r) -> None:
     team = str((r.get("team") if hasattr(r, "get") else "") or "").strip()
     if cur.rowcount and team:
         conn.execute("UPDATE bets SET team=? WHERE id=?", (team, cur.lastrowid))
+    # AND THE TEAMMATE STEP IT WAS PRICED WITH (engine/stepup.mate_mult, step AEC), on the same fresh row.
+    if cur.rowcount:
+        from .stepup import mate_mult
+        mm = mate_mult(r)
+        if mm is not None:
+            conn.execute("UPDATE bets SET mate_mult=? WHERE id=?", (mm, cur.lastrowid))
 
 
 def _edge_book(conn, sport, category: str) -> str:
@@ -11571,6 +11581,15 @@ RECENT_LIMIT = 60
 TWO_LEG_LAST: dict = {}
 
 
+def _stepup_record(conn, since) -> dict:
+    """engine/stepup.bet_record, less the bench; {} when it cannot be read."""
+    try:
+        from .stepup import bet_record
+        return {sp: x for sp, x in bet_record(conn, since).items() if not is_benched(sp)}
+    except Exception:                                        # noqa: BLE001
+        return {}
+
+
 def _game_parlay_record(conn) -> dict:
     """Each league's record of its game parlays and their legs
     (parlayledger.game_parlay_record); never breaks the export."""
@@ -12287,6 +12306,8 @@ def export_json(conn, path) -> None:
             if rep.get("settled") or rep.get("open")},
         "report_recent": recent_settled(conn, REPORT_RECENT_LIMIT, category=REPORT_CATEGORY,
                                         since=since),
+        # THE PICKS A TEAMMATE'S ABSENCE MOVED (engine/stepup.bet_record, step AEC), by league and book.
+        "stepup_record": _stepup_record(conn, since),
         # THE GAME REPORTS' PARLAYS, LEAGUE BY LEAGUE: tickets, legs, markets and
         # the newest tickets with every leg (parlayledger.game_parlay_record).
         "game_parlay_record": _game_parlay_record(conn),

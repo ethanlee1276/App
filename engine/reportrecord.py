@@ -339,6 +339,7 @@ SECTION_KINDS = {"matchups": ("matchups",), "watch": ("candidates", "fades"), "a
                  "scripts": ("script",), "script": ("script",), "pitching": ("starters",), "goalies": ("starters",)}
 #: How a kind of read is said in a sentence.
 KIND_WORDS = {"matchups": "matchup reads", "angles": "angles", "units": "offense-against-defense reads",
+              "stepup": "step-up reads",
               "script": "reads on how the game would go", "starters": "starter reads"}
 #: A kind's record is said once this many of its reads are graded; the call's
 #: and the injury report's once this many games and listings are.

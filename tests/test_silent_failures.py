@@ -148,6 +148,9 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # THE PLAYERS' GAMES CLUB BY CLUB (engine/reunion.stints, step ACK): {} on a failure, as on a history with
         # no games, so a failure prints its own line in the build log; the report says nothing either way.
         "stints",
+        # WHO STEPS UP (engine/stepup.report_blocks, step AEC): [] on a failure, as on a game with nobody out, so a
+        # failure prints its own line in the build log ("who steps up not read"); the report keeps its injury lines.
+        "report_blocks",
         # THE EXPORT'S SAMPLER (engine/stacksample.Sampler._run, 2026-11-08),
         # caught by this sweep the day it was written: it returns None either
         # way, and a failure sets ``error``, which the settle pass puts on its

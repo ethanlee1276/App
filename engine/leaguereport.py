@@ -1331,7 +1331,10 @@ def form_lines(c: Ctx, form: dict) -> list:
         if w + lo:
             where.append(f"{team_np(c, t)} {team_be(c, t)} {w}-{lo} {at}")
     if where:
-        out.append(f"Where they play: {_join(where)} this season")
+        # A NEUTRAL SITE (step AED): a tournament or a showcase game is no one's home floor tonight.
+        from .gamereport import is_neutral
+        out.append(f"Where they play: a neutral site tonight; {_join(where)} this season" if is_neutral(c) else
+                   f"Where they play: {_join(where)} this season")
     return out
 
 

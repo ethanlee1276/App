@@ -3463,6 +3463,40 @@ function recNumberSection(x, scope) {
     </div>`;
 }
 
+/* WHO STEPS UP, ON THE RECORD (engine/stepup.bet_record, step AEC, 24 November 2026; Ethan: "make sure it's in
+   the bets ... and measured with bets"). The picks our numbers raised because a teammate ahead of the player was
+   out, and lowered because one came back, by book, from 25 November on: a league's own, or every league's. */
+const REC_STEPUP_BOOKS = [["edge", "Edge"], ["likely", "Most Likely"], ["report", "Report picks"]];
+function recStepupSection(x, scope) {
+  const sum = {};
+  (scope ? [scope] : Object.keys(x || {})).forEach((lg) => Object.entries((x || {})[lg] || {}).forEach(([book, v]) => {
+    const s = (sum[book] = sum[book] || {});
+    ["raised", "lowered"].forEach((way) => {
+      if (!(v || {})[way]) return;
+      const t = (s[way] = s[way] || [0, 0, 0, 0]);
+      for (let i = 0; i < 4; i++) t[i] += Number(v[way][i] || 0);
+    });
+    s.open = (s.open || 0) + Number((v || {}).open || 0);
+  }));
+  const said = (t, what) => (t ? `${what}: <b>${t[0]}–${t[1]}</b>${t[2] ? `–${t[2]}` : ""} (${t[3] >= 0 ? "+" : MINUS}${
+    Math.abs(t[3]).toFixed(2)}u)` : "");
+  const rows = REC_STEPUP_BOOKS.filter(([b]) => sum[b] && (sum[b].raised || sum[b].lowered || sum[b].open)).map(([b, w]) => {
+    const parts = [said(sum[b].raised, "raised for a teammate out"), said(sum[b].lowered, "lowered for one back")]
+      .filter(Boolean);
+    return `<div class="rec-row flush tight"><span class="rr-what">${escapeHtml(w)}</span>
+      <span>${parts.join(" · ") || "none settled yet"}${sum[b].open ? ` · ${sum[b].open} open` : ""}</span></div>`;
+  }).join("");
+  if (!rows) return "";
+  return `<div class="section-title"><span class="st-ico">${icon("user", 15)}</span>Who steps up
+      <span class="sub">— the picks our numbers moved because a teammate was out${scope ? ` for ${escapeHtml(recLg(scope))}`
+        : ""}</span></div>
+    <div class="card rec-report">${rows}
+      <p class="rr-note">A player whose teammate ahead of him at his position is ruled out is projected up by the lift
+        measured over four seasons, and a player whose teammate comes back, down. Each pick is counted in the book that
+        posted it, from 25 November 2026 on.</p>
+    </div>`;
+}
+
 /* A HEADLINE PICK AS ITS CARD SAID IT (walk 11, 2026-11-18): "DAL +4.5", "BOS@ORL over 222.5", "CHA moneyline".
    The rows printed the stored market and line, so a moneyline read "CHA moneyline 0.5" (the book files a win
    as over 0.5), a spread lost its sign and a total its side: "BOS@ORL total 222.5". */
@@ -4041,6 +4075,8 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      + recCalibrationSection(src.calibration, src.calibration_era)
      // Our number against the line, over every finished pick (ledger.number_vs_line).
      + recNumberSection(scoped ? (d.number_vs_line_by_sport || {})[scope] : d.number_vs_line, scoped ? scope : "")
+     // The picks a teammate's absence moved (engine/stepup.bet_record, step AEC).
+     + recStepupSection(d.stepup_record, scoped ? scope : "")
      + recReplaySection(d.replay, scoped ? scope : null)
      + recSelectionHaircut(d.selection_haircut, scoped ? scope : null)
      + (scoped ? "" : recCalibrationSplits(d.calibration_splits))

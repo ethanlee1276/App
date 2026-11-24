@@ -74,7 +74,8 @@ YES_NO = ("anytime_td", "anytime_goal", "first_td", "first_basket")
 STAT_WORDS = {
     "pass_yds": ("passing yard", "passing yards"), "rush_yds": ("rushing yard", "rushing yards"),
     "rec_yds": ("receiving yard", "receiving yards"), "receptions": ("catch", "catches"),
-    "rush_att": ("carry", "carries"), "carries": ("carry", "carries"), "pass_td": ("touchdown pass",
+    "rush_att": ("carry", "carries"), "carries": ("carry", "carries"), "targets": ("target", "targets"),
+    "pass_td": ("touchdown pass",
     "touchdown passes"), "pass_tds": ("touchdown pass", "touchdown passes"),
     "anytime_td": ("touchdown", "touchdowns"), "rush_rec_yds": ("rushing and receiving yard",
     "rushing and receiving yards"), "pass_rush_yds": ("yard from scrimmage", "yards from scrimmage"),
@@ -98,9 +99,9 @@ UNIT_WORDS = {
 #: The groups the summary counts, in the order it says them.
 GROUPS = (("matchups", "Matchup reads"), ("candidates", "Breakout candidates"), ("fades", "Fades"),
           ("starters", "Starters"), ("angles", "The angles"), ("units", "Offense against defense"),
-          ("script", "How the game would go"))
+          ("stepup", "Who steps up"), ("script", "How the game would go"))
 #: How each group's right answer is said.
-RIGHT_WORDS = {"candidates": "beat their average", "fades": "fell short of it"}
+RIGHT_WORDS = {"candidates": "beat their average", "fades": "fell short of it", "stepup": "beat their average"}
 
 
 def _f(x):
@@ -585,7 +586,9 @@ def _grade(report: dict, g: dict, conn, sport: str, label: str) -> dict | None:
                         sts.add(vs[0])
                     extra = history(conn, sport, g, label, {mine["player"]: sts}) if mine else {}
                     gr = player_grade(sport, pk, bx, extra, way=cl.get("favors"))
-                    grp = "angles" if key == "angles" else "units"
+                    # WHO STEPS UP (engine/stepup, step AEC): a teammate named to take an absent man's work
+                    # is its own group, so the Record says how often those reads are right.
+                    grp = cl["group"] if cl.get("group") in counts else "angles" if key == "angles" else "units"
                     count(grp, gr)
                     marks.append(F.standout(grp, pk, gr, cl.get("favors")))
                 elif kind in ("team", "allowed", "unit"):
@@ -766,7 +769,8 @@ def _summary_section(report: dict, summary: dict) -> None:
     blocks.append({"type": "note", "text": (
         "Each player’s read is graded on the stat it leans on, against the player’s own average over the games "
         "before this one: a favorable read or a breakout candidate is right when the night beat it, an unfavorable "
-        "read or a fade when it fell short. An offense against a defense is graded on the night’s numbers against the team’s own, "
+        "read or a fade when it fell short; a teammate named to step up for a player who is out, when his targets "
+        "(carries, for a back) beat it. An offense against a defense is graded on the night’s numbers against the team’s own, "
         "and how the game would go on its final score. The lines, our team ratings, the simulation, the injury "
         "report and the touchdown chances are checked on their own lines, never counted among the reads. Our picks "
         "and parlays are graded at their own lines, on their cards.")})

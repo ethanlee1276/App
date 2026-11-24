@@ -9704,6 +9704,38 @@ report's picks back one team across the moneyline and the spread, one side of th
 team's own total, keeping the stronger pick. Every league's reports. I also checked every settled pick and parlay
 leg against its final number: no wrong verdicts in about 2,800 picks and legs or in 80 game-line picks.
 
+**AEC. Who steps up when receivers or backs are out** (step 920; 24 November). Nothing to run. You asked about the
+Rams with Puka Nacua and Davante Adams out. Our numbers already raised a player whose teammate ahead of him at his
+position is ruled out, by a lift measured on 2022 to 2025 (a receiver's catches ×1.19 the first game the man ahead
+misses, ×1.10 after; a tight end's ×1.57; a back's rushing ×1.66), and that moved the Most Likely and Edge picks on
+him. The reports never said it in one place. Now each NFL report's injury section has a "Who steps up" part for a
+team missing a receiver or tight end with 10% or more of its targets, or a back with 25% or more of its carries
+(while the player out played in one of the team's last three games, whatever list he is on: Nacua and Adams went
+on injured reserve on 22 November, which our numbers count as out): the share to fill, who took
+the targets or carries in this season's games without them (each teammate's number a game then against with
+them), which picks our numbers raise for it and by how much, and a read on each teammate named, graded after the
+game on his targets (carries, for a back) against his own average. Those reads are their own group, "Who steps
+up", on the report's summary, on Report Picks' totals and on the Record. A read is made only where a step up was
+measured: the out player's own position, and a tight end once a third of the targets are gone. Measured the same
+day and not added to the numbers: the tight end in that case caught 12% more (± 7%, 155 games, three seasons of
+four), just short of our bar, so the report says it and nothing is priced on it; two receivers ahead of a player
+out at once (×1.31 ± .23, 24 games) is too thin; the fourth and fifth receivers already carry it in their own form
+(×0.96 to ×1.17); a back gets no more targets when receivers sit. Every journaled pick now keeps the teammate lift
+it was priced with (`bets.mate_mult`), and the Record's Calibration tab says how those picks have done by book,
+raised for a teammate out and lowered for one back, from 25 November on. The heartbeat's NFL board counts the
+teams, the reads and the moved picks (`stepup`).
+
+**AED. Games off the usual days fire on their own day** (step 921; 24 November). Nothing to run. You asked about
+Wednesday, Thursday, Friday and Sunday games this week. Everything is timed off each game's own kickoff, never the
+weekday: the board turned to week 13 this morning (the week of the next game, Wednesday's), the odds plan buys the
+NFL on any day it plays from the real slate and nothing on a day it does not, each game's picks and parlays post 75
+minutes before its own kickoff, the inactives wait reads each game's own clock, and a short week is said as one.
+Thanksgiving's Lions game and its night game are featured (a Lions game, a Thursday night); a Wednesday or a
+Friday game is neither, by your three. One thing was wrong in another sport: college basketball's tournaments and
+showcase games sit on the board as neutral, and the reports read only football's word for it, so a Maui or a
+Bahamas game read as "at home" for its listed home side. Every league's reports now say a neutral site as one,
+"Where they play" included. Tests pin all of it.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 

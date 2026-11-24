@@ -582,6 +582,11 @@ def _board_counts(path: str) -> dict:
     rk = b.get("report_keep")
     if isinstance(rk, dict) and any(rk.values()):
         out["report_keep"] = {k: int(v) for k, v in rk.items() if isinstance(v, (int, float))}
+    # WHO STEPS UP (engine/stepup.census, step AEC): the teams whose report says where an absent man's work goes,
+    # the step-up reads it claims for grading, and the board rows a teammate step moved. Counts only.
+    su = b.get("stepup")
+    if isinstance(su, dict) and any(su.values()):
+        out["stepup"] = {k: int(v) for k, v in su.items() if isinstance(v, (int, float))}
     # THE GAME PARLAYS AND THE REPORTS, COUNTED (2026-11-14). Both are paid
     # keys, stripped from the public copy, so the heartbeat is where anyone
     # can see a league built them: three three-leg tickets and three scorer

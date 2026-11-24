@@ -917,6 +917,26 @@ def _h(text):
     return {"type": "h", "text": text} if text else None
 
 
+#: A listing's status as a sentence says it (step AEC): the feeds' short codes read as words, never "— ir".
+STATUS_WORDS = {"ir": "on injured reserve", "pup": "on the PUP list", "nfi": "on the non-football injury list",
+                "susp": "suspended", "o": "out", "d": "doubtful", "q": "questionable"}
+
+
+def status_words(status) -> str:
+    """"on injured reserve" for "IR"; any other status as it is, in lower case."""
+    s = str(status or "").strip().lower()
+    return STATUS_WORDS.get(s, s)
+
+
+def is_neutral(c) -> bool:
+    """A game at a neutral site, however its league's board says it: football's ``neutral_site``, basketball's
+    ``neutral`` (nba_build: college's tournaments and showcases), on the game or in the build's meta. College
+    basketball's reports read only football's key, so a Maui or Bahamas game was "at home" for its listed home side
+    (step AED, 24 November 2026)."""
+    g, meta = getattr(c, "g", None) or {}, getattr(c, "meta", None) or {}
+    return bool(g.get("neutral_site") or g.get("neutral") or meta.get("neutral_site") or meta.get("neutral"))
+
+
 def _section(key: str, title: str, blocks) -> dict | None:
     blocks = [b for b in blocks if b]
     return {"key": key, "title": title, "blocks": blocks} if blocks else None
@@ -973,7 +993,7 @@ def line_words(c: Ctx) -> str:
             bits.append("a pick'em")
         else:
             fav = c.home if sp < 0 else c.away
-            where = (" (neutral site)" if g.get("neutral_site") else
+            where = (" (neutral site)" if is_neutral(c) else
                      " at home" if fav == c.home else " on the road")
             bits.append(f"{fav} by {_num(abs(sp))}{where}")
     if tot is not None:
@@ -1032,7 +1052,7 @@ def sec_facts(c: Ctx) -> dict | None:
         s = f"{int(r['wins'])}-{int(r['losses'])}"
         return s + (f"-{int(r['ties'])}" if r.get("ties") else "")
     ra, rh = record(c.away), record(c.home)
-    neutral = g.get("neutral_site") or c.meta.get("neutral_site")
+    neutral = is_neutral(c)
 
     def ranked(t, side):
         rank = g.get(f"{side}_rank")
@@ -1649,7 +1669,7 @@ def sec_injuries(c: Ctx) -> dict | None:
                 (f"{r.get('player')} ({r.get('position') or '—'}) — active: not on "
                  f"{'the ' if c.sport == 'nfl' else ''}{c.name(t)}{chr(39) if c.name(t).endswith('s') else chr(39) + 's'} "
                  f"inactives list (was {str(r['cleared']).lower()})" if r.get("cleared") else
-                 f"{r.get('player')} ({r.get('position') or '—'}) — {str(r.get('status') or '').lower()}"
+                 f"{r.get('player')} ({r.get('position') or '—'}) — {status_words(r.get('status'))}"
                  + (f"; {newest_word(c, t, r.get('player'))}" if newest_word(c, t, r.get("player")) else "")
                  + (f". {r['opens'][0].upper()}{r['opens'][1:]}" if r.get("opens") else ""),
                  injury_claim(r.get("player"), t, r.get("status"), r.get("position")))
@@ -1670,6 +1690,10 @@ def sec_injuries(c: Ctx) -> dict | None:
             own = c.name(t) + ("'" if c.name(t).endswith("s") else "'s")
             blocks.append(_p(f"{own} offensive line: {_join(lines[t])} "
                              f"{'is' if len(lines[t]) == 1 else 'are'} out"))
+    # WHO STEPS UP (engine/stepup, step AEC): where an absent receiver's or back's work went in this season's games
+    # without him, which picks our numbers raise for it, and each teammate named, graded after the game.
+    from .stepup import report_blocks as _stepup
+    blocks += _stepup(c)
     blocks += practice_blocks(c)
     pulled = [p for p in c.scan.get("pulled") or [] if p]
     if pulled:
@@ -2411,7 +2435,7 @@ def sec_context(c: Ctx) -> dict | None:
         if s.get("div_rematch") and not said_rematch:
             lines.append("A division rematch — the second meeting this season")
             said_rematch = True
-        if s.get("long_trip") and not c.g.get("neutral_site"):
+        if s.get("long_trip") and not is_neutral(c):
             lines.append(f"{t} travels {s['long_trip']}")
         if s.get("new_coach"):
             lines.append(f"{t} plays {s['new_coach']}")
@@ -3278,7 +3302,7 @@ def market_sentence(c: Ctx) -> str:
         first = "The books have this one as a pick'em"
     elif sp is not None:
         fav = c.home if sp < 0 else c.away
-        where = (" at a neutral site" if g.get("neutral_site") or c.meta.get("neutral_site") else
+        where = (" at a neutral site" if is_neutral(c) else
                  " at home" if fav == c.home else " on the road")
         size = f"{_num(abs(sp))}-point favorite"
         first = (f"{cap(team_np(c, fav))} {team_be(c, fav)} "
@@ -4764,7 +4788,7 @@ def verdict_evidence(c: Ctx) -> dict:
         mine = sorted((r for r in rows if r.get("team") == t), key=lambda r: str(r.get("position") or "") != "QB")
         if mine:
             said = [f"{r.get('player')}" + (f" ({r['position']})" if r.get("position") else "")
-                    + f", {str(r.get('status')).lower()}" for r in mine[:3]]
+                    + f", {status_words(r.get('status'))}" for r in mine[:3]]
             out[c.opp[t]].append(f"{cap(team_np(c, t))} {team_be(c, t)} without {_join(said)}")
     return out
 
@@ -4812,7 +4836,7 @@ def ratings_chance(c: Ctx) -> float | None:
     if p is None and getattr(c, "conn", None) is not None:
         try:
             from . import slipgame
-            g = {"neutral": bool(c.g.get("neutral") or c.meta.get("neutral"))}
+            g = {"neutral": is_neutral(c)}
             if c.sport == "mlb":
                 from . import leaguereport as LR
                 g["pitchers"] = {("home" if t == c.home else "away"): LR._starter(c, t) for t in c.teams}
@@ -5342,6 +5366,13 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
         stamp_track(reports, sport, out)
         reports, kept = keep_started(result, reports, sport, out, at, conn)
         result[KEY] = reports
+        # WHO STEPS UP, COUNTED (engine/stepup, step AEC): the heartbeat's check that the block fires.
+        from . import stepup as _stepup
+        su = _stepup.census(reports, result) if sport == "nfl" else {}
+        if su:
+            result[_stepup.CENSUS_KEY] = su
+        else:
+            result.pop(_stepup.CENSUS_KEY, None)
         n_bets = _lift_bets(result)
         if not reports:
             return "Game reports: no games on the board"
