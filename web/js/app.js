@@ -8109,8 +8109,10 @@ function gameCard(g, i) {
   // The market row carries the spread and the total in columns, so the
   // sub-line under the name stops repeating them where the row draws.
   const mkts = gameMarketsHTML(g, { mlb, isFinal: (g.live || {}).state === "final" });
-  // A game under way has no pre-game line to wait for.
+  // A game under way has no pre-game line to wait for, and a finished one has none coming: "lines post closer to
+  // tip-off" stood under Memphis 117, Charlotte 111, FINAL (24 November) once the board had dropped its lines.
   const inPlay = (g.live || {}).state === "live";
+  const over = (g.live || {}).state === "final";
   const nba = state.sport === "nba" || state.sport === "wnba" || state.sport === "cbb";
   const nhl = state.sport === "nhl";
   const cfb = state.sport === "cfb";
@@ -8164,12 +8166,12 @@ function gameCard(g, i) {
           : `${esc(teamName(i ? g.home : g.away))} unknown`).join(" vs ")}`);
       } else if (!g.qb_confirmed) bits.push(`${icon('warn')} QB unconfirmed`);
     }
-    sub = bits.join(" · ") || (mkts || inPlay ? "" : "line not posted yet");
+    sub = bits.join(" · ") || (mkts || inPlay || over ? "" : "line not posted yet");
   } else if (nba || nhl) {
     const bits = [];
     if (!mkts && g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
     if (!mkts && g.spread) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
-    sub = bits.join(" · ") || (mkts || inPlay ? "" : nhl ? "lines post closer to puck drop" : "lines post closer to tip-off");
+    sub = bits.join(" · ") || (mkts || inPlay || over ? "" : nhl ? "lines post closer to puck drop" : "lines post closer to tip-off");
   } else if (mlb) {
     // The park name moved up to the card's venue line (fidelity pass) —
     // repeating it here printed "Coors Field" twice on one card.
@@ -8184,11 +8186,11 @@ function gameCard(g, i) {
       ? [`O/U ${Number(g.total).toFixed(1)}`] : [];
     if (g.doubleheader) bits.unshift(`${iconMark("calendar", 12)}DH Game ${esc(g.game_number || 1)}`);
     if (g.lineups_confirmed === false) bits.push(`${icon('clock')} ${esc(lineupPendingWords(g, true))}`);
-    sub = bits.join(" · ") || (mkts || inPlay ? "" : "line not posted yet");
+    sub = bits.join(" · ") || (mkts || inPlay || over ? "" : "line not posted yet");
   } else {
     const favTxt = (!mkts && g.favorite && g.spread != null)
       ? `${esc(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}` : "";
-    const ouTxt = mkts || inPlay ? "" : g.total != null ? `O/U ${g.total.toFixed(1)}` : "line not posted yet";
+    const ouTxt = mkts || inPlay ? "" : g.total != null ? `O/U ${g.total.toFixed(1)}` : over ? "" : "line not posted yet";
     sub = [favTxt, ouTxt].filter(Boolean).join(" · ");
   }
   const art = mlb ? ballpark(g) : nba ? court(g) : state.sport === "nhl" ? rink(g) : stadium(g);
@@ -11030,7 +11032,9 @@ function renderScanTop() {
     </div>` : "";
   host.innerHTML = `<div class="section-title">Who could shine, who could struggle
       <span class="sub">— every game’s key players, read against the defense they face</span></div>
-    ${locked ? `<div class="card ms-locked"><b>A read on every key player</b>, with the reasons for and against, is for members.</div>`
+    ${/* THE SAME LOCK AS THE TOP PICKS ABOVE IT (memberLockHTML): a bare card stacked its bold start over
+         ", with the reasons for and against, is for members." (24 November, the NBA's Home tab). */""}
+    ${locked ? memberLockHTML("A read on every key player is for members", "With the reasons for and against, in every game.")
       : `<div class="sct-grid">${list("Could shine", shine, true)}${list("Could struggle", struggle, false)}</div>
     <p class="ms-note">A player who could shine gets the likeliest over on Most Likely, one who could
       struggle the likeliest under — when one clears the board’s bars (55% or better, −250 or better).

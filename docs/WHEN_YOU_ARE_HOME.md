@@ -9646,6 +9646,14 @@ game tipped every finished college game page lost them, while the NBA's finished
 pregame things, so a build that makes none now keeps the last board's, for the same night only and never over
 anything it made itself.
 
+**ADX. The Home tab's locked reads look like its locked picks, and a finished game never promises a line** (step
+915; 24 November). Nothing to run. On the NBA's Home tab the locked "Who could shine, who could struggle" card read "A
+read on every key player" over a line starting ", with the reasons for and against, is for members.", under a
+"Qellys' top picks" card with a lock, a title and a See the plans button; it is now that same card ("A read on every
+key player is for members"). And a finished game's card said "lines post closer to tip-off" (Memphis 117, Charlotte
+111, Final) once the board had dropped its lines: a finished game's card now says nothing there in every league, and
+names its closing line once the line store has one (step ADT).
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

@@ -61,7 +61,9 @@ def test_the_census_sentence_says_no_row_made_the_board():
 def test_the_shine_card_does_not_repeat_its_heading():
     scan = _fn("renderScanTop")
     assert "Who could shine and who could struggle, in every game" not in scan
-    assert '<b>A read on every key player</b>, with the reasons for and against, is for members.' in scan
+    # The top picks' lock card (memberLockHTML), never a bare card that stacked ", with the reasons…" on a line of its own.
+    assert 'memberLockHTML("A read on every key player is for members", "With the reasons for and against, in every game.")' in scan
+    assert "ms-locked" not in scan
     assert scan.count("Who could shine, who could struggle") == 1
 
 

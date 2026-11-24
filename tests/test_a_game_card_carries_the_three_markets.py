@@ -104,8 +104,11 @@ def test_the_card_draws_the_row_and_the_sub_line_stops_repeating_it():
     assert "const bits = !mkts && g.total != null && g.total_posted !== false && !inPlay" in card, "MLB too"
     assert "const favTxt = (!mkts && g.favorite && g.spread != null)" in card, "and the NFL default"
     assert 'const ouTxt = mkts || inPlay ? "" : g.total != null' in card
-    assert card.count('(mkts || inPlay ? "" : "line not posted yet")') == 2, \
+    # …and a finished game (`over`, 24 November) has no line coming either: it never says one will post.
+    assert card.count('(mkts || inPlay || over ? "" : "line not posted yet")') == 2, \
         "with the row drawn, an otherwise-empty sub-line says nothing rather than 'not posted'"
+    assert '(mkts || inPlay || over ? "" : nhl ? "lines post closer to puck drop" : "lines post closer to tip-off")' in card
+    assert ': over ? "" : "line not posted yet";' in card, "the NFL's card too"
     assert ".gc-mkts { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr));" in CSS
     assert ".gc-mk b { font-family: var(--font-mono);" in CSS
 
