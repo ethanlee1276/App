@@ -396,13 +396,23 @@ def parse_teams(payload: dict) -> dict[str, dict]:
         # See `parse_group_teams`. A field nothing reads, on a guess the
         # measurement contradicted, in a map that ships 756 rows to the
         # browser, is not worth keeping for the day it might be true.
-        out[abbr] = {
+        row = {
             "id": str(t.get("id") or ""),
             "name": tidy_team_name(t.get("displayName"), t.get("location")) or t.get("location") or abbr,
             "nick": t.get("shortDisplayName") or t.get("location") or abbr,
             "primary": f"#{color}" if color else "",
             "alt": f"#{alt}" if alt else "",
         }
+        # THE SCHOOL'S OWN NAME, WHERE NEITHER OF THE OTHERS SAYS IT (step ADV, 2026-11-24). CFBD names a school
+        # the way ESPN's `location` does ("Eastern Michigan"); the map kept ESPN's full name ("Eastern Michigan
+        # Eagles") and its short one ("E Michigan"), neither of which that is, so 30 of the 138 schools CFBD rated
+        # this season joined to nothing: tonight's two MAC games went unscanned, and the talent, blue-chip and
+        # returning-production priors skipped those schools. Kept only where it is a new spelling, so the map
+        # shipped to the page grows by the few schools ESPN shortens.
+        loc = " ".join(str(t.get("location") or "").split())
+        if loc and name_key(loc) not in {name_key(row["name"]), name_key(row["nick"]), name_key(abbr)}:
+            row["school"] = loc
+        out[abbr] = row
     return out
 
 
@@ -433,6 +443,17 @@ def team_lookup(teams: dict[str, dict]) -> dict[str, str]:
             k = name_key(variant or "")
             if k:
                 out.setdefault(k, abbr)
+    # THE SCHOOL'S OWN NAME (`parse_teams` "school", step ADV), CFBD's spelling: after every other spelling, so it
+    # never takes a name another school already answers to, and only where one school has it — two schools sharing
+    # a place name join to neither, the safe way to be wrong.
+    schools: dict[str, set] = {}
+    for abbr, t in teams.items():
+        k = name_key(t.get("school") or "") if isinstance(t, dict) else ""
+        if k:
+            schools.setdefault(k, set()).add(abbr)
+    for k, abbrs in schools.items():
+        if len(abbrs) == 1 and k not in out:
+            out[k] = next(iter(abbrs))
     return out
 
 

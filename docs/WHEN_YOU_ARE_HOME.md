@@ -9628,6 +9628,17 @@ no "moved against the money" note, no closing line on a finished game's page, an
 Record. The NBA's board was taught the same on 15 October; college football's games now carry both prices, from the
 next college build on.
 
+**ADV. CFBD's school names find every school** (step 913; 24 November). Nothing to run. The college board's
+new scan census (step ADS) answered the question it was built for: the CFBD key works, and CFBD rated 138 schools
+this season, but "108 of 138 schools read". CFBD names a school the way ESPN's school field does ("Eastern
+Michigan"), and our school map kept only ESPN's full name ("Eastern Michigan Eagles") and its short one ("E
+Michigan"), so 30 schools joined to nothing. Tonight's two games went unscanned for want of their home sides
+(Eastern Michigan, Western Michigan), and the same schools were skipped by the talent, blue-chip and
+returning-production priors in the college ratings. The map now keeps each school's own name where neither other
+name says it, read after every other spelling and never where two schools share it. The census on the next college
+build says how many of the 138 join now; the Matchup scan and its "who could shine, who could struggle" reads come
+back on every game where both schools do.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

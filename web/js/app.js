@@ -13755,7 +13755,9 @@ function closedLine(g) {
   if (!c) return g;
   const num = (v) => (v != null && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
   const spread = num(c.spread_home), total = num(c.total);
-  return { ...g, spread, total, home_ml: num(c.home_ml), away_ml: num(c.away_ml), favorite: "",
+  // The favourite is the close's own (the NFL's card names it from `favorite`), never the board's later word.
+  const favorite = spread ? (spread < 0 ? g.home : g.away) : "";
+  return { ...g, spread, total, home_ml: num(c.home_ml), away_ml: num(c.away_ml), favorite,
            spread_posted: spread != null, total_posted: total != null, closed: true };
 }
 function scriptExpected(g) {

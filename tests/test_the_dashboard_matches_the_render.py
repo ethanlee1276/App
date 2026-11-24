@@ -140,7 +140,9 @@ def test_the_game_and_pick_pages_do_not_say_things_twice_on_a_phone():
     hero's own spread/ML/total grid, its Key insights repeated the wind the
     hero's conditions chip prints, its five counts ran ~330px, and a pick
     with two tiles stranded the second on a half-empty row."""
-    assert "const linesCard = !gpLines && (g.spread != null" in APP
+    # A finished game reads its close (`gl`, app.js closedLine, step ADT); the card still stands only where the
+    # hero draws no grid.
+    assert "const linesCard = !gpLines && (gl.spread != null" in APP
     i = APP.index("const notes = [];")
     assert "mph wind" not in APP[i:APP.index("const notesCard", i)]
     # The five counts went altogether (2026-10-25): the jump chips carry

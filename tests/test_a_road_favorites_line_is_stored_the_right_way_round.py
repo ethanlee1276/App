@@ -163,7 +163,7 @@ def test_every_finished_game_names_its_close():
     if got is None:
         return
     assert got["a"] == [-1.5, 6.5, -195, 180, "NJD", True], got
-    assert got["b"] == ["MEM", ""], "the close's own sign names the favourite, not the board's word"
+    assert got["b"] == ["MEM", "MEM"], "the close's own sign names the favourite, not the board's word"
     assert got["bare"], "no stored close: the board's own fields"
     det = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
     assert "const gl = isFinal ? closedLine(g) : g;" in det
@@ -171,6 +171,7 @@ def test_every_finished_game_names_its_close():
     assert "<b>${gpMl(gl.away_ml)}</b>" in det and "<b>${gpMl(gl.home_ml)}</b>" in det
     app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     card = app[app.index("function gameCard(g, i) {"):]
+    assert "const favTxt = (!mkts && g.favorite && g.spread != null)" in card, "the NFL's card reads the close's favourite"
     assert card.index('if ((g.live || {}).state === "final") g = closedLine(g);') < card.index("const mkts = ")
 
 
