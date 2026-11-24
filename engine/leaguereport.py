@@ -1513,6 +1513,8 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
         reports, kept = keep_started(result, reports, sport, out, at, conn)
         result[KEY] = reports
         n_bets = _lift_bets(result)
+        from .gamereport import lift_both
+        lift_both(result)
         if not reports:
             return "Game reports: no games on the board"
         return summary(reports, logged, out) + kept + n_bets

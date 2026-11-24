@@ -9788,7 +9788,17 @@ player picks are all one team's now gives its last player seat to the other team
 the same tier and our chance for it is at least as high, so the card gives up nothing by the chance it shows.
 Measured that day on every finished game's report picks: the team with more of a game's picks held a median 82% of
 an NFL game's picks, and all of them in 14% of NFL games; its picks hit 65.9% (440 of 668) and the other team's
-60.9% (151 of 248), +5.0 points ± 3.6, a weak lean, so the order stays best first.
+60.9% (151 of 248), +5.0 points ± 3.6, a weak lean, so the order stays best first. By the team our report picks to
+win, the lean is no edge at all: that team held a median 82% of an NFL game's player picks (67% in college
+football, 58% in the NBA, 60% in the NHL), and its players' picks hit 62.2% (46 of 74) where the other team's hit
+56.5% (13 of 23) in the NFL, 58.6% and 57.6% in college football, 66.1% and 63.6% in the NBA, and 67.5% and 70.0%
+in the NHL, each gap inside its noise. The heartbeat counts it, each league's board under ``both_teams``: reports
+with a big-day line, those seating both teams in it, those saying a team with no favorable matchup, and cards that
+seated the other team's pick (the reports are paid, so the heartbeat is where it can be seen). Also measured,
+nothing changed: a game's parlays already mix both teams in most games (NFL 40 of 60 graded tickets, the NBA 209
+of 225, college football 94 of 113). The parlays of one team's players did better than their prices in football
+(NFL 12 of 20 where the prices said 35.8%, college football 12 of 19 where they said 33.5%), but on 39 tickets
+that is a watch, not a change.
 
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:

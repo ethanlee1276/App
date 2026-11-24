@@ -192,6 +192,60 @@ def test_a_doubted_pick_never_takes_the_seat():
         R._card_doubted = was
 
 
+def test_the_heartbeat_counts_what_both_teams_got():
+    """The reports are paid, so the heartbeat is where anyone sees the lines fire (engine/gamereport.lift_both)."""
+    import json
+    import launch as L
+    c = _ctx()
+    R.shine_lines(c, _reads(), key_only=True)
+    assert c._both_counts == {"big_day_teams": 1, "quiet": 1}, c._both_counts
+    both = _ctx()
+    reads = _reads()
+    reads[4] = dict(reads[4], read="good", pro=["CHI gives up the 5th-most rushing yards to running backs (112 a game)"])
+    R.shine_lines(both, reads)
+    assert both._both_counts == {"big_day_teams": 2, "quiet": 0}, both._both_counts
+    result = {R.KEY: [{"game": "CHI@DET", R.BOTH_NOTE: dict(c._both_counts)},
+                      {"game": "GB@LA", R.BOTH_NOTE: {"big_day_teams": 2, "quiet": 0, "seated": 1}},
+                      {"game": "KC@DAL"}]}
+    assert R.lift_both(result) == {"big_day": 2, "big_day_both": 1, "quiet": 1, "seated": 1}
+    assert all(R.BOTH_NOTE not in r for r in result[R.KEY]), "each report's note is lifted off before it is written"
+    assert result[R.BOTH_KEY] == {"big_day": 2, "big_day_both": 1, "quiet": 1, "seated": 1}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(result, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert got.get("both_teams") == {"big_day": 2, "big_day_both": 1, "quiet": 1, "seated": 1}, got
+    none = {R.KEY: [{"game": "KC@DAL"}], R.BOTH_KEY: {"big_day": 3}}
+    R.lift_both(none)
+    assert R.BOTH_KEY not in none, "a board with nothing to count drops the key"
+
+
+def test_a_seated_card_is_noted():
+    bears = [_pick("Caleb Williams", "CHI", 0.70), _pick("Rome Odunze", "CHI", 0.68)]
+    c = types.SimpleNamespace(featured=False, sport="cfb", home="DET", away="CHI", teams=("CHI", "DET"), result={})
+    was = R._card_pool
+    R._card_pool = lambda _c, key="rows": bears + [_pick("Jahmyr Gibbs", "DET", 0.69)]
+    try:
+        R._card_rows(c)
+    finally:
+        R._card_pool = was
+    assert getattr(c, "_both_counts", {}) == {}, "a card with room seats the pick without a swap"
+    full = bears + [_pick("Colston Loveland", "CHI", 0.66), _pick("D'Andre Swift", "CHI", 0.65),
+                    _pick("Jahmyr Gibbs", "DET", 0.65)]
+    R._card_pool = lambda _c, key="rows": list(full)
+    try:
+        R._card_rows(c)
+    finally:
+        R._card_pool = was
+    assert c._both_counts == {"seated": 1}, c._both_counts
+
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0

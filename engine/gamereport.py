@@ -3574,12 +3574,16 @@ def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_
     # The matchups first, a spot after (step ACW: the wind or the lines are every player's in the game).
     shine.sort(key=lambda r: (r.get("read") != "breakout", bool(r.get("spot")), -_volume(r), -len(r.get("pro") or [])))
     if shine:
-        out.append("Who could have a big day: " + _clauses(c, team_balanced(shine, shine_n, c.teams), "up"))
+        seated = team_balanced(shine, shine_n, c.teams)
+        out.append("Who could have a big day: " + _clauses(c, seated, "up"))
+        quiet = 0
         for t in c.teams:
             if not any(r.get("team") == t for r in shine):
                 line = quiet_team_line(c, t, reads)
                 if line:
                     out.append(line)
+                    quiet += 1
+        _both_note(c, big_day_teams=len({r.get("team") for r in seated if r.get("team")}), quiet=quiet)
     # A go-to scorer is not a man to have a hard day (engine/readlogic rule
     # 3): his card says the yards are tough and the touchdowns still his.
     struggle = [r for r in reads if r.get("read") in ("tough", "avoid") and (not key_only or _is_key(r))
@@ -3616,8 +3620,42 @@ def _clauses(c: Ctx, rows: list, tone: str) -> str:
     return ". ".join([parts[0]] + [cap(x) for x in parts[1:]]) if parts else ""
 
 
-#: The leagues whose players' share of the work the report can say (`_role_line`: targets, carries, attempts).
+#: The leagues whose players' share of the work the report can say (`_share_words`: carries, targets, catches).
 QUIET_TEAM_SPORTS = ("nfl", "cfb")
+#: BOTH TEAMS, COUNTED (step AEH): the board key the heartbeat reads (launch._board_counts), and each report's
+#: working note of it, lifted off before the board is written (`lift_both`). The reports are paid, so the heartbeat
+#: is where anyone can see the lines fire.
+BOTH_KEY, BOTH_NOTE = "both_teams", "_both"
+
+
+def _both_note(c, **counts) -> None:
+    """Notes on the report's context what step AEH did for it (`lift_both` counts them)."""
+    c._both_counts = {**(getattr(c, "_both_counts", None) or {}), **counts}
+
+
+def lift_both(result: dict) -> dict:
+    """``result["both_teams"]``: of the board's reports, how many have a big-day line ("big_day"), how many seat both
+    teams in it ("big_day_both"), how many say a team with no favorable matchup ("quiet"), and how many cards seated
+    the other team's pick ("seated"); each report's note lifted off. Counts only; the key is dropped when all are
+    none. Never raises."""
+    got = {"big_day": 0, "big_day_both": 0, "quiet": 0, "seated": 0}
+    try:
+        for r in result.get(KEY) or []:
+            note = r.pop(BOTH_NOTE, None) if isinstance(r, dict) else None
+            if not isinstance(note, dict):
+                continue
+            n = int(note.get("big_day_teams") or 0)
+            got["big_day"] += n >= 1
+            got["big_day_both"] += n >= 2
+            got["quiet"] += int(note.get("quiet") or 0) >= 1
+            got["seated"] += bool(note.get("seated"))
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ both teams not counted ({type(exc).__name__}: {exc})")
+    if any(got.values()):
+        result[BOTH_KEY] = got
+    else:
+        result.pop(BOTH_KEY, None)
+    return got
 
 
 def quiet_team_line(c: Ctx, t: str, reads: list) -> str:
@@ -4090,6 +4128,7 @@ def _balance_card(c: Ctx, out: list, ordered: list, doubted: list) -> list:
                       and str(r.get("player") or "") and str(r.get("player")) not in names), None)
         if other is None:
             return out
+        _both_note(c, seated=1)
         keep = [r for r in out if r is not drop] + [other]
         order = {id(r): i for i, r in enumerate(ordered)}
         return sorted(keep, key=lambda r: order.get(id(r), len(order)))
@@ -5255,6 +5294,7 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
     g = c.g
     return {"game": f"{c.away}@{c.home}", "away": c.away, "home": c.home, "sport": c.sport,
             **({"_bets": bets} if bets else {}),
+            **({BOTH_NOTE: dict(c._both_counts)} if getattr(c, "_both_counts", None) else {}),
             "date": g.get("date") or "", "kickoff": g.get("kickoff") or "",
             "title": f"{c.name(c.away)} at {c.name(c.home)}",
             # What Share says beside the link: the kickoff and the line —
@@ -5494,6 +5534,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
         else:
             result.pop(_stepup.CENSUS_KEY, None)
         n_bets = _lift_bets(result)
+        lift_both(result)
         if not reports:
             return "Game reports: no games on the board"
         return summary(reports, logged, out) + f"; form for {len(form)} player(s)" + kept + n_bets

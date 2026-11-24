@@ -587,6 +587,11 @@ def _board_counts(path: str) -> dict:
     su = b.get("stepup")
     if isinstance(su, dict) and any(su.values()):
         out["stepup"] = {k: int(v) for k, v in su.items() if isinstance(v, (int, float))}
+    # BOTH TEAMS (engine/gamereport.lift_both, step AEH): reports with a big-day line, those seating both teams in
+    # it, those saying a team with no favorable matchup, and cards that seated the other team's pick. Counts only.
+    bt = b.get("both_teams")
+    if isinstance(bt, dict) and any(bt.values()):
+        out["both_teams"] = {k: int(v) for k, v in bt.items() if isinstance(v, (int, float))}
     # THE GAME PARLAYS AND THE REPORTS, COUNTED (2026-11-14). Both are paid
     # keys, stripped from the public copy, so the heartbeat is where anyone
     # can see a league built them: three three-leg tickets and three scorer
