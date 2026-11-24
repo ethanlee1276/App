@@ -9782,8 +9782,10 @@ Bears-Lions short version named three Bears under "Who could have a big day", ea
 give up the fourth-most passing yards), and said nothing about the Lions. Now each team's best read takes a seat in
 that line (and in the hard-day line and the Players to watch lists) before the rest fill in by strength; players of
 one team who share a reason are named together, the reason said once; a player's reason about his own position goes
-before a team-wide one; and a football team with no favorable matchup still gets a sentence: who its offense runs
-through, by his share of the work, and the points the lines expect it to score, with no matchup claimed. A card whose
+before a team-wide one; and a football or basketball team with no favorable matchup still gets a sentence: who its
+offense runs through, by his share of the work (a basketball player's by the share of the team's plays he uses on
+the floor), and the points the lines expect it to score, with no matchup claimed. A team whose one favorable read is
+a man who may sit, or the NBA's breakout candidate the line leaves to its own list, gets no such sentence. A card whose
 player picks are all one team's now gives its last player seat to the other team's best pick when that pick is in
 the same tier and our chance for it is at least as high, so the card gives up nothing by the chance it shows.
 Measured that day on every finished game's report picks: the team with more of a game's picks held a median 82% of

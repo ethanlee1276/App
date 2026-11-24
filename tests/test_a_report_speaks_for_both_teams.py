@@ -119,8 +119,8 @@ def test_the_quiet_team_line_claims_no_matchup_and_names_no_tough_read():
     assert line == ("The Lions have no player with a favorable matchup by our numbers, but their offense still runs "
                     "through Amon-Ra St. Brown (28% of the targets), and the lines expect them to score about 26."), line
     assert R.quiet_team_line(c, "DET", [r for r in reads if r["team"] == "CHI"]) == "", "no one to name, no line"
-    # A league whose work the report cannot say by share has no such line.
-    assert R.quiet_team_line(_ctx("nba"), "DET", _reads()) == ""
+    # A league whose work the report cannot say by share has no such line (hockey's puck line implies no score).
+    assert R.quiet_team_line(_ctx("nhl"), "DET", _reads()) == "" and R.quiet_team_line(_ctx("mlb"), "DET", _reads()) == ""
     # Without a line on the game, no points are said.
     no_line = _ctx(spread=None, total=None)
     assert R.quiet_team_line(no_line, "DET", _reads()).endswith("Amon-Ra St. Brown (28% of the targets).")
@@ -131,6 +131,41 @@ def test_the_quiet_team_line_claims_no_matchup_and_names_no_tough_read():
     assert R.quiet_team_line(school, "OSU", [wr]) == (
         "Ohio State has no player with a favorable matchup by our numbers, but its offense still runs through "
         "Jeremiah Smith (31% of the catches), and the lines expect it to score about 28.")
+
+
+def test_basketball_says_who_a_quiet_team_runs_through():
+    g = {"away": "BOS", "home": "MIA", "date": "2026-11-24", "spread": 4.5, "total": 221.5}
+    c = R.Ctx(g, {"games": [g]}, names={"BOS": "Celtics", "MIA": "Heat"}, sport="nba")
+    reads = [{"player": "Jayson Tatum", "team": "BOS", "pos": "", "read": "good",
+              "pro": ["MIA gives up the 3rd-most points to forwards"], "usage": {"usg": 0.31, "mpg": 36.0}},
+             {"player": "Bam Adebayo", "team": "MIA", "pos": "", "read": "neutral", "usage": {"usg": 0.24, "mpg": 34.0}},
+             {"player": "Tyler Herro", "team": "MIA", "pos": "", "read": "neutral", "usage": {"usg": 0.27, "mpg": 33.5}}]
+    got = R.shine_lines(c, reads)
+    assert got[1:] == ["The Heat has no player with a favorable matchup by our numbers, but its offense still runs "
+                       "through Tyler Herro (27% of the team's plays while on the floor) and Bam Adebayo (24% of the "
+                       "team's plays while on the floor), and the lines expect it to score about 108."], got
+
+
+def test_no_quiet_line_for_a_team_whose_favorable_read_sits_elsewhere():
+    c = _ctx()
+    reads = _reads()
+    # The Lions' one favorable read may sit: the big-day line leaves him to his card, and the Lions are not "quiet".
+    reads[4] = dict(reads[4], read="good", availability={"status": "questionable"},
+                    pro=["CHI gives up the 5th-most rushing yards to running backs (112 a game)"])
+    c.reads = reads
+    got = R.shine_lines(c, reads)
+    assert len(got) == 1 and "Gibbs" not in got[0] and "no player with a favorable" not in " ".join(got), got
+    # The NBA's big-day line leaves its breakout candidates to their own list (leaguereport.nba_short): a team with
+    # one is not "quiet" either.
+    g = {"away": "BOS", "home": "MIA", "date": "2026-11-24", "spread": 4.5, "total": 221.5}
+    nba = R.Ctx(g, {"games": [g]}, names={"BOS": "Celtics", "MIA": "Heat"}, sport="nba")
+    nba_reads = [{"player": "Jayson Tatum", "team": "BOS", "pos": "", "read": "good", "pro": ["x"],
+                  "usage": {"usg": 0.31}},
+                 {"player": "Tyler Herro", "team": "MIA", "pos": "", "read": "breakout", "pro": ["y"],
+                  "usage": {"usg": 0.27}}]
+    nba.reads = nba_reads
+    got = R.shine_lines(nba, [r for r in nba_reads if r["read"] != "breakout"])
+    assert len(got) == 1 and "no player with a favorable" not in got[0], got
 
 
 def test_the_players_to_watch_lists_seat_both_teams():

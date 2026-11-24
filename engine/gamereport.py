@@ -3593,7 +3593,7 @@ def _big_day_lines(c: Ctx, shine: list, reads: list, shine_n: int) -> list:
     seated = team_balanced(shine, shine_n, c.teams)
     out = ["Who could have a big day: " + _clauses(c, seated, "up")]
     for t in c.teams:
-        if not any(r.get("team") == t for r in shine):
+        if not _has_favorable(c, t, shine):
             out += [x for x in [quiet_team_line(c, t, reads)] if x]
     _both_note(c, big_day_teams=len({r.get("team") for r in seated if r.get("team")}), quiet=len(out) - 1)
     return out
@@ -3625,8 +3625,16 @@ def _clauses(c: Ctx, rows: list, tone: str) -> str:
     return ". ".join([parts[0]] + [cap(x) for x in parts[1:]]) if parts else ""
 
 
-#: The leagues whose players' share of the work the report can say (`_share_words`: carries, targets, catches).
-QUIET_TEAM_SPORTS = ("nfl", "cfb")
+#: The leagues whose players' share of the work the report can say (`_share_words`: football's carries, targets and
+#: catches; basketball's plays used on the floor, engine/nba/scan's usage rate).
+QUIET_TEAM_SPORTS = ("nfl", "cfb", "nba", "wnba", "cbb")
+
+
+def _has_favorable(c: Ctx, t: str, shine=()) -> bool:
+    """Whether any read of the team's leans its way, a breakout candidate the line leaves to its own list (the NBA's)
+    and a man who may sit included: a team with one never reads "no player with a favorable matchup"."""
+    pool = list(getattr(c, "reads", None) or []) + list(shine or [])
+    return any(isinstance(r, dict) and r.get("team") == t and r.get("read") in ("breakout", "good") for r in pool)
 #: BOTH TEAMS, COUNTED (step AEH): the board key the heartbeat reads (launch._board_counts), and each report's
 #: working note of it, lifted off before the board is written (`lift_both`). The reports are paid, so the heartbeat
 #: is where anyone can see the lines fire.
@@ -3673,7 +3681,7 @@ def quiet_team_line(c: Ctx, t: str, reads: list) -> str:
         return ""
     mine = [r for r in reads or [] if isinstance(r, dict) and r.get("team") == t and r.get("player")
             and r.get("read") not in ("tough", "avoid") and _share_words(r)]
-    mine.sort(key=lambda r: -_volume(r))
+    mine.sort(key=lambda r: -_work_share(r))
     who = [f"{r.get('player')} ({_share_words(r)})" for r in mine[:2]]
     if not who:
         return ""
@@ -3687,13 +3695,25 @@ def quiet_team_line(c: Ctx, t: str, reads: list) -> str:
 
 def _share_words(r: dict) -> str:
     """"55% of the carries", "28% of the targets" (or "of the catches", college's count): a skill player's share of
-    his team's work, the one number `quiet_team_line` names him by; "" for a quarterback or a player with none."""
+    his team's work, the one number `quiet_team_line` names him by; "27% of the team's plays while on the floor" for a
+    basketball player's usage rate over the last five games; "" for a quarterback or a player with none."""
     u, pos = _usage(r), str(r.get("pos") or "").upper()
     if pos in ("RB", "FB") and u.get("carry_share"):
         return f"{_pct(u['carry_share'])} of the carries"
     if pos in ("WR", "TE", "RB", "FB") and u.get("tgt_share"):
         return f"{_pct(u['tgt_share'])} of the {_caught(u)[0]}"
+    if u.get("usg"):
+        return f"{_pct(u['usg'])} of the team's plays while on the floor"
     return ""
+
+
+def _work_share(r: dict) -> float:
+    """The share `_share_words` says, as a number, to put the busiest first."""
+    u = _usage(r)
+    pos = str(r.get("pos") or "").upper()
+    if pos in ("RB", "FB", "WR", "TE"):
+        return max(float(u.get("carry_share") or 0), float(u.get("tgt_share") or 0))
+    return float(u.get("usg") or 0)
 
 
 def absent_sentence(c: Ctx, rows: list, per_team: int = 5) -> str:
