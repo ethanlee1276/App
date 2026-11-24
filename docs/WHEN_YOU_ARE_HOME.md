@@ -9766,6 +9766,17 @@ matchup picks, the scenarios, the market gaps) a pick is now refused from its ki
 than any board's slate lives. The parlays' legs keep the old window (a ticket goes on the record only when every leg
 has its row), and the clock rule is unchanged, because the backtest replays old weeks through the live pipeline.
 
+**AEG. The Record says whether the chance we SHOW is honest lately; offensive lines measured** (step 924; 24
+November). Nothing to run. The board's own learning grades every pick on its raw first claim, the number its refits
+learn from, so it could not say whether the number the page showed after the 20-21 November corrections (the NFL
+cap, college's price ceiling) and the paper holds is honest; it is the question the open item about NFL picks shown
+72% and up was waiting on. "What it learned" on the Record now has a cut by the chance we showed, over the last 14
+days, every league, graded on that shown chance. Also measured, nothing changed: starting offensive linemen out.
+On 2022 to 2025 snap counts (a starter: half the snaps in two of the team's last three games; out: no snap), with
+two or more out, quarterbacks' yards, attempts and sacks, backs' rushing and receivers' catches all land within
+1.7 standard errors of their own form, the sign changing by season, so the reports keep saying who is out on the
+line without pricing it.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 

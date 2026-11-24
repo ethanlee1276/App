@@ -103,9 +103,25 @@ MAKER_WORDS = {"list": "Most Likely list", "bold": "bolder than the books", "mat
                "scenario": "touchdown scenarios"}
 
 
-def slices(rows: list[dict]) -> dict:
+#: THE CHANCE WE SHOWED, LATELY (step AEG, 24 November 2026). Every cut above grades a pick on our RAW first claim
+#: (likelyctx.journal), the number a refit learns from; it cannot say whether the number the page SHOWED was honest
+#: after the corrections the board now makes (the NFL's cap and college's price ceiling of 20-21 November, the paper
+#: holds). This cut can: the last RECENT_DAYS days of graded picks, banded and graded on the chance the page showed
+#: (the journal's ``hit_prob``).
+RECENT_DAYS = 14
+
+
+def _day_of(r):
+    try:
+        return _dt.date.fromisoformat(str(r.get("day") or "")[:10])
+    except ValueError:
+        return None
+
+
+def slices(rows: list[dict], today: _dt.date | None = None) -> dict:
     """{cut: [slice, ...]} — each slice graded against its own claim,
-    worst first, only slices of MIN_SLICE or more."""
+    worst first, only slices of MIN_SLICE or more. ``shown_recent`` reads the
+    chance the page showed on the last RECENT_DAYS days' picks."""
     from .likelyctx import maker
     cuts = {
         "maker": lambda r: f"{MAKER_WORDS[maker(r['sources'])]} · {_side(r)}",
@@ -119,6 +135,20 @@ def slices(rows: list[dict]) -> dict:
             grp[key(r)].append(r)
         graded = [{"key": k, **grade(v)} for k, v in grp.items() if len(v) >= MIN_SLICE]
         out[name] = sorted(graded, key=lambda s: s["z"])
+    today = today or _dt.date.today()
+    cut = today - _dt.timedelta(days=RECENT_DAYS)
+    grp = defaultdict(list)
+    for r in rows:
+        d = _day_of(r)
+        try:
+            shown = float(r.get("hit_prob"))
+        except (TypeError, ValueError):
+            continue
+        if d is None or d < cut or not 0.0 < shown < 1.0:
+            continue
+        grp[_band(shown)].append(dict(r, p=shown))
+    out["shown_recent"] = sorted(({"key": k, **grade(v)} for k, v in grp.items() if len(v) >= MIN_SLICE),
+                                 key=lambda s: s["z"])
     return out
 
 

@@ -67,6 +67,26 @@ def test_a_settle_pass_adopts_what_the_record_proves_and_grades_every_maker():
     assert any("adopted" in ln for ln in lines)
 
 
+def test_the_chance_we_showed_lately_is_a_cut_of_its_own():
+    """Step AEG: the cuts above grade a pick on its raw first claim; this one, on the chance the page showed, over
+    the last fourteen days, so the Record says whether the corrections now shown (the NFL cap, college's ceiling,
+    the paper holds) are honest. Older picks and those with no shown chance are left out."""
+    import datetime as dt
+    today = dt.date(2026, 11, 24)
+    mk = lambda day, raw, shown, wins, n=40: [  # noqa: E731
+        {"day": day, "p": raw, "hit_prob": shown, "won": i < wins, "market": "rec_yds", "side": "OVER",
+         "sources": {"board"}} for i in range(n)]
+    rows = mk("2026-11-20", 0.82, 0.68, 27) + mk("2026-10-01", 0.82, 0.82, 20) + mk("2026-11-21", 0.6, None, 30)
+    sl = B.slices(rows, today=today)
+    recent = {s["key"]: s for s in sl["shown_recent"]}
+    assert set(recent) == {"65-74%"}, recent
+    assert (recent["65-74%"]["n"], recent["65-74%"]["said"], recent["65-74%"]["verdict"]) == (40, 0.68, "holds up")
+    claimed = {s["key"]: s for s in sl["claimed"]}
+    assert claimed["75% and up"]["n"] == 80, "the raw claim's own cut is as it was"
+    assert 'shown_recent: "By the chance we showed, the last 14 days"' in Path(
+        ROOT, "web", "js", "record.js").read_text(encoding="utf-8")
+
+
 def test_a_bold_pick_is_found_however_its_books_dated_it():
     # The box, 2026-10-04: the audit found 61 bold picks and likelycal's
     # fit printed no bold group, because it matched books on `date`.
