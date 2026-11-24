@@ -14,6 +14,7 @@ read of every season. What this holds:
     and last season never;
   * the stat spreads' values are one read's, in season and day order, rows filed with no season first, and a
     night's rows read this season's again and no other;
+  * the fantasy file's season means read this season's rows alone on a night, and come out the same;
   * the league's stored seasons are found by seeks, rows with no season said.
 
 Offline. Run directly: `python3 tests/test_a_night_of_rows_reads_this_season_alone.py`
@@ -144,6 +145,28 @@ def test_the_stat_spreads_read_this_season_alone_on_a_night():
         finally:
             logcache.enabled_for = keep
         assert got == plain and got != want, "the spreads are one read's, and the night moved them"
+
+
+def test_the_fantasy_means_read_this_season_alone_on_a_night():
+    from engine import fantasy_daily as FD
+    with _Sandbox() as sb:
+        _two_seasons(sb.conn)
+        assert FD.season_means(sb.conn, "nba") == FD.season_means(sb.conn, "nba")
+        calls, undo = _counting(FD, "_season_rows")
+        try:
+            _night(sb.conn)
+            got = FD.season_means(sb.conn, "nba")
+            read = [c[0] for c in calls]
+        finally:
+            undo()
+        assert read == [(2026,)], f"this season's rows alone: {read}"
+        keep = logcache.enabled_for
+        logcache.enabled_for = lambda conn: False
+        try:
+            plain = FD.season_means(sb.conn, "nba")
+        finally:
+            logcache.enabled_for = keep
+        assert got == plain and got["BOS P0"]["_games"] > 0
 
 
 def test_values_keep_season_and_day_order_and_a_seasonless_row_comes_first():

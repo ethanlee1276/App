@@ -9809,7 +9809,8 @@ said where the time went: the team profiles took 268 seconds and the stat spread
 this season's rows had landed. Each was kept on every season it reads at once, so one night's rows read the whole of
 last season with them, and college basketball's last season is about four times this one so far. Each season is now
 kept on its own (the NBA's and the WNBA's too): a night's rows read this season's alone, last season's stay kept
-while its rows hold, and the profiles and the spreads come out the same as one read of every season. The first
+while its rows hold, and the profiles and the spreads come out the same as one read of every season. The fantasy
+file's season means (95 seconds of a healthy 368-second college build at 13:03 ET) are kept the same way. The first
 college build after this deploy still reads both seasons once, and may run long that one time.
 
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the

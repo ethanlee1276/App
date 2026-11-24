@@ -86,18 +86,31 @@ def season_means(conn, sport: str, season: int | None = None) -> dict:
                          lambda: _season_means(conn, sport, int(season)), code=__file__)
 
 
-def _season_means(conn, sport: str, season: int) -> dict:
-    """`season_means` read off the table."""
+def _season_rows(conn, sport: str, season: int) -> dict:
+    """``{(player, market): (games, mean, position)}`` of one season's rows, off the table ({} without logs)."""
     try:
         rows = conn.execute(
-            "SELECT season, player, market, COUNT(*), AVG(value), MAX(position) FROM player_game_logs "
-            "WHERE sport=? AND season IN (?, ?) GROUP BY season, player, market",
-            (sport, int(season), int(season) - 1)).fetchall()
+            "SELECT player, market, COUNT(*), AVG(value), MAX(position) FROM player_game_logs "
+            "WHERE sport=? AND season=? GROUP BY player, market", (sport, int(season))).fetchall()
     except Exception:                                             # noqa: BLE001 — no logs, no fill
-        return {}
-    now, before = {}, {}
-    for s, player, market, n, avg, pos in rows:
-        (now if int(s) == int(season) else before)[(player, market)] = (int(n or 0), float(avg or 0.0), pos)
+        rows = []
+    return {(player, market): (int(n or 0), float(avg or 0.0), pos) for player, market, n, avg, pos in rows}
+
+
+def _kept_season(conn, sport: str, season: int) -> dict:
+    """`_season_rows`, kept while that season's rows hold (engine/logcache).
+
+    EACH SEASON ON ITS OWN (step AEI, 24 November 2026): the means were kept on both seasons at once, so a night's
+    rows read last season's again with this one's; college basketball's "fantasy tonight" ran 95 seconds of a
+    368-second build that day. A season's means are its own rows' either way, so the file comes out the same."""
+    from . import logcache
+    return logcache.memo(conn, "season_rows", sport, (int(season),),
+                         lambda: _season_rows(conn, sport, int(season)), code=__file__)
+
+
+def _season_means(conn, sport: str, season: int) -> dict:
+    """`season_means` read off the table, each season kept on its own (`_kept_season`)."""
+    now, before = _kept_season(conn, sport, int(season)), _kept_season(conn, sport, int(season) - 1)
     out: dict = {}
     for key in set(now) | set(before):
         player, market = key
