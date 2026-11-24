@@ -9639,6 +9639,13 @@ name says it, read after every other spelling and never where two schools share 
 build says how many of the 138 join now; the Matchup scan and its "who could shine, who could struggle" reads come
 back on every game where both schools do.
 
+**ADW. A finished college basketball game keeps its Matchup scan and Team shapes** (step 914; 24 November). Nothing
+to run. At 00:18 Eastern the college basketball board still carried Monday's 46 games and not one Matchup scan, player
+read or Team shapes radar: its build makes all three only while a game it prices is still to tip, so once the last
+game tipped every finished college game page lost them, while the NBA's finished games kept theirs. All three are
+pregame things, so a build that makes none now keeps the last board's, for the same night only and never over
+anything it made itself.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

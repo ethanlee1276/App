@@ -990,6 +990,49 @@ def _board_lines_cached(league: str) -> bool:
 #: in a season (or either of the two before) puts a school among college basketball's own for the Team shapes radar.
 CBB_SHAPE_GAMES = 15
 
+
+def keep_pregame(out: dict, public_path, date) -> str:
+    """A started game keeps the pregame Matchup scan the last board gave it, and the board keeps the league's Team
+    shapes, when this build made neither. One line for the build log, "" when nothing was kept; never raises.
+
+    PAST THE LAST TIP (step ADW, 2026-11-24). College basketball's slate section runs only while a game the board
+    prices is still to tip (`college_board_games`), and it is where the scan, its player reads and the Team shapes
+    are made: at 00:18 on 24 November the board still carried Monday's 46 games and not one tape, read or shape,
+    so every finished college game page had lost its Matchup scan and its radar while the NBA's finished games kept
+    theirs. Both are pregame things, so the last board's stand: read from the private copy (`gate.board_source`;
+    the public one has the reads taken out), the same slate's only, and never over anything this build made."""
+    import json as _json
+    try:
+        from engine.gate import board_source
+        with open(board_source(public_path), encoding="utf-8") as fh:
+            prev = _json.load(fh)
+    except Exception:                                        # noqa: BLE001
+        return ""
+    if not isinstance(prev, dict) or str(prev.get("date") or "") != str(date or ""):
+        return ""
+    tapes = {f"{g.get('away')}@{g.get('home')}": g["nba_tape"] for g in prev.get("games") or []
+             if isinstance(g, dict) and g.get("nba_tape")}
+    reads = prev.get("scan_reads") or {}
+    n = 0
+    for gd in out.get("games") or []:
+        k = f"{gd.get('away')}@{gd.get('home')}"
+        if gd.get("nba_tape") or not tapes.get(k):
+            continue
+        gd["nba_tape"] = tapes[k]
+        n += 1
+        if isinstance(reads, dict) and reads.get(k) and k not in (out.get("scan_reads") or {}):
+            out.setdefault("scan_reads", {})[k] = reads[k]
+    shapes = False
+    if not out.get("team_shapes") and prev.get("team_shapes"):
+        out["team_shapes"] = prev["team_shapes"]
+        out["team_shapes_season"] = prev.get("team_shapes_season")
+        shapes = True
+    if not (n or shapes):
+        return ""
+    bits = ([f"{n} started game(s)' pregame scan"] if n else []) + (["the team shapes"] if shapes else [])
+    return "Kept from the last board: " + " and ".join(bits)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("date", nargs="?",
@@ -2313,6 +2356,10 @@ def main() -> None:
     # hook, whose money split the against-the-money note reads.
     from engine import lineopen as _lo
     print(_lo.attach_to_board(out, args.league))
+    # THE PREGAME SCAN AND SHAPES, KEPT PAST THE LAST TIP (`keep_pregame`, step ADW).
+    _kept_pre = keep_pregame(out, args.out, args.date)
+    if _kept_pre:
+        print(f"  {_kept_pre}")
     # THE GAME REPORT (engine/leaguereport; Ethan, 2026-10-20: "I want you
     # too do all of it besides D"): every game written out, the NFL's
     # report in basketball's terms. Last of the game hooks, for the NFL's
