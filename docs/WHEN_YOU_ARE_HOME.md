@@ -9603,7 +9603,10 @@ in, in the NBA, the WNBA, college basketball, hockey and baseball, went in flipp
 Sunday night, 3 of college basketball's 24 priced games, 2 of hockey's 7). That store is the close the Record grades
 a spread bet against: the Record showed baseball's run lines at an average closing-line value of +2.0 runs and the
 NBA's picks of the day at −6.0 points, which no run line or spread can earn. It is also each line's move and its
-"moved against the money" note, and the spread the prediction markets and the money split are matched on. The rule
+"moved against the money" note, and the spread the prediction markets and the money split are matched on; and in
+the NBA, the WNBA, college basketball and baseball, whose finished games keep no line of their own, it is how the
+Under pressure card picks each game's favourite, so its favourite and underdog rates counted every road favourite as
+the home side. The rule
 is fixed, and the first board build turns the stored lines round once, from each row's own moneylines, which say who
 was favoured (the NFL's rows were right and are left alone). A finished game's page now names its closing line in
 every league, as the NBA's did and ESPN's does: hockey's finished games had lost their lines on the first build
@@ -9616,6 +9619,14 @@ them:
 cd /srv/qellys && sudo -u qellys python3 launch.py --repair-spread-closes
 cd /srv/qellys && sudo -u qellys python3 launch.py --repair-spread-closes --apply
 ```
+
+**ADU. College football's games carry their moneylines** (step 912; 24 November). Nothing to run. Every college
+football game page's market grid read "ML — / —". The build reads each game's moneylines and prices its game bets
+with them, but never put them on the board's game, so the page had none to show, and the line store, which keeps a
+game's opening and closing lines only when both sides are priced, kept nothing for college football: no line moves,
+no "moved against the money" note, no closing line on a finished game's page, and no close for its game bets on the
+Record. The NBA's board was taught the same on 15 October; college football's games now carry both prices, from the
+next college build on.
 
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they

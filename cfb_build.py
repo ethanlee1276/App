@@ -1917,6 +1917,12 @@ def main() -> None:
         lines = priced.get(g["game_id"]) or {}
         gd["spread"] = (lines.get("spread") or [None])[0]
         gd["total"] = (lines.get("total") or [None])[0]
+        # THE MONEYLINES TOO (step ADU, 2026-11-24), as the NFL's, the NBA's and hockey's boards carry them. Read here
+        # and priced into the game bets, they never reached the game: every college game page's market grid read
+        # "ML — / —", and engine/lineopen keeps a game's opening and closing lines only when both sides are priced, so
+        # college football had no line moves, no "moved against the money" note and no close for its game bets.
+        _ml = lines.get("moneyline") or (None, None)
+        gd["home_ml"], gd["away_ml"] = (_ml[0] or None), (_ml[1] or None)
     # A STARTED GAME'S PREGAME LINE, back off the tape (`lines_at_kickoff`).
     _kept = lines_at_kickoff(out["games"])
     if _kept:
