@@ -3933,18 +3933,54 @@ def _card_rows(c: Ctx) -> list:
     A bet the record doubts (`_card_doubted`, step AAO) goes behind the other bets."""
     most = CARD_MAX_FEATURED if c.featured else CARD_MAX
     pool = _card_pool(c)
-    out, seen = [], set()
+    out, seen, sides = [], set(), {}
     bets = [r for r in pool if not read_only(r)]
     doubted = [r for r in bets if _card_doubted(getattr(c, "sport", ""), r)]
     for r in [r for r in bets if r not in doubted] + doubted + [r for r in pool if read_only(r)]:
         who = str(r.get("player") or "")
         if not who or who in seen:
             continue
+        gs = game_side(r)
+        if gs is not None:
+            what, side = gs
+            if sides.get(what, side) != side:
+                # The other side of a line the card already takes (step AEB): never both.
+                continue
+            sides[what] = side
         seen.add(who)
         out.append(r)
         if len(out) == most:
             break
     return out
+
+
+#: ONE SIDE OF A GAME ON A CARD (step AEB, 24 November 2026). On the record of How our reports did, five finished
+#: games' reports carried both sides of one spread: the Vikings at the 49ers both "49ers −3" (won) and "Vikings
+#: +3.5" (lost), Eastern Michigan at Western Michigan both sides of 14.5, and three more college games. Those
+#: came before 22 November, when every version of a card was journaled and a line that moved during the week
+#: left both sides on the record (a report's picks post once since step ABQ); but nothing kept one card from
+#: holding both. A card now backs one club across the moneyline and the spread, one side of the total and one
+#: side of each club's team total: the first in its order, which is best first. Every league's card (leaguereport
+#: builds its reports through `finish`).
+GAME_SIDE_MARKETS = ("moneyline", "spread", "total", "team_total")
+
+
+def game_side(r: dict):
+    """(what a game row bets on, the side it takes): a moneyline or a spread backs a club ("club", the club), a
+    total a side ("total", "over"), a team total a side of one club's number; None for a player's pick."""
+    if not isinstance(r, dict):
+        return None
+    m = str(r.get("bet_type") or r.get("market") or "").lower()
+    if r.get("kind") != "game" and m not in GAME_SIDE_MARKETS:
+        return None
+    if m in ("moneyline", "spread"):
+        club = str(r.get("team") or "")
+        return ("club", club) if club else None
+    side = str(r.get("side") or "").lower()
+    side = {"yes": "over", "no": "under", "o": "over", "u": "under"}.get(side, side)
+    if not side:
+        return None
+    return (f"team_total|{r.get('team') or ''}", side) if m == "team_total" else (m, side)
 
 
 # --- a report's picks post with its parlays, then never change (ABQ) ------------------------------

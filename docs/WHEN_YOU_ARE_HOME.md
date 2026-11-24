@@ -9694,6 +9694,16 @@ to grade. Their rows used to be blank; they now say why ("we priced no player pr
 lines was a pick"). Pricing more college games is a credits choice for you: say so and I'll work out what it would
 cost a month before changing anything.
 
+**AEB. A report never backs both sides of a game** (step 919; 24 November). Nothing to run. With every finished
+game's parlays listed again (step AEA), five reports turned out to carry both sides of one spread: the Vikings at
+the 49ers both "49ers −3" (won) and "Vikings +3.5" (lost), Eastern Michigan at Western Michigan both sides of 14.5,
+and three more college games. Both sides of a line is one guaranteed loss. All five came before 22 November, when
+every version of a report's card was put on the record, so a line that moved during the week left both sides
+there; since then a game's picks post once. Nothing stopped a single card from holding both, though, so now a
+report's picks back one team across the moneyline and the spread, one side of the total and one side of each
+team's own total, keeping the stronger pick. Every league's reports. I also checked every settled pick and parlay
+leg against its final number: no wrong verdicts in about 2,800 picks and legs or in 80 game-line picks.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 
