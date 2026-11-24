@@ -89,7 +89,8 @@ def test_the_header_carries_the_cards_lines():
     # And only with a total: a lone "O/U —" said nothing (2026-11-18, step XZ).
     assert '${gpLines || g.total == null ? "" : `<span class="chip">O/U' in chips, \
         "the O/U chip only when the grid is absent and there is a total"
-    assert "${gpLines ? \"\" : g.favorite ?" in chips
+    # The favourite's chip in every league since 24 November (app.js spreadFav: the slate's word or the spread's sign).
+    assert "${gpLines || !spreadFav(g) || g.spread == null ? \"\"" in chips
     assert ".gp-meta .gc-mkts {" in CSS
 
 

@@ -2341,7 +2341,7 @@ function renderGamePage() {
   // The render's GAME LINES table and KEY INSIGHTS panel. Lines come
   // straight off the slate; a cell without a real price shows a dash.
   // Insights are the game's own data fields, not narratives.
-  const gpFav = g.favorite || g.home;
+  const gpFav = spreadFav(g);
   const gpSp = (side) => g.spread == null ? "—"
     : `${side === gpFav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
   const gpMl = (v) => v == null ? "—" : oddsTxt(v);
@@ -2558,8 +2558,8 @@ function renderGamePage() {
           ${g.doubleheader ? `<span class="chip up">${icon("calendar", 11)} Doubleheader · Game ${g.game_number || 1}</span>` : ""}
           ${/* No total posted, no chip: a lone "O/U —" said nothing (2026-11-18). */""}
           ${gpLines || g.total == null ? "" : `<span class="chip">O/U ${g.total.toFixed(1)}</span>`}
-          ${gpLines ? "" : g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>`
-            : nba && g.spread ? `<span class="chip">${escapeHtml(teamName(g.spread < 0 ? g.home : g.away))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
+          ${gpLines || !spreadFav(g) || g.spread == null ? ""
+            : `<span class="chip">${escapeHtml(teamName(spreadFav(g)))} −${Math.abs(g.spread).toFixed(1)}</span>`}
           <span class="chip">${escapeHtml(cond)}</span>
           ${g.roof ? `<span class="chip">${escapeHtml(({ outdoors: "Outdoors", open: "Roof open",
             closed: "Roof closed", dome: "Dome", retractable: "Retractable roof" })[g.roof] || `Roof ${g.roof}`)}</span>` : ""}

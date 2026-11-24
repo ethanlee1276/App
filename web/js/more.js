@@ -3152,7 +3152,7 @@ function teamHomeHTML(d, p) {
         <span class="gp-at">@</span> ${teamMarkIn(d.sport, g.home, 22)} ${escapeHtml(teamNameIn(d.sport, g.home))}</span>
       <span class="tm-next-m">${escapeHtml([whenLabel(g.date, g.kickoff),
         g.total != null ? `O/U ${Number(g.total).toFixed(1)}` : "",
-        g.favorite && g.spread != null ? `${teamNameIn(d.sport, g.favorite)} −${Math.abs(g.spread).toFixed(1)}` : ""]
+        spreadFav(g) && g.spread != null ? `${teamNameIn(d.sport, spreadFav(g))} −${Math.abs(g.spread).toFixed(1)}` : ""]
         .filter(Boolean).join(" · "))} · Game page →</span></button>` : "";
   const s = (p.seasons || [])[0];
   const tile = (k, v, note) => v == null || v === "" ? "" : `<div class="metric"><div class="k">${k}</div>

@@ -13731,8 +13731,18 @@ function scriptScenarioOdds(g, m, p) {
    model has a measured cut (engine/gamescript.HIGH_TOTAL) — the total
    read as high or low. Null on either axis when the line cannot say. */
 const GS_HIGH_TOTAL = 47;
+/* WHO THE SPREAD FAVOURS (24 November): the slate's word where it gives one (the NFL's), else the spread's own sign,
+   which every league's board writes from the home side (-5.5: the home side gives the points; +5.5: the away side
+   does). The NBA's, hockey's and college's boards carry no favourite, and the Live card, the rail's live cards and
+   the game page's lines table took the home side for it, so an away favourite read backwards: "MEM +2.5" beside
+   "MEM -145". Pick'em favours nobody. */
+function spreadFav(g) {
+  const sp = Number((g || {}).spread);
+  return (g || {}).favorite || (Number.isFinite(sp) && sp !== 0 ? (sp < 0 ? g.home : g.away) : "");
+}
 function scriptExpected(g) {
   const sp = Number(g.spread);
+  // spreadFav's rule, written out: the tests run this function on its own (tests/test_game_scripts.py).
   const fav = g.favorite || (Number.isFinite(sp) && sp !== 0 ? (sp < 0 ? g.home : g.away) : "");
   const margin = fav === g.home ? 1 : fav === g.away ? -1 : 0;
   const tot = Number(g.total);
@@ -27555,7 +27565,7 @@ function renderRail() {
         <a class="rail-see" href="#live">See all</a></div>
       ${games.slice(0, 3).map((g) => {
         const lv = spoiledG(state.sport, g) ? {} : g.live || {};
-        const fav = g.favorite || g.home;
+        const fav = spreadFav(g);
         const sp = (side) => g.spread == null ? ""
           : `${side} ${side === fav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
         const situation = [escapeHtml(lv.period || ""),
@@ -28125,7 +28135,7 @@ function liveCardHTML({ sport, g, bets }) {
   // columns with one row per team. Only real numbers render — the slate
   // carries the line and both moneylines, but not per-side juice, so a
   // cell without a real price shows a dash, never an invented one.
-  const fav = g.favorite || g.home;
+  const fav = spreadFav(g);
   const sp = (side) => g.spread == null ? "—"
     : `${side === fav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
   const mlOdds = (v) => v == null ? "—" : oddsTxt(v);

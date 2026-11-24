@@ -9471,6 +9471,23 @@ rebounds stay on the game's own page, which keeps every play. The ninth look als
 Playoff's and the basketball reports sit in the vendor's older apps, read in December), so it rests again
 (`QB_CFB_AVAIL_PROBE=on` wakes it).
 
+**ADJ. Every league's spread says who gives the points** (step 901; 24 November). Nothing to run. On tonight's
+Live tab Memphis at Charlotte read "MEM +2.5" in the spread column beside "MEM -145" in the moneyline: the NBA's,
+hockey's and both colleges' boards name no favourite, and the Live card's lines, the side rail's live cards and the
+game page's lines table took the home side for it whenever the slate named none. Every board writes its spread from
+the home side (the NFL's too: the Bengals at the Commanders, favoured, read +6.5), so one rule now gives the
+favourite from the slate's word or the spread's own sign, everywhere a spread is drawn. The line chip on the game page
+and the team page named a favourite only in the NFL; it now does in every league.
+
+**Monday night's inactives, timed** (24 November; no change). Bengals at Commanders, the lists due 6:45 PM ET:
+ESPN's game roster flagged the inactive players first (by 6:44), the game summary marked them "inactive" next (the
+Bengals' at 6:50, the Commanders' at 6:58), and ESPN's injury board, which our NFL picks wait on, last: at 6:57 and
+7:01, about ten minutes after the times ESPN stamped on them. The game's picks and parlays posted at about 7:18, 57
+minutes before kickoff, on the first NFL build after both lists were on the board: on a busy night one pass over
+every board takes 14 to 22 minutes, and the NFL's extra build for a game that is due can only run between two other
+boards' builds. Reading the summary instead of the board would post three to seven minutes sooner; I have left it
+as it is for Thanksgiving, since the picks still post with almost an hour to spare.
+
 **ADI. Hockey's live rows say the shot, and its card drops stoppages** (step 900; 24 November). Nothing to run. The
 same side-by-side with tonight's NBA and hockey games on: the NBA's card reads cleanly, and hockey's read ESPN's
 terse words ("NJD · Timo Meier — Missed", "CBJ · Kent Johnson — Blocked") with "Stoppage" rows among them. A row
