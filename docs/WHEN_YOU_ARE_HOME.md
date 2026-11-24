@@ -9755,6 +9755,17 @@ total (the score landed 0.3 points over it), and on 2022 to 2025 players on shor
 form said (passing and receivers' targets a few percent above, rushing a couple below, none two standard errors
 out). So Thanksgiving week's totals and props carry no rest adjustment.
 
+**AEF. A board's pick is never put on the record after its game** (step 923; 24 November). Nothing to run. The
+loss miner found 113 NFL catches picks and 83 receiving-yards picks on the Most Likely board and the bold book that
+were journaled after their game had started (said 78% and 74%, hit 53% and 49%), which also dragged the board's own
+record. The journal refuses a pick from kickoff to eight hours after it, but past eight hours it read an old row as
+history (a replay), and the clock rule does the same, so a week's board rebuilt after the scoreboard had moved on
+could price a finished game's stale quote as if it were still to play. Nothing that journals is a replay: every
+caller is a live build. So in the Most Likely books (the list and its staked copy, the board, bold, held, the
+matchup picks, the scenarios, the market gaps) a pick is now refused from its kickoff to a week after it, longer
+than any board's slate lives. The parlays' legs keep the old window (a ticket goes on the record only when every leg
+has its row), and the clock rule is unchanged, because the backtest replays old weeks through the live pipeline.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 

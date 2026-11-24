@@ -190,6 +190,32 @@ def _likely(player, team, minutes, **kw):
     return row
 
 
+def test_a_board_claim_is_never_journaled_after_its_game():
+    """STRICT_START_CATEGORIES (step AEF, 24 November 2026): the loss miner found 196 NFL board and bold picks
+    journaled after their game's start (said 74-78%, hit 49-53%), past the window the in-play rule reads, where
+    a finished game reads as not started. In the Most Likely books a claim is journaled before its game, never
+    after; the parlays' legs and every other caller keep the window."""
+    d, k = _et(-15 * 60)
+    row = {"kickoff": k, "game_date": d}
+    assert ledger.in_play_reason(row) is None, "the window, as every other caller reads it"
+    why = ledger.in_play_reason(row, strict=True)
+    assert why and "15 hours ago" in why and "never after" in why, why
+    d2, k2 = _et(120)
+    assert ledger.in_play_reason({"kickoff": k2, "game_date": d2}, strict=True) is None, "a pick still to play"
+    assert ledger.in_play_reason({}, strict=True) is None, "no clock, no refusal"
+    d3, k3 = _et(-8 * 24 * 60)
+    assert ledger.in_play_reason({"kickoff": k3, "game_date": d3}, strict=True) is None, \
+        "past a week it is history (a fixture, a replay), as the window reads it"
+    late = lambda cat: ledger.log_most_likely(                                     # noqa: E731
+        _conn(), {"sport": "nfl", "date": "2026-W12",
+                  "most_likely": [_likely("Davante Adams", "LA", -15 * 60), _likely("Josh Allen", "BUF", 120)]},
+        depth=None, category=cat, grade_label="x")
+    for cat in ("board", "bold", "held", "likely", "matchup_prop", "plan_gap"):
+        assert late(cat) == 1, cat
+    assert late("parlay_leg") == 2, "a ticket's legs keep the window"
+    assert set(ledger.STRICT_START_CATEGORIES) >= {"likely", "likely_live", "board", "bold", "held"}
+
+
 def test_the_likely_journal_refuses_the_row_in_play():
     conn = _conn()
     payload = {"sport": "nfl", "date": "2026-W02",

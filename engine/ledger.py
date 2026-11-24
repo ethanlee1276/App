@@ -1223,7 +1223,22 @@ def journal_skip_reason(r: dict, only_recommended: bool = True,
     return in_play_reason(r, kick, now)
 
 
-def in_play_reason(r: dict, kick: dict | None = None, now=None) -> str | None:
+#: THE MOST LIKELY BOOKS, WHERE EVERY ROW IS A BOARD'S OWN PRE-GAME CLAIM (step AEF, 24 November 2026). The window
+#: below lets a row far past its kickoff through as history, and nothing that journals is a replay (every caller is
+#: a live build), yet the loss miner found 113 NFL catches and 83 receiving-yards picks on the board and the bold
+#: book journaled after their game's start, said 78% and 74%, hit 53% and 49%: a week's board rebuilt after the
+#: scoreboard had moved on, its finished games read as not started (rules.clock_says_started answers False past the
+#: window). A claim made after the game is no claim, so in these books a row is refused from its own kickoff to
+#: STRICT_START_WINDOW_MIN after it: longer than any board's slate lives (a board reads back only its own slate,
+#: likely.previous_board, and an NFL slate is its week), while a row older than that is still history, a fixture or
+#: a replay, as the window below calls it. The parlays' legs keep that window: a ticket is journaled only when every
+#: leg has its row.
+STRICT_START_CATEGORIES = ("likely", "likely_live", "board", "bold", "held", "td_scenario", "matchup_td",
+                           "matchup_prop", "plan_gap")
+STRICT_START_WINDOW_MIN = 7 * 24 * 60
+
+
+def in_play_reason(r: dict, kick: dict | None = None, now=None, strict: bool = False) -> str | None:
     """Why this row cannot be journaled NOW: its game is under way, or over.
 
     THE JOURNAL IS THE LAST LINE OF DEFENCE, and on 2026-09-14 it had no
@@ -1256,6 +1271,10 @@ def in_play_reason(r: dict, kick: dict | None = None, now=None) -> str | None:
     if lead is not None and -IN_PLAY_WINDOW_MIN < lead <= 0:
         return (f"kicked off {abs(lead):.0f} min ago by its own schedule — "
                 f"a pre-game price cannot be taken in play")
+    if strict and lead is not None and -STRICT_START_WINDOW_MIN < lead <= 0:
+        # STRICT_START_CATEGORIES: past the in-play window, through the week.
+        return (f"kicked off {abs(lead) / 60:.0f} hours ago by its own schedule — "
+                f"a board's claim is journaled before its game, never after")
     return None
 
 
@@ -1939,8 +1958,9 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         # never been told a game was live: Adam Trautman over 1.5
         # receptions journaled here at 8:52pm, thirty-seven minutes into
         # Broncos-Chiefs. The row's own kickoff is the witness that needs
-        # no feed.
-        if in_play_reason(r, kick):
+        # no feed. In the Most Likely books, any time past it
+        # (STRICT_START_CATEGORIES, step AEF).
+        if in_play_reason(r, kick, strict=category in STRICT_START_CATEGORIES):
             continue
         player = r["player"]
         if r.get("kind") == "game" or market in GAME_MARKETS:
