@@ -9544,12 +9544,27 @@ Abrams questionable; Texas Tech lists running back Quinten Joyner, receiver Jale
 out, outside linebacker LaDamion Guyton doubtful and five questionable; everyone else available or probable. One
 thing the season's archive did not show: a live report writes each name with the position and number in front ("QB
 #1 Jaden Craig", "CB #1 Vernon Glover, Jr."), which would have matched nobody on ESPN's board. The name is now read
-without them, the position kept for the row, and "Glover, Jr." reads "Glover Jr." as ESPN writes it. With that, and
+without them, the position kept for the row, and "Glover, Jr." reads "Glover Jr." as ESPN writes it. A live report
+also lists the whole roster, most of it "Available" (185 of the 203), where the archive lists only the designated;
+a man ESPN does not list and the school calls available is left off the Injuries page, so the two schools show 18
+rows there, not 203 (probable, questionable, doubtful and out). With that, and
 the archive already checked against the box scores (step ADF), the switch is on: a school's newest word replaces
 ESPN's older one on the Injuries page, in the game reports and in the picks; a player the school lists as available
 is cleared; and a game between two reporting schools posts its picks and parlays once both game-day reports are in,
 50 minutes before kickoff at the latest. A row from a report says so on the Injuries page ("Big 12 availability
 report"). `QB_CFB_AVAIL=off` on the box turns it off without a deploy.
+
+**ADP. Every college football game page has a Matchup scan** (step 907; 24 November). Nothing to run. Every other
+league's game page opens its facts on a Matchup scan (the NFL's units; the NBA's, college basketball's and hockey's
+tapes); college football's comes from CFBD's advanced season table, and tonight no college game carried one: Kent
+State at Eastern Michigan went from the money card straight to "No prop prices for this game yet". Each college game
+that scan leaves bare now gets the tale of the tape from our own box scores, drawn in the same cells as the others:
+points, passing yards and rushing yards a game for and against, yards a carry and a pass both ways, interceptions
+thrown and made, each ranked among the FBS teams (games between FBS teams only, last season filling in until a
+team's sixth game and the card saying so), the points the lines expect, and the key matchups where one side's unit
+meets the other's at the far ends of the FBS. It moves no number. The heading promises the player reads only where
+there are some ("offense against defense" here). Why CFBD's scan came up empty is on the box's log ("Matchup
+scan: N of M game(s)"); a missing or spent CFBD key would do it.
 
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they

@@ -367,7 +367,8 @@ def test_the_game_page_draws_the_nba_tape_and_its_reads():
                  "t.basis"):
         assert want in fn, want
     assert "matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g) || nbaScanHTML(g)" in app
-    assert "g.mlb_tape || g.nhl_tape || g.nba_tape) ? [\"gp-sec-scan\", \"Matchup scan\"]" in app
+    # College football's own tape rides the same chip and renderer since 24 November (step ADP).
+    assert "g.mlb_tape || g.nhl_tape || g.nba_tape || g.cfb_tape) ? [\"gp-sec-scan\", \"Matchup scan\"]" in app
     assert "if (u.usg) bits.push(" in app
 
 

@@ -122,7 +122,7 @@ def test_the_game_page_draws_the_tape_and_the_reads():
     # the board carries one; no other league's board does, so baseball's
     # scan draws as before.
     assert '${report ? "" : matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g) || nbaScanHTML(g)}' in js
-    assert '!report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape || g.nba_tape) ? ["gp-sec-scan", "Matchup scan"] : null,' in js
+    assert '!report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape || g.nba_tape || g.cfb_tape) ? ["gp-sec-scan", "Matchup scan"] : null,' in js
     # Football's notes were tested and added nothing; baseball's, hockey's and
     # basketball's never were, so only football says so.
     assert 'Also noticed — not counted${["nfl", "cfb"].includes(state.sport) ? ", no lift when tested" : ""}' in js, \

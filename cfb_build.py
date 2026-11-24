@@ -2634,6 +2634,27 @@ def main() -> None:
                       f"{len(_cfb_leans)} lean(s) for Most Likely.")
             except Exception as _sexc:                        # noqa: BLE001
                 print(f"  ⚠️  matchup scan skipped: {_sexc}")
+            # THE TAPE WHERE THAT SCAN HAS NONE (engine/cfb/scan, 2026-11-24; Ethan: "We want all the live pages to
+            # match each other"). Every other league's game page opens its facts on a Matchup scan; on 24 November
+            # no college game carried CFBD's. Each game it leaves bare gets the tale of the tape from our own box
+            # scores — points, passing and rushing for and against, ranked among the FBS — drawn as the other
+            # leagues' tapes are. It moves no number.
+            try:
+                from engine.cfb import scan as _cfbtape
+                from engine.seasons import season_of as _tape_season_of
+                _tape_prof = _cfbtape.profiles(conn, _tape_season_of("cfb", args.date), before=args.date)
+                _taped = 0
+                for _gd in out.get("games") or []:
+                    if (_gd.get("scan") or {}).get("units") or not _gd.get("home") or not _gd.get("away"):
+                        continue
+                    _tp = _cfbtape.tape(_gd["home"], _gd["away"], _tape_prof, _gd)
+                    if _tp:
+                        _gd["cfb_tape"] = _tp
+                        _taped += 1
+                print(f"  Matchup tape: {_taped} game(s) from our own box scores "
+                      f"({_tape_prof.get('n', 0)} FBS teams ranked).")
+            except Exception as _tx:                          # noqa: BLE001
+                print(f"  ⚠️  matchup tape skipped: {_tx}")
             _t = _clock.lap("long shots + Most Likely board", "matchup scan", _t)
             from engine.likely import build as _likely
             from engine import boards as _boards

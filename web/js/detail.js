@@ -2164,7 +2164,8 @@ function nhlScanHTML(g) {
    rank — and writes the key matchups and the basis; this draws them in the
    football tape's own cells, then the reads. */
 function nbaScanHTML(g) {
-  const t = g && g.nba_tape;
+  // College football's tape where CFBD's scan has none (engine/cfb/scan) is drawn here too, in the same cells.
+  const t = g && (g.nba_tape || g.cfb_tape);
   if (!t || !(t.rows || []).length) return "";
   const d = state.data || {};
   const reads = (d.scan_reads || {})[`${g.away}@${g.home}`];
@@ -2172,8 +2173,10 @@ function nbaScanHTML(g) {
   const n = t.teams || 30;
   const cell = (v, r, plain) => `<span class="tp-cell ${plain ? "" : (tapeTier(r, n) || [""])[0]}"><b>${escapeHtml(v)}</b>${r ? `<em>${ordinal(r)}</em>` : ""}</span>`;
   const head = (tm) => `<span class="tp-team">${teamMark(tm, 22)}<b>${escapeHtml(teamName(tm))}</b></span>`;
+  // The reads, or the members' word on them; a tape with neither (college football's own) promises none.
+  const who = players.length || (!reads && d.locked && d.locked.scan_reads);
   return `<div id="gp-sec-scan" class="ms">
-    <div class="section-title">Matchup scan <span class="sub">— offense against defense, and who could shine or struggle</span></div>
+    <div class="section-title">Matchup scan <span class="sub">— offense against defense${who ? ", and who could shine or struggle" : ""}</span></div>
     <div class="card ms-tape"><div class="tp-row tp-head"><span class="tp-k">Rank of ${n}</span>${head(g.away)}${head(g.home)}</div>
       ${t.rows.map((r) => `<div class="tp-row"><span class="tp-k">${escapeHtml(r.label)}</span>${cell(r.a, r.ar, r.plain)}${cell(r.h, r.hr, r.plain)}</div>`).join("")}</div>
     ${(t.edges || []).length ? `<div class="card ms-edges"><div class="ms-sub">Key matchups</div>
@@ -2574,7 +2577,7 @@ function renderGamePage() {
       linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
       reportHTML ? ["gp-sec-report", "Game report"] : null,
       planHTML ? ["gp-sec-plan", "Game plan"] : null,
-      !report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape || g.nba_tape) ? ["gp-sec-scan", "Matchup scan"] : null,
+      !report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape || g.nba_tape || g.cfb_tape) ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard && !report ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
       matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,
