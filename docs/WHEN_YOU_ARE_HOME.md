@@ -9814,9 +9814,11 @@ file's season means (95 seconds of a healthy 368-second college build at 13:03 E
 are the league's shot totals over the last year that the shooting read takes its percentages from (summed on every
 build until now, about 44 seconds of college's). The first college build on the new code, at 13:22 ET, read both
 seasons once and still finished in 345 seconds: the team profiles took 69 seconds where they had taken 268, and
-each season is kept from there. Still read on every college build, and left as they are: the player histories (55
-seconds, both seasons' rows for tonight's schools, which no index on the table serves) and the comps (each market's
-whole history read again when a night's rows land).
+each season is kept from there. Once all three were in, college's builds at 13:59 and 14:11 ET ran 160 and 165
+seconds where the 13:03 build had run 368: the fantasy means 0.3 seconds where they had taken 94, the shooting read
+0.1 where it had taken 39, and the board's write 26 where it had taken 133. Still read on every college build, and
+left as they are: the player histories (38 to 55 seconds, both seasons' rows for tonight's schools, which no index
+on the table serves) and the comps (each market's whole history read again when a night's rows land).
 
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
