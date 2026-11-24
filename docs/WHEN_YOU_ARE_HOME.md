@@ -9654,6 +9654,14 @@ key player is for members"). And a finished game's card said "lines post closer 
 111, Final) once the board had dropped its lines: a finished game's card now says nothing there in every league, and
 names its closing line once the line store has one (step ADT).
 
+**ADY. Once every game has begun, the top picks say they are under way, or decided** (step 916; 24 November).
+Nothing to run. After the NBA's last final the Home tab still offered a visitor "133 picks for members, the
+likeliest to hit" and told a member "Tonight's 133 picks are under way: follow them on the Live tab", over picks
+whose games were all over. Once every game on a board has begun, the visitor's card says "Tonight's picks are under
+way" (members follow them on the Live tab) and, once every game is final, "Tonight's picks are decided", with how
+every one did free on the Record; the member's line says the same. The NFL's and college football's boards say "This
+week's".
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

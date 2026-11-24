@@ -35,7 +35,11 @@ def _fn(name):
 def test_a_locked_board_shows_the_members_card():
     top = _fn("renderLikelyTop")
     assert "const lk = (state.data.locked || {}).most_likely;" in top
-    assert 'lk ? memberLockHTML(`${plural(lk, "pick")} for members`, "The likeliest to hit.")' in top
+    assert '!b.begun ? memberLockHTML(`${plural(lk, "pick")} for members`, "The likeliest to hit.")' in top
+    # Every game begun: the count is of picks under way or decided, said so (24 November, "133 picks for members"
+    # over an NBA night whose games were all final).
+    assert 'b.done ? memberLockHTML(`${b.when} picks are decided`, "How every one did is free on the Record.")' in top
+    assert 'memberLockHTML(`${b.when} picks are under way`' in top
     # The census still answers a board with nothing kept back.
     assert "likelyHiddenWhy(state.data) || likelyEmptyWhy(state.data.likely_census, state.data)" in top
 

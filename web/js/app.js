@@ -10869,12 +10869,26 @@ function capWipeoutNote() {
    their games are under way (they are on Live), or this page held them
    back, which is ours to fix and not a quiet night. "" when the board has
    no pick at all, and the census sentence stands. */
+/* WHERE THE BOARD'S GAMES STAND (24 November): every one begun, and every one over. After the NBA's last final the
+   Home tab told a member "Tonight's 133 picks are under way: follow them on the Live tab" and a visitor "133 picks
+   for members", over picks whose games were all decided. A board that holds the week says so as the week's. */
+function boardBegun(d) {
+  const gs = (((d || {}).games) || []).filter((g) => g && g.home && g.away);
+  const st = (g) => (g.live || {}).state;
+  const begun = gs.length > 0 && gs.every((g) => st(g) === "live" || st(g) === "final");
+  return { begun, done: begun && gs.every((g) => st(g) === "final"),
+           when: state.sport === "nfl" || state.sport === "cfb" ? "This week’s" : "Tonight’s" };
+}
 function likelyHiddenWhy(d) {
   const n = ((d || {}).most_likely || []).filter(Boolean).length;
   if (!n) return "";
   const on = d.most_likely.filter((r) => r && rowStarted(r)).length, held = n - on;
+  const b = boardBegun(d);
+  if (on === n && b.done) {
+    return `${b.when} ${plural(n, "pick")} ${pluralWord(n, "is", "are")} decided: how ${pluralWord(n, "it", "each one")} did is on the Record.`;
+  }
   return on === n
-    ? `Tonight’s ${plural(n, "pick")} ${pluralWord(n, "is", "are")} under way: follow ${pluralWord(n, "it", "them")} on the Live tab.`
+    ? `${b.when} ${plural(n, "pick")} ${pluralWord(n, "is", "are")} under way: follow ${pluralWord(n, "it", "them")} on the Live tab.`
     : `Tonight’s board has ${plural(n, "pick")}, and this page could not show ${held === n ? "them" : `${held} of them`}${
       on ? ` (${on} more under way)` : ""}. That’s our fault, not a quiet slate: refresh in a minute.`;
 }
@@ -11071,7 +11085,13 @@ function renderLikelyTop() {
       <div class="section-title">Qellys’ top picks
         <span class="sub">— who’s most likely to hit</span>
       </div>
-      ${lk ? memberLockHTML(`${plural(lk, "pick")} for members`, "The likeliest to hit.")
+      ${lk ? (() => {
+        // Every game on the board begun: the picks are under way or decided, not the next ones to take.
+        const b = boardBegun(state.data);
+        return !b.begun ? memberLockHTML(`${plural(lk, "pick")} for members`, "The likeliest to hit.")
+          : b.done ? memberLockHTML(`${b.when} picks are decided`, "How every one did is free on the Record.")
+          : memberLockHTML(`${b.when} picks are under way`, "Members follow them on the Live tab; how every one does is free on the Record.");
+      })()
         : `<div class="ls-note">${likelyHiddenWhy(state.data) || likelyEmptyWhy(state.data.likely_census, state.data)}</div>`}`;
     revealChildren(host);
     return;

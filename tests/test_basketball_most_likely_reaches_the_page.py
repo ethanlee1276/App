@@ -154,7 +154,8 @@ def test_an_nba_pick_as_the_engine_writes_it_is_shown():
 # --- a board with picks the page did not draw ----------------------------------------
 def _hidden_why(board, started=()):
     extra = ("const rowStarted = (r) => " + json.dumps(list(started)) + ".includes(r.player);\n"
-             + _fn("pluralWord") + "\n" + _fn("plural") + "\n" + _fn("likelyHiddenWhy"))
+             + "const state = {sport: \"nba\"};\n"
+             + _fn("pluralWord") + "\n" + _fn("plural") + "\n" + _fn("boardBegun") + "\n" + _fn("likelyHiddenWhy"))
     return _node(f"return likelyHiddenWhy({json.dumps(board)});", extra)
 
 
@@ -173,6 +174,13 @@ def test_the_empty_state_says_when_the_page_held_picks_back():
     assert "3 picks are under way: follow them on the Live tab" in gone and "fault" not in gone, gone
     one = _hidden_why({"most_likely": rows[:1]}, started=("A",))
     assert "1 pick is under way: follow it on the Live tab" in one, one
+    # Every game over (24 November, after the NBA's last final): decided, and the Record has them.
+    over = [{"home": "CHA", "away": "MEM", "live": {"state": "final"}}, {"home": "PHI", "away": "POR", "live": {"state": "final"}}]
+    done = _hidden_why({"most_likely": rows, "games": over}, started=("A", "B", "C"))
+    assert done == "Tonight’s 3 picks are decided: how each one did is on the Record.", done
+    still = _hidden_why({"most_likely": rows, "games": [over[0], dict(over[1], live={"state": "live"})]},
+                        started=("A", "B", "C"))
+    assert "3 picks are under way: follow them on the Live tab" in still, still
 
 
 def test_both_empty_states_read_it_first():
