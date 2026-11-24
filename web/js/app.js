@@ -16882,19 +16882,6 @@ function setStandaloneSource(label, dateLabel, ok = true) {
    The city or sport keeps its label underneath: the mark is the fast
    read and the word is the precise one, same as a helmet over an
    abbreviation everywhere else. */
-/* The venue's mark. Deliberately a house monogram rather than a copy of
-   Kalshi's or Polymarket's logo: we are naming where a price came from,
-   not borrowing a brand, and a traced trademark is the one graphic on
-   this site nobody asked us to draw. One letter, one tint, same disc
-   everywhere a venue is named. */
-function venueMark(venue, size = 22) {
-  const v = String(venue || "").toUpperCase();
-  const known = v.startsWith("KALSHI") ? "kalshi"
-    : v.startsWith("POLY") ? "poly" : "";
-  return `<span class="vmark ${known}" aria-hidden="true"
-    style="width:${size}px;height:${size}px;font-size:${
-      Math.round(size * 0.5)}px">${escapeHtml(v.slice(0, 1) || "?")}</span>`;
-}
 
 /* --- The render-copy board (Ethan's 2026-08-18 render pack) ----------
    "i really love the graphics and layouts of these renders so i wanna
@@ -17085,21 +17072,6 @@ function pmFlowLeague(f) {
   return "other";
 }
 
-function pmxHeroHTML() {
-  return `<header class="pmx-hero">
-    <div class="pmx-hero-txt">
-      <div class="pmx-eyebrow">Prediction market</div>
-      <h1 class="pmx-title">Prediction <span>Market</span><span class="pmx-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span></h1>
-      <p class="pmx-sub">Trade real-world outcomes on Kalshi and Polymarket.</p>
-      <p class="pmx-sub2">Live markets. Real-time odds. Track the smart money.</p>
-    </div>
-    <div class="pmx-art" aria-hidden="true">
-      <img class="pmx-art-img" src="img/predict/pm-hero@800.webp"
-        srcset="img/predict/pm-hero@800.webp 800w, img/predict/pm-hero.webp 1600w"
-        sizes="(max-width: 760px) 100vw, 1000px" alt="" decoding="async"/>
-    </div>
-  </header>`;
-}
 
 /* Switch rooms from outside the pill row (the rail's doors), through the
    pills themselves so the page keeps one way of switching. */
@@ -22006,39 +21978,6 @@ function teamLeadersHTML(st) {
     </button>`).join("")}</div>`;
 }
 
-function teamStatsHTML(st, sport) {
-  const sections = ((st || {}).sections || []).filter(
-    (x) => (x.rows || []).length);
-  if (!sections.length) return "";
-  const num = (v) => (v == null ? "—"
-    : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : String(v)));
-  const body = sections.map((sec) => `
-    <div class="section-title minor">${escapeHtml(sec.title)}</div>
-    <div class="rank-scroll"><table class="rank-table"><thead><tr>
-      <th>Name</th>${(sec.columns || []).map(
-        (c) => `<th>${escapeHtml(c)}</th>`).join("")}
-      </tr></thead><tbody>
-      ${(sec.rows || []).map((r) => `<tr class="tst-row" tabindex="0"
-          role="link" data-player-page="${escapeAttr(slugify(r.player))}">
-        <td class="rank-name">${escapeHtml(r.player)}${r.position
-          ? ` <span class="tst-pos">${escapeHtml(r.position)}</span>` : ""}</td>
-        ${(r.cells || []).map((v, i) => `<td>${sec.columns[i] === "SV%" && v != null
-          ? v.toFixed(3).replace(/^0/, "") : num(v)}</td>`).join("")}
-      </tr>`).join("")}
-      </tbody></table></div>`).join("");
-  return `
-    ${teamLeadersHTML(st)}
-    <div class="section-title">Team stats${st.season ? ` · ${st.season}` : ""}
-      <span class="sub">— every player with a game logged for this team,
-      ranked by ${escapeHtml(({ nhl: "points", nba: "points", wnba: "points", cbb: "points",
-        mlb: "playing time" })[sport] || "yards")}. Tap a row for the player’s page.</span></div>
-    ${body}
-    <p class="rank-help">Totals and averages are computed from the game
-      logs this site ingests${["nfl", "cfb"].includes(sport) ? `, which is why there is no longest-play or
-      20-plus column: a game log holds the yards, not the plays that
-      made them` : ""}. A column nobody on this team has a number for is left
-      out rather than filled with dashes.</p>`;
-}
 let _teamOppAll = false;
 
 // renderTeamPage is in js/more.js, loaded the first time its page opens (loadRoom).

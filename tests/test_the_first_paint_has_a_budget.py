@@ -406,6 +406,9 @@ APP_JS_BUDGET_KB = 290
 #: pressure cell to js/detail.js, the only files that draw them. The first
 #: visit went 392,360 -> 387,722 B, and the budget keeps the room (5.4 KB)
 #: for what comes next.
+#: 384 kept on 2026-11-24, TRIMMED UNDER IT again (steps ADT-ADY put a finished game's close and the board's
+#: begun/decided words on the boot path, 115 B over): venueMark, teamStatsHTML and pmxHeroHTML moved to
+#: js/more.js, the only file that draws them. The first visit went 393,331 -> 392,336 B.
 BOOT_BUDGET_KB = 384
 
 

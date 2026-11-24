@@ -9662,6 +9662,14 @@ way" (members follow them on the Live tab) and, once every game is final, "Tonig
 every one did free on the Record; the member's line says the same. The NFL's and college football's boards say "This
 week's".
 
+**ADZ. College basketball's Home keeps its night's picks past the last tip** (step 917; 24 November). Nothing to
+run. After college basketball's last tip its build makes no Most Likely board, so its Home tab dropped "Qellys' top
+picks" altogether while the NBA's, whose board keeps its night, says the picks are under way or decided (step ADY).
+A build that makes no board now keeps the last one's, for the same night only, written just before the board is
+published, after the Pick of the Day is chosen, so nothing that picks or journals reads it. Also: the first visit
+had crept 115 bytes past its size budget with steps ADT to ADY; three functions only the More pages draw moved to
+the file those pages load, and it is back under, as you chose on 19 November (trim, not raise).
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

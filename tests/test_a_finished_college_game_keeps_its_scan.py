@@ -66,6 +66,27 @@ def test_the_build_keeps_them_for_every_slate_not_only_one_with_games_to_tip():
         "at the main level, after the opening lines and before the game report"
 
 
+def test_the_nights_most_likely_board_stands_past_the_last_tip():
+    """After the last tip the build makes no Most Likely board (no `likely_census`); the last one's stands, for the
+    same slate, and the page then says the picks are under way or decided (app.js boardBegun, step ADY)."""
+    prev = dict(PREV, most_likely=[{"player": "A"}], likely_board={"rows": [{"player": "A"}]},
+                board_shelves=[{"key": "top", "rows": [{"player": "A"}]}], likely_census={"under the floor": 3})
+    path = _prev(prev)
+    out = {"games": [], "most_likely": [], "board_shelves": []}
+    said = nba_build.keep_likely(out, path, "2026-11-23")
+    assert out["most_likely"] == [{"player": "A"}] and out["likely_board"] == prev["likely_board"]
+    assert out["board_shelves"] == prev["board_shelves"] and out["likely_census"] == {"under the floor": 3}
+    assert said == "Kept from the last board: the night's Most Likely board (1 pick(s))", said
+    made = {"most_likely": [{"player": "B"}], "likely_census": {}}
+    assert nba_build.keep_likely(made, path, "2026-11-23") == "" and made["most_likely"] == [{"player": "B"}], \
+        "a build that made its board keeps its own"
+    assert nba_build.keep_likely({"most_likely": []}, path, "2026-11-24") == "", "another slate's never"
+    src = (ROOT / "nba_build.py").read_text(encoding="utf-8")
+    i = src.index("    _kept_ml = keep_likely(out, args.out, args.date)\n")
+    assert src.index("out[\"pick_of_the_day\"] = _led.relock_potd(") < i < src.index("    gate.publish(out, p)\n"), \
+        "after the Pick of the Day and its relock, just before the publish"
+
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0

@@ -1033,6 +1033,38 @@ def keep_pregame(out: dict, public_path, date) -> str:
     return "Kept from the last board: " + " and ".join(bits)
 
 
+#: The night's Most Likely board as the page reads it (step ADZ).
+LIKELY_KEYS = ("most_likely", "likely_board", "board_shelves", "likely_census")
+
+
+def keep_likely(out: dict, public_path, date) -> str:
+    """The night's Most Likely board, kept past the last tip, when this build made none. One line for the build log,
+    "" when nothing was kept; never raises.
+
+    THE PICKS, LIKE THE SCAN (step ADZ, 2026-11-24). After college basketball's last tip its build makes no Most
+    Likely board (`likely_census` is the mark of one made), so its Home tab dropped "Qellys' top picks" altogether
+    while the NBA's, whose board keeps its night, said the picks were under way or decided. The last board's stands,
+    from the private copy, for the same slate only: its picks were chosen and journaled by the build that made it.
+    Called just before the publish, after the Pick of the Day and its relock, so nothing that chooses or journals a
+    pick reads it."""
+    if "likely_census" in out:
+        return ""
+    import json as _json
+    try:
+        from engine.gate import board_source
+        with open(board_source(public_path), encoding="utf-8") as fh:
+            prev = _json.load(fh)
+    except Exception:                                        # noqa: BLE001
+        return ""
+    if not isinstance(prev, dict) or str(prev.get("date") or "") != str(date or "") or "likely_census" not in prev:
+        return ""
+    for k in LIKELY_KEYS:
+        if k in prev:
+            out[k] = prev[k]
+    n = len(out.get("most_likely") or [])
+    return f"Kept from the last board: the night's Most Likely board ({n} pick(s))"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("date", nargs="?",
@@ -2400,6 +2432,11 @@ def main() -> None:
     from engine import freshness as _fresh
     _fresh.stamp_board(out, str(out.get("sport") or "nba"))
     _wt = _clock.lap("write the board", "freshness", _wt)
+    # THE NIGHT'S MOST LIKELY BOARD, KEPT PAST THE LAST TIP (`keep_likely`, step ADZ): after the Pick of the Day and
+    # its relock, so nothing that chooses or journals a pick reads it.
+    _kept_ml = keep_likely(out, args.out, args.date)
+    if _kept_ml:
+        print(f"  {_kept_ml}")
     gate.publish(out, p)
     _wt = _clock.lap("write the board", "publish", _wt)
     # The light copy the Home page draws first (engine/lightboard),
