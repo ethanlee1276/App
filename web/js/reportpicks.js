@@ -728,9 +728,9 @@ function rpBetsHTML(x, sport, open, game) {
   const unkept = x.unkept ? `<p class="mini rpk-bets-note">${early ? "Parlays weren’t saved for games before 16 November."
     : "This game’s parlays weren’t kept at its start, so the Record counts none of them."}</p>` : "";
   // NOTHING ON THE RECORD, SAID WHY (step AEA; engine/reportoutcome.none_why): a blank row read as data lost.
-  const none = x.none ? `<p class="mini rpk-bets-note">${x.none === "no_props"
-    ? "No picks or parlays: we priced no player props for this game, and none of its lines was a pick."
-    : "No picks or parlays: none of this report’s picks had a price to post."}</p>` : "";
+  const none = x.none ? `<p class="mini rpk-bets-note">${early ? "Picks and parlays weren’t saved for games before 16 November."
+    : x.none === "no_props" ? "No picks or parlays: we priced no player props for this game, and none of its lines was a pick."
+    : "No picks or parlays were posted for this game."}</p>` : "";
   if (!parts.length) return unkept + paperNote + held + none;
   const strip = parts.map(([w, l]) => {
     const h = rpHit(l);

@@ -314,7 +314,9 @@ def test_a_game_with_nothing_on_the_record_says_why():
     assert got == {f"{DAY}|IND|HOU": {"none": O.NONE_NO_PROPS}}, got
     said = _render({"none": "no_props"}, {"date": DAY})
     assert "we priced no player props for this game" in said, said
-    assert "had a price to post" in _render({"none": "none"}, {"date": DAY})
+    assert "No picks or parlays were posted for this game." in _render({"none": "none"}, {"date": DAY})
+    assert "weren’t saved for games before 16 November" in _render({"none": "none"}, {"date": "2026-11-12"}), \
+        "before the report's own book began, the reason is that"
     assert _render({}, {"date": DAY}) == "", "nothing asked, nothing said"
     # A game with anything on the record lists it, and says nothing of none.
     assert "none" not in _game(path, _archive(KEPT))
