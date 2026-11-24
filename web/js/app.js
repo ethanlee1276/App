@@ -29769,9 +29769,13 @@ function playsHTML(g) {
     const who = [side, p.player].filter(Boolean).map(escapeHtml).join(" · ");
     const at = (p.away_score != null && p.home_score != null)
       ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
+    // Hockey's terse feed words, as its game page says them ("Missed shot", "Blocked shot"; js/rinkcast.js):
+    // the row's words only, never the data, which Call It and the big plays read as the feed wrote it.
+    const ICE_WORDS = { Missed: "Missed Shot", Blocked: "Blocked Shot", "Face Off": "Faceoff" };
+    const label = ice ? (ICE_WORDS[p.event] || p.event) : p.event;
     const what = said && said.html
       ? `${side ? `<span class="lb-side">${escapeHtml(side)}</span> ` : ""}${said.html}`
-      : `${who}${who ? " — " : ""}${escapeHtml(p.event)}`;
+      : `${who}${who ? " — " : ""}${escapeHtml(label)}`;
     return `<div class="lb-play${p.scoring ? " scoring" : ""}">
       <span class="lb-inn">${escapeHtml(when)}</span>
       <span class="lb-what">${what}${tag}</span>

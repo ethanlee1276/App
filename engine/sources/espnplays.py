@@ -928,11 +928,15 @@ def event_label(text) -> str:
 #: basketball dead ball brings a run of substitutions and a dead-ball rebound, and on a college card they were half
 #: of the six. Bookkeeping like that stays on the game's own page (its full list) and off the card.
 _CARD_NOISE = re.compile(r"^(?:substitution|dead\s*ball\s*rebound)$", re.I)
+#: …and hockey's: a stoppage (the faceoff after it is the play; the reason is on the game's page).
+_CARD_NOISE_ICE = re.compile(r"^stoppage$", re.I)
 
 
 def card_noise(row: dict) -> bool:
-    """A basketball row the Live tab's card leaves out: a substitution or a dead-ball rebound."""
-    return (row or {}).get("kind") == "hoops" and bool(_CARD_NOISE.match(str((row or {}).get("event") or "")))
+    """A row the Live tab's card leaves out: basketball's substitutions and dead-ball rebounds, hockey's
+    stoppages. The game's own file keeps every play (Call It and the big plays read that list, not the card's)."""
+    kind, e = (row or {}).get("kind"), str((row or {}).get("event") or "")
+    return bool((kind == "hoops" and _CARD_NOISE.match(e)) or (kind == "hockey" and _CARD_NOISE_ICE.match(e)))
 
 
 def hoops_plays(payload: dict, league: str = "wnba", limit: int = 6,

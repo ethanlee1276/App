@@ -38,6 +38,18 @@ def test_the_card_leaves_bookkeeping_to_the_games_own_page():
     assert 'doc["plays"] = espnplays.hoops_plays(payload, league, 0, sides=sides)' in src, "the page keeps them all"
 
 
+def test_hockeys_card_drops_stoppages_and_its_rows_say_the_shot():
+    rows = [{"kind": "hockey", "event": e} for e in ("Shot", "Stoppage", "Face Off", "Missed", "Goal")]
+    assert [r["event"] for r in rows if not E.card_noise(r)] == ["Shot", "Face Off", "Missed", "Goal"]
+    js = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    assert 'const ICE_WORDS = { Missed: "Missed Shot", Blocked: "Blocked Shot", "Face Off": "Faceoff" };' in js, \
+        "inside the row's own function (the tests that lift it out carry it along)"
+    assert "const label = ice ? (ICE_WORDS[p.event] || p.event) : p.event;" in js
+    assert '${who}${who ? " — " : ""}${escapeHtml(label)}' in js
+    assert E.event_label("Missed") == "Missed" and E.event_label("Blocked") == "Blocked", \
+        "the data keeps the feed's words (Call It reads them)"
+
+
 def test_a_college_play_row_carries_the_words():
     payload = {"plays": [{"id": "1", "type": {"text": "LayUpShot"}, "period": {"number": 2},
                           "clock": {"displayValue": "0:57"}, "team": {"id": "9"}, "scoringPlay": True,

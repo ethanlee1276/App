@@ -9471,6 +9471,14 @@ rebounds stay on the game's own page, which keeps every play. The ninth look als
 Playoff's and the basketball reports sit in the vendor's older apps, read in December), so it rests again
 (`QB_CFB_AVAIL_PROBE=on` wakes it).
 
+**ADI. Hockey's live rows say the shot, and its card drops stoppages** (step 900; 24 November). Nothing to run. The
+same side-by-side with tonight's NBA and hockey games on: the NBA's card reads cleanly, and hockey's read ESPN's
+terse words ("NJD · Timo Meier — Missed", "CBJ · Kent Johnson — Blocked") with "Stoppage" rows among them. A row
+now says "Missed Shot", "Blocked Shot" and "Faceoff", as the hockey game page does, and stoppages stay on the game's
+own page. Only the row's words change: the plays in the data keep the feed's words, because Call It and the big
+plays read them. Its clock stays as it is: a hockey row gives the time gone in the period (4:59) under a header that
+gives the time left (15:01), which is ESPN's own way for hockey and our hockey game page's too.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his
