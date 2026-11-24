@@ -106,8 +106,16 @@ def _read_values(conn, league: str, seasons: list[int] | None = None, null_seaso
     """``{(player, market): [values, in game order]}`` off the table in one read: the seasons asked (every season
     for None), or with ``null_season`` the rows filed with no season. Each list in its season's and day's order,
     so a player's columns line up night by night for the combos."""
-    q = ("SELECT player, market, season, period, value FROM player_game_logs WHERE sport=? AND market IN (%s)"
-         % ",".join("?" * len(_READ)))
+    # THE SEASON'S OWN ROWS, NOT EVERY SEASON'S (step AEO, 24 November 2026). With a season asked, SQLite (the
+    # box's file is never ANALYZEd) read this through the (sport, market, game_id, player) index, which holds no
+    # season: every stored season's rows of each market, each looked up in the table to be told its season. On the
+    # box at 18:18 that evening, college basketball's 2026 rows alone took 35.1 seconds to read, at about 410,000
+    # rows. The plus sign leaves `market` to the row filter, so the read walks the table's key (sport, season, ...)
+    # over the seasons asked and nothing else. The rows come back in that key's order now, so each list is put in
+    # game order by its game too, as the old index gave a day's two games (tests/test_a_season_read_walks_its_
+    # season_alone.py).
+    q = ("SELECT player, market, season, period, game_id, value FROM player_game_logs WHERE sport=? "
+         "AND +market IN (%s)" % ",".join("?" * len(_READ)))
     args: list = [league, *_READ]
     if null_season:
         q += " AND season IS NULL"
@@ -117,8 +125,9 @@ def _read_values(conn, league: str, seasons: list[int] | None = None, null_seaso
     rows: dict[tuple, list] = {}
     for r in conn.execute(q, args):
         rows.setdefault((r["player"], r["market"]), []).append(
-            (-1 if r["season"] is None else int(r["season"]), str(r["period"] or ""), float(r["value"])))
-    return {k: [v for _s, _p, v in sorted(vals, key=lambda x: (x[0], x[1]))] for k, vals in rows.items()}
+            (-1 if r["season"] is None else int(r["season"]), str(r["period"] or ""), str(r["game_id"] or ""),
+             float(r["value"])))
+    return {k: [v for _s, _p, _g, v in sorted(vals, key=lambda x: (x[0], x[1], x[2]))] for k, vals in rows.items()}
 
 
 def _stored_seasons(conn, league: str) -> tuple[list, bool]:

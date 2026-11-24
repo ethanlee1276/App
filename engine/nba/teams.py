@@ -98,9 +98,13 @@ def load_rows(conn, sport: str, season: int) -> list:
     """``(period, team, opponent, market, value)`` for every stored box-score
     column a team's night is summed from."""
     qs = ",".join("?" * len(BOX))
+    # THE SEASON'S OWN ROWS (step AEO, 24 November 2026): SQLite read this through the (sport, market, game_id,
+    # player) index, which holds no season, so every stored season's rows were looked up to keep one season's;
+    # college basketball's team profiles took 40 seconds of a game-night build that evening. The plus sign leaves
+    # `market` to the row filter and the read walks the table's key (sport, season, ...). Sums, in any order.
     return [tuple(r) for r in conn.execute(
         "SELECT period, team, opponent, market, value FROM player_game_logs "
-        f"WHERE sport=? AND season=? AND market IN ({qs})", (sport, season, *BOX)).fetchall()]
+        f"WHERE sport=? AND season=? AND +market IN ({qs})", (sport, season, *BOX)).fetchall()]
 
 
 def team_games(rows, sport: str = "nba") -> dict:

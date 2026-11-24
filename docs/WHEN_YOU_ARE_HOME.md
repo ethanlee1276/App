@@ -9902,6 +9902,18 @@ not only the top 12's.
   credit(s) each · K priced in the last 2.5h read from the cache, their places given to games waiting". I'll read it
   off the live board on Friday and Saturday.
 
+**AEO. Three slow reads of the game logs now read only the season they need** (step 931; 24 November). Nothing to
+run. On game nights the college basketball build takes about 300 of the site's roughly 750-second cycle (the
+heartbeat that evening), which slows every board's refresh and leaves no room to price more college games. The
+heartbeat's own timings said where the time went: re-reading this season's college stat values took 35.1 seconds
+for about 410,000 rows, the team profiles 40 seconds, and the NHL's fantasy means for last season 39.3 seconds. Our
+history file has no statistics for SQLite to plan with, and for these three reads it picked an index with no season
+in it, so it walked every stored season's rows to keep one season's. Now each read walks only the season it asks
+for, and gives the same answers. On a test history of five college seasons (1.05 million rows, held in memory) the
+three reads ran 11, 9 and 2.7 times faster. The box's real times show on the heartbeat after the deploy (the
+`logcache` read times and the board's stage times). Each of the three is read once more in full after the deploy,
+because its code changed.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 
