@@ -119,7 +119,7 @@ def test_a_drives_head_still_reads_it_in_game_order():
     assert "function drivesHTML(" not in GC and "function playsTabHTML(" not in GC
     # The Live tab card's last few plays, the newest on top of them.
     card = _fn("liveCardHTML")
-    assert "${playsHTML({ ...g, plays: (g.plays || []).slice().reverse()," in card
+    assert "${playsHTML({ ...g, plays: words.plays.slice().reverse(), say: words.say," in card
 
 
 def test_in_a_browser_the_rail_and_the_plays_tab_put_the_newest_play_on_top():

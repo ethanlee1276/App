@@ -338,7 +338,7 @@ def test_the_live_line_reads_the_scoreboard_against_the_two_teams_rates():
 
 def test_the_three_surfaces_read_the_same_payload():
     assert "${pressureHTML(d.pressure, d)}" in APP, "the standings page, under the rankings"
-    assert "    ${linesGrid}\n    ${pressureLiveHTML(sport, g)}\n    ${playsHTML({ ...g, plays: (g.plays || []).slice().reverse(),\n      room:" in APP, \
+    assert "    ${linesGrid}\n    ${pressureLiveHTML(sport, g)}\n    ${playsHTML({ ...g, plays: words.plays.slice().reverse(), say: words.say,\n      room:" in APP, \
         "the live card"
     # The warm-up reads the games the board just fetched. The tracker
     # redraw (2026-09-14) sits between the two lines; order is the pin.

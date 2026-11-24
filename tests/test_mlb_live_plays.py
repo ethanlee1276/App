@@ -231,7 +231,7 @@ def test_the_card_draws_the_plays():
     # Called with the game's chat room beside it since 2026-10-25 (each
     # play's thread, js/chat.js).
     # The newest play on top since 2026-11-15 (test_the_newest_play_is_on_top).
-    assert "${playsHTML({ ...g, plays: (g.plays || []).slice().reverse(),\n      room:" in src, \
+    assert "${playsHTML({ ...g, plays: words.plays.slice().reverse(), say: words.say,\n      room:" in src, \
         "it is defined and never called"
 
 

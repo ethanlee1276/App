@@ -9496,6 +9496,23 @@ own page. Only the row's words change: the plays in the data keep the feed's wor
 plays read them. Its clock stays as it is: a hockey row gives the time gone in the period (4:59) under a header that
 gives the time left (15:01), which is ESPN's own way for hockey and our hockey game page's too.
 
+**ADK. The Live tab's basketball and hockey cards say their plays as sentences** (step 902; 24 November). Nothing to run. On
+tonight's Live tab a football card read our own sentences ("CIN Joe Burrow sacked by Tim Settle for a loss of 6
+yds"), while every basketball and hockey card read a label ("MEM · Zach Edey — Defensive Rebound", "NJD · Nico
+Hischier — Missed Shot"), though the game page says the same play as a sentence. The Live tab now uses the game page's words: "MEM Cedric Coward grabs a defensive
+rebound", "CHA Coby White makes a 3-point running jump shot, assist Brandon Miller +3", "MEM Jaylen Wells misses a
+driving layup, blocked by Coby White", "Full timeout, Bucks" (NBA, college and WNBA, checked on tonight's NBA and
+college games). An assist, a block or a steal is named only when the card's own box score puts that player on the
+side it belongs to. On the way: the card's box score named a club by ESPN's code, "NO" where every page says NOP, and
+a school the board has no code for ("MNFD") apart from its card's; each player's row now takes the card's code and
+says which side the player is on, so New Orleans players get their club's mark on the game page. Hockey's sentences
+come from the NHL's own feed, which only the game's own page had: each hockey card now carries the league's newest
+six events (whistles left to the game page; a pass the league does not answer keeps the last six), and reads "NJD
+Nico Hischier wins the faceoff over Charlie Coyle", "Connor Brown shoots (wrist), saved by Cam Talbot", "Mikael
+Pyyhtia scores shorthanded (snap), from Damon Severson and Jack Williams" with its GOAL chip and the score, on the
+clock the card's header counts down (checked on tonight's five hockey games). A card the league's feed has not reached
+keeps ESPN's rows as before.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

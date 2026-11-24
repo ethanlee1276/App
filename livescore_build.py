@@ -69,6 +69,23 @@ SUMMARY_WORKERS = 4
 #: Plays on a card: about one drive's worth.
 PLAYS_PER_GAME = 6
 
+#: HOCKEY'S CARD ROWS FROM THE LEAGUE'S OWN EVENTS (2026-11-24; Ethan: "We
+#: want all the live pages to match each other"). The game page says each
+#: hockey play from the NHL's own feed (js/rinkcast.js), who shot and who
+#: saved it; ESPN's rows on the card name one player and a label. The rink
+#: pass puts the newest few of those events on the card (`rink_plays`), and
+#: the Live tab says them as the game page does. A whistle is the game
+#: page's, as ESPN's stoppages are (espnplays.card_noise).
+RINK_CARD_SKIP = frozenset({"stoppage"})
+
+
+def card_rink(rink: dict) -> list[dict]:
+    """The card's few rows from a rink block: its newest events, newest last."""
+    ev = [e for e in (rink or {}).get("events") or []
+          if isinstance(e, dict) and e.get("kind") and e.get("kind") not in RINK_CARD_SKIP]
+    return ev[-PLAYS_PER_GAME:]
+
+
 #: The game's recent BIG plays on its card too (espnplays.big_play): the
 #: Live tab's play feed reads every game's (Real's main screen,
 #: 2026-10-25), and six plays is a drive — a touchdown twenty minutes ago
@@ -598,6 +615,21 @@ def pbp_players(league: str, payload: dict, g: dict) -> list[dict]:
                 continue
         row = {"player": r.get("player"), "team": r.get("team", ""),
                "position": r.get("position", ""), "stats": stats}
+        # THE CLUB IN THE CARD'S OWN WORDS (2026-11-24). The box names a club
+        # by ESPN's code: "NO" where the card and every page say NOP, and a
+        # school the board has no code for by one ("MNFD") where the card
+        # says espn:2365. By the side's ESPN id the row takes the card's
+        # code where the card has one, and says which side it plays for
+        # either way, so the player's mark on the game page and the Live tab's
+        # sentences (js/hoopscast.js cardSay) read one club as one club.
+        tid = str(r.get("team_id") or "")
+        side = ("home" if tid and tid == str(g.get("home_id") or "")
+                else "away" if tid and tid == str(g.get("away_id") or "") else "")
+        if side:
+            row["side"] = side
+            code = str(g.get(side) or "")
+            if code and not code.startswith("espn:"):
+                row["team"] = code
         # HIS ESPN ID, for his face on the play cards and the feed (Ethan,
         # 2026-11-14, on college: "make sure we're pulling headshots"; the
         # feed drew initials for every league). Only when the box has one.
@@ -838,10 +870,24 @@ def _previous(out_dir: Path, league: str) -> dict | None:
         return None
 
 
+def _carry_rink(games: list[dict], prev: dict | None) -> None:
+    """A hockey game in progress keeps the card rows the league's feed gave
+    it last pass (`rink_plays`) until this pass's rink pass gives fresh ones,
+    so a pass the feed does not answer never turns its card back to ESPN's
+    labels for a moment."""
+    was = {str(g.get("event_id") or ""): g for g in ((prev or {}).get("games") or []) if isinstance(g, dict)}
+    for g in games or []:
+        old = was.get(str(g.get("event_id") or "")) or {}
+        if (g.get("live") or {}).get("state") == "live" and old.get("rink_plays") and not g.get("rink_plays"):
+            g["rink_plays"] = old["rink_plays"]
+
+
 def write(league: str, out_dir: Path = OUT) -> dict:
     pbp_dir = Path(out_dir) / "pbp"
-    payload = build(league, pbp_dir=pbp_dir,
-                    prev=_previous(out_dir, league))
+    prev = _previous(out_dir, league)
+    payload = build(league, pbp_dir=pbp_dir, prev=prev)
+    if league == "nhl":
+        _carry_rink(payload.get("games") or [], prev)
     try:
         prune_pbp(pbp_dir)
     except Exception:                                        # noqa: BLE001
@@ -872,6 +918,14 @@ def write(league: str, out_dir: Path = OUT) -> dict:
                 payload["rink_note"] = note
         except Exception:                                    # noqa: BLE001
             pass
+        # The card again, with the rows the rink pass just read (card_rink):
+        # the scoreboard went out first and stays out if this write fails.
+        if any(g.get("rink_plays") for g in payload.get("games") or []):
+            try:
+                tmp.write_text(json.dumps(payload, indent=1))
+                os.replace(tmp, out)
+            except OSError:
+                pass
     return payload
 
 
@@ -1110,6 +1164,7 @@ def nhl_rink_pass(games: list[dict], out_dir: Path, fetch_day=None, fetch_box=No
             rink = nhlrink.rink_doc(pbp, box, xg_fn)
             rink["at"] = utc_stamp()
             _merge_rink(g, rink, Path(out_dir) / "pbp")
+            g["rink_plays"] = card_rink(rink)
             done += 1
         except Exception:                                    # noqa: BLE001
             failed += 1

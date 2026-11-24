@@ -89,10 +89,12 @@ def tap_chip(chip, sport="mlb", bar=("mlb", "nfl", "cfb")):
     function liveSlips() {{}}
     function reportLiveAsk() {{}}
     // The tab's own five-second clock (liveTickArm), the play feed, your
-    // players' strip and the threads' counts are not under test here.
+    // players' strip, the threads' counts and the sports' words for the
+    // cards' rows (liveWordsLoad) are not under test here.
     const liveSig = () => "";
     let _liveDrawnSig = "";
     function liveTickArm() {{}}
+    function liveWordsLoad() {{}}
     let _liveView = "games";
     function liveChatCounts() {{}}
     function ypMount() {{}}

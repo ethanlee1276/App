@@ -79,7 +79,7 @@ def test_every_play_row_carries_its_thread():
     rows = rows[:rows.index("\n}\n")]
     assert 'const bubble = (p) => (g.room ? chatPlayBadge(g.room, p) : "");' in rows
     assert rows.count("${at}${bubble(p)}</div>`") == 3, "football, basketball/hockey and baseball rows"
-    assert "playsHTML({ ...g, plays: (g.plays || []).slice().reverse(),\n      room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : \"\" })" in APP
+    assert "playsHTML({ ...g, plays: words.plays.slice().reverse(), say: words.say,\n      room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : \"\" })" in APP
     assert "room: pbpRoom(d, league)" in DETAIL and "chatPlayBadge(room, r)" in DETAIL
     # One renderer for every sport's rows since 2026-11-21 (the one page, detail.js gpPageHTML): basketball's
     # and hockey's files hand the page their rows and their words and draw no bubble of their own. Hockey's

@@ -694,6 +694,28 @@
     const bits = said(p, d, k);
     return bits ? { html: bits.map((x) => (x && x.b ? `<b>${esc(x.b)}</b>` : esc(x))).join("") } : null;
   }
+  /* THE LIVE TAB'S CARD, IN THE SAME WORDS (2026-11-24; Ethan: "We want all
+     the live pages to match each other ... NFL is kind of like the one we
+     want to go off of"). A card on the Live tab holds the game's last few
+     plays and its players (each name with the side it plays for,
+     livescore_build.pbp_players), not the box: its rows are said as the
+     game page says them, the second name's part only where the card's
+     players put that player on the side the part belongs to. Who came in
+     for whom is the whole game's to settle (onFloor), so a card never says
+     it. The league is the card's, for a college half or a quarter. */
+  function cardSay(g, league) {
+    const by = {};
+    (g.players || []).forEach((r) => {
+      const side = r && (r.side === "home" || r.side === "away" ? r.side : sideOf(g, r.team));
+      if (r && r.player && side) by[r.player] = side;
+    });
+    const k = { sideOfName: (name) => by[name] || "", floor: null };
+    return (p) => {
+      const was = LG;
+      LG = String(league || "");
+      try { return sayPlay(p, g, k); } finally { LG = was; }
+    };
+  }
   /* THE PLAY RIGHT NOW, on the card every sport's is drawn on (js/gamecast.js
      playNow): the newest play in words, the score it left when it scored, and
      the people in it with their game so far. The caption under the arena
@@ -889,5 +911,7 @@
     // The readers, for the tests and for Ask.
     ballAfter, flow, leads, droughts, onFloor, shotsOf, zoneOf, courtSpot, artSpot, toArt, homography,
     elapsed, clockSecs, colours, teamTotals, playKind, sayPlay, said, momentOf,
+    // The Live tab's cards (app.js liveCardHTML).
+    cardSay,
   };
 })();

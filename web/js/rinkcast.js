@@ -459,6 +459,15 @@
     const bits = said(e, d);
     return bits ? { html: bits.map((x) => (x && x.b ? `<b>${esc(x.b)}</b>` : esc(x))).join("") } : null;
   }
+  /* THE LIVE TAB'S CARD, IN THE SAME WORDS (2026-11-24; Ethan: "We want all
+     the live pages to match each other"). A hockey card carries the league's
+     newest few events (`rink_plays`, livescore_build.card_rink): its rows are
+     those events as this page's rows, said as this page says them. A card
+     the league's feed has not reached keeps ESPN's rows (null). */
+  function cardRows(g) {
+    const ev = ((g || {}).rink_plays || []).filter((e) => e && e.kind);
+    return ev.length ? { rows: ev.map(rowOf), say: (p) => (p && p.rink ? sayPlay(p.rink, g) : null) } : null;
+  }
 
   /* ---------------- on the score ----------------
      The score is the page's own (detail.js pbpBoardHTML), the same for every
@@ -985,5 +994,7 @@
     // The readers, for the tests and for Ask.
     events, sitOf, puckAfter, endOf, powerPlay, teamStats, flow, pressure, quiet, nowElapsed, toArt, colours, playWords, CP,
     said, momentOf, sayPlay, rowOf,
+    // The Live tab's cards (app.js liveWords).
+    cardRows,
   };
 })();

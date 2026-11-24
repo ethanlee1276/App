@@ -28117,12 +28117,47 @@ function watchHTML(g, league, cls) {
     rest.map((s) => `<a class="watch-alt" href="${safeHref(s.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.label)}</a>`).join("")}${followA(false)}</div>`;
 }
 
+/* THE LIVE TAB'S ROWS IN WORDS (2026-11-24; Ethan: "We want all the live
+   pages to match each other ... NFL is kind of like the one we want to go off
+   of"). A football card's rows read as our own lines (playsHTML footballRow,
+   "CIN Joe Burrow sacked by Tim Settle for a loss of 6 yds"); a basketball or
+   hockey card's read a label ("MEM · Zach Edey — Defensive Rebound"). The
+   game page's sentences are the sport's own file's (js/hoopscast.js cardSay;
+   js/rinkcast.js cardRows, over the league's own events the hockey card
+   carries): the file and its styles (which the game page then finds in
+   place) are fetched once the tab shows one of its games, and the tab is
+   drawn again when they land. Until then, or where they will not load, a
+   row reads as it did. */
+const LIVE_WORDS = { nba: ["js/hoopscast.js", "css/hoopscast.css", "QBHoops"], wnba: ["js/hoopscast.js", "css/hoopscast.css", "QBHoops"],
+                     cbb: ["js/hoopscast.js", "css/hoopscast.css", "QBHoops"], nhl: ["js/rinkcast.js", "css/rinkcast.css", "QBRink"] };
+const _liveWordFiles = {};
+//: A card's rows and their words: `{plays, say}`, the card's own plays and no words where the sport's file has none to give.
+function liveWords(sport, g) {
+  const f = LIVE_WORDS[sport], M = f && typeof window !== "undefined" ? window[f[2]] : null;
+  if (M && typeof M.cardSay === "function") return { plays: g.plays || [], say: M.cardSay(g, sport) };
+  const ice = M && typeof M.cardRows === "function" ? M.cardRows(g) : null;
+  return ice ? { plays: ice.rows, say: ice.say } : { plays: g.plays || [], say: null };
+}
+function liveWordsLoad(games) {
+  for (const sport of new Set((games || []).map((x) => x && x.sport))) {
+    const f = LIVE_WORDS[sport];
+    if (!f || window[f[2]] || _liveWordFiles[f[0]]) continue;
+    _liveWordFiles[f[0]] = "loading";
+    loadRoom(f[0], f[1]).then((ok) => {
+      _liveWordFiles[f[0]] = ok ? "ready" : "failed";
+      if (ok && state.view === "live") renderLiveBoard();
+    });
+  }
+}
+
 function liveCardHTML({ sport, g, bets }) {
   // Saved for later: the clock stays, the score, plays and line go.
   const hid = spoiledG(sport, g);
   const lv0 = g.live || {};
-  if (hid) g = { ...g, live: { state: lv0.state, period: lv0.period, clock: lv0.clock }, plays: [], line_track: null };
+  if (hid) g = { ...g, live: { state: lv0.state, period: lv0.period, clock: lv0.clock }, plays: [], rink_plays: [], line_track: null };
   const lv = g.live || {};
+  // Its rows and their words, as the game page says them (liveWords).
+  const words = liveWords(sport, g);
   const teams = teamsForSport(sport);
   const mark = (abbr) => teamMark(abbr, 34, teams, sport);
   const mlb = sport === "mlb";
@@ -28175,7 +28210,7 @@ function liveCardHTML({ sport, g, bets }) {
     ${hid ? `<p class="rail-quiet lb-why">Spoiler-free: the score and the plays wait until you open the game.</p>` : ""}
     ${linesGrid}
     ${pressureLiveHTML(sport, g)}
-    ${playsHTML({ ...g, plays: (g.plays || []).slice().reverse(),
+    ${playsHTML({ ...g, plays: words.plays.slice().reverse(), say: words.say,
       room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : "" })}
     ${lineTrackHTML(g)}
   </div>`;
@@ -30045,7 +30080,7 @@ const LIVE_TICK_MS = 5000;
 let _liveTick = null;
 let _liveDrawnSig = "";
 const liveSig = (games) => JSON.stringify((games || []).map(({ sport, g }) =>
-  [sport, g.away, g.home, g.live, g.plays, g.big, g.drive, g.players]).concat([(_liveAll.finals || []).length]));
+  [sport, g.away, g.home, g.live, g.plays, g.big, g.drive, g.players, g.rink_plays]).concat([(_liveAll.finals || []).length]));
 function liveTickArm(games) {
   clearTimeout(_liveTick);
   _liveTick = null;
@@ -30085,6 +30120,7 @@ async function renderLiveBoard() {
   const games = await fetchAllLive();
   _liveDrawnSig = liveSig(games);
   liveTickArm(games);
+  liveWordsLoad(games);
   /* THE BETS REDRAW THE MOMENT THE SCOREBOARD LANDS. `renderAll` draws
      the tracker (renderLivePicks) BEFORE it reaches this function, so on
      the first paint of the Live tab `_liveAll` is still empty and every
