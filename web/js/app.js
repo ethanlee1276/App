@@ -20287,7 +20287,10 @@ function injWhen(ts) {
   if (days < 1) return "today";
   if (days < 2) return "yesterday";
   if (days < 14) return `${Math.floor(days)}d ago`;
-  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  // Another year's filing says its year: college's 2020 row read "filed Nov 21", as if this week's (2026-11-24).
+  const then = new Date(ts);
+  return then.toLocaleDateString(undefined, { month: "short", day: "numeric",
+    ...(then.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
 }
 
 /* Rebuilt 2026-08-18 from a six-column agate table. Ethan, screenshot of

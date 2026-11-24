@@ -9528,6 +9528,14 @@ page says "Aaron Judge doubles off Garrett Crochet, 401 ft, 2 runs in." The word
 which the Live tab does not load; they are the shared file's now, and the card says them. Nothing to see until
 baseball is back in the spring.
 
+**ADN. A six-year-old injury line is off the college page** (step 905; 24 November). Nothing to run. College
+football's Injuries page held one player tonight: "Kahleil Jackson (undisclosed) is inactive for Saturday's game
+against Vanderbilt", Out for Florida, which ESPN filed on 21 November 2020 and never retired; the page printed it as
+"filed Nov 21", as if this week's. A designation filed more than a year ago is now dropped from the Injuries page and
+from the injury list the picks read, and any filing from another year shows its year. No other league had one: the
+oldest elsewhere were the WNBA's season-ending injuries from May, which stay. The page is empty for college until
+the conferences' reports fill it (decision 20).
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

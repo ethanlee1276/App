@@ -232,13 +232,14 @@ def live_injuries(rows: list[dict], now: float | None = None,
     abbreviation table by default; college passes its school resolver
     (load_cfb_injuries).
     """
-    from .espninjuries import current_rows, _parse_iso_ts
+    from .espninjuries import current_rows, drop_old_designations, _parse_iso_ts
     from .oddsapi import TEAM_ABBR
     team_key = team_key or TEAM_ABBR.get
     cutoff = (now if now is not None else time.time()) - LIVE_DESIGNATION_DAYS * 86400
     since = since or {}
     out: list[Injury] = []
-    for r in current_rows(rows):
+    # A row past a year is one the feed never retired (espninjuries.DESIGNATION_MAX_DAYS: college's 2020 "Out").
+    for r in drop_old_designations(current_rows(rows), now=now):
         # A cleared-to-play notice carries status "Active", which maps
         # to nothing below — the page's `is_return` test is not needed
         # here, and a second guard doing the same job would be one more

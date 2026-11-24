@@ -192,6 +192,26 @@ def drop_stale_returns(rows: list[dict], now: float | None = None) -> list[dict]
     return kept
 
 
+#: A DESIGNATION OLDER THAN A YEAR IS NOBODY'S STATUS NOW (2026-11-24). ESPN's college football feed held one row in
+#: the whole league that night: "Kahleil Jackson (undisclosed) is inactive for Saturday's game against Vanderbilt",
+#: Out for Florida, filed 21 November 2020, and the Injuries page showed it as "filed Nov 21". A league's own
+#: long-term list runs months, never a year (the WNBA's oldest that night, season-ending injuries from May, were 201
+#: days old); a row past a year is one the feed never retired.
+DESIGNATION_MAX_DAYS = 365
+
+
+def drop_old_designations(rows: list[dict], now: float | None = None) -> list[dict]:
+    """Every row but a dated one filed more than `DESIGNATION_MAX_DAYS` ago. An undated row is kept: its age is
+    not known, and the return notices' own cut (drop_stale_returns) already drops an undated return."""
+    cutoff = (now if now is not None else time.time()) - DESIGNATION_MAX_DAYS * 86400
+    kept = []
+    for r in rows:
+        stamp = _parse_iso_ts(r.get("date"))
+        if stamp is None or stamp >= cutoff:
+            kept.append(r)
+    return kept
+
+
 def _parse_iso_ts(stamp) -> float | None:
     """ESPN's ISO stamp → epoch seconds, or None for anything unparseable."""
     if not stamp:
