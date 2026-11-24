@@ -239,7 +239,11 @@ def build(now_rows, last_rows, sport: str = "nba", before: str | None = None) ->
     "nights"}`` from this season's and last season's log rows. ``nights`` is
     every team-night of both (`team_games`) — the scan's usage rates read
     it; it is the build's, never the page's."""
-    now_g, last_g = team_games(now_rows, sport), team_games(last_rows, sport)
+    return build_from_games(team_games(now_rows, sport), team_games(last_rows, sport), sport, before=before)
+
+
+def build_from_games(now_g: dict, last_g: dict, sport: str = "nba", before: str | None = None) -> dict:
+    """`build` from each season's team-nights (`team_games`), as `board_profiles` keeps them a season at a time."""
     prof = blend(season_profiles(now_g, before=before), season_profiles(last_g))
     # ONLY THE LEAGUE'S OWN CLUBS (2026-11-18: the NBA's matchup scan read "Rank
     # of 31"). A side outside the league with three nights on file (a visiting
@@ -270,11 +274,25 @@ def board_profiles(conn, sport: str, date: str) -> dict:
     """`build` for a board on ``date``: this season walk-forward, last season
     whole. Kept between builds while those two seasons' logs and the date
     hold (engine/logcache, 2026-11-09): 4.3 seconds of the NBA build's scan
-    stage at 09:34 on 9 November, the same two seasons summed on every build."""
+    stage at 09:34 on 9 November, the same two seasons summed on every build.
+
+    EACH SEASON'S NIGHTS KEPT ON THEIR OWN (`season_games`, step AEI, 24 November 2026). College basketball's
+    profiles took 268 seconds to read again at 12:45 ET that day, when 266 of this season's rows landed: the whole
+    of last season was read with them, and with the stat spreads' 81 seconds the build ran past its ten minutes
+    and was killed (it had been, on game nights, since 21 November). A night's rows now read this season's alone;
+    last season's nights are kept while its rows hold, and the profiles come out the same."""
     from .. import divisions, logcache, seasons
     season = seasons.season_of(sport, date)
     return logcache.memo(conn, "nba_team_profiles", sport, [season - 1, season],
-                         lambda: build(load_rows(conn, sport, season), load_rows(conn, sport, season - 1),
-                                       sport, before=date),
+                         lambda: build_from_games(season_games(conn, sport, season),
+                                                  season_games(conn, sport, season - 1), sport, before=date),
                          code=(__file__, divisions.__file__, seasons.__file__),
                          extra={"date": str(date)})
+
+
+def season_games(conn, sport: str, season: int) -> dict:
+    """`team_games` of one season's rows, kept while that season's rows hold (engine/logcache, step AEI)."""
+    from .. import divisions, logcache
+    return logcache.memo(conn, "nba_team_games", sport, [int(season)],
+                         lambda: team_games(load_rows(conn, sport, int(season)), sport),
+                         code=(__file__, divisions.__file__))

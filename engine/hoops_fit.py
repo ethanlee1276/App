@@ -98,6 +98,71 @@ def fit_stat_cvs(conn, league: str, seasons: list[int] | None = None,
                          code=__file__)
 
 
+#: The columns the fit reads: the stats it measures, and the minutes it has always read beside them.
+_READ = (*STATS, "min")
+
+
+def _read_values(conn, league: str, seasons: list[int] | None = None, null_season: bool = False) -> dict:
+    """``{(player, market): [values, in game order]}`` off the table in one read: the seasons asked (every season
+    for None), or with ``null_season`` the rows filed with no season. Each list in its season's and day's order,
+    so a player's columns line up night by night for the combos."""
+    q = ("SELECT player, market, season, period, value FROM player_game_logs WHERE sport=? AND market IN (%s)"
+         % ",".join("?" * len(_READ)))
+    args: list = [league, *_READ]
+    if null_season:
+        q += " AND season IS NULL"
+    elif seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    rows: dict[tuple, list] = {}
+    for r in conn.execute(q, args):
+        rows.setdefault((r["player"], r["market"]), []).append(
+            (-1 if r["season"] is None else int(r["season"]), str(r["period"] or ""), float(r["value"])))
+    return {k: [v for _s, _p, v in sorted(vals, key=lambda x: (x[0], x[1]))] for k, vals in rows.items()}
+
+
+def _stored_seasons(conn, league: str) -> tuple[list, bool]:
+    """(the league's stored seasons, ascending; whether it has rows filed with no season), each a seek on the
+    table's key (sport, season, ...) rather than a read of its rows."""
+    out: list = []
+    last = None
+    while True:
+        r = conn.execute("SELECT MIN(season) FROM player_game_logs WHERE sport=? AND season IS NOT NULL"
+                         + ("" if last is None else " AND season > ?"),
+                         (league,) if last is None else (league, last)).fetchone()
+        if r is None or r[0] is None:
+            break
+        last = int(r[0])
+        out.append(last)
+    nulls = conn.execute("SELECT 1 FROM player_game_logs WHERE sport=? AND season IS NULL LIMIT 1",
+                         (league,)).fetchone()
+    return out, nulls is not None
+
+
+def _values_by_player(conn, league: str, seasons: list[int] | None = None) -> dict:
+    """``{(player, market): [values]}`` for the seasons asked (every stored season for None).
+
+    EACH SEASON KEPT ON ITS OWN (step AEI, 24 November 2026): college basketball's spreads took 81 seconds to read
+    again at 12:45 ET that day, when 266 of this season's rows landed, because every season was read with them; with
+    the team profiles' 268 the build ran past its ten minutes and was killed. A night's rows now read this season's
+    alone, each other season kept while its rows hold (engine/logcache); the values, and so the spreads, are the
+    same as one read of every season. Rows filed with no season are read each time, first, as one read had them."""
+    from . import logcache
+    if seasons:
+        wanted, nulls = sorted({int(x) for x in seasons}), False
+    else:
+        wanted, nulls = _stored_seasons(conn, league)
+    parts = [_read_values(conn, league, null_season=True)] if nulls else []
+    parts += [logcache.memo(conn, "hoops_values", league, [season],
+                            lambda season=season: _read_values(conn, league, [season]), code=__file__)
+              for season in wanted]
+    out: dict[tuple, list] = {}
+    for part in parts:
+        for k, vals in part.items():
+            out.setdefault(k, []).extend(vals)
+    return out
+
+
 def _fit_stat_cvs(conn, league: str, seasons: list[int] | None = None,
                   min_games: int = 12) -> tuple[dict, dict]:
     """({stat: cv}, {stat: rows}) from this league's own player logs.
@@ -110,17 +175,7 @@ def _fit_stat_cvs(conn, league: str, seasons: list[int] | None = None,
     much larger, which would widen every distribution and quietly kill
     every edge on the board.
     """
-    by_player: dict[tuple, list] = {}
-    q = ("SELECT player, market, value FROM player_game_logs "
-         "WHERE sport=? AND market IN (%s)"
-         % ",".join("?" * (len(STATS) + 1)))
-    args: list = [league, *STATS, "min"]
-    if seasons:
-        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
-        args += list(seasons)
-    for r in conn.execute(q, args):
-        by_player.setdefault((r["player"], r["market"]), []).append(
-            float(r["value"]))
+    by_player = _values_by_player(conn, league, seasons)
 
     # PRA and the combos are sums of columns we already store; deriving
     # them here keeps the history and the line referring to the same numbers.
