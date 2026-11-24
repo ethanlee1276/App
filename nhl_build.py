@@ -1036,6 +1036,19 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
                 t["sides"][team]["injuries"] = inj_by_team.get(team, [])
             t["pulled"] = sorted(n for n in pulled_names if (players.get(n) or {}).get("team") in (gd["home"], gd["away"]))
             gd["nhl_tape"] = t
+    # TEAM SHAPES, AS THE NFL'S GAME PAGE DRAWS THEM (2026-11-24; Ethan: "We want all the live pages to match each
+    # other"): goals scored and allowed, the last five margins, home edge and steadiness as league percentiles off
+    # the scores table, this season blended with last (engine/teamshape).
+    try:
+        from engine import teamshape as _tshape
+        from engine.seasons import season_of as _shape_season_of
+        _shape_season = _shape_season_of("nhl", date)
+        _shapes = _tshape.blended_shapes(conn, "nhl", _shape_season)
+        if _shapes:
+            out["team_shapes"] = _shapes
+            out["team_shapes_season"] = _shape_season
+    except Exception as _shx:                               # noqa: BLE001
+        print(f"  ⚠️  team shapes skipped: {_shx}")
     # THE CORRELATION ENGINE: two Edge plays on one game that argue
     # opposite ways — the weaker one is passed.
     from engine.nhl import edgehunter as EH

@@ -9566,6 +9566,17 @@ meets the other's at the far ends of the FBS. It moves no number. The heading pr
 there are some ("offense against defense" here). Why CFBD's scan came up empty is on the box's log ("Matchup
 scan: N of M game(s)"); a missing or spent CFBD key would do it.
 
+**ADQ. The NBA's, the WNBA's and hockey's game pages draw the Team shapes radar** (step 908; 24 November). Nothing
+to run. Side by side tonight, an NFL game page carries Lines & insights, the Game report, the Game plan, the Matchup
+scan, Team shapes and Edge picks; the NBA's and hockey's carry the report, the scan and Edge picks. The Team shapes
+radar (each side's points or goals scored and allowed, its last five margins, home edge and steadiness, as league
+percentiles off the scores table, this season blended with last) is any league's, and only the NFL's builder
+attached it; the basketball and hockey builders now do, and the note under it says goals for hockey and leaves a new
+starting QB to football. College basketball's and college football's scores mix in schools outside the top
+division, whose few games would bend every percentile, so they wait for a filter. The Game plan stays football's
+(it is built on the football scan's units), and Lines & insights shows on any league's page when its lines are not
+already on the page.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

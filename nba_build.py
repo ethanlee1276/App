@@ -2015,6 +2015,24 @@ def main() -> None:
                       f"{args.league} --seasons 2025 --refresh)")
         except Exception as _nsx:                           # noqa: BLE001
             print(f"  ⚠️  NBA matchup scan skipped: {_nsx}")
+        # TEAM SHAPES, AS THE NFL'S GAME PAGE DRAWS THEM (2026-11-24; Ethan: "We want all the live pages to match
+        # each other ... NFL is kind of like the one we want to go off of"). Five measured axes a side — points
+        # scored and allowed, the last five margins, home edge, steadiness — as league percentiles off the scores
+        # table, this season blended with last (engine/teamshape). The radar is any league's; the NBA's and the
+        # WNBA's are whole leagues. College basketball's scores mix in schools outside Division I, whose few games
+        # would bend every percentile, so it waits for a filter of its own.
+        if args.league in ("nba", "wnba"):
+            try:
+                from engine import teamshape as _tshape
+                from engine.seasons import season_of as _shape_season_of
+                _shape_season = _shape_season_of(args.league, args.date)
+                _shapes = _tshape.blended_shapes(conn, args.league, _shape_season)
+                if _shapes:
+                    out["team_shapes"] = _shapes
+                    out["team_shapes_season"] = _shape_season
+                    print(f"  Team shapes: {len(_shapes)} team(s), {_shape_season} blended with {_shape_season - 1}.")
+            except Exception as _shx:                       # noqa: BLE001
+                print(f"  ⚠️  team shapes skipped: {_shx}")
 
         _clock.mark("scan + team profiles")
         # THE GAME LINES PINNACLE QUOTED, for the Pick of the Day. This

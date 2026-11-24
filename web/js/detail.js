@@ -2485,8 +2485,9 @@ function renderGamePage() {
         <tbody>${rows}</tbody></table></div>
       <p class="gp-sim-note">${_sh.blend ? `Percentile against the whole league on this
         season and last, blended the way the matchup scan blends its ranks — this
-        season counting for more as its games come in, faster for a new starting QB` : "Percentile against the whole league on last season’s finals"}:
-        offense is points scored, defense is points allowed (fewer ranks
+        season counting for more as its games come in${/* A new starting QB is football's (engine/teamchange). */
+        state.sport === "nfl" || state.sport === "cfb" ? ", faster for a new starting QB" : ""}` : "Percentile against the whole league on last season’s finals"}:
+        offense is ${state.sport === "nhl" ? "goals" : "points"} scored, defense is ${state.sport === "nhl" ? "goals" : "points"} allowed (fewer ranks
         higher), form is the last five margins, home edge is home-minus-road
         margin, steadiness is low variance. Measured shape, not a projection.</p>
     </div>`;
