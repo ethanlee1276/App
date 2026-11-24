@@ -9838,6 +9838,19 @@ logs' guess, never names a quarterback for a back's carries, and claims no grade
 for college. The season's games are the lineup step's own kept read, handed to the reports on the board's working
 key (never published); the heartbeat's "stepup" counts now include college's.
 
+**AEL, measured: week 12 cannot test the NFL cap yet** (24 November; nothing to run). The NFL Most Likely picks
+of week 12 we showed at 72% or more hit 14 of 28 where we showed 88.5% (picks shown 65-72% hit 66.3% where we showed
+67.8%, and those under 65% hit 60.6% where we showed 57.0%). Nearly every one was an alternate-line rung far from
+the main line: a back over 0.5 catches, a quarterback over 3.5 rushing yards, a kicker over 0.5 field goals or
+under 10.5 kicking points, shown at 80% to 99.9% while its own price said 55% to 70%. The cap (step AAV, decision
+17: at most ten points over the price) went live on 21 November, but week 12's Sunday picks were posted from 17 to
+20 November, and a posted pick keeps the chance it went up at (engine/likelyboard.harmonize), so they kept their
+pre-cap chances. Week 13 is the first week posted under the cap. Before it, picks this far over their price hit 47%
+(65 of 137), below their own price's chance as well as ours, so the cap may still show them too high; that is
+measured on 1 December (a check-in is set) and put to Ethan with the numbers: keep the cap, or hold these picks on
+paper until their record says otherwise. The NBA's and the NHL's boards had no such picks the same week (nothing
+shown at 80% or more; 65-72% hit 68.1% and 70.5% where we showed 67.6% and 68.8%).
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 
