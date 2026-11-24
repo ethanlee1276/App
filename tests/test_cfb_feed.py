@@ -202,15 +202,17 @@ def test_the_note_names_the_price_and_the_shortfall():
 
     def fake_fetch(eid, key, markets=None, books=None, ttl=300, sport="nfl",
                    cache_only=False):
+        if cache_only:                       # nothing on disk: never bought
+            raise O.OddsAPIError("no cached copy")
         return {"bookmakers": []}, O.Quota()
     real = O.fetch_event_odds
     O.fetch_event_odds = fake_fetch
     try:
         _s, _l, note, _age = B.attach_player_quotes(
-            games, priced, cache_only=True, now=now, cap=2)
+            games, priced, cache_only=False, now=now, cap=2)
     finally:
         O.fetch_event_odds = real
-    assert "2 of 6 eligible" in note
+    assert "2 of 6 eligible game(s) priced, 2 bought" in note, note
     assert f"{B.CREDITS_PER_EVENT} credit(s) each" in note
     assert "4 left unpriced" in note
 
@@ -223,17 +225,21 @@ def test_a_pull_nobody_can_afford_buys_nothing_rather_than_guessing():
     calls = []
 
     def fake_fetch(*a, **k):
-        calls.append(a)
+        calls.append((a, bool(k.get("cache_only"))))
+        if k.get("cache_only"):              # nothing on disk: never bought
+            raise O.OddsAPIError("no cached copy")
         return {"bookmakers": []}, O.Quota()
     real = O.fetch_event_odds
     O.fetch_event_odds = fake_fetch
     try:
         scorers, lines, note, _age = B.attach_player_quotes(
-            games, priced, cache_only=True, now=now, cap=0)
+            games, priced, cache_only=False, now=now, cap=0)
     finally:
         O.fetch_event_odds = real
-    assert calls == [] and scorers == {} and lines == {}
-    assert "0 of 1 eligible" in note and "1 left unpriced" in note
+    # Nothing bought; the game is only looked for on disk (step AEN).
+    assert calls and all(cached for _a, cached in calls), calls
+    assert scorers == {} and lines == {}
+    assert "0 of 1 eligible game(s) priced, 0 bought" in note and "1 left unpriced" in note, note
 
 
 def test_an_unmeasured_prop_shelf_explains_itself():

@@ -442,6 +442,45 @@ def player_event_cap(kicks: list, now_ts: float) -> int:
     return max(0, int(cap))
 
 
+#: A GAME PRICED THIS RECENTLY GIVES ITS PLACE IN A PULL TO ONE STILL WAITING (step AEN, 24 November 2026). Ethan's
+#: decisions that day: A, "yes more" college games priced, and B, "we always want every sport posting props and bets
+#: and game reports at all times for every games so we learn and dial in and calibrate". A pull buys at most twelve
+#: games (`player_event_cap`), the ranked and power-conference ones first, and it bought the same twelve at every pull
+#: of the day until they kicked off, so on a sixty-game Saturday the games below them were priced only once the top
+#: ones had started, if at all. Now a game whose last price is younger than this, with its kickoff further off than
+#: this, is read from the cache for nothing and its place goes to the next game waiting; in its last REPRICE_AFTER_S
+#: before kickoff a game is bought every pull, as before. A price is then at most this plus one pull's gap old when
+#: it is bought again, inside the six hours it stays bettable (oddsapi.MAX_PROP_PRICE_AGE). The pull spends what it
+#: did: `cap` games at most. TWO AND A HALF HOURS, chosen on a simulated sixty-game Saturday of four waves at twelve
+#: games a pull (tests/test_a_saturday_prices_more_college_games.py), over three pull schedules: the pacer's own
+#: (7 AM, noon, 3 and 6 PM and a readiness pull three hours before each wave), one every two hours, and an uneven
+#: one. Games priced at least once went from 29 or 30 of 60 to 39-56 at 2.5 hours (2 hours: 29-45, no gain at all
+#: with pulls two hours apart; 3 hours: 35-45), the games priced within two hours of their kickoff never fell below
+#: the old rule's count, and no price was over six hours old at kickoff under any of them. A simulation of the
+#: schedule, not a measured Saturday: the heartbeat's college note says what each real pull bought and held.
+REPRICE_AFTER_S = int(2.5 * 3600)
+
+
+def pull_plan(cands: list, ages: dict, cap: int, now, until: float | None = None,
+              cache_only: bool = False) -> tuple[set, int, int]:
+    """(the event ids this pull buys, how many games gave their place, how many games wanted a buy).
+
+    ``cands`` are `attach_player_quotes`' candidates in its order (tonight's first, then attention tier, then
+    kickoff); ``ages`` each event's cached payload age in seconds, None for nothing on disk. A game gives its place
+    when its price is younger than REPRICE_AFTER_S and its kickoff more than REPRICE_AFTER_S off. A game after
+    tonight's slate (``until``) is never bought, and a cached build buys nothing."""
+    held, want = 0, []
+    for _tier, _pri, ko, _i, event_id in cands:
+        if until is not None and ko.timestamp() > until:
+            continue
+        age = ages.get(event_id)
+        if age is not None and age < REPRICE_AFTER_S and (ko - now).total_seconds() > REPRICE_AFTER_S:
+            held += 1
+            continue
+        want.append(event_id)
+    return (set() if cache_only else set(want[:max(0, int(cap))])), held, len(want)
+
+
 def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
                          api_key: str | None = None,
                          now=None, cap: int | None = None,
@@ -488,7 +527,10 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
 
     ``cap`` is the number of games this pull may buy; None asks the
     budget pacer. Games are ordered by attention tier, then by whether
-    the game board has a spread and a total on them, then by kickoff.
+    the game board has a spread and a total on them, then by kickoff. A
+    game priced in the last REPRICE_AFTER_S and further than that from
+    its kickoff gives its place to the next one waiting, and every game
+    not bought is read from the cache (`pull_plan`, step AEN).
 
     THE SPREAD/TOTAL CHECK IS A PREFERENCE HERE AND USED TO BE A FILTER.
     It was the touchdown model's requirement — no implied total, no
@@ -519,7 +561,7 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         cands.append((_TIER_ORDER.get(attention_tier(g), 9),
                       0 if priceable else 1, ko, i, entry["event_id"]))
     # Tonight's games first (``until``), so a capped pull spends its cap on
-    # them and a cached build reads the same games the paid one bought.
+    # them; a cached build reads every game's last paid price (`pull_plan`).
     cands.sort(key=lambda c: (until is not None and c[2].timestamp() > until,
                               c[0], c[1], c[2]))
     from engine.pricedplayers import Tracker as _PricedTracker
@@ -529,45 +571,64 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         cap = player_event_cap([k.timestamp() for _t, _p, k, _i, _e in cands],
                                t.timestamp())
     cap = max(0, int(cap))
+    # WHICH GAMES THIS PULL BUYS, AND WHICH IT READS FOR NOTHING (step AEN, `pull_plan`): a game priced in the last
+    # REPRICE_AFTER_S, still more than that from its kickoff, gives its place to the next game waiting, and every
+    # game not bought is read from the cache, so a cached build shows every game's last paid price.
+    # BEFORE ANY CALL, because a paid pull rewrites the file and the age we want is the age of what this build is
+    # about to READ.
+    ages = {c[4]: oddsapi.event_cache_age(c[4], PLAYER_MARKETS, sport="cfb") for c in cands}
+    buying, held_n, wanting = pull_plan(cands, ages, cap, t, until=until, cache_only=cache_only)
 
     scorers: dict = {}
     lines: dict = {}
     pulled = 0
+    bought = 0                         # games this pull asked the API for
     oldest = None                      # seconds; the stalest payload used
     stale = 0                          # payloads refused: past the SHOW ceiling
     stale_oldest = 0.0
     shown_stale = 0                    # payloads kept but past the FRESH bar
     shown_stale_oldest = 0.0
     read_later = 0                     # after tonight's slate: read, not bought
-    for _tier, _pri, _ko, i, event_id in cands[:cap]:
-        # BEFORE THE CALL, because a paid pull rewrites the file and the
-        # age we want is the age of what this build is about to READ.
-        age = oddsapi.event_cache_age(event_id, PLAYER_MARKETS, sport="cfb")
-        this_cache = cache_only or (until is not None and _ko.timestamp() > until)
-        read_later += int(this_cache and not cache_only)
+    live_ok = True                     # a live failure ends the spend, not the build
+    for _tier, _pri, _ko, i, event_id in cands:
+        age = ages.get(event_id)
+        later = until is not None and _ko.timestamp() > until
+        this_cache = cache_only or not (live_ok and event_id in buying)
+        read_later += int(later and not cache_only)
         try:
             payload, _quota = oddsapi.fetch_event_odds(
                 event_id, api_key, markets=PLAYER_MARKETS,
                 sport="cfb", ttl=1800, cache_only=this_cache)
         except oddsapi.OddsAPIError:
+            payload = None
             if not this_cache:
-                break                  # a live failure ends the spend, not the build
+                # A LIVE FAILURE ENDS THE SPEND, NOT THE BUILD: this game and every one after it are read from the
+                # cache, today's name first (it ended the loop, until step AEN, when no game after the cap was
+                # read at all).
+                live_ok, this_cache = False, True
+                try:
+                    payload, _quota = oddsapi.fetch_event_odds(
+                        event_id, api_key, markets=PLAYER_MARKETS,
+                        sport="cfb", ttl=1800, cache_only=True)
+                except oddsapi.OddsAPIError:
+                    payload = None
             # THE DEPLOY-DAY MISS: no payload under today's name yet,
             # but the last paid pull's payload is on disk under the name
             # the request had then. Every earlier spelling is tried,
             # newest first (PLAYER_MARKETS_FALLBACKS). Same fallback as
             # `oddsapi.apply_odds_to_slate`.
-            payload = None
-            for _markets in PLAYER_MARKETS_FALLBACKS:
-                try:
-                    payload, _quota = oddsapi.fetch_event_odds(
-                        event_id, api_key, markets=_markets,
-                        sport="cfb", ttl=1800, cache_only=True)
-                    break
-                except oddsapi.OddsAPIError:
-                    continue
+            if payload is None:
+                for _markets in PLAYER_MARKETS_FALLBACKS:
+                    try:
+                        payload, _quota = oddsapi.fetch_event_odds(
+                            event_id, api_key, markets=_markets,
+                            sport="cfb", ttl=1800, cache_only=True)
+                        break
+                    except oddsapi.OddsAPIError:
+                        continue
             if payload is None:
                 continue               # never paid for — nothing on disk
+        bought += int(not this_cache)  # the API answered this game's call
         # A LIVE PULL IS ZERO SECONDS OLD whatever was on disk before it.
         # `_request` only serves the cache under `cache_only` or inside
         # the 30-minute TTL, and both of those are what `age` measures.
@@ -640,8 +701,10 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
 
     _priced.save()
     note = (f"player quotes: {pulled} of {len(cands)} eligible game(s) "
-            f"pulled at {CREDITS_PER_EVENT} credit(s) each"
+            f"priced, {bought} bought at {CREDITS_PER_EVENT} credit(s) each"
             + (" (cached)" if cache_only else "")
+            + (f" · {held_n} priced in the last {REPRICE_AFTER_S / 3600:g}h read from the cache, "
+               f"their places given to games waiting" if held_n and not cache_only else "")
             + (f" · {read_later} after tonight's slate left to the cache, "
                f"not bought" if read_later else ""))
     # HOW OLD THE PRICES ARE, not merely that they came from the cache.
@@ -660,14 +723,19 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
                  + (f"{hrs / 24.0:.1f} day(s)" if hrs >= 24 else f"{hrs:.1f} hour(s)")
                  + " old — college buys player markets per event, so a game "
                    "outside the cap keeps the last pull that reached it")
-    if cap < len(cands):
+    unpriced = len(cands) - pulled - stale
+    if unpriced > 0:
         # SAID ON THE BOARD, NOT ONLY IN THE LOG. A college Saturday the
         # budget can only half-buy looks exactly like a college Saturday
         # the books did not price, and the difference is the whole
-        # question a reader is asking.
-        note += (f" · {len(cands) - cap} left unpriced — the pull is capped "
-                 f"at {cap} game(s) by attention tier "
-                 f"({'budget pacing' if cap < PLAYER_EVENT_CAP else 'board policy'})")
+        # question a reader is asking. The games with no price at all:
+        # never bought, or nothing usable on disk (step AEN: every game
+        # not bought is read from the cache, so the cap alone no longer
+        # says how many).
+        note += (f" · {unpriced} left unpriced — "
+                 + (f"the pull is capped at {cap} game(s) by attention tier "
+                    f"({'budget pacing' if cap < PLAYER_EVENT_CAP else 'board policy'})"
+                    if wanting > cap else "no paid pull has reached them yet"))
     if shown_stale:
         # SHOWN, AND SAID SO. Between the freshness bar and the show
         # ceiling the last paid pull's real price is the best number

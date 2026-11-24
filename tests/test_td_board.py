@@ -566,8 +566,11 @@ def test_cfb_no_quotes_no_usage_no_picks():
 
 # --- the capped CFB quote pull ----------------------------------------------
 
-def _quote_pull(games, priced, now, cap=None, calls=None):
-    """Run `attach_player_quotes` against a stubbed fetch."""
+def _quote_pull(games, priced, now, cap=None, calls=None, cache_only=True, on_disk=None, live=None):
+    """Run `attach_player_quotes` against a stubbed fetch. A cached read of
+    e2 finds nothing under today's name; ``on_disk`` (a set of event ids,
+    None for all but e2) says which events a cached read finds at all, and
+    ``live`` (a list) collects the events a paid call bought."""
     sys.path.insert(0, ROOT)
     import cfb_build as B
     seen = calls if calls is not None else []
@@ -575,13 +578,17 @@ def _quote_pull(games, priced, now, cap=None, calls=None):
     def fake_fetch(eid, key, markets=None, books=None, ttl=300, sport="nfl",
                    cache_only=False):
         seen.append((eid, tuple(markets or ()), sport))
-        if eid == "e2":
+        if not cache_only:
+            if live is not None:
+                live.append(eid)
+            return SCORER_EVENT, oa.Quota("491", "9")
+        if eid == "e2" or (on_disk is not None and eid not in on_disk):
             raise oa.OddsAPIError("no cached copy")
         return SCORER_EVENT, oa.Quota("491", "9")
     real = oa.fetch_event_odds
     oa.fetch_event_odds = fake_fetch
     try:
-        return B.attach_player_quotes(games, priced, cache_only=True,
+        return B.attach_player_quotes(games, priced, cache_only=cache_only,
                                       now=now, cap=cap)
     finally:
         oa.fetch_event_odds = real
@@ -617,20 +624,22 @@ def test_attach_player_quotes_filters_caps_and_survives_cache_misses():
     # total is no longer struck out: it cannot carry a TOUCHDOWN price
     # (no implied total, no script) but a yardage prop needs neither, so
     # it goes last in the queue instead of off it.
-    # One call per capped game, plus the deploy-day fallback's second
-    # ask for the event with no cached payload under the ladder's name.
-    assert len({e for e, _m, _s in calls}) == B.PLAYER_EVENT_CAP, calls
+    # A cached build reads every eligible game's last paid price (step
+    # AEN: the cap is what a paid pull may BUY), one call a game, plus the
+    # deploy-day fallback's asks for the event with no cached payload
+    # under today's name.
+    assert len({e for e, _m, _s in calls}) == 14, calls
     # The cache miss costs four more reads, never a credit: every
     # earlier spelling of the request, newest first (the thirteen before
     # first touchdown, 2026-10-31; that morning's twelve, the pre-ladder
     # base, the pre-volume nine — cfb_build.PLAYER_MARKETS_FALLBACKS).
-    assert len(calls) == B.PLAYER_EVENT_CAP + len(B.PLAYER_MARKETS_FALLBACKS), calls
+    assert len(calls) == 14 + len(B.PLAYER_MARKETS_FALLBACKS), calls
     assert len(B.PLAYER_MARKETS_FALLBACKS) == 4
     assert B.PLAYER_MARKETS_FALLBACKS[0] == [m for m in B.PLAYER_MARKETS if m != "player_1st_td"]
     # The cache miss was skipped, not fatal; everything else parsed —
     # and `pulled` counts what actually answered.
-    assert len(out) == B.PLAYER_EVENT_CAP - 1, sorted(out)
-    assert f"{B.PLAYER_EVENT_CAP - 1} of 14 eligible" in note, note
+    assert len(out) == 13, sorted(out)
+    assert "13 of 14 eligible game(s) priced, 0 bought" in note, note
 
 
 def test_one_call_buys_every_player_market_for_that_game():
@@ -640,10 +649,11 @@ def test_one_call_buys_every_player_market_for_that_game():
     sys.path.insert(0, ROOT)
     import cfb_build as B
     now = dt.datetime(2026, 8, 29, 12, 0, tzinfo=dt.timezone.utc)
-    calls = []
-    _quote_pull(*_slate_of(), now=now, cap=2, calls=calls)
-    assert len(calls) == 2
-    for _eid, markets, sport in calls:
+    calls, live = [], []
+    _quote_pull(*_slate_of(), now=now, cap=2, calls=calls, cache_only=False, live=live)
+    assert len(live) == 2, live
+    bought = [c for c in calls if c[0] in live][:2]
+    for _eid, markets, sport in bought:
         assert sport == "cfb"
         assert list(markets) == B.PLAYER_MARKETS
         assert "player_anytime_td" in markets and "player_rush_yds" in markets
@@ -671,15 +681,16 @@ def test_the_ranked_games_are_bought_first():
         games[i]["weekday"] = "saturday"
     for i in range(4, 16):
         games[i]["weekday"] = "tuesday"          # → low
+    live = []
+    _quote_pull(games, priced, now, cap=4, cache_only=False, live=live)
+    assert B._TIER_ORDER["marquee"] < B._TIER_ORDER["low"]
+    assert sorted(live) == ["e0", "e1", "e2", "e3"], live
+    # In a cached build the one event with no cached payload under today's
+    # name is asked again under each earlier spelling (the deploy-day
+    # fallback, newest first) and nothing else is asked twice.
     calls = []
     _quote_pull(games, priced, now, cap=4, calls=calls)
-    assert B._TIER_ORDER["marquee"] < B._TIER_ORDER["low"]
-    assert sorted({e for e, _m, _s in calls}) == ["e0", "e1", "e2", "e3"], calls
-    # The one event with no cached payload under today's name is asked
-    # again under each earlier spelling (the deploy-day fallback, newest
-    # first) and nothing else is asked twice.
-    twice = [e for e in ("e0", "e1", "e2", "e3")
-             if sum(1 for c in calls if c[0] == e) > 1]
+    twice = sorted({e for e, _m, _s in calls if sum(1 for c in calls if c[0] == e) > 1})
     assert twice == ["e2"], calls
     assert [m for e, m, _s in calls if e == "e2"][1:] == [tuple(x) for x in B.PLAYER_MARKETS_FALLBACKS]
 
@@ -689,7 +700,9 @@ def test_a_capped_pull_says_what_it_left_unpriced():
     Saturday the books did not price, and the difference is the whole
     question a reader is asking."""
     now = dt.datetime(2026, 8, 29, 12, 0, tzinfo=dt.timezone.utc)
-    _out, _lines, note, _age = _quote_pull(*_slate_of(), now=now, cap=3)
+    # A paid pull of three where no other game has a price on disk.
+    _out, _lines, note, _age = _quote_pull(*_slate_of(), now=now, cap=3, cache_only=False, on_disk=set())
+    assert "3 of 14 eligible game(s) priced, 3 bought" in note, note
     assert "11 left unpriced" in note, note
     assert "budget pacing" in note, note
 

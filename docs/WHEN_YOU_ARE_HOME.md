@@ -9883,6 +9883,25 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AEN. College football's Saturday prices more games for the same credits** (step 930; 24 November). Nothing to
+run. Decision A, done the way that costs nothing: a pull buys player prices for at most 12 games, the ranked and
+power-conference games first, and it bought those same 12 at every pull of the day until they kicked off, so on a
+60-game Saturday the games below them were priced only once the top ones had started, if at all. Now a game priced
+in the last two and a half hours, with its kickoff further off than that, gives its place in the pull to the next
+game waiting, and its price stays on the board from the cache for nothing. In its last two and a half hours before
+kickoff a game is bought at every pull, as before, and every price is bought again before it passes the six hours a
+price stays bettable. Each pull still buys 12 games at most. A cached build now shows every game's last paid price,
+not only the top 12's.
+
+- **What it should do, by a simulation of a Saturday** (not yet a measured one): 60 games in four waves, 12 games a
+  pull, at our own pull times. Games priced at least once went from 29 of 60 to 49, for 89 buys where there were 90, and the
+  games priced within two hours of their kickoff did not drop (16 before, 17 after). Over two other pull schedules it
+  went from 29-30 to 39-47 and 40-45, and no game's price was over six hours old at kickoff in any of them.
+- **Friday's games try it first** (Black Friday has a full college slate), then rivalry Saturday. The college
+  board's odds note says what each real pull did: "player quotes: N of M eligible game(s) priced, 12 bought at 14
+  credit(s) each · K priced in the last 2.5h read from the cache, their places given to games waiting". I'll read it
+  off the live board on Friday and Saturday.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 

@@ -373,7 +373,8 @@ def test_college_puts_tonights_games_first_and_buys_only_them():
             _Swap(pricedplayers, "Tracker", Tracker):
         *_, note, _age = CB.attach_player_quotes(games, priced, cache_only=False, now=fri_3pm,
                                                  cap=1, until=until)
-        assert calls == [("ev-fri-mac", False)], ("the cap's one game is tonight's", calls)
+        assert calls == [("ev-fri-mac", False), ("ev-sat-marquee", True)], \
+            ("the cap's one game is tonight's; tomorrow's is read from the cache (step AEN)", calls)
         calls.clear()
         *_, note, _age = CB.attach_player_quotes(games, priced, cache_only=False, now=fri_3pm,
                                                  cap=12, until=until)
@@ -381,7 +382,8 @@ def test_college_puts_tonights_games_first_and_buys_only_them():
         assert "1 after tonight's slate left to the cache, not bought" in note, note
         calls.clear()
         CB.attach_player_quotes(games, priced, cache_only=False, now=fri_3pm, cap=1)
-        assert calls == [("ev-sat-marquee", False)], "no bound: attention tier first, as before"
+        assert calls == [("ev-sat-marquee", False), ("ev-fri-mac", True)], \
+            "no bound: attention tier first, as before, and the rest read from the cache"
 
 
 def test_the_launcher_hands_tonights_end_to_the_weekly_builds():
