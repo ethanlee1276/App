@@ -3413,18 +3413,28 @@ def _with_name(player, why: str) -> str:
     return f"for {player}, {w}"
 
 
+#: A reason about a player's own position (engine/gamescan's defense-against-position lines), by his position: it
+#: says more about him than a team-wide one, and keeps a quarterback, a receiver and a tight end of one club from all
+#: reading "the Lions give up the fourth-most passing yards" (step AEH).
+OWN_POSITION_WORDS = {"WR": "to wide receivers", "TE": "to tight ends", "RB": "to running backs",
+                      "FB": "to running backs", "QB": "to quarterbacks"}
+
+
 def _best_reason(c: Ctx, r: dict, tone: str) -> str:
-    """The one reason a short line gives for a player: a matchup over his
-    workload, and either over the game's line, which every player in the
-    game shares."""
+    """The one reason a short line gives for a player: one about his own
+    position first, then a matchup over his workload, and either over the
+    game's line, which every player in the game shares."""
     pool = [str(x) for x in (r.get("pro") if tone == "up" else r.get("con")) or [] if x]
     if not pool:
         return ""
+    own = OWN_POSITION_WORDS.get(str(r.get("pos") or "").upper())
 
     def rank(x):
         low = x.lower()
-        return (0 if any(w in low for w in ("most", "fewest", "allow", "give", "concede", "faces", "against"))
-                else 2 if low.startswith("the lines expect") else 1)
+        if own and own in low:
+            return 0
+        return (1 if any(w in low for w in ("most", "fewest", "allow", "give", "concede", "faces", "against"))
+                else 3 if low.startswith("the lines expect") else 2)
     return _clause(named(c, short_reason(sorted(pool, key=rank)[0])), _known_names(c))
 
 
@@ -3545,9 +3555,17 @@ def scorer_sentence(c: Ctx) -> str:
     return _sentence("Likeliest to score: " + ". ".join([bits[0]] + [cap(b) for b in bits[1:]]))
 
 
+#: BOTH TEAMS IN THE BIG-DAY LINE (step AEH; Ethan, 24 November, on a Bears-Lions report that named three Bears, each
+#: for the same reason, and no Lion: "A team like the lions is still a highs scoring team so too have data and shit
+#: then say nothing about the lions in the report doesn't make sense"). Each team's best read takes a seat before the
+#: rest fill in by strength (breakouts.team_balanced); players of one team who share a reason are named together, the
+#: reason said once (`_clauses`); a player's own-position reason goes before a team-wide one (`_best_reason`); and a
+#: football team with no favorable read is still said, by who its offense runs through and the points the lines
+#: expect it to score (`quiet_team_line`), with no matchup claimed for it.
 def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_only: bool = False) -> list:
     """Who could have a big day and who could have a hard one, each with
-    the reason that says why."""
+    the reason that says why; both teams (step AEH, above)."""
+    from .breakouts import team_balanced
     out = []
     # A man who may sit is never the game's headline (engine/availability):
     # his card says why, in Players to watch.
@@ -3556,16 +3574,83 @@ def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_
     # The matchups first, a spot after (step ACW: the wind or the lines are every player's in the game).
     shine.sort(key=lambda r: (r.get("read") != "breakout", bool(r.get("spot")), -_volume(r), -len(r.get("pro") or [])))
     if shine:
-        out.append("Who could have a big day: " + ". ".join(player_clause(c, r, "up") for r in shine[:shine_n]))
+        out.append("Who could have a big day: " + _clauses(c, team_balanced(shine, shine_n, c.teams), "up"))
+        for t in c.teams:
+            if not any(r.get("team") == t for r in shine):
+                line = quiet_team_line(c, t, reads)
+                if line:
+                    out.append(line)
     # A go-to scorer is not a man to have a hard day (engine/readlogic rule
     # 3): his card says the yards are tough and the touchdowns still his.
     struggle = [r for r in reads if r.get("read") in ("tough", "avoid") and (not key_only or _is_key(r))
                 and not _go_to(r)]
     struggle.sort(key=lambda r: (r.get("read") != "avoid", bool(r.get("spot")), -_volume(r), -len(r.get("con") or [])))
     if struggle:
-        out.append("Who could have a hard day: " + ". ".join(player_clause(c, r, "down")
-                                                             for r in struggle[:struggle_n]))
+        out.append("Who could have a hard day: " + _clauses(c, team_balanced(struggle, struggle_n, c.teams), "down"))
     return out
+
+
+def _clauses(c: Ctx, rows: list, tone: str) -> str:
+    """The players of a big-day (or hard-day) line, best first, each with his reason; players of one team who share
+    a reason named together, the reason said once: "the Bears' Caleb Williams (quarterback, a breakout candidate)
+    and Rome Odunze (wide receiver) — the Lions give up the fourth-most passing yards (253 a game)"."""
+    groups: list = []
+    for r in rows:
+        why = _best_reason(c, r, tone)
+        g = next((g for g in groups if why and g[2] == why and g[0] == r.get("team")), None)
+        if g is not None:
+            g[1].append(r)
+        else:
+            groups.append([r.get("team"), [r], why])
+    parts = []
+    for t, rs, why in groups:
+        if len(rs) == 1:
+            parts.append(player_clause(c, rs[0], tone))
+            continue
+        names = []
+        for r in rs:
+            tags = [w for w in (pos_word(c, r.get("pos")),
+                                "a breakout candidate" if r.get("read") == "breakout" else "") if w]
+            names.append(f"{r.get('player')}" + (f" ({', '.join(tags)})" if tags else ""))
+        parts.append(f"{team_owner(c, t)} {_join(names)}" + (f" — {why}" if why else ""))
+    return ". ".join([parts[0]] + [cap(x) for x in parts[1:]]) if parts else ""
+
+
+#: The leagues whose players' share of the work the report can say (`_role_line`: targets, carries, attempts).
+QUIET_TEAM_SPORTS = ("nfl", "cfb")
+
+
+def quiet_team_line(c: Ctx, t: str, reads: list) -> str:
+    """A TEAM WITH NO FAVORABLE MATCHUP STILL HAS AN OFFENSE (step AEH): who it runs through, by his share of the
+    work, and the points the lines expect it to score. "No Lion has a favorable matchup by our numbers, but their
+    offense still runs through Amon-Ra St. Brown (28% of the targets) and Jahmyr Gibbs (55% of the carries), and the
+    lines expect them to score about 26." No matchup is claimed; a player the scan reads as tough is not named. ""
+    for a league whose work it cannot say, or a team with no one to name."""
+    if str(getattr(c, "sport", "") or "") not in QUIET_TEAM_SPORTS:
+        return ""
+    mine = [r for r in reads or [] if isinstance(r, dict) and r.get("team") == t and r.get("player")
+            and r.get("read") not in ("tough", "avoid") and _share_words(r)]
+    mine.sort(key=lambda r: -_volume(r))
+    who = [f"{r.get('player')} ({_share_words(r)})" for r in mine[:2]]
+    if not who:
+        return ""
+    pts = implied_points(c).get(t)
+    line = (f"{cap(team_np(c, t))} {team_be(c, t, 'have', 'has')} no player with a favorable matchup by our "
+            f"numbers, but {team_be(c, t, 'their', 'its')} offense still runs through {_join(who)}")
+    if pts is not None:
+        line += f", and the lines expect {team_be(c, t, 'them', 'it')} to score about {_n(pts)}"
+    return _sentence(line)
+
+
+def _share_words(r: dict) -> str:
+    """"55% of the carries", "28% of the targets" (or "of the catches", college's count): a skill player's share of
+    his team's work, the one number `quiet_team_line` names him by; "" for a quarterback or a player with none."""
+    u, pos = _usage(r), str(r.get("pos") or "").upper()
+    if pos in ("RB", "FB") and u.get("carry_share"):
+        return f"{_pct(u['carry_share'])} of the carries"
+    if pos in ("WR", "TE", "RB", "FB") and u.get("tgt_share"):
+        return f"{_pct(u['tgt_share'])} of the {_caught(u)[0]}"
+    return ""
 
 
 def absent_sentence(c: Ctx, rows: list, per_team: int = 5) -> str:
@@ -3960,7 +4045,8 @@ def _card_rows(c: Ctx) -> list:
     out, seen, sides = [], set(), {}
     bets = [r for r in pool if not read_only(r)]
     doubted = [r for r in bets if _card_doubted(getattr(c, "sport", ""), r)]
-    for r in [r for r in bets if r not in doubted] + doubted + [r for r in pool if read_only(r)]:
+    ordered = [r for r in bets if r not in doubted] + doubted + [r for r in pool if read_only(r)]
+    for r in ordered:
         who = str(r.get("player") or "")
         if not who or who in seen:
             continue
@@ -3975,7 +4061,41 @@ def _card_rows(c: Ctx) -> list:
         out.append(r)
         if len(out) == most:
             break
-    return out
+    return _balance_card(c, out, ordered, doubted)
+
+
+#: THE CARD SEATS THE OTHER TEAM'S PICK WHEN IT IS AS GOOD (step AEH, 24 November 2026; Ethan: "make sure all game
+#: reports and bets included not always just favore the favored team", and decision 19: "All I want is picks that win
+#: the most"). When every player pick on a card is one team's, the other team's best pick takes the card's last player
+#: seat if it sits in the same tier as the pick it replaces and our chance for it is at least as high: the card loses
+#: nothing by the chance it shows, and a game with two offenses is not read as one. The card's order is otherwise
+#: kept, because it is right more often than not: on every finished game's report picks that day, the team with more
+#: of its game's picks hit 65.9% (440 of 668) and the other team 60.9% (151 of 248), +5.0 points ± 3.6. A doubted
+#: pick (`_card_doubted`) or a read never takes the seat.
+def _balance_card(c: Ctx, out: list, ordered: list, doubted: list) -> list:
+    """The card's picks with the other team seated when its pick is as good (step AEH), in the card's own order.
+    Never raises."""
+    try:
+        teams = set(getattr(c, "teams", ()) or ())
+        players = [r for r in out if game_side(r) is None and r.get("team") in teams and not read_only(r)]
+        if len(players) < 2 or len({r.get("team") for r in players}) != 1:
+            return out
+        drop = players[-1]
+        have, tier, floor = drop.get("team"), str(drop.get("tier") or ""), _f(drop.get("model_prob"))
+        names = {str(r.get("player") or "") for r in out}
+        other = next((r for r in ordered if r.get("team") in teams and r.get("team") != have
+                      and game_side(r) is None and not read_only(r) and not any(r is d for d in doubted)
+                      and str(r.get("tier") or "") == tier and floor is not None
+                      and (_f(r.get("model_prob")) or 0.0) >= floor
+                      and str(r.get("player") or "") and str(r.get("player")) not in names), None)
+        if other is None:
+            return out
+        keep = [r for r in out if r is not drop] + [other]
+        order = {id(r): i for i, r in enumerate(ordered)}
+        return sorted(keep, key=lambda r: order.get(id(r), len(order)))
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ card's other team not read ({type(exc).__name__}: {exc}); the card stands as built")
+        return out
 
 
 #: ONE SIDE OF A GAME ON A CARD (step AEB, 24 November 2026). On the record of How our reports did, five finished

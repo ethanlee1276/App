@@ -9777,6 +9777,19 @@ two or more out, quarterbacks' yards, attempts and sacks, backs' rushing and rec
 1.7 standard errors of their own form, the sign changing by season, so the reports keep saying who is out on the
 line without pricing it.
 
+**AEH. A game report speaks for both teams** (step 925; 24 November). Nothing to run. Ethan's screenshot of the
+Bears-Lions short version named three Bears under "Who could have a big day", each for the same reason (the Lions
+give up the fourth-most passing yards), and said nothing about the Lions. Now each team's best read takes a seat in
+that line (and in the hard-day line and the Players to watch lists) before the rest fill in by strength; players of
+one team who share a reason are named together, the reason said once; a player's reason about his own position goes
+before a team-wide one; and a football team with no favorable matchup still gets a sentence: who its offense runs
+through, by his share of the work, and the points the lines expect it to score, with no matchup claimed. A card whose
+player picks are all one team's now gives its last player seat to the other team's best pick when that pick is in
+the same tier and our chance for it is at least as high, so the card gives up nothing by the chance it shows.
+Measured that day on every finished game's report picks: the team with more of a game's picks held a median 82% of
+an NFL game's picks, and all of them in 14% of NFL games; its picks hit 65.9% (440 of 668) and the other team's
+60.9% (151 of 248), +5.0 points ± 3.6, a weak lean, so the order stays best first.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 

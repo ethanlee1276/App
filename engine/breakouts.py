@@ -47,6 +47,36 @@ def _sentence(text: str) -> str:
     return t if not t or t[-1] in ".!?" else t + "."
 
 
+def team_balanced(rows: list, n: int, teams=None) -> list:
+    """BOTH TEAMS IN A REPORT (step AEH, 24 November 2026; Ethan, on a Bears-Lions report that named three Bears
+    under "Who could have a big day", each for the same reason, and no Lion: "A team like the lions is still a highs
+    scoring team so too have data and shit then say nothing about the lions in the report doesn't make sense too me
+    ... make sure all game reports and bets included not always just favore the favored team").
+
+    The first ``n`` of ``rows`` (already best first), each of ``teams`` that has a row among them seated by its own
+    best before the rest fill in by order; returned in the rows' own order. ``teams`` defaults to the rows' teams in
+    order. Measured the same day on every finished game's report picks: the team with more picks held a median 82%
+    of a game's NFL picks (every pick in 14% of NFL games, 13% of hockey's, 22% of college football's), and its picks
+    hit 65.9% against the other team's 60.9% (+5.0 ± 3.6 points): a weak lean, which keeps the order, and no reason
+    to say nothing of the other team."""
+    rows = [r for r in rows or [] if isinstance(r, dict)]
+    if n <= 0 or not rows:
+        return []
+    teams = list(teams) if teams else list(dict.fromkeys(str(r.get("team") or "") for r in rows))
+    picked: list = []
+    for t in teams:
+        first = next((r for r in rows if str(r.get("team") or "") == str(t or "") and t), None)
+        if first is not None and len(picked) < n:
+            picked.append(first)
+    for r in rows:
+        if len(picked) >= n:
+            break
+        if not any(r is x for x in picked):
+            picked.append(r)
+    order = {id(r): i for i, r in enumerate(rows)}
+    return sorted(picked, key=lambda r: order[id(r)])
+
+
 def volume(r: dict) -> float:
     """His work, 0..1, for the tie between two cases of the same strength:
     a target or carry share, a usage rate, or minutes (or ice time) as a
@@ -126,10 +156,12 @@ def blocks(reads: list, *, pick_fn=None, role_fn=None, form_fn=None, fade_ok=Non
         return card(r, tone, pick=(pick_fn(r) if pick_fn else "") or "",
                     role=(role_fn(r) if role_fn else "") or "", form=form_fn(r) if form_fn else None)
     out = []
+    # Each team's strongest case seated first (`team_balanced`, step AEH), the strongest case still first in the list.
     if up:
-        out += [head(CANDIDATES_HEAD), {"type": "verdicts", "items": [one(r, "up") for r in up[:CANDIDATES_N]]}]
+        out += [head(CANDIDATES_HEAD),
+                {"type": "verdicts", "items": [one(r, "up") for r in team_balanced(up, CANDIDATES_N)]}]
     if down:
-        out += [head(FADES_HEAD), {"type": "verdicts", "items": [one(r, "down") for r in down[:FADES_N]]}]
+        out += [head(FADES_HEAD), {"type": "verdicts", "items": [one(r, "down") for r in team_balanced(down, FADES_N)]}]
     if reads and not up:
         out.append({"type": "p", "text": _sentence(NONE_LINE)})
     return out
