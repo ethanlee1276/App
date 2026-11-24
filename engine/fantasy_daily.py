@@ -88,15 +88,17 @@ def season_means(conn, sport: str, season: int | None = None) -> dict:
 
 def _season_rows(conn, sport: str, season: int) -> dict:
     """``{(player, market): (games, mean, position)}`` of one season's rows, off the table ({} without logs)."""
+    # ONE SEASON'S ROWS (step AEO, 24 November 2026): grouped as written, SQLite (with no statistics on the box's
+    # file) walked the (sport, market, player, ...) index for its order, every stored season of the sport; the
+    # NHL's 2025 means took 39.3 seconds that evening. The plus signs give up that order, and the read walks the
+    # table's key (sport, season, ...) over this season alone and groups it after.
     try:
-        # ONE SEASON'S ROWS (step AEO, 24 November 2026): grouped as written, SQLite (with no statistics on the
-        # box's file) walked the (sport, market, player, ...) index for its order, every stored season of the sport;
-        # the NHL's 2025 means took 39.3 seconds that evening. The plus signs give up that order, and the read walks
-        # the table's key (sport, season, ...) over this season alone and groups it after.
         rows = conn.execute(
             "SELECT player, market, COUNT(*), AVG(value), MAX(position) FROM player_game_logs "
             "WHERE sport=? AND season=? GROUP BY +player, +market", (sport, int(season))).fetchall()
-    except Exception:                                             # noqa: BLE001 — no logs, no fill
+    except Exception as exc:                                      # noqa: BLE001 — no logs, no fill
+        # {} is also a season with no rows, so a failed read says so in the build's log.
+        print(f"  ⚠️  {sport.upper()} {season} season means not read ({type(exc).__name__}: {exc})")
         rows = []
     return {(player, market): (int(n or 0), float(avg or 0.0), pos) for player, market, n, avg, pos in rows}
 
