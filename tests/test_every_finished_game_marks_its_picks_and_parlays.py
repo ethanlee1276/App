@@ -133,7 +133,8 @@ def test_each_finished_game_lists_its_report_picks_and_tickets_off_the_record():
     got = O.for_games("nfl", [("2026-11-15", "NE", "DET"), ("2026-11-15", "KC", "BUF"), ("2026-11-15", "SF", "DAL")],
                       member=True, path=path, where=where)
     assert set(got) == {"2026-11-15|NE|DET", "2026-11-15|KC|BUF"}, "a game not archived is left out"
-    assert got["2026-11-15|KC|BUF"] == {}, "an archived game the record holds nothing for says so"
+    assert got["2026-11-15|KC|BUF"] == {"none": "none"}, \
+        "an archived game the record holds nothing for says so, and why (step AEA)"
     game = got["2026-11-15|NE|DET"]
     picks = {(p["player"], p["status"]) for p in game["picks"]}
     assert picks == {("Jahmyr Gibbs", "won"), ("Drake Maye", "lost"), ("Sam LaPorta", "pending"),

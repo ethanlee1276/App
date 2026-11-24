@@ -161,16 +161,84 @@ def _restore(result: dict, g: dict, rec: dict, words: str) -> None:
         result.setdefault(KEPT_PICKS, {})[f"{g.get('away')}@{g.get('home')}"] = picks
 
 
+#: This build's count of started games (`hold`): kept from before the start, rebuilt from the archive, and
+#: written as built for want of either. The board carries it (REPORT_KEEP_KEY), so the heartbeat can say so.
+LAST: dict = {}
+REPORT_KEEP_KEY = "report_keep"
+
+
+def _from_archive(path, g: dict) -> dict | None:
+    """A STARTED GAME'S RECORD, REBUILT FROM ITS ARCHIVED REPORT (step AEA, 24 November 2026).
+
+    The file beside the private board is the only place a started game's report, tickets and picks as they
+    stood before the start live until the game is archived (engine/reportarchive), and a build that finds a
+    started game missing from it writes the game's report as built after the start: no picks card, no tickets,
+    and its archived file written again without them. Live on the 24th, every NFL game of the week before but
+    its Monday night read "unkept" on Report Picks. Where the game's archived file holds the report kept before
+    the start, that report, its tickets and its picks are the game's record again ({"at", "report", "parlays",
+    "picks", "words"}: the kept words the report carries); None where it does not."""
+    try:
+        from . import reportarchive
+        p = Path(path)
+        sport = p.stem[len("reportkeep_"):] if p.stem.startswith("reportkeep_") else ""
+        doc = reportarchive.load(sport, str(g.get("date") or "")[:10], g.get("away"), g.get("home"), where=p.parent)
+    except Exception:                                        # noqa: BLE001
+        return None
+    rep = (doc or {}).get("report")
+    if not isinstance(rep, dict) or not rep.get("kept"):
+        return None
+    rec = {"at": "", "words": str(rep["kept"]), "report": {k: v for k, v in rep.items() if k != "kept"}}
+    gp = doc.get("parlays")
+    if isinstance(gp, dict) and gp.get("kept"):
+        rec["parlays"] = {k: v for k, v in gp.items() if k != "kept"}
+    if isinstance(doc.get("picks"), dict) and doc["picks"]:
+        rec["picks"] = doc["picks"]
+    return rec
+
+
+def _read_kept(path) -> tuple[dict, bool]:
+    """(the file's document, whether it is there and could not be read this time). A file that cannot be opened
+    (a full table of open files, a disk that will not answer) is left for the next build to read again; one whose
+    text is no document is set aside beside it (".unreadable", for a look) and the file starts again, since no
+    later build could read it either. No file is an empty one."""
+    import json
+    p = Path(path)
+    if not p.exists():
+        return {}, False
+    try:
+        with open(p) as fh:
+            doc = json.load(fh)
+    except OSError as exc:
+        print(f"⚠️  the reports kept before the start could not be read ({exc}); the file is left as it is this "
+              f"build and each started game is read from its archived report")
+        return {}, True
+    except ValueError as exc:
+        try:
+            p.replace(p.with_name(p.name + ".unreadable"))
+        except OSError:
+            return {}, True
+        print(f"⚠️  the reports kept before the start were not a document ({exc}); set aside as "
+              f"{p.name}.unreadable, each started game read from its archived report")
+        return {}, False
+    return (doc if isinstance(doc, dict) else {}), False
+
+
 def hold(result: dict, reports: list, path, at: str | None = None) -> tuple[list, int]:
     """This build's reports, each started game's the one kept before it
     started, in the board's order; and how many were the kept ones. Every
     report of a game not yet started is kept, as written (its bets too).
     A file that cannot be read or written leaves the reports as built and
-    says so."""
+    says so.
+
+    A started game the file does not hold is rebuilt from its archived report
+    where there is one (`_from_archive`), and kept in the file again. A file
+    that is there and cannot be read is not written over this build: an empty
+    read would lose every started game it holds (step AEA)."""
+    LAST.clear()
     try:
-        from .reportlog import _write, game_key, read, when_words
+        from .reportlog import _write, game_key, when_words
         utc, et = stamps(at)
-        data = read(path)
+        data, unreadable = _read_kept(path)
         games = data.get("games") if isinstance(data.get("games"), dict) else {}
         fresh: dict = {}
         for r in reports or []:
@@ -182,6 +250,7 @@ def hold(result: dict, reports: list, path, at: str | None = None) -> tuple[list
         for g in board:
             seen[game_key(g)] = seen.get(game_key(g), 0) + 1
         out, n, on_board = [], 0, set(seen)
+        restored = lost = 0
         for g in board:
             k = game_key(g)
             mine = fresh.get(k) or []
@@ -193,13 +262,19 @@ def hold(result: dict, reports: list, path, at: str | None = None) -> tuple[list
                 continue
             if started(g, utc):
                 rec = games.get(k)
+                if not (isinstance(rec, dict) and isinstance(rec.get("report"), dict)):
+                    rec = _from_archive(path, g)
+                    if rec is not None:
+                        games[k] = rec
+                        restored += 1
                 if isinstance(rec, dict) and isinstance(rec.get("report"), dict):
-                    words = f"{when_words(str(rec.get('at') or ''))} ET"
+                    words = str(rec.get("words") or "") or f"{when_words(str(rec.get('at') or ''))} ET"
                     out.append(dict(copy.deepcopy(rec["report"]), kept=words))
                     _restore(result, g, rec, words)
                     n += 1
                 elif r is not None:
                     out.append(r)
+                    lost += 1
                 continue
             if r is not None:
                 games[k] = {"at": et, "report": copy.deepcopy(r),
@@ -219,7 +294,12 @@ def hold(result: dict, reports: list, path, at: str | None = None) -> tuple[list
                 continue
             if (today - day).days > KEEP_DAYS:
                 games.pop(k)
-        _write(path, {"games": games})
+        if not unreadable:
+            _write(path, {"games": games})
+        LAST.update(kept=n, restored=restored, lost=lost)
+        if isinstance(result, dict):
+            # Counts only (no pick, no ticket): the heartbeat reads them off the board (launch._board_counts).
+            result[REPORT_KEEP_KEY] = {k: v for k, v in LAST.items() if v} or {"kept": 0}
         return out, n
     except Exception as exc:                                 # noqa: BLE001
         print(f"⚠️  reports as written before the start not kept ({type(exc).__name__}: {exc})")

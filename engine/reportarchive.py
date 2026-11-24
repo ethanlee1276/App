@@ -93,6 +93,44 @@ def doc_for(report: dict, g: dict, sport: str, label: str, parlays, picks, resul
     return out
 
 
+def _read(path: Path) -> dict | None:
+    """The document a file holds, or None (no file, or one that cannot be read)."""
+    try:
+        doc = json.loads(gzip.decompress(path.read_bytes())) if path.exists() else None
+    except (OSError, ValueError, EOFError, gzip.BadGzipFile):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def keep_start(report: dict, parlays, picks, old: dict | None) -> tuple:
+    """WHAT A GAME CARRIED AT ITS START IS NEVER WRITTEN OVER WITH LESS (step AEA, 24 November 2026).
+
+    A finished game's file is written again whenever what it holds changes, from what the build has for the
+    game: the report kept from before the start, its tickets and its picks (engine/reportkeep). A build that
+    had lost them for a game (live on the 24th: every NFL game of the week before but its Monday night read
+    "unkept" on Report Picks, its parlays gone from its file while the Record still counted them) wrote the
+    game again without them. So (report, parlays, picks) for the file: this build's, except where the file
+    already holds the set the report carried at the start (``kept``) and this build has no such set, or holds
+    picks and this build has none, or holds the report as kept before the start and this build has a report
+    written after it. The kept report keeps this build's word on how its picks and parlays did
+    (reportoutcome.KEY), read off the record."""
+    if not isinstance(old, dict):
+        return report, parlays, picks
+    op = old.get("parlays")
+    if isinstance(op, dict) and op.get("kept") and not (isinstance(parlays, dict) and parlays.get("kept")):
+        parlays = op
+    if old.get("picks") and not picks:
+        picks = old["picks"]
+    orep = old.get("report")
+    if isinstance(orep, dict) and orep.get("kept") and isinstance(report, dict) and not report.get("kept"):
+        from .reportoutcome import KEY
+        mine = dict(orep)
+        if report.get(KEY):
+            mine[KEY] = report[KEY]
+        report = mine
+    return report, parlays, picks
+
+
 def write(path: Path, doc: dict) -> bool:
     """The file, written only when what it holds has changed."""
     body = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -137,7 +175,8 @@ def save(result: dict, reports: list, sport: str, out, results: dict | None = No
                 results = read(sport, label) or {}
             picks = ((result or {}).get(KEPT_PICKS) or {}).get(f"{g.get('away')}@{g.get('home')}") \
                 or picks_for(result, g)
-            if write(path, doc_for(r, g, sport, label, parlays_for(result, g), picks, results)):
+            rep, parlays, picks = keep_start(r, parlays_for(result, g), picks, _read(path))
+            if write(path, doc_for(rep, g, sport, label, parlays, picks, results)):
                 n += 1
         # THE REPORTS' OWN RECORD (engine/reportrecord): its index, brought up
         # to date with what was written (and built once where there is none).

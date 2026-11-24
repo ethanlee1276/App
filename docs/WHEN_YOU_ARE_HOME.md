@@ -9670,6 +9670,30 @@ published, after the Pick of the Day is chosen, so nothing that picks or journal
 had crept 115 bytes past its size budget with steps ADT to ADY; three functions only the More pages draw moved to
 the file those pages load, and it is back under, as you chose on 19 November (trim, not raise).
 
+**AEA. Every finished game's report lists the parlays the Record counts** (step 918; 24 November). Nothing to
+run. You said the game reports were missing a lot of data when you checked how they did. On Report Picks' "How our
+reports did", every NFL game of last week but Monday night's (Thursday's Colts at Texans and all eleven of Sunday's)
+showed its picks graded and not one parlay, under the line "Parlays weren't saved for games before 16 November". The
+parlays were never lost. The journal marks each game's starting set as the game starts, and the Record counted those
+same games: its Thursday nights panel has Colts at Texans' 2 three-leg parlays, a two-leg parlay and 3 touchdown
+pairs, and its Lions panel has Buccaneers at Lions' seven. Report Picks checked them against the copy in each game's
+archived file instead, and for those games that copy no longer named a single ticket the journal had. Report Picks
+now reads the journal's own marking, as the Record does, so the two can't disagree, and last week's games list their
+parlays again with nothing to rebuild. Three guards go with it: a finished game's archived file is never written
+again with less than it held from the start (its parlays, its picks, its report as it stood before kickoff); a
+started game the kickoff file has lost is read back from its archived copy; and a kickoff file that is there but
+can't be read is left alone that build instead of being written over. Each build's count of started games kept,
+read back, or written without a kept report is on the build log and on the heartbeat ("report_keep"), so if it
+happens again it shows. I couldn't see which build dropped them: those files are on the box and private.
+
+College: 15 of college football's 70 finished games and 97 of college basketball's 111 list no pick and no parlay.
+That isn't lost data either. A report's picks and parlays need priced player props or a line worth betting, and to
+keep the month's odds credits in hand college basketball prices player props for 5 games a build (the ranked and
+power-conference games first) and college football for 12 games a pull. So most smaller college games have nothing
+to grade. Their rows used to be blank; they now say why ("we priced no player props for this game, and none of its
+lines was a pick"). Pricing more college games is a credits choice for you: say so and I'll work out what it would
+cost a month before changing anything.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 

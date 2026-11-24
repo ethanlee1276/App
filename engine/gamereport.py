@@ -5379,8 +5379,14 @@ def keep_started(result: dict, reports: list, sport: str, out, at: str | None, c
     # A FINAL THE BOARD NO LONGER HOLDS (`_archive_departed`): graded off the
     # history's final from the report kept before its start.
     n_late = _archive_departed(result, sport, out, conn)
+    # A started game the file had lost, rebuilt from its archive, and one written as built for want of either
+    # (step AEA): said, never silent.
+    restored, lost = int(_keep.LAST.get("restored") or 0), int(_keep.LAST.get("lost") or 0)
     return reports, ((f"; {n} started game{'' if n == 1 else 's'} kept as written before the start"
-                      if n else "") + graded
+                      if n else "")
+                     + (f" ({restored} read back from the archive)" if restored else "")
+                     + (f"; {lost} under way written as built, no report kept from before its start"
+                        if lost else "") + graded
                      + (f"; {n_arch} finished report{'' if n_arch == 1 else 's'} archived" if n_arch else "")
                      + (f"; {n_late} more archived after leaving the board" if n_late else ""))
 

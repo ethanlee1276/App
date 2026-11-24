@@ -283,7 +283,10 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
             game = {"picks": [{k: v for k, v in p.items() if k != "book"}
                               for p in picks(conn, sport, days, home, away, names_in(doc.get("report")),
                                              books=REPORT_BOOKS)]}
-            game.update(_own_tickets(ts, doc.get("parlays")))
+            game.update(_own_tickets(ts, doc.get("parlays"), marks(conn, sport, days, home, away)))
+            if not any(game.get(k) for k in ("picks", *TICKETS, "earlier", "paper", "unkept")):
+                # NOTHING ON THE RECORD, SAID WHY (step AEA): a blank row read as data lost.
+                game["none"] = none_why(doc)
             if not member:
                 held = 0
                 for part in ("picks", *TICKETS):
@@ -311,9 +314,47 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
 
 #: Where a kept set holds a kind its league had on paper (the holds of 17-20 November, since retired).
 PAPER_OF = {"threes": "paper_threes", "twos": "paper_twos"}
+#: Why a finished game's report put nothing on the record (`none_why`).
+NONE_NO_PROPS, NONE_POSTED = "no_props", "none"
 
 
-def _own_tickets(ts: dict, kept) -> dict:
+def none_why(doc) -> str:
+    """WHY A FINISHED GAME HAS NO PICK AND NO PARLAY ON THE RECORD (step AEA, 24 November 2026). Live that
+    morning 15 of college football's 70 finished games and 97 of college basketball's 111 listed nothing on
+    Report Picks, and a blank row reads as data lost. Nearly every one is a game we priced no player prop in:
+    college football buys its props for the slate's best games, twelve a pull (cfb_build.PLAYER_EVENT_CAP),
+    and a report's picks and its parlays are priced props and lines. NONE_NO_PROPS where the set the game
+    carried at the start says no prop was priced (its `no_props`, engine/gameparlays.props_note), else
+    NONE_POSTED: no pick of its report had a price to post."""
+    kept = (doc or {}).get("parlays")
+    return NONE_NO_PROPS if isinstance(kept, dict) and kept.get("no_props") else NONE_POSTED
+
+
+def marks(conn, sport: str, date, home: str, away: str) -> dict:
+    """{journal key: at_start} for each of the game's tickets on the record (engine/parlayledger.mark_at_start):
+    1 for the set its report carried at the start, the set the Record counts; 0 for a version the board replaced
+    before it; None for one the journal never marked. {} for a journal older than the marking. ``date`` is a day
+    or several (`_dates`); a key filed twice keeps the marking that says the most (1 over 0 over none)."""
+    days = _dates(date)
+    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "parlays" not in have or not days:
+        return {}
+    if "at_start" not in {r[1] for r in conn.execute("PRAGMA table_info(parlays)")}:
+        return {}
+    srcs = tuple(TICKETS.values())
+    rank = {1: 2, 0: 1}
+    out: dict = {}
+    for key, mark in conn.execute(
+            f"SELECT legs_key, at_start FROM parlays WHERE sport=? AND date IN ({','.join('?' * len(days))}) "
+            f"AND grade=? AND source IN ({','.join('?' * len(srcs))}) ORDER BY id",
+            (sport, *days, f"{away}@{home}", *srcs)).fetchall():
+        k = key or ""
+        if k not in out or rank.get(mark, 0) > rank.get(out[k], 0):
+            out[k] = mark if mark in (0, 1) else None
+    return out
+
+
+def _own_tickets(ts: dict, kept, marks: dict | None = None) -> dict:
     """The game's tickets as the report carried them at the start, in its order.
 
     ONE SET A GAME, AND NONE WHERE IT WAS NOT KEPT (ZP, 2026-11-20). Ethan, on
@@ -334,7 +375,25 @@ def _own_tickets(ts: dict, kept) -> dict:
     board had built that day, the ones before the report's picks made them
     too, as the report's: 2 of 19 beside picks that hit 16 of 21. The kept
     set's paper tickets are its own here, under "paper", and the kinds it held
-    on paper are named ("on_paper"), so the page can say they were never posted."""
+    on paper are named ("on_paper"), so the page can say they were never posted.
+
+    THE RECORD'S OWN MARKING DECIDES (step AEA, 24 November 2026). Ethan, the
+    Tuesday morning: "Make sure the game reports are recording all wins and loses
+    correctly. It seems like when I check how they did, it's missing a lot of
+    data". Live, every NFL game of the week before but its Monday night read
+    "unkept" here (Thursday's Colts at Texans and all eleven of Sunday's), its
+    picks graded and not one parlay listed, while the Record counted those same
+    games' starting tickets (Thursday nights: 2 three-leg, 1 two-leg and 3
+    touchdown pairs from Colts at Texans; the Lions' games: Buccaneers at Lions'
+    seven). The Record reads the journal's own marking of each game's starting
+    set (``marks``: at_start, written as the game started); this read the copy
+    the archive held, which for those games no longer named a ticket the journal
+    had. So where the journal has marked the game, its marking is the game's set
+    here too: the tickets it marked 1 are the report's, in the order the kept set
+    names them where it does; those it marked 0, the versions replaced before
+    the start, are listed apart ("earlier"); and the kept set only says which
+    were on paper. A game the journal never marked is read off the kept set, as
+    before."""
     from .parlayledger import legs_key
     strip = lambda t: {k: v for k, v in t.items() if k != "key"}       # noqa: E731
     keys = lambda lst: [legs_key(t.get("legs") or []) for t in lst or []    # noqa: E731
@@ -344,21 +403,35 @@ def _own_tickets(ts: dict, kept) -> dict:
     paper = {kind: keys(kept.get(PAPER_OF[kind])) for kind in PAPER_OF}
     named = {k for ks in (*wanted.values(), *paper.values()) for k in ks}
     on_record = {t.get("key") for kind in TICKETS for t in ts.get(kind) or []}
+    marked = {k: v for k, v in (marks or {}).items() if k in on_record}
+    by_mark = any(v in (0, 1) for v in marked.values())
+    start = {k for k, v in marked.items() if v == 1}
+    replaced = {k for k, v in marked.items() if v == 0}
     # No set kept at the start (before 16 November), or one the record never
-    # journaled: none listed. A kept set that held no ticket held none.
-    if not kept or (named and not named & on_record):
+    # journaled, and no marking of the journal's own: none listed. A kept set
+    # that held no ticket held none.
+    if not by_mark and (not kept or (named and not named & on_record)):
         return {"unkept": True} if on_record else {}
     out: dict = {}
     held: dict = {}
+    rest_of: dict = {}
     for kind in TICKETS:
         allk = ts.get(kind) or []
         order = {k: i for i, k in enumerate(wanted[kind])}
-        out[kind] = [strip(t) for t in sorted((t for t in allk if t.get("key") in order),
-                                              key=lambda t: order[t["key"]])]
         pk = {k: i for i, k in enumerate(paper.get(kind) or [])}
-        mine = [strip(t) for t in sorted((t for t in allk if t.get("key") in pk), key=lambda t: pk[t["key"]])]
-        if mine:
-            held[kind] = mine
+        if by_mark:
+            mine = sorted((t for t in allk if t.get("key") in start and t.get("key") not in pk),
+                          key=lambda t: order.get(t["key"], len(order)))
+            on_p = sorted((t for t in allk if t.get("key") in start and t.get("key") in pk),
+                          key=lambda t: pk[t["key"]])
+            rest_of[kind] = [t for t in allk if t.get("key") in replaced]
+        else:
+            mine = sorted((t for t in allk if t.get("key") in order), key=lambda t: order[t["key"]])
+            on_p = sorted((t for t in allk if t.get("key") in pk), key=lambda t: pk[t["key"]])
+            rest_of[kind] = [t for t in allk if t.get("key") not in set(order) | set(pk)]
+        out[kind] = [strip(t) for t in mine]
+        if on_p:
+            held[kind] = [strip(t) for t in on_p]
     if held:
         out["paper"] = held
     # THE VERSIONS POSTED EARLIER AND REPLACED BEFORE THE GAME (step ABB, 21 November 2026). Ethan, on the
@@ -373,8 +446,7 @@ def _own_tickets(ts: dict, kept) -> dict:
         # A kind its league had on paper that day was never posted, its versions no more than its kept ones.
         if kept.get(f"{kind}_paper"):
             continue
-        named_k = set(wanted[kind]) | set(paper.get(kind) or [])
-        rest = [strip(t) for t in ts.get(kind) or [] if t.get("key") not in named_k]
+        rest = [strip(t) for t in rest_of.get(kind) or []]
         if rest:
             earlier[kind] = rest
     if earlier:

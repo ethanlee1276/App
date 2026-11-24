@@ -124,6 +124,9 @@ def test_a_game_first_seen_under_way_is_written_as_before():
     rep, line = _attach(live, meta, out, "2026-10-22T20:10:00")
     assert rep and "kept" not in rep and _card_players(rep) == [], "nothing kept: the report written now"
     assert "started game" not in line, line
+    # …and said, as a count (step AEA): a started game with no report kept is never silent.
+    assert "; 1 under way written as built, no report kept from before its start" in line, line
+    assert live["report_keep"] == {"lost": 1}, live.get("report_keep")
     path = K.path_for("nba", gate._full_dir_for(out))
     assert "MIA@BOS|2026-10-22" not in json.load(open(path))["games"], "a started game's new report is not kept"
 

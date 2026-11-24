@@ -722,9 +722,16 @@ function rpBetsHTML(x, sport, open, game) {
   }).join("");
   const held = x.held ? `<p class="mini rpk-bets-held">${escapeHtml(plural(x.held, "more pick or ticket", "more picks and tickets"))
     } waiting on the box score: members see ${x.held === 1 ? "it" : "them"} now.</p>` : "";
-  // One short line: on a week of old games it is read once a row.
-  const unkept = x.unkept ? `<p class="mini rpk-bets-note">Parlays weren’t saved for games before 16 November.</p>` : "";
-  if (!parts.length) return unkept + paperNote + held;
+  // One short line: on a week of old games it is read once a row. A game after 16 November the journal never
+  // marked at its start says so of itself, never the old reason (step AEA).
+  const early = !(game && game.date) || String(game.date) < "2026-11-16";
+  const unkept = x.unkept ? `<p class="mini rpk-bets-note">${early ? "Parlays weren’t saved for games before 16 November."
+    : "This game’s parlays weren’t kept at its start, so the Record counts none of them."}</p>` : "";
+  // NOTHING ON THE RECORD, SAID WHY (step AEA; engine/reportoutcome.none_why): a blank row read as data lost.
+  const none = x.none ? `<p class="mini rpk-bets-note">${x.none === "no_props"
+    ? "No picks or parlays: we priced no player props for this game, and none of its lines was a pick."
+    : "No picks or parlays: none of this report’s picks had a price to post."}</p>` : "";
+  if (!parts.length) return unkept + paperNote + held + none;
   const strip = parts.map(([w, l]) => {
     const h = rpHit(l);
     const more = l.length > RP_STRIP_MAX ? `<span class="rpk-marks-more">+${l.length - RP_STRIP_MAX}</span>` : "";
