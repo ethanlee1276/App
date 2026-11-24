@@ -824,6 +824,11 @@ def _board_counts(path: str) -> dict:
     reps = b.get("game_reports")
     if isinstance(reps, list) and reps:
         out["reports"] = len(reps)
+        # College basketball's reports that read the two teams alone, its players not read (step AEM,
+        # leaguereport.TEAMS_ONLY): present only on a board that writes them.
+        teams_only = sum(1 for r in reps if isinstance(r, dict) and r.get("scope") == "teams")
+        if teams_only:
+            out["reports_teams_only"] = teams_only
         # Reports that open on our picks for the game (engine/gamereport
         # sec_card, 2026-11-15), and the ones whose card says nothing clears.
         cards = [((r.get("sections") or [{}])[0]) for r in reps if isinstance(r, dict)]
@@ -6341,6 +6346,28 @@ def _logcache_public() -> dict:
         return {}
 
 
+#: The odds bill's last read (`_odds_bill_public`): {"at": epoch, "v": what it said}.
+_ODDS_BILL: dict = {}
+#: How long one read of the spend ledger answers for the heartbeat.
+ODDS_BILL_EVERY_S = 600
+
+
+def _odds_bill_public() -> dict:
+    """WHAT ONE GAME REALLY COSTS, BY LEAGUE (engine/oddsbudget.event_bills, step AEM): the game-by-game calls of
+    the last 24 hours, the credits the API billed for them, what we priced them at, and how many billed each
+    amount. Counts only. Read off the ledger at most every ODDS_BILL_EVERY_S; never fails the heartbeat."""
+    now = time.time()
+    if _ODDS_BILL and now - float(_ODDS_BILL.get("at") or 0) < ODDS_BILL_EVERY_S:
+        return _ODDS_BILL.get("v") or {}
+    try:
+        from engine.oddsbudget import event_bills
+        v = event_bills(since=now - 86400)
+    except Exception:  # noqa: BLE001 — the heartbeat never fails for a side read
+        v = {}
+    _ODDS_BILL.update(at=now, v=v)
+    return v
+
+
 def _write_heartbeat(interval: int, swept: str = "ran") -> None:
     """web/data/heartbeat.json — one small fact per cycle, never fatal."""
     try:
@@ -6412,6 +6439,9 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             # THE KEPT GAME-LOG READS (2026-11-09): served or read again,
             # why, and their seconds (engine/logcache.status).
             "logcache": _logcache_public(),
+            # WHAT ONE GAME REALLY COSTS, BY LEAGUE (step AEM, 2026-11-24): the
+            # API's own bill for the last day's game-by-game calls, counts only.
+            "odds_bill": _odds_bill_public(),
         }))
         os.replace(tmp, p)
     except OSError:

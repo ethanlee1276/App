@@ -770,6 +770,9 @@ def nba_facts(c: Ctx) -> dict | None:
             bits.append("up from near sea level to altitude")
         if bits:
             items.append(f"{c.name(t)}: {'; '.join(bits)}")
+    teams_only = teams_only_line(c)
+    if teams_only:
+        items.append(teams_only)
     claims = [None] * len(items)
     if any("blowout" in (_spot(c, t).get("flags") or []) for t in c.teams):
         items.append("Blowout watch: a spread of 10 or more — starters' minutes are the first thing a "
@@ -785,6 +788,34 @@ def nba_facts(c: Ctx) -> dict | None:
 def _plural_days(n) -> str:
     n = int(n)
     return "a day" if n == 1 else f"{n} days"
+
+
+#: A REPORT THAT READS THE TEAMS ALONE (step AEM), marked on the report so the heartbeat can count them
+#: (launch._board_counts, "reports_teams_only"); the report's own words say it in the facts (`teams_only_line`).
+SCOPE_KEY, TEAMS_ONLY = "scope", "teams"
+
+
+def _board_named(c: Ctx) -> list | None:
+    """College basketball's priced games ("AWAY@HOME", `nba_build.college_board_games`), or None on a board that
+    prices every game it carries."""
+    if getattr(c, "sport", "") != "cbb":
+        return None
+    named = (c.result or {}).get("board_games")
+    return list(named) if isinstance(named, list) else None
+
+
+def teams_only_line(c: Ctx) -> str:
+    """The facts' line for a college game whose players the board does not read (step AEM): what the report reads
+    and why its players are missing, in plain words. "" for a priced game and every other league."""
+    named = _board_named(c)
+    if named is None or f"{c.away}@{c.home}" in named:
+        return ""
+    n = len(named)
+    games = "the game" if n == 1 else f"the {n} games"
+    return (f"Players: not read for this game. Tonight we read players and buy player prices for {games} we "
+            f"price, the ranked and power-conference games first; this report reads the two teams and the "
+            f"betting market") if n else ("Players: not read for this game; this report reads the two teams and "
+                                          "the betting market")
 
 
 def nba_carry(c: Ctx) -> dict | None:
@@ -1477,16 +1508,24 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
             # the school, as a reader says it ("Duke", "Kansas").
             names = {code: (t.get("loc") or t.get("short") or t.get("name") or code)
                      for code, t in (result.get("teams") or {}).items()}
-        # COLLEGE WRITES THE GAMES IT PRICES: a night of sixty to a hundred and
-        # fifty games, of which the board reads the players of the few it
-        # prices (`nba_build.college_board_games`); a report on a game it holds
-        # no player of would be a scoreboard line dressed as a read.
+        # COLLEGE WRITES EVERY GAME STILL TO TIP (step AEM, 24 November 2026). It wrote the games it prices
+        # alone (`nba_build.college_board_games`: five of the night's sixty to a hundred and fifty), 7 reports
+        # of 87 games that night. Ethan's decision B the same day: "we always want every sport posting props
+        # and bets and game reports at all times for every games so we learn and dial in and calibrate". The
+        # board reads the players of the games it prices; every other game's report reads the two teams (the
+        # tale of the tape and its key matchups, each graded on the box score once the game is final,
+        # engine/reportgrade) and the betting market, and says in its facts that its players are not read
+        # (`teams_only_line`). A game already under way when first seen is not written: a report written after
+        # the tip is no pregame call, so only one kept from before its start stands (engine/reportkeep.hold).
         board = set(result.get("board_games") or []) if sport == "cbb" else None
+        if board is not None:
+            from .reportkeep import stamps as _stamps, started as _started
+            _utc = _stamps(at)[0]
         prepared = []
         for g in result.get("games") or []:
             if not isinstance(g, dict) or not g.get("home") or not g.get("away"):
                 continue
-            if board is not None and f"{g['away']}@{g['home']}" not in board:
+            if board is not None and f"{g['away']}@{g['home']}" not in board and _started(g, _utc):
                 continue
             m = (meta or {}).get(f"{g['away']}@{g['home']}") or {}
             more = (mlb_more(g, result) if sport == "mlb" else nhl_more(g, result) if sport == "nhl"
@@ -1501,6 +1540,8 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
             r = build(g, result, sport=sport, names=names, meta=m, conn=conn,
                       changes=logged.get(f"{g['away']}@{g['home']}|{str(g.get('date') or '')[:10]}"))
             if r:
+                if board is not None and f"{g['away']}@{g['home']}" not in board:
+                    r[SCOPE_KEY] = TEAMS_ONLY
                 reports.append(r)
         # A GAME NO REPORT REBUILT POSTS NO THREE-LEG TICKET (GPLEGS1).
         from .gamereport import _report_only

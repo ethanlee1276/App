@@ -9851,6 +9851,38 @@ measured on 1 December (a check-in is set) and put to Ethan with the numbers: ke
 paper until their record says otherwise. The NBA's and the NHL's boards had no such picks the same week (nothing
 shown at 80% or more; 65-72% hit 68.1% and 70.5% where we showed 67.6% and 68.8%).
 
+**AEM. Every college basketball game gets a report, and your three decisions** (step 929; 24 November). Nothing
+to run. Your answers that evening: "Decisions: A, yes more B, we always want every sport posting props and bets and
+game reports at all times for every games so we learn and dial in and calibrate and all that shit too make our picks
+better. C, like u said not a problem."
+
+- **B, reports for every game.** That evening every league with games wrote a report for every one of them (the NFL 16
+  of 16, college football 2 of 2, the NBA 3 of 3, the NHL 1 of 1) except college basketball, which wrote one for the 5
+  games it prices: 7 reports for 87 games. Now every college basketball game still to tip gets one. A game we price
+  players for reads as before. Every other game's report reads the two teams (the tale of the tape and its key
+  matchups) and the betting market, and its facts say "Players: not read for this game" and why. Its key matchups
+  are graded on the box score once the game is final, as every report's are (How our reports did), so every game
+  now adds to what our reads are measured on. A game already under way when first seen gets no report: written after
+  the tip, it would not be a pregame call. The heartbeat counts these reports (`reports_teams_only`).
+- **B, the NFL cap.** Kept, and those picks stay posted and graded; none goes to paper. The 1 December check still
+  measures week 13, and I'll bring you the numbers.
+- **C.** No licensed scores feed; ESPN's free feed stays.
+- **A, what more college games cost.** By the odds plan's own price table (a model, not yet the API's measured bill):
+  college basketball spends about 315 credits a game day now (three pulls of 5 games at 13 credits a game, plus the
+  game lines and the live line), about 9,800 over a 31-day month. 10 games a pull would be about 15,800 a month
+  (6,000 more); 15 games about 21,900 (12,100 more). Every game of a night like this one's 87 would be about 3,500
+  credits for that night alone, more than the plan's whole daily average (100,000 a month is 3,333 a day).
+  December's plan funds every league's own target and leaves about 1,800 credits over, which go to the NFL's extra
+  pulls, so more college basketball games in December mean taking credits from another league or a bigger odds
+  plan. College football prices 12 games a pull; on this Saturday's rivalry slate, 20 a pull would cost about 900
+  credits more that day, and after Saturday (the conference title games, then the bowls) no college football day
+  is likely to reach 12 games, so its cap stops mattering.
+- **What the API really bills.** Our table charges 13 credits for a college basketball game whether or not the books
+  posted a player prop on it. The heartbeat now carries the API's own bill for each league's game-by-game calls over
+  the last day (`odds_bill`: the calls, the credits billed, our estimate, and how many calls billed each amount). If
+  a game with no props bills less than the table says, more college games cost less than the numbers above, and the
+  next step is sized from that. Nothing to run: I read it off the heartbeat.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 

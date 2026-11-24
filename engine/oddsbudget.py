@@ -367,6 +367,41 @@ def bill_line(check: dict, span: str = "last 24h") -> str:
             f"call(s) we priced at {est:,}{ratio}")
 
 
+#: THE ODDS FEED'S OWN BILL FOR A GAME, BY LEAGUE (step AEM, 24 November 2026), for the heartbeat
+#: (launch._odds_bill_public, "odds_bill"). Ethan's decision A that day, "yes more" college games priced, turns on
+#: what one more game really costs, and our price table (`EVENT_CREDITS`) is a model of it: the API states each
+#: call's cost (`x-requests-last`, booked on the ledger since 30 October), and whether a game the books post no
+#: player prop on bills as much as one they do is on the ledger alone. The game-by-game calls only.
+EVENT_KINDS = frozenset({"live_event"})
+
+
+def event_bills(rows: list | None = None, since: float | None = None) -> dict:
+    """{league: {"calls", "billed", "est", "each": {credits: calls}}}: each league's game-by-game calls that carry
+    the API's own bill (`billing_check`'s rows), the credits it billed, what we priced them at, and how many calls
+    billed each amount. Counts only; never raises, {} with none."""
+    try:
+        rows = read_spend() if rows is None else rows
+        out: dict = {}
+        for r in rows:
+            if not isinstance(r, dict) or not r.get("billed") or "est" not in r or r.get("kind") not in EVENT_KINDS:
+                continue
+            if since is not None and float(r.get("ts", 0) or 0) < since:
+                continue
+            try:
+                billed, est = int(r.get("credits", 0) or 0), int(r.get("est", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            s = out.setdefault(budget_sport(str(r.get("sport") or "")) or "?",
+                               {"calls": 0, "billed": 0, "est": 0, "each": {}})
+            s["calls"] += 1
+            s["billed"] += billed
+            s["est"] += est
+            s["each"][str(billed)] = s["each"].get(str(billed), 0) + 1
+        return out
+    except Exception:                                        # noqa: BLE001
+        return {}
+
+
 def read_spend(path: Path | str | None = None) -> list[dict]:
     rows = []
     f = Path(path or SPEND_LOG)
