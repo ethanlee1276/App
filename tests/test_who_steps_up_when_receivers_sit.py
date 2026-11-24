@@ -114,6 +114,15 @@ def test_never_out_together_reads_the_games_without_the_biggest_one():
                                      "Tutu Atwell (WR) 7 (4.2 a game with Puka Nacua), 40 yards"), _texts(got)[1]
 
 
+def test_the_bigger_one_never_missed_so_the_other_ones_games_are_read():
+    got = S.for_team(_conn(_rams(puka_out=(), adams_out=(9,))), 2026, 12, "LA", "Rams", OUT, ROWS)
+    assert _texts(got)[1].startswith("In the only game this season without Davante Adams (week 9), the targets went "
+                                     "to: Tutu Atwell (WR) 6 (4 a game with Davante Adams)"), _texts(got)[1]
+    none = S.for_team(_conn(_rams(puka_out=(), adams_out=())), 2026, 12, "LA", "Rams", OUT, ROWS)
+    assert _texts(none)[1] == ("They have not missed a game this season, so there is no game of this team's own to "
+                               "read it from yet"), _texts(none)
+
+
 def test_a_back_out_leaves_his_carries_and_not_a_line_of_targets():
     got = S.for_team(_conn(_rams()), 2026, 12, "LA", "Rams", [("Kyren Williams", "RB", "OUT")], ROWS)
     assert _texts(got) == ["Rams without Kyren Williams (RB, 75% of the carries): 75% of the carries this season to "

@@ -209,11 +209,13 @@ def for_team(conn, season: int, week: int | None, team: str, team_name: str, out
         withall = [w for w in all_weeks if all(n in weeks[w] for n in names)]
         them = "them" if len(names) > 1 else "that player"
         if not without and len(names) > 1:
-            # NEVER OUT TOGETHER: the games without the one who carried the most of the work, the others playing.
-            top = out_here[0][0]
-            without = [w for w in all_weeks if top not in weeks[w]]
-            withall = [w for w in all_weeks if top in weeks[w]]
-            them = top
+            # NEVER OUT TOGETHER: the games without the one who carried the most of the work and missed any, the
+            # others playing; "they have not missed a game" only when none of them has.
+            for nm, _pos, _sh, _st in out_here:
+                wo = [w for w in all_weeks if nm not in weeks[w]]
+                if wo:
+                    without, withall, them = wo, [w for w in all_weeks if nm in weeks[w]], nm
+                    break
         if not without:
             lines.append((f"{'They have' if len(names) > 1 else 'That player has'} not missed a game this "
                           f"season, so there is no game of this team's own to read it from yet", None))
