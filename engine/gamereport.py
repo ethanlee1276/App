@@ -5555,7 +5555,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
         result[KEY] = reports
         # WHO STEPS UP, COUNTED (engine/stepup, step AEC): the heartbeat's check that the block fires.
         from . import stepup as _stepup
-        su = _stepup.census(reports, result) if sport == "nfl" else {}
+        su = _stepup.census(reports, result) if sport in ("nfl", "cfb") else {}
         if su:
             result[_stepup.CENSUS_KEY] = su
         else:

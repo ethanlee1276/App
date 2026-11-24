@@ -270,6 +270,148 @@ def for_team(conn, season: int, week: int | None, team: str, team_name: str, out
     return {"lines": lines, "outs": named_out, "vacated": vacated}
 
 
+# --- college football (step AEK) -----------------------------------------------------------------------------------
+#: WHO STEPS UP, FOR COLLEGE (step AEK, 24 November 2026; rivalry week). College's props already take a measured
+#: teammate-out step (engine/cfb/lineup, since 10 October: its own multipliers, fitted on college games, applied only
+#: where they pass the NFL's rule), and its report never said it. College box scores log catches, not targets, and
+#: no positions, so the block says what the logs hold and claims no graded read: who is out and his share of the
+#: team's catches or carries; in this season's games where he has no catch or carry on record, who took them (each
+#: man's per game then, beside his per game with him); and which picks our numbers raise for it. The season's games
+#: are the lineup step's own read (engine/cfb/lineup.season_games), handed over on the board's working key below.
+#: (kind, the box column, positions whose absence leaves it, positions that take it, the share that is worth a line,
+#: the yards said beside it)
+CFB_KINDS = (("catches", "receptions", ("WR", "TE"), ("WR", "TE", "RB"), TARGET_SHARE, "rec_yds"),
+             ("carries", "rush_att", ("RB",), ("RB",), CARRY_SHARE, "rush_yds"))
+#: The board's working key (dropped before the board is written, engine/gate) the college build leaves the lineup
+#: step's season read under: {"players": {team: {name: {"role", "games"}}}, "team_days": {team: [day]}}.
+CFB_GAMES_KEY = "_cfb_lineup_games"
+
+
+def _cfb_value(g: dict, market: str) -> float:
+    """One college game's column (a back's carries filed as either name)."""
+    g = g or {}
+    v = g.get(market)
+    if v is None and market == "rush_att":
+        v = g.get("carries")
+    try:
+        return float(v or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _days_words(days: list, season=None) -> str:
+    from .gamereport import day_label
+    labels = [day_label(d, season or str(d)[:4], season or str(d)[:4]) for d in sorted(days)]
+    return _join(labels)
+
+
+def for_cfb_team(players: dict, days: list, team: str, team_name: str, outs: list, rows=None, before: str = "",
+                 positions: dict | None = None, season=None) -> dict | None:
+    """College's "who steps up" for one team (CFB_KINDS): {"lines": [(text, None)], "outs": [...], "vacated":
+    {kind: share}}, or None. ``players`` is the team's {name: {"role", "games": {day: {market: value}}}} and ``days``
+    its logged days (engine/cfb/lineup.season_games); ``outs`` [(player, position, status)] ruled out, each counted
+    while he played in one of the team's last RECENT_GAMES; ``positions`` {name key: position} the report's own reads
+    say (the roster's, where the logs' guess can call a tight end a receiver)."""
+    prior = [d for d in sorted(days or []) if not before or d < str(before)[:10]]
+    if not prior or not outs or not players:
+        return None
+    pos_of = {k: str(v or "").upper() for k, v in (positions or {}).items() if v}
+
+    def role(name):
+        return pos_of.get(_key(name)) or str((players.get(name) or {}).get("role") or "").upper()
+    recent_days = set(prior[-RECENT_GAMES:])
+    recent = {_key(n) for n, p in players.items() if set((p or {}).get("games") or {}) & recent_days}
+    by_key = {_key(n): n for n in players}
+    fresh, seen = [], set()
+    for r in outs:
+        k = _key(r[0])
+        if k in recent and k in by_key and k not in seen:
+            seen.add(k)
+            fresh.append((by_key[k], str(r[1] or "").upper(), r[2]))
+    if not fresh:
+        return None
+    games = {n: (p or {}).get("games") or {} for n, p in players.items()}
+    absent = {n for n, _p, _s in fresh}
+    lines: list = []
+    vacated: dict = {}
+    named_out: list = []
+    for kind, market, out_pos, take_pos, bar, yds in CFB_KINDS:
+        team_total = {d: sum(_cfb_value(g.get(d), market) for g in games.values()) for d in prior}
+
+        def share(name, market=market, team_total=team_total):
+            mine = sum(_cfb_value(games[name].get(d), market) for d in prior if d in games[name])
+            tot = sum(team_total[d] for d in prior if d in games[name])
+            return mine / tot if tot else 0.0
+        out_here = []
+        for name, pos, status in fresh:
+            p = pos if pos in out_pos else role(name)
+            if p not in out_pos:
+                continue
+            sh = share(name)
+            if sh >= bar:
+                out_here.append((name, p, sh, str(status or "out").lower()))
+        if not out_here:
+            continue
+        out_here.sort(key=lambda x: -x[2])
+        total = min(1.0, sum(x[2] for x in out_here))
+        vacated[kind] = round(total, 3)
+        named_out += [x[0] for x in out_here if x[0] not in named_out]
+        who = _join([f"{n} ({p}, {sh:.0%} of the {kind})" for n, p, sh, _st in out_here])
+        lines.append((f"{team_name} without {who}: {total:.0%} of the {kind} this season to fill", None))
+        names = {x[0] for x in out_here}
+        without = [d for d in prior if not any(d in games[n] for n in names)]
+        withall = [d for d in prior if all(d in games[n] for n in names)]
+        them = "them" if len(names) > 1 else "that player"
+        if not without and len(names) > 1:
+            for nm, _pos, _sh, _st in out_here:
+                wo = [d for d in prior if d not in games[nm]]
+                if wo:
+                    without, withall, them = wo, [d for d in prior if d in games[nm]], nm
+                    break
+        if not without:
+            lines.append((f"{'They have' if len(names) > 1 else 'That player has'} a catch or carry on record in "
+                          f"every game this season, so there is no game of this team's own to read it from yet", None))
+            continue
+        cands = []
+        for name in games:
+            if name in absent or _key(name) not in recent or role(name) not in take_pos:
+                continue
+            played = [d for d in without if d in games[name]]
+            if not played:
+                continue
+            pg = sum(_cfb_value(games[name][d], market) for d in played) / len(played)
+            if pg < MIN_PER_GAME:
+                continue
+            w = [d for d in withall if d in games[name]]
+            before_pg = sum(_cfb_value(games[name][d], market) for d in w) / len(w) if w else None
+            ypg = sum(_cfb_value(games[name][d], yds) for d in played) / len(played)
+            cands.append((pg, name, role(name), before_pg, ypg))
+        cands.sort(key=lambda x: (-x[0], x[1]))
+        if not cands:
+            continue
+        per = "" if len(without) == 1 else " a game"
+        parts = []
+        for pg, name, pos, before_pg, ypg in cands[:NAMED]:
+            bit = f"{name} ({pos}) {_num(pg)}{per}"
+            if before_pg is not None:
+                bit += f" ({_num(before_pg)} a game with {them})"
+            if ypg:
+                bit += f", {_num(ypg)} yards{per}"
+            parts.append(bit)
+        n_words = "the only game" if len(without) == 1 else f"the {len(without)} games"
+        had = "they had" if them == "them" else f"{them} had"
+        lines.append((f"In {n_words} this season {had} no catch or carry on record ({_days_words(without, season)}), "
+                      f"the {kind} went to: " + "; ".join(parts), None))
+    if not lines:
+        return None
+    lift = raised(rows, team, {_key(n) for n in named_out} | {_key(o[0]) for o in outs})
+    for player, mk in sorted(lift.items()):
+        bits = _join([f"{MARKET_WORDS[m]} ×{v:.2f}" for m, v in sorted(mk.items())])
+        lines.append((f"Our numbers raise {player}'s {bits}, the lift measured on college games for a player whose "
+                      f"teammate ahead of him at his position is out, in every number we price on him", None))
+    return {"lines": lines, "outs": named_out, "vacated": vacated}
+
+
 # --- the bets a teammate's absence moved, on the record ------------------------------------------------------------
 #: The books a moved pick is counted in, each as its page names it (ledger: Edge's, Most Likely's, the reports').
 BET_BOOKS = {"edge": ("main", "paper", "edge_held"), "likely": ("likely", "likely_live"), "report": ("report",)}
@@ -355,7 +497,10 @@ def report_blocks(c) -> list:
     """The report's injury-section blocks: a "Who steps up" heading and each team's lines, its step-up reads
     claimed for grading (NFL; never raises: [] on anything it cannot read)."""
     try:
-        if str(getattr(c, "sport", "") or "") != "nfl" or getattr(c, "conn", None) is None:
+        sport = str(getattr(c, "sport", "") or "")
+        if sport == "cfb":
+            return _cfb_blocks(c)
+        if sport != "nfl" or getattr(c, "conn", None) is None:
             return []
         from .gamescan import OUT_STATUSES
         from .gamereport import _claimed_list, _h, _week_of
@@ -376,3 +521,28 @@ def report_blocks(c) -> list:
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ who steps up not read ({type(exc).__name__}: {exc})")
         return []
+
+
+def _cfb_blocks(c) -> list:
+    """College's "Who steps up" blocks (`for_cfb_team`), off the lineup step's season read the build left on the
+    board (CFB_GAMES_KEY); [] without it. Raises into `report_blocks`, which says so in the build log."""
+    from .gamescan import OUT_STATUSES
+    from .gamereport import _claimed_list, _h
+    held = (c.result or {}).get(CFB_GAMES_KEY) or {}
+    players, team_days = held.get("players") or {}, held.get("team_days") or {}
+    if not players:
+        return []
+    rows = [r for k in ("recommendations", "most_likely") for r in (c.result or {}).get(k) or [] if isinstance(r, dict)]
+    positions = {_key(r.get("player")): r.get("pos") for r in getattr(c, "reads", None) or []
+                 if isinstance(r, dict) and r.get("player") and r.get("pos")}
+    blocks: list = []
+    for t in c.teams:
+        outs = [(r.get("player"), r.get("position"), r.get("status"))
+                for r in (c.scan or {}).get("injuries") or [] if isinstance(r, dict) and r.get("team") == t
+                and str(r.get("status") or "").upper() in OUT_STATUSES and not r.get("cleared")]
+        got = for_cfb_team(players.get(t) or {}, team_days.get(t) or [], t, c.name(t), outs, rows,
+                           before=str((getattr(c, "g", None) or {}).get("date") or ""), positions=positions,
+                           season=getattr(c, "season", None))
+        if got:
+            blocks.append(_claimed_list(got["lines"]))
+    return ([_h("Who steps up")] + blocks) if blocks else []

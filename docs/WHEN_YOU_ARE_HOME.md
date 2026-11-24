@@ -9826,6 +9826,18 @@ for each side mixed the scan's codes and the teams' names line by line ("CHI's r
 version has since October ("The Bears' run game (9th) against the Patriots' run defense (22nd)"). The market and
 rankings sections keep their codes beside the prices and in their tables, where they read as the books print them.
 
+**AEK. College football's reports say who steps up** (step 928; 24 November). Nothing to run. College's props have
+taken a measured teammate-out step since 10 October (engine/cfb/lineup: multipliers fitted on college games, applied
+only where they pass the NFL's rule), and the report never said it; the NFL's reports have said where an absent
+man's work goes since this morning (step AEC). College's injury section now has the same "Who steps up" block, in
+what college's logs hold: who is out and his share of the team's catches (a receiver or tight end) or carries (a
+back); in this season's games where he has no catch or carry on record, who took them, each man's per game then
+beside his per game with him; and which picks our numbers raise for it. College box scores log catches, not
+targets, and no positions: the block says catches, takes a man's position from the report's own reads before the
+logs' guess, never names a quarterback for a back's carries, and claims no graded read, since none was measured
+for college. The season's games are the lineup step's own kept read, handed to the reports on the board's working
+key (never published); the heartbeat's "stepup" counts now include college's.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 

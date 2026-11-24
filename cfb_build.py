@@ -2344,6 +2344,13 @@ def main() -> None:
             print(f"  Lineup: {_lu['orders']} depth order(s), {_lu['outs']} ranked teammate(s) out, "
                   f"{len(_cfb_qb_ch)} QB change(s)"
                   + ("" if _clu.measured() else " — college not measured yet, nothing applied"))
+            # WHO STEPS UP, FOR COLLEGE'S REPORTS (engine/stepup.for_cfb_team, step AEK): the season read the step
+            # just made (kept, so this is the same read), on the board's working key, which is never published.
+            from engine.stepup import CFB_GAMES_KEY as _su_key
+            _su_teams = {t for _sg in getattr(_prop_slate, "games", None) or [] for t in (_sg.home, _sg.away)}
+            if _su_teams:
+                _su_players, _su_days = _clu.season_games(conn, _prop_season_of("cfb", args.date), _su_teams)
+                out[_su_key] = {"players": _su_players, "team_days": _su_days}
         except Exception as _lux:                            # noqa: BLE001
             print(f"  ⚠️  college lineup step skipped: {_lux}")
         _t = _clock.lap("injuries + lineup + prop pricing", "lineup", _t)
