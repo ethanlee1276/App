@@ -3573,17 +3573,7 @@ def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_
     shine = [r for r in reads if r.get("read") in ("breakout", "good")]
     # The matchups first, a spot after (step ACW: the wind or the lines are every player's in the game).
     shine.sort(key=lambda r: (r.get("read") != "breakout", bool(r.get("spot")), -_volume(r), -len(r.get("pro") or [])))
-    if shine:
-        seated = team_balanced(shine, shine_n, c.teams)
-        out.append("Who could have a big day: " + _clauses(c, seated, "up"))
-        quiet = 0
-        for t in c.teams:
-            if not any(r.get("team") == t for r in shine):
-                line = quiet_team_line(c, t, reads)
-                if line:
-                    out.append(line)
-                    quiet += 1
-        _both_note(c, big_day_teams=len({r.get("team") for r in seated if r.get("team")}), quiet=quiet)
+    out += _big_day_lines(c, shine, reads, shine_n)
     # A go-to scorer is not a man to have a hard day (engine/readlogic rule
     # 3): his card says the yards are tough and the touchdowns still his.
     struggle = [r for r in reads if r.get("read") in ("tough", "avoid") and (not key_only or _is_key(r))
@@ -3591,6 +3581,21 @@ def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_
     struggle.sort(key=lambda r: (r.get("read") != "avoid", bool(r.get("spot")), -_volume(r), -len(r.get("con") or [])))
     if struggle:
         out.append("Who could have a hard day: " + _clauses(c, team_balanced(struggle, struggle_n, c.teams), "down"))
+    return out
+
+
+def _big_day_lines(c: Ctx, shine: list, reads: list, shine_n: int) -> list:
+    """The big-day line, each team's best seated (breakouts.team_balanced), then a sentence for each team with no
+    favorable read (`quiet_team_line`); [] without a favorable read. Notes both for the heartbeat (`lift_both`)."""
+    from .breakouts import team_balanced
+    if not shine:
+        return []
+    seated = team_balanced(shine, shine_n, c.teams)
+    out = ["Who could have a big day: " + _clauses(c, seated, "up")]
+    for t in c.teams:
+        if not any(r.get("team") == t for r in shine):
+            out += [x for x in [quiet_team_line(c, t, reads)] if x]
+    _both_note(c, big_day_teams=len({r.get("team") for r in seated if r.get("team")}), quiet=len(out) - 1)
     return out
 
 
