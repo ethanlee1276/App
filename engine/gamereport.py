@@ -4887,12 +4887,14 @@ def verdict_evidence(c: Ctx) -> dict:
     """{team: [sentence]}: what in this report points to each side winning,
     the strongest first."""
     out = {t: [] for t in c.teams}
-    # Each offense against the other defense: the scan's edges, the widest first.
+    # Each offense against the other defense: the scan's edges, the widest first. Said with the teams' names, as
+    # every other reason in the list is (step AEJ, 24 November 2026: "CHI's run game (9th) against NE's run defense
+    # (22nd)" sat over "The Patriots are without Carlton Davis III").
     for e in sorted(_edges(c), key=lambda e: -abs(float(e.get("gap") or 0))):
         gap = float(e.get("gap") or 0)
         who = e.get("off") if gap > 0 else e.get("def")
         if gap and who in out:
-            out[who].append(edge_words(c, e).rsplit(" — edge ", 1)[0])
+            out[who].append(cap(named(c, edge_words(c, e).rsplit(" — edge ", 1)[0])))
     # The records (football's table).
     rec = ((c.result.get("playoff_picture") or {}).get("teams") or {})
 

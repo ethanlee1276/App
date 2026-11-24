@@ -77,10 +77,13 @@ def test_the_nfl_report_calls_it_and_says_both_sides():
                  "Our simulation of the game, drive by drive, 4,000 times: the Lions 58%",
                  "Prediction markets: Kalshi 61% and Polymarket 60%",
                  "The lines expect about Lions 27.8, Packers 24.8",
-                 "Why the Lions", "GB's pass protection (22nd) against DET's pass rush (5th)",
+                 "Why the Lions", "The Packers' pass protection (22nd) against the Lions' pass rush (5th)",
                  "The Packers are without Zach Tom (T), out",
-                 "The case for the Packers", "GB's passing game (4th) against DET's pass defense (22nd)"):
+                 "The case for the Packers", "The Packers' passing game (4th) against the Lions' pass defense (22nd)"):
         assert any(want in s for s in said), (want, said)
+    # Every reason in the two lists says the teams by name (step AEJ): no code beside a name.
+    import re
+    assert not [s for s in said[:-1] if re.search(r"\b(GB|DET)\b", s)], said
     assert "the disagreement has carried nothing" in said[-1], said[-1]
     assert "Who we think wins" not in R.to_text(rep).split("WHO WE THINK WINS")[0], "said once, as its section"
     assert "A lean: Lions — 60% to win" in R.to_text(rep)

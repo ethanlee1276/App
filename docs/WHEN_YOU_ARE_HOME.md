@@ -9820,6 +9820,12 @@ seconds where the 13:03 build had run 368: the fantasy means 0.3 seconds where t
 left as they are: the player histories (38 to 55 seconds, both seasons' rows for tonight's schools, which no index
 on the table serves) and the comps (each market's whole history read again when a night's rows land).
 
+**AEJ. "Who we think wins" says the teams by name** (step 927; 24 November). Nothing to run. The section's reasons
+for each side mixed the scan's codes and the teams' names line by line ("CHI's run game (9th) against NE's run defense
+(22nd)" over "The Patriots are without Carlton Davis III"). Each matchup reason now names the teams, as the short
+version has since October ("The Bears' run game (9th) against the Patriots' run defense (22nd)"). The market and
+rankings sections keep their codes beside the prices and in their tables, where they read as the books print them.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 
