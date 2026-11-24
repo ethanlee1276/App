@@ -245,6 +245,36 @@ def test_a_hockey_cards_rows_are_said_as_the_game_page_says_them():
     assert got["none"] is None, "a card the league's feed has not reached keeps ESPN's rows"
 
 
+def test_a_baseball_cards_at_bats_are_said_as_the_game_page_says_them():
+    """Baseball's words were the game page's file's (detail.js); they are app.js's now, for the Live tab's cards too."""
+    node = shutil.which("node")
+    if not node:
+        return
+    card = {"home": "NYY", "away": "BOS", "plays": [
+        {"inning": 3, "half": "B", "batter": "Aaron Judge", "pitcher": "Garrett Crochet", "event": "Double",
+         "event_type": "double", "rbi": 2, "scoring": True, "away_score": 1, "home_score": 3, "distance": 401},
+        {"inning": 3, "half": "B", "batter": "Juan Soto", "pitcher": "Garrett Crochet", "event": "Strikeout",
+         "event_type": "strikeout", "rbi": 0}]}
+    src = "\n".join([STUBS, "const LIVE_WORDS = {};", decl("GP_BB_VERB"), decl("GP_BB_OUT"), decl("GP_BB_OFF"),
+                     decl("gpAtBatWords"), decl("liveWords"), decl("PLAYS_EMPTY"), decl("hockeyPeriod"),
+                     decl("halfPeriod"), decl("playsHTML"),
+                     f"const g = {json.dumps(card)}, w = liveWords('mlb', g);",
+                     "console.log(JSON.stringify(playsHTML({ ...g, plays: w.plays.slice().reverse(), say: w.say })));"])
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(src)
+        path = fh.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+    finally:
+        os.unlink(path)
+    assert out.returncode == 0, out.stderr
+    html = json.loads(out.stdout)
+    assert "<b>Aaron Judge</b> doubles off <b>Garrett Crochet</b>, 401 ft, 2 runs in." in html, html
+    assert "<b>Juan Soto</b> strikes out off <b>Garrett Crochet</b>." in html, html
+    assert "2 RBI" not in html, "the line says the runs; the chip is for the rows that cannot"
+    assert "function gpAtBatWords(" not in (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8"), "one copy"
+
+
 def test_the_live_tab_asks_for_the_words_once_and_draws_again_when_they_land():
     card = APP[APP.index("function liveCardHTML("):]
     card = card[:card.index("\n}\n")]
@@ -257,6 +287,7 @@ def test_the_live_tab_asks_for_the_words_once_and_draws_again_when_they_land():
         assert f'{sport}: ["js/hoopscast.js", "css/hoopscast.css", "QBHoops"]' in table, sport
     assert 'nhl: ["js/rinkcast.js", "css/rinkcast.css", "QBRink"]' in table
     words = decl("liveWords")
+    assert 'if (sport === "mlb") return { plays: g.plays || [], say: (p) => (p && p.batter ? { html: gpAtBatWords(p).html } : null) };' in words
     assert 'if (M && typeof M.cardSay === "function") return { plays: g.plays || [], say: M.cardSay(g, sport) };' in words
     assert "return ice ? { plays: ice.rows, say: ice.say } : { plays: g.plays || [], say: null };" in words
     load = decl("liveWordsLoad")

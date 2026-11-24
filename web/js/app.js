@@ -28117,6 +28117,35 @@ function watchHTML(g, league, cls) {
     rest.map((s) => `<a class="watch-alt" href="${safeHref(s.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.label)}</a>`).join("")}${followA(false)}</div>`;
 }
 
+/* AN AT-BAT IN WORDS (the game page's since 2026-11-21, detail.js gpBaseballKit;
+   the Live tab's baseball cards' too since 2026-11-24, liveWords): "Aaron
+   Judge doubles off Gerrit Cole, 2 runs in." From the at-bat's own facts —
+   MLB's event type, the batter, the pitcher, the runs in and how far the
+   ball went — and a plain "Batter: Event" where the type is one it has no
+   verb for. */
+const GP_BB_VERB = { single: "singles", double: "doubles", triple: "triples", home_run: "homers", walk: "walks",
+  intent_walk: "is walked intentionally", strikeout: "strikes out", hit_by_pitch: "is hit by a pitch",
+  sac_fly: "hits a sacrifice fly", sac_bunt: "lays down a sacrifice bunt", grounded_into_double_play: "grounds into a double play",
+  double_play: "hits into a double play", triple_play: "hits into a triple play", force_out: "is forced out",
+  fielders_choice: "reaches on a fielder’s choice", fielders_choice_out: "is out on a fielder’s choice",
+  field_error: "reaches on an error", strikeout_double_play: "strikes out in a double play", catcher_interf: "reaches on catcher’s interference" };
+const GP_BB_OUT = { groundout: "grounds out", flyout: "flies out", lineout: "lines out", "pop out": "pops out",
+  "bunt groundout": "grounds out on a bunt", "bunt pop out": "pops out on a bunt", "bunt lineout": "lines out on a bunt" };
+//: The at-bats said against the pitcher ("doubles off …").
+const GP_BB_OFF = new Set(["singles", "doubles", "triples", "homers", "walks", "strikes out", "is hit by a pitch", "is walked intentionally"]);
+function gpAtBatWords(p) {
+  const who = String(p.batter || ""), pit = String(p.pitcher || "");
+  const e = String(p.event || "").trim();
+  const verb = GP_BB_VERB[String(p.event_type || "").toLowerCase()] || GP_BB_OUT[e.toLowerCase()] || "";
+  const b = (x) => `<b>${escapeHtml(x)}</b>`;
+  if (!who || !verb) return { text: [who, e].filter(Boolean).join(": "), html: [who ? b(who) : "", escapeHtml(e)].filter(Boolean).join(": ") };
+  const off = GP_BB_OFF.has(verb) && pit;
+  const runs = Number(p.rbi) || 0;
+  const tail = `${p.distance ? `, ${Number(p.distance)} ft` : ""}${runs ? `, ${runs === 1 ? "a run" : `${runs} runs`} in` : ""}.`;
+  return { text: `${who} ${verb}${off ? ` off ${pit}` : ""}${tail}`,
+           html: `${b(who)} ${escapeHtml(verb)}${off ? ` off ${b(pit)}` : ""}${escapeHtml(tail)}` };
+}
+
 /* THE LIVE TAB'S ROWS IN WORDS (2026-11-24; Ethan: "We want all the live
    pages to match each other ... NFL is kind of like the one we want to go off
    of"). A football card's rows read as our own lines (playsHTML footballRow,
@@ -28133,6 +28162,7 @@ const LIVE_WORDS = { nba: ["js/hoopscast.js", "css/hoopscast.css", "QBHoops"], w
 const _liveWordFiles = {};
 //: A card's rows and their words: `{plays, say}`, the card's own plays and no words where the sport's file has none to give.
 function liveWords(sport, g) {
+  if (sport === "mlb") return { plays: g.plays || [], say: (p) => (p && p.batter ? { html: gpAtBatWords(p).html } : null) };
   const f = LIVE_WORDS[sport], M = f && typeof window !== "undefined" ? window[f[2]] : null;
   if (M && typeof M.cardSay === "function") return { plays: g.plays || [], say: M.cardSay(g, sport) };
   const ice = M && typeof M.cardRows === "function" ? M.cardRows(g) : null;

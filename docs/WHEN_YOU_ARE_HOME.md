@@ -9522,6 +9522,12 @@ happened now ("MEM Three-pointer", "MEM Missed dunk", "MEM Technical foul", "NJD
 lines; a thread's label and a shared play add whose play it was ("MEM Three-pointer — Coby White", "CIN Pass
 intercepted — Joe Burrow", "Walk-off 416-ft 3-run homer — Pete Alonso").
 
+**ADM. Baseball's live cards say each at-bat as the game page does** (step 904; 24 November). Nothing to run. The
+last Live tab card still reading a label is baseball's ("Aaron Judge — Double" and a "2 RBI" chip), while its game
+page says "Aaron Judge doubles off Garrett Crochet, 401 ft, 2 runs in." The words were the game page's own file's,
+which the Live tab does not load; they are the shared file's now, and the card says them. Nothing to see until
+baseball is back in the spring.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

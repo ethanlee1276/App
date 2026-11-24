@@ -6758,28 +6758,7 @@ function gpKit(o) {
                 as a sentence (`gpAtBatWords`);
      teamStats, boxes   the box score's batting and pitching lines (`players`).
    The line score is read off the at-bats, inning by inning (`gpBaseballLines`). */
-const GP_BB_VERB = { single: "singles", double: "doubles", triple: "triples", home_run: "homers", walk: "walks",
-  intent_walk: "is walked intentionally", strikeout: "strikes out", hit_by_pitch: "is hit by a pitch",
-  sac_fly: "hits a sacrifice fly", sac_bunt: "lays down a sacrifice bunt", grounded_into_double_play: "grounds into a double play",
-  double_play: "hits into a double play", triple_play: "hits into a triple play", force_out: "is forced out",
-  fielders_choice: "reaches on a fielder's choice", fielders_choice_out: "is out on a fielder's choice",
-  field_error: "reaches on an error", strikeout_double_play: "strikes out in a double play", catcher_interf: "reaches on catcher's interference" };
-const GP_BB_OUT = { groundout: "grounds out", flyout: "flies out", lineout: "lines out", "pop out": "pops out",
-  "bunt groundout": "grounds out on a bunt", "bunt pop out": "pops out on a bunt", "bunt lineout": "lines out on a bunt" };
-//: The at-bats said against the man throwing ("doubles off …").
-const GP_BB_OFF = new Set(["singles", "doubles", "triples", "homers", "walks", "strikes out", "is hit by a pitch", "is walked intentionally"]);
-function gpAtBatWords(p) {
-  const who = String(p.batter || ""), pit = String(p.pitcher || "");
-  const e = String(p.event || "").trim();
-  const verb = GP_BB_VERB[String(p.event_type || "").toLowerCase()] || GP_BB_OUT[e.toLowerCase()] || "";
-  const b = (x) => `<b>${escapeHtml(x)}</b>`;
-  if (!who || !verb) return { text: [who, e].filter(Boolean).join(": "), html: [who ? b(who) : "", escapeHtml(e)].filter(Boolean).join(": ") };
-  const off = GP_BB_OFF.has(verb) && pit;
-  const runs = Number(p.rbi) || 0;
-  const tail = `${p.distance ? `, ${Number(p.distance)} ft` : ""}${runs ? `, ${runs === 1 ? "a run" : `${runs} runs`} in` : ""}.`;
-  return { text: `${who} ${verb}${off ? ` off ${pit}` : ""}${tail}`,
-           html: `${b(who)} ${escapeHtml(verb)}${off ? ` off ${b(pit)}` : ""}${escapeHtml(tail)}` };
-}
+// The at-bat's words (gpAtBatWords) are app.js's: the Live tab's cards say them too.
 /* A player's line so far, from the box score's own counts (engine/mlb/livestats `_card_line`). */
 function gpBaseballLine(row) {
   const L = (row || {}).line || {};

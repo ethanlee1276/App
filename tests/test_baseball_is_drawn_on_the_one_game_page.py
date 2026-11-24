@@ -60,10 +60,13 @@ def _node(js):
         print("      (skipped: no node)")
         return None
     pieces = []
+    # The at-bat's words are app.js's (the Live tab's baseball cards say them too); the lines are the page's.
+    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     for name in ("const GP_BB_VERB", "const GP_BB_OUT", "const GP_BB_OFF"):
-        i = DETAIL.index(name)
-        pieces.append(DETAIL[i:DETAIL.index(";\n", i) + 2])
-    for name in ("gpAtBatWords", "gpBaseballLine", "gpBaseballLines"):
+        i = app.index(name)
+        pieces.append(app[i:app.index(";\n", i) + 2])
+    pieces.append(_fn(app, "gpAtBatWords"))
+    for name in ("gpBaseballLine", "gpBaseballLines"):
         pieces.append(_fn(DETAIL, name))
     prog = ("const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/'/g, '&#39;');\n"
             + "\n".join(pieces) + f"\nconsole.log(JSON.stringify((() => {{ {js} }})()));")
