@@ -398,7 +398,9 @@ def event_bills(rows: list | None = None, since: float | None = None) -> dict:
             s["est"] += est
             s["each"][str(billed)] = s["each"].get(str(billed), 0) + 1
         return out
-    except Exception:                                        # noqa: BLE001
+    except Exception as exc:                                 # noqa: BLE001
+        # {} is a quiet day's answer too (no game calls), so a failure says so in the log.
+        print(f"  ⚠️  the odds bill was not read ({type(exc).__name__}: {exc})")
         return {}
 
 

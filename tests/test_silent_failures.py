@@ -154,6 +154,9 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # THE CARD'S OTHER TEAM (engine/gamereport._balance_card, step AEH): the card as built on a failure, so a
         # failure prints its own line in the build log ("card's other team not read") and the card loses no pick.
         "_balance_card",
+        # WHAT ONE GAME REALLY COSTS (engine/oddsbudget.event_bills, step AEM): {} on a failure, as on a day with no
+        # game calls, so a failure prints its own line ("the odds bill was not read"); the heartbeat carries {}.
+        "event_bills",
         # THE EXPORT'S SAMPLER (engine/stacksample.Sampler._run, 2026-11-08),
         # caught by this sweep the day it was written: it returns None either
         # way, and a failure sets ``error``, which the settle pass puts on its
