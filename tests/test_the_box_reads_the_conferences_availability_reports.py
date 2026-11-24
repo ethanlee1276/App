@@ -212,7 +212,8 @@ def test_a_read_writes_the_cache_and_what_it_saw():
     seen = json.loads((tmp / "s.json").read_text())
     assert seen["conferences"]["ACC"]["filings"] == 1 and seen["conferences"]["SEC"]["status"] == "HTTP 404"
     assert seen["conferences"]["ACC"]["shape"][0] == 1, "the answer's shape, for checking the reading"
-    assert seen["check"] == {"acc": {"filings": 1}} and seen["trusted"] is False, "the first read's check, kept"
+    # On since the first live report read right (step ADO).
+    assert seen["check"] == {"acc": {"filings": 1}} and seen["trusted"] is True, "the first read's check, kept"
     assert R.BASE == "https://app.hdintelligence.com" and R.DATA == {"report": "/api/get-publish-public",
                                                                     "archive": "/api/get-archive-public"}
 
@@ -249,12 +250,18 @@ def test_the_check_holds_past_reports_to_the_games_box_scores():
                                    "Ohio State: Sat Out (2026-11-23T21:00:00Z)"]
 
 
-def test_nothing_reaches_picks_or_the_injuries_page_until_the_reading_is_checked():
+def test_the_filings_reach_picks_and_the_injuries_page_once_checked():
+    """Off until the reading was checked (steps ADF, ADO); on since, and the switch turns it off without a deploy."""
     import os
-    assert CA.TRUSTED is False and not CA.on()
+    assert CA.TRUSTED is True and CA.on()
+    os.environ[CA.ENV] = "off"
+    try:
+        assert not CA.on(), "the switch can take it off without a deploy"
+    finally:
+        os.environ.pop(CA.ENV)
     os.environ[CA.ENV] = "on"
     try:
-        assert CA.on(), "the switch can put it on without a deploy"
+        assert CA.on()
     finally:
         os.environ.pop(CA.ENV)
 

@@ -9536,6 +9536,21 @@ from the injury list the picks read, and any filing from another year shows its 
 oldest elsewhere were the WNBA's season-ending injuries from May, which stay. The page is empty for college until
 the conferences' reports fill it (decision 20).
 
+**ADO. College football's injuries now come from the schools' own reports (decision 20, on)** (step 906; 24
+November). Nothing to run. The Big 12's first report of rivalry week posted at 9 PM Central tonight (TCU at Texas
+Tech, Thursday) and the box read it at 9:02: 98 TCU players and 105 Texas Tech players, filed at 9 PM Central, each
+with the school's word. TCU lists quarterback Jaden Craig and running back G'Ivori Graham out and linebacker Keylan
+Abrams questionable; Texas Tech lists running back Quinten Joyner, receiver Jalen Jones and safety Miquel Dingle Jr.
+out, outside linebacker LaDamion Guyton doubtful and five questionable; everyone else available or probable. One
+thing the season's archive did not show: a live report writes each name with the position and number in front ("QB
+#1 Jaden Craig", "CB #1 Vernon Glover, Jr."), which would have matched nobody on ESPN's board. The name is now read
+without them, the position kept for the row, and "Glover, Jr." reads "Glover Jr." as ESPN writes it. With that, and
+the archive already checked against the box scores (step ADF), the switch is on: a school's newest word replaces
+ESPN's older one on the Injuries page, in the game reports and in the picks; a player the school lists as available
+is cleared; and a game between two reporting schools posts its picks and parlays once both game-day reports are in,
+50 minutes before kickoff at the latest. A row from a report says so on the Injuries page ("Big 12 availability
+report"). `QB_CFB_AVAIL=off` on the box turns it off without a deploy.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

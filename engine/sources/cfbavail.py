@@ -48,9 +48,10 @@ SUFFIX = re.compile(r"^(jr|sr|ii|iii|iv|v)\.?$", re.I)
 
 
 #: THE SCHOOLS' FILINGS REACH PICKS AND THE INJURIES PAGE ONLY ONCE CHECKED (decision 20: "a yes if it helps").
-#: The box's reader keeps its cache from its first read; this stays False until that reading is checked against a
-#: week of the vendor's own archive and the games' box scores. ``QB_CFB_AVAIL=on`` or ``off`` overrides it.
-TRUSTED = False
+#: Checked: the season's archive against the games' box scores (step ADF: 4 of 755 men listed out had stats), and
+#: the first live report with rows read right on 24 November (step ADO). ``QB_CFB_AVAIL=off`` turns it off without a
+#: deploy, ``on`` on.
+TRUSTED = True
 
 
 def on() -> bool:
@@ -74,17 +75,36 @@ def status_of(word) -> str | None:
     return None
 
 
+#: A CURRENT REPORT'S NAME CARRIES ITS POSITION AND NUMBER (the Big 12's first live report, 23 November 2026, 9 PM
+#: Central: "EDG #0 Zach Chapman", "CB #1 Vernon Glover, Jr."), where the season's archive keeps the number in a
+#: column of its own. The position is the row's (`name_and_pos`); the number is dropped.
+LEAD = re.compile(r"^\s*([A-Za-z]{1,4}(?:/[A-Za-z]{1,4})?)\s*#\s*\d{1,3}\s+(?=\S)")
+
+
 def player_name(raw) -> str:
     """A report's name in the board's order: "#12 Smith, John (QB)" -> "John Smith"; "Smith Jr., John" ->
-    "John Smith Jr."; a name already first-last is left as it is."""
-    s = re.sub(r"^\s*#?\d{1,3}\s*[-–.]?\s+", "", str(raw or ""))
+    "John Smith Jr."; "CB #1 Vernon Glover, Jr." -> "Vernon Glover Jr."; a name already first-last is left as it
+    is."""
+    s = str(raw or "")
+    lead = LEAD.match(s)
+    s = s[lead.end():] if lead else s
+    s = re.sub(r"^\s*#?\d{1,3}\s*[-–.]?\s+", "", s)
     s = re.sub(r"\s*\([^)]*\)", " ", s)
     parts = [p.strip() for p in s.split(",")]
     if len(parts) == 2 and parts[1] and not SUFFIX.match(parts[1]):
         s = f"{parts[1]} {parts[0]}"
+    elif len(parts) == 2 and SUFFIX.match(parts[1]):
+        s = f"{parts[0]} {parts[1]}"
     elif len(parts) == 3 and SUFFIX.match(parts[1]):
         s = f"{parts[2]} {parts[0]} {parts[1]}"
     return " ".join(s.split())
+
+
+def name_and_pos(raw) -> tuple[str, str]:
+    """``(name, position)`` from a report's name: "EDG #0 Zach Chapman" -> ("Zach Chapman", "EDG"); a name with
+    no position before its number has none."""
+    lead = LEAD.match(str(raw or ""))
+    return player_name(raw), (lead.group(1).upper() if lead else "")
 
 
 def _ts(value) -> float | None:
@@ -182,10 +202,10 @@ def filed_for(games, lookup: dict, cache: dict | None = None) -> list[dict]:
     for team, rep in best.items():
         for p in rep.get("players") or []:
             status = status_of(p.get("word"))
-            name = player_name(p.get("player"))
+            name, lead = name_and_pos(p.get("player"))
             if status is None or not name:
                 continue
-            rows.append({"team": team, "player": name, "pos": str(p.get("pos") or "").upper(), "status": status,
+            rows.append({"team": team, "player": name, "pos": str(p.get("pos") or lead).upper(), "status": status,
                          "word": " ".join(str(p.get("word") or "").split()), "at": rep["_at"],
                          "conference": rep.get("conference") or "", "final": bool(rep.get("final"))})
         if not rep.get("players"):
@@ -323,6 +343,12 @@ def page_rows(espn_rows: list[dict], cache: dict, lookup: dict, teams: dict | No
     for key, (name, p, rep) in mine_by.items():
         if key in used:
             continue
+        # A live report lists the whole roster, most of it "Available" (the Big 12's first, 23 November: 185 of 203
+        # men), where the archive lists only the designated: a man ESPN does not list and the school calls
+        # available is no news here. "Probable" is a word on him, and stays.
+        word = " ".join(str(p.get("word") or "").split())
+        if status_of(word) == "" and not re.search(r"probable", word, re.I):
+            continue
         team = key[0]
         display = shown.get(team) or ((teams or {}).get(team) or {}).get("name") or rep.get("school")
         out.append(_school_row(display, name, p, rep, None))
@@ -333,7 +359,7 @@ def page_rows(espn_rows: list[dict], cache: dict, lookup: dict, teams: dict | No
 def _school_row(team: str, name: str, p: dict, rep: dict, espn: dict | None) -> dict:
     word = " ".join(str(p.get("word") or "").split())
     label = LABELS.get(str(rep.get("conference") or "").lower(), str(rep.get("conference") or "").upper())
-    return {"team": team, "player": name, "pos": (p.get("pos") or (espn or {}).get("pos") or None),
+    return {"team": team, "player": name, "pos": (p.get("pos") or name_and_pos(p.get("player"))[1] or (espn or {}).get("pos") or None),
             "status": word.title() if word.isupper() or word.islower() else word,
             "date": rep.get("filed_at"), "injury": (espn or {}).get("injury"), "side": (espn or {}).get("side"),
             "return_date": None, "face": (espn or {}).get("face"),

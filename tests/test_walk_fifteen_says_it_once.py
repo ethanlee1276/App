@@ -93,8 +93,13 @@ def test_the_cards_game_keeps_the_interceptions_alone():
 
 
 def test_college_basketballs_sparse_board_is_said_as_college_footballs():
-    assert 'const note = sport === "cfb" || sport === "cbb"' in MORE
-    assert "The news below names who is hurt." in MORE
+    # College football's note names the conferences' own reports since decision 20 went on (step ADO); college
+    # basketball keeps the sparse board's word, and both point at the news below.
+    note = MORE[MORE.index("const note = sport === \"cfb\""):]
+    note = note[:note.index(";\n")]
+    assert "The Big Ten, the SEC, the ACC and the Big 12 post each school’s availability report" in note
+    assert ': sport === "cbb"' in note and "College programs have no duty to report, so this feed runs sparse" in note
+    assert note.count("The news below names who is hurt.") == 2
 
 
 def test_the_record_windows_keep_their_order():

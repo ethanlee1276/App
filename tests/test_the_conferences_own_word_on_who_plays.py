@@ -41,6 +41,26 @@ def test_a_reports_names_read_first_name_first():
     assert CA.player_name("  7  Jeremiah Smith ") == "Jeremiah Smith"
 
 
+def test_a_current_reports_name_carries_its_position_and_number():
+    """The Big 12's first live report (TCU at Texas Tech, posted 23 November at 9 PM Central) wrote each name as
+    "EDG #0 Zach Chapman", where the season's archive kept the number in a column of its own; the comma before a
+    suffix ("Vernon Glover, Jr.") would not match ESPN's "Vernon Glover Jr."."""
+    assert CA.name_and_pos("EDG #0 Zach Chapman") == ("Zach Chapman", "EDG")
+    assert CA.name_and_pos("CB #1 Vernon Glover, Jr.") == ("Vernon Glover Jr.", "CB")
+    assert CA.name_and_pos("S #0 Mikal Harrison-Pilot") == ("Mikal Harrison-Pilot", "S")
+    assert CA.name_and_pos("OLB #2 Trey White") == ("Trey White", "OLB")
+    assert CA.name_and_pos("#12 Klubnik, Cade (QB)") == ("Cade Klubnik", "")
+    assert normalize_name(CA.player_name("CB #1 Vernon Glover, Jr.")) == normalize_name("Vernon Glover Jr.")
+    games = [{"home": "TTU", "away": "TCU", "date": "2026-11-26", "kickoff": "2026-11-27T01:00:00Z"}]
+    rep = {"conference": "b12", "school": "Texas Tech", "filed_at": "2026-11-24T03:00:00Z", "final": False,
+           "players": [{"player": "RB #0 Quinten Joyner", "pos": "", "word": "Out"},
+                       {"player": "WR #1 Micah Hudson", "pos": "", "word": "Questionable"},
+                       {"player": "DL #1 Julien Laventure", "pos": "", "word": "Available"}]}
+    rows = CA.filed_for(games, {"texas tech": "TTU", "tcu": "TCU"}, _cache(rep))
+    assert [(r["player"], r["pos"], r["status"]) for r in rows] == [
+        ("Quinten Joyner", "RB", "OUT"), ("Micah Hudson", "WR", "QUESTIONABLE"), ("Julien Laventure", "DL", "")]
+
+
 def _cache(*reports):
     return {"reports": list(reports)}
 
@@ -144,6 +164,26 @@ def test_the_injuries_page_shows_each_schools_filing_over_espns_rows():
     assert ("Clemson Tigers", "Filing Old") not in got and n == 2
     from engine.sources.espninjuries import is_return
     assert is_return(k) and not is_return(w), "an Available row counts as cleared, never as listed"
+
+
+def test_a_whole_rosters_available_men_are_no_news_on_the_page():
+    """The Big 12's live report lists every man (185 of 203 "Available"), the archive only the designated: a man
+    ESPN does not list and the school calls available is left off the page; probable, out and the rest stay, and
+    a man ESPN lists is cleared by the school's word as before."""
+    look = {"texas tech": "TTU", "texas tech red raiders": "TTU"}
+    espn = [{"team": "Texas Tech Red Raiders", "player": "Micah Hudson", "pos": "WR", "status": "Out",
+             "date": "2026-11-20T12:00Z"}]
+    rep = {"conference": "b12", "school": "Texas Tech", "filed_at": "2026-11-24T03:00:00Z", "final": False,
+           "players": [{"player": "WR #1 Micah Hudson", "pos": "", "word": "Available"},
+                       {"player": "DL #1 Julien Laventure", "pos": "", "word": "Available"},
+                       {"player": "WR #3 Coy Eakin", "pos": "", "word": "Probable"},
+                       {"player": "RB #0 Quinten Joyner", "pos": "", "word": "Out"}]}
+    rows, n = CA.page_rows(espn, _cache(rep), look, now=CA._ts("2026-11-24T04:00:00Z"))
+    got = {r["player"]: r for r in rows}
+    assert set(got) == {"Micah Hudson", "Coy Eakin", "Quinten Joyner"}, sorted(got)
+    assert got["Micah Hudson"]["cleared"] is True and got["Micah Hudson"]["comment"] == "Big 12 availability report"
+    assert got["Quinten Joyner"]["pos"] == "RB" and got["Quinten Joyner"]["status"] == "Out"
+    assert got["Coy Eakin"]["status"] == "Probable" and n == 3
 
 
 def test_the_injuries_builder_reads_the_schools_filings_even_when_espn_fails():

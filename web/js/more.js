@@ -2101,7 +2101,12 @@ async function renderInjuries() {
   if (!rows.length) {
     // College basketball's board is college football's twin (walk 15, 2026-11-18: an empty board read "rare — or
     // the feed declined" above news of Tyran Stokes and Neo Avdalas hurt).
-    const note = sport === "cfb" || sport === "cbb"
+    // College football's four big conferences post their schools' own reports (decision 20, step ADO).
+    const note = sport === "cfb"
+      ? `The Big Ten, the SEC, the ACC and the Big 12 post each school’s availability report for conference
+         games, and those show here once posted. Other programs have no duty to report, so this feed runs
+         sparse between them. The news below names who is hurt.`
+      : sport === "cbb"
       ? `College programs have no duty to report, so this feed runs sparse —
          emptiness here is the league’s opacity, not a fault to chase. The news below names who is hurt.`
       : `Either nobody in the league carries a designation right now — rare —
@@ -2185,7 +2190,8 @@ async function renderInjuries() {
       lists, not just this week’s.</span></div>
     ${teams.map((t) => injTeamBlock(t, byTeam[t], severity[t])).join("")}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
-      Statuses are the league’s own filings via ESPN’s public feed, refreshed with the
+      ${sport === "cfb" ? `A row that names a conference’s availability report is that school’s own filing,
+      read from the conference’s report as it posts; the rest are ESPN’s. ` : ""}Statuses are the league’s own filings via ESPN’s public feed, refreshed with the
       site on a 30-minute cache, one row per player — the newest filing.${
       _nextUp.size ? ` <b>Next man up</b> names who holds an injured player’s work and the
       share each already held, from the usage board — a measured role, never a
