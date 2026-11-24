@@ -100,13 +100,37 @@ def poly_quality(row: dict) -> str:
 
 def home_spread(g: dict) -> float | None:
     """The board's line as the HOME club's number (−3.5 = home gives 3.5).
-    `spread` is stored as a size and `favorite` names who gives it."""
+
+    Every board stores `spread` as the home club's signed number; the NFL's
+    also names its `favorite`, which settles the sign where it is named.
+
+    A ROAD FAVOURITE WAS STORED THE WRONG WAY ROUND (step ADT, 2026-11-24).
+    This read `spread` as a size and took the home club for the favourite
+    whenever no `favorite` was named — and only the NFL's board names one
+    (baseball's writes it empty). So every game a road side was favoured in,
+    in every other league, had its line stored on the other side of zero:
+    Memphis −5.5 at Charlotte went into the line store as Charlotte −5.5, and
+    5 of the NBA's 10 games, 3 of college basketball's 24 priced games and 2
+    of hockey's 7 that night were stored flipped. The store is the close the
+    Record grades a spread against (`ledger._game_close`; baseball's run
+    lines showed an average closing-line value of +2.0 runs, the NBA's
+    picks of the day −6.0 points), the line's move and the "moved against
+    the money" note (engine/lineopen), and the spread the prediction
+    markets and the money split are matched on (crowd_lines, kalshi_lines,
+    engine/moneysplit). engine/lineopen.repair_signs mends the rows stored
+    before this, and `launch.py --repair-spread-closes` the closes banked
+    from them."""
     try:
-        size = abs(float(g.get("spread")))
+        sp = float(g.get("spread"))
     except (TypeError, ValueError):
         return None
-    fav = str(g.get("favorite") or g.get("home") or "")
-    return -size if fav == str(g.get("home") or "") else size
+    if sp != sp:                                             # NaN
+        return None
+    home, away = str(g.get("home") or ""), str(g.get("away") or "")
+    fav = str(g.get("favorite") or "")
+    if fav and fav in (home, away):
+        return -abs(sp) if fav == home else abs(sp)
+    return sp
 
 
 def crowd_lines(row: dict, g: dict, first_is_home: bool, ids: bool = False) -> dict:

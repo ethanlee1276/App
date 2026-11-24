@@ -2243,6 +2243,8 @@ function renderGamePage() {
   const live = g.live || {};
   const isLive = live.state === "live";
   const isFinal = live.state === "final";
+  // A finished game's lines are its close, in every league (app.js closedLine, step ADT).
+  const gl = isFinal ? closedLine(g) : g;
 
   // The picks kept from before the start (keptPicksFor), where the board's are gone.
   const kept = keptPicksFor(g) || {};
@@ -2344,26 +2346,27 @@ function renderGamePage() {
   // The render's GAME LINES table and KEY INSIGHTS panel. Lines come
   // straight off the slate; a cell without a real price shows a dash.
   // Insights are the game's own data fields, not narratives.
-  const gpFav = spreadFav(g);
-  const gpSp = (side) => g.spread == null ? "—"
-    : `${side === gpFav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
+  const gpFav = spreadFav(gl);
+  const gpSp = (side) => gl.spread == null ? "—"
+    : `${side === gpFav ? "−" : "+"}${Math.abs(gl.spread).toFixed(1)}`;
   const gpMl = (v) => v == null ? "—" : oddsTxt(v);
   // NOT TWICE (the 2026-09-27 sweep): the hero already draws these three
   // markets (gpLines, the Home card's grid) for any game not yet final,
   // and the card below repeated the same six numbers straight under it.
   // It stays for a finished game, where the hero draws none.
-  const linesCard = !gpLines && (g.spread != null || g.total != null
-                     || g.away_ml != null || g.home_ml != null) ? `
-    <div class="card gp-lines"><div class="gp-panel-title">Game lines</div>
+  const linesCard = !gpLines && (gl.spread != null || gl.total != null
+                     || gl.away_ml != null || gl.home_ml != null) ? `
+    <div class="card gp-lines"><div class="gp-panel-title">Game lines${gl.closed
+      ? ` <span class="gp-panel-sub">— the last line before the game started</span>` : ""}</div>
       <div class="lb-table">
         <span class="lb-th"></span><span class="lb-th">Spread</span>
         <span class="lb-th">Total</span><span class="lb-th">ML</span>
         <span class="lb-tm">${teamMark(g.away, 20)} ${escapeHtml(g.away)}</span>
-        <b>${gpSp(g.away)}</b><b>${g.total != null ? "O " + g.total.toFixed(1) : "—"}</b>
-        <b>${gpMl(g.away_ml)}</b>
+        <b>${gpSp(g.away)}</b><b>${gl.total != null ? "O " + gl.total.toFixed(1) : "—"}</b>
+        <b>${gpMl(gl.away_ml)}</b>
         <span class="lb-tm">${teamMark(g.home, 20)} ${escapeHtml(g.home)}</span>
-        <b>${gpSp(g.home)}</b><b>${g.total != null ? "U " + g.total.toFixed(1) : "—"}</b>
-        <b>${gpMl(g.home_ml)}</b>
+        <b>${gpSp(g.home)}</b><b>${gl.total != null ? "U " + gl.total.toFixed(1) : "—"}</b>
+        <b>${gpMl(gl.home_ml)}</b>
       </div></div>` : "";
   const notes = [];
   // WHO IS OUT HAS ONE HOME. The game report's injuries section and the
@@ -2561,9 +2564,9 @@ function renderGamePage() {
         <div class="chips gp-chips">
           ${g.doubleheader ? `<span class="chip up">${icon("calendar", 11)} Doubleheader · Game ${g.game_number || 1}</span>` : ""}
           ${/* No total posted, no chip: a lone "O/U —" said nothing (2026-11-18). */""}
-          ${gpLines || g.total == null ? "" : `<span class="chip">O/U ${g.total.toFixed(1)}</span>`}
-          ${gpLines || !spreadFav(g) || g.spread == null ? ""
-            : `<span class="chip">${escapeHtml(teamName(spreadFav(g)))} −${Math.abs(g.spread).toFixed(1)}</span>`}
+          ${gpLines || gl.total == null ? "" : `<span class="chip">O/U ${gl.total.toFixed(1)}</span>`}
+          ${gpLines || !spreadFav(gl) || gl.spread == null ? ""
+            : `<span class="chip">${escapeHtml(teamName(spreadFav(gl)))} −${Math.abs(gl.spread).toFixed(1)}</span>`}
           <span class="chip">${escapeHtml(cond)}</span>
           ${g.roof ? `<span class="chip">${escapeHtml(({ outdoors: "Outdoors", open: "Roof open",
             closed: "Roof closed", dome: "Dome", retractable: "Retractable roof" })[g.roof] || `Roof ${g.roof}`)}</span>` : ""}

@@ -78,12 +78,47 @@ def priced(g: dict) -> bool:
     return _ml(g.get("home_ml")) is not None and _ml(g.get("away_ml")) is not None
 
 
+#: THE ROAD FAVOURITE'S SIGN, MENDED ONCE (step ADT, 2026-11-24). Until then
+#: crowd.home_spread took the home club for the favourite on every board that
+#: names none — every league but the NFL — so each game a road side was
+#: favoured in was stored with its line on the other side of zero, open and
+#: close alike. The row's own moneylines, taken in the same read, say who was
+#: favoured: where they name the road side and the stored line has the home
+#: club giving points, the line is flipped. Once, recorded in
+#: `line_open_fixes`: a row written since is the board's own number, and a
+#: book's spread and moneyline that disagree on a pick'em are left as read.
+SIGN_FIX = "road_favourite_sign_2026_11_24"
+
+
+def repair_signs(conn) -> int:
+    """Flip the spreads stored the wrong way round before step ADT, once.
+    Returns the columns flipped (an open and a close count apart); 0 when
+    the repair has already run. Never touches the NFL's rows, whose board
+    always named its favourite."""
+    ensure_tables(conn)
+    conn.execute("CREATE TABLE IF NOT EXISTS line_open_fixes (name TEXT PRIMARY KEY, at INTEGER, rows INTEGER)")
+    if conn.execute("SELECT 1 FROM line_open_fixes WHERE name=?", (SIGN_FIX,)).fetchone():
+        return 0
+    n = 0
+    for col, hm, am in (("open_spread", "open_home_ml", "open_away_ml"),
+                        ("now_spread", "now_home_ml", "now_away_ml")):
+        # The old rule only ever stored a home favourite's number (zero or
+        # less); the road side's shorter price says it was the road's.
+        n += conn.execute(
+            f"UPDATE line_opens SET {col} = -{col} WHERE sport != 'nfl' AND {col} < 0 "
+            f"AND {hm} IS NOT NULL AND {am} IS NOT NULL AND {am} < {hm}").rowcount
+    conn.execute("INSERT OR IGNORE INTO line_open_fixes VALUES (?,?,?)", (SIGN_FIX, int(time.time()), n))
+    conn.commit()
+    return n
+
+
 def record(conn, sport: str, games, now: float | None = None) -> dict:
     """First-seen numbers written once; ``now`` columns every build on a
     current price (a dated one opens a row but never moves them). Started
     games are left alone (engine/crowd.started). Returns a census."""
     from .crowd import home_spread, started
     ensure_tables(conn)
+    repair_signs(conn)
     ts = int(now if now is not None else time.time())
     census = {"games": 0, "opened": 0, "updated": 0}
     for g in games or []:
@@ -158,21 +193,31 @@ def total_against_money(g: dict, open_total, now_total) -> dict | None:
 
 
 def attach(conn, sport: str, games, now: float | None = None) -> int:
-    """``line_open`` on every game with a stored opener. Returns games stamped."""
-    from .crowd import home_spread
+    """``line_open`` on every game with a stored opener. Returns games stamped.
+
+    A STARTED GAME CARRIES ITS CLOSE (step ADT, 2026-11-24): ``close``, the
+    `now_*` columns the board stopped writing at the start — the line the
+    Record grades a game bet against. The board's own fields do not keep it:
+    hockey's finished games lost theirs on the first build after midnight,
+    college basketball's as each game ended, and the NFL's moneylines went to
+    the not-offered zero, so a finished game's page read "—" in one league
+    and its closing numbers in the NBA's. ESPN's page for a finished game
+    still names the line; every league's now does, from here."""
+    from .crowd import home_spread, started
     ensure_tables(conn)
     n = 0
     for g in games or []:
         if not isinstance(g, dict):
             continue
         date, away, home = key(g)
-        row = conn.execute("SELECT open_ts, open_spread, open_total, open_home_ml, open_away_ml "
+        row = conn.execute("SELECT open_ts, open_spread, open_total, open_home_ml, open_away_ml, "
+                           "now_ts, now_spread, now_total, now_home_ml, now_away_ml "
                            "FROM line_opens WHERE sport=? AND date=? AND away=? AND home=?",
                            (sport, date, away, home)).fetchone()
         if row is None:
             g.pop("line_open", None)
             continue
-        open_ts, o_sp, o_tot, o_hm, o_am = row
+        open_ts, o_sp, o_tot, o_hm, o_am, c_ts, c_sp, c_tot, c_hm, c_am = row
         # The current numbers are the game's own — this build's, not the
         # table's "now" columns, which a started game stops updating.
         n_sp = home_spread(g) if priced(g) else None
@@ -187,6 +232,8 @@ def attach(conn, sport: str, games, now: float | None = None) -> int:
         trlm = total_against_money(g, o_tot, n_tot)
         if trlm:
             out["total_against_money"] = trlm
+        if c_ts is not None and started(g, now):
+            out["close"] = {"spread_home": c_sp, "total": c_tot, "home_ml": _ml(c_hm), "away_ml": _ml(c_am)}
         g["line_open"] = out
         n += 1
     return n

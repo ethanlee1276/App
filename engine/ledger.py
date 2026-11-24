@@ -7192,6 +7192,77 @@ def fill_game_closes(conn, hist_conn, apply: bool = False,
     return out
 
 
+#: The boards that name no favourite: every league's but the NFL's (step ADT).
+SPREAD_SIGN_SPORTS = ("mlb", "nba", "wnba", "nhl", "cbb", "cfb")
+
+
+def repair_spread_closes(conn, hist_conn, apply: bool = False,
+                         sport: str | None = None) -> dict:
+    """Re-derive the banked close of every settled spread bet in a league
+    whose board names no favourite, from the stored pregame lines, by the
+    settle's own function (`_game_close`). Writes only a close that
+    differs; dry run unless ``apply``. Returns a census.
+
+    WHY (step ADT, 2026-11-24). crowd.home_spread took the home club for the
+    favourite on every board but the NFL's, so a road favourite's line went
+    into the store on the other side of zero and each spread bet on its game
+    banked a close there: a run line taken at −1.5 "closed" at +1.5, a
+    three-run closing-line value. The Record showed baseball's run lines at
+    an average of +2.0 and the NBA's picks of the day at −6.0. The store is
+    mended once (engine/lineopen.repair_signs, every board build runs it);
+    a settled bet never settles again, so its close is re-read here. A close
+    already right is left alone, and so is every bet the store has no line
+    for."""
+    out = {"examined": 0, "changed": 0, "same": 0, "no_line": 0, "no_game": 0,
+           "by_sport": {}, "sample": [], "applied": apply}
+    if hist_conn is None:
+        return out
+    sports = [s for s in SPREAD_SIGN_SPORTS if not sport or s == sport]
+    if not sports:
+        return out
+    q = ("SELECT * FROM bets WHERE status IN ('won','lost','push') AND market='spread' "
+         f"AND closing_line IS NOT NULL AND sport IN ({','.join('?' * len(sports))})")
+    cache: dict = {}
+    for b in conn.execute(q, sports).fetchall():
+        out["examined"] += 1
+        where, wargs = _hist_where(b)
+        try:
+            rows, actual_fn = _game_bet_evidence(hist_conn, b, where, wargs)
+            if not rows and b["sport"] == "cfb":
+                nrows, nfn = _neighbour_game_evidence(hist_conn, b, where, wargs)
+                if nrows:
+                    rows, actual_fn = nrows, nfn
+            g, _v = _pick_dh_game(rows, b, actual_fn)
+        except Exception:                                    # noqa: BLE001
+            g = None
+        if g is None:
+            out["no_game"] += 1
+            continue
+        cl, _co = _game_close(cache, hist_conn, b, g, n_games=len(rows))
+        if cl is None:
+            out["no_line"] += 1
+            continue
+        if abs(float(cl) - float(b["closing_line"])) < 1e-9:
+            out["same"] += 1
+            continue
+        out["changed"] += 1
+        out["by_sport"][b["sport"]] = out["by_sport"].get(b["sport"], 0) + 1
+        if len(out["sample"]) < 8:
+            out["sample"].append((b["date"], b["sport"], b["player"], b["line"],
+                                  b["closing_line"], float(cl)))
+        if apply:
+            conn.execute("UPDATE bets SET closing_line=? WHERE id=?", (float(cl), b["id"]))
+    if apply:
+        conn.commit()
+    lo = cache.get("_line_opens")
+    if lo is not None:
+        try:
+            lo.close()
+        except Exception:                                    # noqa: BLE001
+            pass
+    return out
+
+
 def repair_closing_odds(conn, apply: bool = False, hist_conn=None, sport: str | None = None) -> dict:
     """Re-derive every settled bet's banked closing price, side- and
     line-aware, from the harvested closes and the raw snapshots.

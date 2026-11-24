@@ -42,8 +42,9 @@ def test_every_place_that_draws_a_spread_uses_it():
     assert APP.count("const fav = spreadFav(g);") == 2, "the live card and the rail's live cards"
     assert 'const fav = g.favorite || (Number.isFinite(sp) && sp !== 0 ? (sp < 0 ? g.home : g.away) : "");' in APP, \
         "the game script's read, the same rule written out (its tests run it on its own)"
-    assert "const gpFav = spreadFav(g);" in det, "the game page's lines table"
-    assert "`<span class=\"chip\">${escapeHtml(teamName(spreadFav(g)))} −${Math.abs(g.spread).toFixed(1)}</span>`" in det
+    # The lines a finished game reads are its close (`gl`, app.js closedLine, step ADT), favoured by the same rule.
+    assert "const gpFav = spreadFav(gl);" in det, "the game page's lines table"
+    assert "`<span class=\"chip\">${escapeHtml(teamName(spreadFav(gl)))} −${Math.abs(gl.spread).toFixed(1)}</span>`" in det
     assert "spreadFav(g) && g.spread != null ? `${teamNameIn(d.sport, spreadFav(g))}" in more, "the team page"
     for js in (APP, det, more):
         assert "g.favorite || g.home" not in js, "never the home side by default"

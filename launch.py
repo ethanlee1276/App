@@ -11316,6 +11316,47 @@ def fill_game_closes(apply: bool = False, sport: str | None = None) -> None:
           if apply else "\n  DRY RUN — nothing written. Add --apply to fill them.\n")
 
 
+def repair_spread_closes(apply: bool = False, sport: str | None = None) -> None:
+    """Re-read the close of every settled spread bet on a game a road side
+    was favoured in (step ADT). Dry run unless --apply.
+
+    Until 2026-11-24 every board but the NFL's stored a road favourite's line
+    on the other side of zero, and each spread bet on that game banked its
+    close there — baseball's run lines read an average closing-line value of
+    +2.0 runs on the Record. The stored lines are mended first (the first
+    board build after the deploy does it too, once); then each settled spread
+    bet's close is read again by the settle's own function and rewritten
+    where it differs."""
+    from engine import crowd, lineopen
+    from engine import db as hist_db
+    from engine import ledger
+    try:
+        c = crowd.connect()
+        try:
+            n = lineopen.repair_signs(c)
+        finally:
+            c.close()
+        print(f"\n  STORED LINES: {n} road favourite line(s) turned the right way round"
+              if n else "\n  STORED LINES: already mended (every board build does it once)")
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"\n  ⚠️  the stored lines could not be mended ({type(exc).__name__}: {exc}) — stopping")
+        return
+    conn = ledger.connect()
+    if apply and not _backed_up("repair-spread-closes", history=False):
+        return
+    r = ledger.repair_spread_closes(conn, hist_db.connect(), apply=apply, sport=sport)
+    print(f"  SETTLED SPREAD BETS with a close, in the leagues that name no favourite: {r['examined']}")
+    print(f"  {r['changed']:>5} {'REWRITTEN' if apply else 'would be rewritten'}"
+          + (" — " + ", ".join(f"{k} {v}" for k, v in sorted(r["by_sport"].items())) if r["by_sport"] else ""))
+    print(f"  {r['same']:>5} already right")
+    print(f"  {r['no_line']:>5} no line    the board never stored that game's line")
+    print(f"  {r['no_game']:>5} no game    its games row is not on file")
+    for date, sp, who, line, old, new in r["sample"]:
+        print(f"    {date}  {sp:<4} {str(who)[:16]:<16} line {line}  close {old} → {new}")
+    print("\n  written — the Record page's closing-line numbers pick it up on the next export.\n"
+          if apply else "\n  DRY RUN — no close rewritten. Add --apply to write them.\n")
+
+
 def set_paper_mode(want: str | None = None) -> None:
     """Turn real-money staking on or off. `python3 launch.py --paper on`.
 
@@ -12135,6 +12176,7 @@ KNOWN_FLAGS = frozenset({
     "--promo-new", "--promos", "--promos-setup", "--recreate", "--refit",
     "--refresh", "--refresh-rosters", "--relearn", "--renders",
     "--repair-close-lines", "--repair-closes", "--repair-journal", "--repair-premature",
+    "--repair-spread-closes",
     "--reset-budget", "--resize-unstaked", "--ripple", "--seal",
     "--settle", "--shape", "--side-bias",
     # Consumed by `for flag in ("--sport", "--since")` — invisible to any
@@ -12717,6 +12759,10 @@ def main() -> None:
     if "--fill-game-closes" in argv:
         _fs = next((a for a in argv if a in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb")), None)
         fill_game_closes(apply="--apply" in argv, sport=_fs)
+        return
+    if "--repair-spread-closes" in argv:
+        _rs = next((a for a in argv if a in ("cfb", "mlb", "nba", "wnba", "nhl", "cbb")), None)
+        repair_spread_closes(apply="--apply" in argv, sport=_rs)
         return
     if "--void-unplayed" in argv:
         show_unplayed(apply="--apply" in argv)

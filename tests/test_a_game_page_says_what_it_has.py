@@ -43,7 +43,8 @@ def test_no_prices_is_said_once_and_rightly():
 
 
 def test_no_total_is_no_chip_and_a_chip_starts_with_a_capital():
-    assert '${gpLines || g.total == null ? "" : `<span class="chip">O/U ${g.total.toFixed(1)}</span>`}' in DETAIL
+    # A finished game reads its close (`gl`, app.js closedLine, step ADT); the rule is the same.
+    assert '${gpLines || gl.total == null ? "" : `<span class="chip">O/U ${gl.total.toFixed(1)}</span>`}' in DETAIL
     assert 'O/U ${g.total != null ? g.total.toFixed(1) : "—"}' not in DETAIL, "a lone \"O/U —\" said nothing"
     assert '<span class="chip down">Second night of a back-to-back</span>' in DETAIL
 

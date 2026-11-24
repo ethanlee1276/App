@@ -8103,6 +8103,8 @@ function gameCard(g, i) {
   // file (no score, clock, count or runners), here and on the photo's board.
   const hid = spoiledG(state.sport, g);
   if (hid) g = { ...g, live: { state: (g.live || {}).state } };
+  // A finished game names its close, as every league's page does (closedLine).
+  if ((g.live || {}).state === "final") g = closedLine(g);
   const mlb = state.sport === "mlb";
   // The market row carries the spread and the total in columns, so the
   // sub-line under the name stops repeating them where the row draws.
@@ -13741,6 +13743,20 @@ const GS_HIGH_TOTAL = 47;
 function spreadFav(g) {
   const sp = Number((g || {}).spread);
   return (g || {}).favorite || (Number.isFinite(sp) && sp !== 0 ? (sp < 0 ? g.home : g.away) : "");
+}
+/* A FINISHED GAME'S LINE IS ITS CLOSE (step ADT, 24 November). The boards do not keep a game's lines once it is
+   over: hockey's finished games lost theirs on the first build after midnight, college basketball's as each game
+   ended, and the NFL's moneylines went to the not-offered zero ("—"), while the NBA's kept theirs, so one finished
+   game named its line and the next named nothing. ESPN's page for a finished game still names it. The board's
+   stored close (engine/lineopen `line_open.close`, the line the Record grades a game bet against) stands in for
+   the board's own fields, its spread from the home side; a game with no stored close keeps what the board has. */
+function closedLine(g) {
+  const c = ((g || {}).line_open || {}).close;
+  if (!c) return g;
+  const num = (v) => (v != null && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
+  const spread = num(c.spread_home), total = num(c.total);
+  return { ...g, spread, total, home_ml: num(c.home_ml), away_ml: num(c.away_ml), favorite: "",
+           spread_posted: spread != null, total_posted: total != null, closed: true };
 }
 function scriptExpected(g) {
   const sp = Number(g.spread);

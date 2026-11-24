@@ -9594,6 +9594,29 @@ same. The college board now carries `scan_census` in its public file: each seaso
 (never the key), how many schools it read, and how many games it scanned. If it says the key is missing or refused, a
 new free key from collegefootballdata.com in `secrets.local` brings the scan and the player reads back.
 
+**ADT. A road favourite's line is stored the right way round, and every finished game names its close** (step
+911; 24 November). One command to run, below. Comparing the leagues' boards key by key turned up a stored line on
+the wrong side of zero: Memphis was −185 at Charlotte and the board said Memphis −5.5, but the line store had it
+opening as Charlotte −4. Every board but the NFL's writes its spread as the home team's number and names no
+favourite, and the store took the home team for the favourite each time, so every game a road team was favoured
+in, in the NBA, the WNBA, college basketball, hockey and baseball, went in flipped (5 of the NBA's 10 games on
+Sunday night, 3 of college basketball's 24 priced games, 2 of hockey's 7). That store is the close the Record grades
+a spread bet against: the Record showed baseball's run lines at an average closing-line value of +2.0 runs and the
+NBA's picks of the day at −6.0 points, which no run line or spread can earn. It is also each line's move and its
+"moved against the money" note, and the spread the prediction markets and the money split are matched on. The rule
+is fixed, and the first board build turns the stored lines round once, from each row's own moneylines, which say who
+was favoured (the NFL's rows were right and are left alone). A finished game's page now names its closing line in
+every league, as the NBA's did and ESPN's does: hockey's finished games had lost their lines on the first build
+after midnight, college basketball's as each game ended, and the NFL's moneylines read "—". The closes already
+banked on settled spread bets are read again by one command, which writes the journal, so it takes the usual backup
+first. The first line is a dry run that says how many would change, by league, with a sample; the second writes
+them:
+
+```
+cd /srv/qellys && sudo -u qellys python3 launch.py --repair-spread-closes
+cd /srv/qellys && sudo -u qellys python3 launch.py --repair-spread-closes --apply
+```
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his

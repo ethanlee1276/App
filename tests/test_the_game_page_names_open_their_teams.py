@@ -87,10 +87,10 @@ def test_the_header_carries_the_cards_lines():
     assert "gpLines}" in head, "under the date, above the chips"
     chips = page[page.index('<div class="chips gp-chips">'):][:900]
     # And only with a total: a lone "O/U —" said nothing (2026-11-18, step XZ).
-    assert '${gpLines || g.total == null ? "" : `<span class="chip">O/U' in chips, \
+    assert '${gpLines || gl.total == null ? "" : `<span class="chip">O/U' in chips, \
         "the O/U chip only when the grid is absent and there is a total"
     # The favourite's chip in every league since 24 November (app.js spreadFav: the slate's word or the spread's sign).
-    assert "${gpLines || !spreadFav(g) || g.spread == null ? \"\"" in chips
+    assert "${gpLines || !spreadFav(gl) || gl.spread == null ? \"\"" in chips
     assert ".gp-meta .gc-mkts {" in CSS
 
 
