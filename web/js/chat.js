@@ -61,14 +61,46 @@ const chEsc = (s) => escapeHtml(String(s == null ? "" : s));
    rather than a word. */
 const PLAY_RINK_WORD = { goal: "Goal", sog: "Shot on goal", miss: "Missed shot", block: "Blocked shot", hit: "Hit",
                          penalty: "Penalty", faceoff: "Faceoff win", takeaway: "Takeaway", giveaway: "Giveaway" };
+/* EVERY SPORT'S PLAY BY NAME, AS FOOTBALL'S (2026-11-24; Ethan: "We want all
+   the live pages to match each other ... NFL is kind of like the one we want
+   to go off of"). Football's card is titled by its side and what happened
+   ("CIN Pass intercepted"), each player on a line of their own under it
+   with their game so far, and baseball's by what happened; basketball's
+   read "Coby White — Jump Shot" (a made three not saying it was one) and
+   hockey's "NJD Goal — Nico Hischier". Every card's title is its side and
+   what happened now ("MEM Three-pointer", "NJD Goal"), its players on their
+   own lines; a thread's label and a shared play add the first of them
+   (pcNamed). From the play's own facts: made or missed, the points, its
+   type label. */
+const PLAY_ICE_WORD = { Goal: "Goal", Shot: "Shot on goal", Missed: "Missed shot", Blocked: "Blocked shot", Hit: "Hit",
+                        Penalty: "Penalty", "Face Off": "Faceoff win", Takeaway: "Takeaway", Giveaway: "Giveaway", Fight: "Fight" };
+function hoopsWhat(p) {
+  const e = String(p.event || "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/\s+/g, " ").trim();
+  if (/technical/i.test(e)) return "Technical foul";
+  if (/flagrant/i.test(e)) return "Flagrant foul";
+  if (/^block/i.test(e)) return "Block";
+  if (/^steal/i.test(e)) return "Steal";
+  if (/free throw/i.test(e)) return p.scoring ? "Free throw" : "Missed free throw";
+  if (p.shot) {
+    const what = /alley/i.test(e) ? "Alley-oop" : /dunk/i.test(e) ? "Dunk" : Number(p.points_attempted) === 3 ? "Three-pointer"
+      : /lay ?up/i.test(e) ? "Layup" : "Shot";
+    return p.scoring ? what : `Missed ${what.toLowerCase()}`;
+  }
+  if (/turnover/i.test(e)) return "Turnover";
+  if (/rebound/i.test(e)) return /offensive/i.test(e) ? "Offensive rebound" : "Rebound";
+  return e ? `${e.charAt(0)}${e.slice(1).toLowerCase()}` : "Play";
+}
 function playTitleOf(p, d) {
   if (!p) return "this play";
-  if (PLAY_RINK_WORD[p.kind]) return `${p.team ? `${p.team} ` : ""}${PLAY_RINK_WORD[p.kind]}${p.player ? ` — ${p.player}` : ""}`;
+  const side = p.team && !String(p.team).startsWith("espn:") ? `${p.team} ` : "";
+  if (PLAY_RINK_WORD[p.kind]) return `${side}${PLAY_RINK_WORD[p.kind]}`;
   if (p.kind === "football") {
     const w = footballWords(p, d || {});
-    return `${p.team ? `${p.team} ` : ""}${w.title || p.event || "Play"}`;
+    return `${side}${w.title || p.event || "Play"}`;
   }
   if (p.kind === "atbat") return `${p.batter || "At-bat"}: ${p.event || ""}`.trim();
+  if (p.kind === "hockey") return `${side}${PLAY_ICE_WORD[p.event] || p.event || "Play"}`;
+  if (p.kind === "hoops") return `${side}${hoopsWhat(p)}`;
   const who = p.player || "";
   return `${who ? `${who} — ` : ""}${p.event || "Play"}`;
 }
@@ -143,6 +175,12 @@ function pcTitle(p, d) {
   if (p.kind === "atbat") return `${e}${Number(p.rbi) ? `, ${p.rbi} run${p.rbi > 1 ? "s" : ""} in` : ""}`;
   return playTitleOf(p, d);
 }
+// A play's title and whose play it was, for a thread's label and a shared
+// play: "MEM Three-pointer — Coby White", "Walk-off 416-ft 3-run homer — Pete Alonso".
+function pcNamed(p, d) {
+  const who = p ? pcPeople(p)[0] : "";
+  return `${pcTitle(p, d)}${who ? ` — ${who}` : ""}`;
+}
 
 // The win chance it moved, for the side that made the play — only where the
 // feed gave one and the move is worth a line.
@@ -203,13 +241,12 @@ function espnFace(league, id) {
 function pcBodyHTML(p, d, plays, full, league) {
   d = d || {};
   const people = pcPeople(p);
-  // Football and baseball name the player whether or not the box has his
-  // line yet (a kicker's often has none); basketball's and hockey's
-  // headlines carry the name already.
-  const named = p.kind === "football" || p.kind === "atbat";
+  // Every player in it is named whether or not the box has a line for them
+  // yet (a kicker's often has none; hockey's box is the league's own): the
+  // title says what happened, never who (playTitleOf).
   const lines = people.map((n) => {
     const ln = pcLine(pcBox(d.players, n));
-    return ln || named ? `<span class="pcard-line"><b>${chEsc(pcShort(n))}</b>${ln ? ` · ${chEsc(ln)}` : ""}</span>` : "";
+    return `<span class="pcard-line"><b>${chEsc(pcShort(n))}</b>${ln ? ` · ${chEsc(ln)}` : ""}</span>`;
   }).join("");
   const team = p.kind === "atbat" ? (p.half === "T" ? d.away : d.home) : p.team;
   // His face where the box carries his ESPN id (app.js espnFace), his
@@ -300,7 +337,7 @@ function pfItemHTML(x) {
       <b>${escapeHtml(score)}</b>
       <span class="pf-when">${escapeHtml(when)}</span>${ago ? `<time class="pf-ago">${ago}</time>` : ""}${pcRate(p)}</div>
     ${pcBodyHTML(p, g, g.big || [], false, sport)}
-    <div class="pf-acts">${chatPlayBadge(room, p)}${pcShareHTML(sport, event, p, `${pcTitle(p, g)} · ${score}`)}<button type="button" class="pf-open">Open the game →</button></div>
+    <div class="pf-acts">${chatPlayBadge(room, p)}${pcShareHTML(sport, event, p, `${pcNamed(p, g)} · ${score}`)}<button type="button" class="pf-open">Open the game →</button></div>
   </article>`;
 }
 
@@ -1503,8 +1540,9 @@ function chatPlayOf(key) {
   return chatAllPlays().find((p) => chatPlayKey(p) === key) || null;
 }
 
-// The play's words, shared with the Live tab's feed (app.js playTitleOf).
-const chatPlayTitle = (p) => playTitleOf(p, CH.d || {});
+// The play's words, shared with the Live tab's feed (pcNamed): a thread says
+// whose play it was ("MEM Three-pointer — Coby White").
+const chatPlayTitle = (p) => pcNamed(p, CH.d || {});
 
 function chatPlayWhen(p) {
   if (p.kind === "atbat") return `${p.half === "T" ? "Top" : "Bottom"} ${p.inning || ""}`;
@@ -1562,7 +1600,7 @@ function chatPlayCardHTML(p, inThread) {
     <div class="gch-play-when">${chEsc(chatPlayWhen(p))}${score ? `<span>${chEsc(score)}</span>` : ""}${pcRate(p)}</div>
     ${pcBodyHTML(p, d, chatAllPlays(), true, CH.league)}
     <div class="gch-acts">${chatPlayFacesHTML(key)}${inThread ? "" : `<button type="button" class="gch-act gch-thread-btn" data-gch="thread" data-play="${chEsc(key)}">${
-      chatThreadWord(n)}</button>`}${pcShareHTML(CH.league, CH.event, p, `${pcTitle(p, d)}${score ? ` · ${score}` : ""}`)}</div></article>`;
+      chatThreadWord(n)}</button>`}${pcShareHTML(CH.league, CH.event, p, `${pcNamed(p, d)}${score ? ` · ${score}` : ""}`)}</div></article>`;
 }
 
 /* Real's feed, for this game: the big plays, newest first, each with its

@@ -9513,6 +9513,15 @@ Pyyhtia scores shorthanded (snap), from Damon Severson and Jack Williams" with i
 clock the card's header counts down (checked on tonight's five hockey games). A card the league's feed has not reached
 keeps ESPN's rows as before.
 
+**ADL. The Play feed titles every sport's play as football's** (step 903; 24 November). Nothing to run. The Live
+tab's Play feed, and a game room's play cards, titled a football play by its side and what happened ("CIN Pass
+intercepted"), each player on a line under it with their game so far, and a baseball play by what happened. A
+basketball card read "Coby White — Jump Shot", a made three not saying it was one, and a hockey card "NJD Goal —
+Nico Hischier", with no line for a player the box had no line for. Every card is titled by its side and what
+happened now ("MEM Three-pointer", "MEM Missed dunk", "MEM Technical foul", "NJD Goal"), its players on their own
+lines; a thread's label and a shared play add whose play it was ("MEM Three-pointer — Coby White", "CIN Pass
+intercepted — Joe Burrow", "Walk-off 416-ft 3-run homer — Pete Alonso").
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his
