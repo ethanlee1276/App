@@ -221,6 +221,71 @@ def test_the_settle_pass_measures_it_and_says_so():
                            {"sport": "nba", "market": "pts", "band": "5-15", "said": 0.71, "hit": 0.52, "n": 64}]}, v
 
 
+def _bold_journal(day="2026-11-08"):
+    """The NFL board: 60 bold receptions picks said 76% and hit 30 (each also in the ``bold`` book), and 200 of
+    the list's picks in the same market and band said 62% and hit 124: the market's kind runs six points hot, under
+    the bar, so only the bold picks' own kind can see what they do."""
+    bold = _kind(60, 0.76, 30, day=day, sport="nfl", market="receptions", edge=0.12)
+    honest = [dict(r, player=r["player"] + "-list") for r in
+              _kind(200, 0.62, 124, day=day, sport="nfl", market="receptions", edge=0.08)]
+    marks = [dict(r, category="bold") for r in bold]
+    return _journal(bold + honest + marks)
+
+
+def test_bold_picks_are_a_kind_of_their_own():
+    rows = P.rows_from_ledger(_bold_journal())
+    assert sum(1 for r in rows if r.get("maker") == "bold") == 60, "read as bold where the bold book holds the bet"
+    assert len(rows) == 260, "the bold book's own rows are not the board's"
+    got = P.measure(rows, TODAY)
+    held = {P._key(h) for h in got["held"]}
+    assert held == {"nfl|*|all|bold"}, held
+    h = got["held"][0]
+    assert (h["said"], h["hit"], h["n"]) == (0.76, 0.5, 60), h
+
+
+def test_a_bold_pick_goes_on_paper_and_one_from_the_list_at_the_same_gap_stays():
+    path = _tmp()
+    out = P.refresh(_bold_journal(), path, today=TODAY)
+    assert [h["key"] for h in out["holds"] if h.get("maker")] == ["nfl|*|all|bold"]
+    why = P.reason("nfl", "receptions", 0.12, path, maker="bold")
+    assert why == ("on paper, not posted: our NFL picks bolder than the books said 76% and hit 50% over 60 — our rule "
+                   "records them without posting them until 30 run honest"), why
+    assert P.reason("nfl", "receptions", 0.12, path) is None, "the list's pick at the same gap still posts"
+    assert P.reason("cfb", "receptions", 0.12, path, maker="bold") is None, "one league's record holds its own"
+    rows = [_row(0.74, 0.62, bold=True), _row(0.74, 0.62, player="Jahmyr Gibbs")]
+    assert P.stamp(rows, "nfl", None, path) == 1
+    assert rows[0]["paper_hold"].startswith("on paper, not posted: our NFL picks bolder than the books")
+    assert "paper_hold" not in rows[1]
+    v = P.verdict(out)
+    assert {"sport": "nfl", "market": "*", "band": "all", "maker": "bold", "said": 0.76, "hit": 0.5, "n": 60} \
+        in v["kinds"], v["kinds"]
+
+
+def test_bold_picks_held_on_paper_come_back_on_their_own_record():
+    path = _tmp()
+    conn = _bold_journal()
+    P.refresh(conn, path, today=TODAY)
+    # Thirty held bold picks since, run honest (said 70%, hit 21): back on the board, nobody asked.
+    for r in _kind(30, 0.70, 21, day="2026-11-20", sport="nfl", market="receptions", edge=0.12):
+        for cat in ("held", "bold"):
+            conn.execute("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                         ("nfl", "receptions", "OVER", 20.5, r["player"], r["day"], r["day"], r["day"] + "T12:00:00",
+                          r["prob"], r["edge"], None, r["status"], cat))
+    out = P.refresh(conn, path, today=dt.date(2026, 11, 28))
+    assert "nfl|*|all|bold" in {h["key"] for h in out["released"]}, out
+    assert P.reason("nfl", "receptions", 0.12, path, maker="bold") is None
+
+
+def test_the_bold_book_keeps_every_bold_pick_the_board_held():
+    on_list = _row(0.74, 0.62, bold=True)
+    held = _row(0.80, 0.62, bold=True, player="Sam LaPorta", paper_hold="on paper")
+    plain = _row(0.66, 0.62, player="Jahmyr Gibbs")
+    res = {"most_likely": [on_list, plain], "likely_board": {"held": [held, dict(on_list)]}}
+    assert [r["player"] for r in LB.bold_rows(res)] == ["Amon-Ra St. Brown", "Sam LaPorta"], "each bet once"
+    for rel in ("nfl_build.py", "cfb_build.py"):
+        assert "_lb_bold_rows(" in Path(ROOT, rel).read_text(encoding="utf-8"), rel
+
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0

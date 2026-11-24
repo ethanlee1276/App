@@ -1945,10 +1945,12 @@ def main() -> None:
                 if _n:
                     print(f"Matchup picks ({_kind}): {_n} row(s) journaled on paper.")
             # THE BOLD ROWS (engine/boldcheck): far from the books, checked
-            # and found real — shown on Most Likely, on paper here.
+            # and found real — shown on Most Likely, on paper here. The ones
+            # the board held back on paper too (step AEE, `bold_rows`).
+            from engine.likelyboard import bold_rows as _lb_bold_rows
             _n = ledger.log_most_likely(
                 lconn, {"sport": "nfl", "date": result.get("date", ""), "games": result.get("games") or [],
-                        "most_likely": [r for r in result.get("most_likely") or [] if r.get("bold")]},
+                        "most_likely": _lb_bold_rows(result)},
                 depth=None, category="bold", grade_label="Bold")
             if _n:
                 print(f"Bolder than the books: {_n} row(s) journaled on paper.")

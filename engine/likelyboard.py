@@ -1615,6 +1615,19 @@ def journal_held(lconn, result: dict, sport: str, date: str = "") -> int:
                 "most_likely": held}, depth=None, category=HELD_CATEGORY, grade_label=HELD_LABEL) or 0
 
 
+def bold_rows(result: dict) -> list:
+    """Every bold pick this build made (engine/boldcheck), for the journal's ``bold`` book: the Most Likely list's,
+    and the board's held-back ones, which the list no longer carries once held (engine/paperhold, step AEE). The
+    book keeps measuring them on paper either way, and the hold reads a pick as bold off it, so a kind it holds can
+    come back on its own record. Each bet once."""
+    out, seen = [], set()
+    for r in list(result.get("most_likely") or []) + list((result.get("likely_board") or {}).get("held") or []):
+        if isinstance(r, dict) and r.get("bold") and key_of(r) not in seen:
+            seen.add(key_of(r))
+            out.append(r)
+    return out
+
+
 def journal_rows(board: dict, tier: str) -> list:
     """The board's rows of one tier, for the paper book."""
     return [r for r in (board or {}).get("rows") or [] if r.get("tier") == tier]

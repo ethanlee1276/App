@@ -2989,10 +2989,11 @@ def main() -> None:
                 depth=None, category=_cat, grade_label="Matchup")
             if _mp_n:
                 print(f"Matchup picks ({_kind}): {_mp_n} row(s) journaled on paper.")
-        # The bold rows, on paper (engine/boldcheck; nfl_build).
+        # The bold rows, on paper (engine/boldcheck; nfl_build), the held-back ones too (step AEE).
+        from engine.likelyboard import bold_rows as _lb_bold_rows
         _bold_n = ledger.log_most_likely(
             lconn, {"sport": "cfb", "date": args.date, "games": out.get("games") or [],
-                    "most_likely": [r for r in out.get("most_likely") or [] if r.get("bold")]},
+                    "most_likely": _lb_bold_rows(out)},
             depth=None, category="bold", grade_label="Bold")
         if _bold_n:
             print(f"Bolder than the books: {_bold_n} row(s) journaled on paper.")

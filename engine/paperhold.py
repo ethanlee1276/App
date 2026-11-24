@@ -69,6 +69,19 @@ RELEASE_N = 30
 #: …running hot by under this many points.
 RELEASE_GAP_PTS = 5.0
 
+#: WHERE A PICK CAME FROM, AS A KIND OF ITS OWN (step AEE, 24 November 2026). The kinds above are a market at a
+#: distance from the price; the board's own learning (engine/boardlearn) splits its record by the maker of each pick
+#: too, and one maker ran hot past every bar while the market kinds held only part of it: the "bolder than the
+#: books" picks (engine/boldcheck: our number ten points or more past the books', kept because a measured step or
+#: his own games explained it) hit 122 of 237 on the NFL board where we said about 76%, and 501 of 900 on college's
+#: where we said about 68%, while every other maker held up. A bold pick 15 or more points over was on paper since
+#: 15 November; one 10 to 15 over still posted. So "every league's bold picks" is a kind, tested and released by the
+#: same rule as every other, a pick read as bold where the journal's ``bold`` book holds the same bet.
+MAKERS = ("bold",)
+MAKER_WORDS = {"bold": "bolder than the books"}
+#: The journal's book that marks a bet bold (ledger category).
+BOLD_CATEGORY = "bold"
+
 #: (key, low, high, words): our chance minus the price's, in probability.
 BANDS = (("15+", 0.15, None, "15 or more points above the price"),
          ("5-15", 0.05, 0.15, "5 to 15 points above the price"),
@@ -134,6 +147,7 @@ def rows_from_ledger(conn) -> list[dict]:
          "status, category "
          f"FROM bets WHERE category IN ({','.join('?' * len(FAMILY))}) AND status IN ('won','lost')")
     seen: dict = {}
+    bold = bold_keys(conn)
     for r in conn.execute(q, FAMILY).fetchall():
         r = dict(r)
         try:
@@ -155,7 +169,25 @@ def rows_from_ledger(conn) -> list[dict]:
                 pass
         seen[key] = {"sport": key[0], "market": r["market"], "prob": p, "won": int(r["status"] == "won"),
                      "band": band(gap), "day": _day(r), "category": r["category"]}
+        if _bet_key(r) in bold:
+            seen[key]["maker"] = "bold"
     return list(seen.values())
+
+
+def _bet_key(r) -> tuple:
+    """One bet across the journal's books: league, game day (the settle key where none), player, market, side —
+    the match engine/likelyctx.journal makes, so a bold pick is read as the board's learning reads it."""
+    return (str(r["sport"] or "").lower(), r["game_day"] or r["date"], r["player"], r["market"],
+            str(r["side"] or "").upper())
+
+
+def bold_keys(conn) -> set:
+    """Every bet the journal's ``bold`` book holds (`_bet_key`); empty where it cannot be read."""
+    try:
+        return {_bet_key(dict(r)) for r in conn.execute(
+            "SELECT sport, date, game_day, player, market, side FROM bets WHERE category=?", (BOLD_CATEGORY,))}
+    except Exception:                                        # noqa: BLE001
+        return set()
 
 
 def _test(rows: list) -> dict | None:
@@ -176,7 +208,8 @@ def _test(rows: list) -> dict | None:
 
 def _in(kind: dict, r: dict) -> bool:
     return ((kind["sport"] in ("*", r["sport"])) and (kind["market"] in ("*", r["market"]))
-            and (kind["band"] == ALL or kind["band"] == r["band"]))
+            and (kind["band"] == ALL or kind["band"] == r["band"])
+            and (not kind.get("maker") or r.get("maker") == kind["maker"]))
 
 
 def _hot(t: dict) -> bool:
@@ -191,18 +224,21 @@ def measure(rows: list, today: _dt.date | None = None) -> dict:
     recent = [r for r in rows if r["day"] is None or r["day"] >= cut]
     kinds: dict = {}
     for r in recent:
-        for k in ((r["sport"], r["market"], r["band"]), (r["sport"], "*", r["band"]),
-                  (r["sport"], r["market"], ALL)):
+        ks = [(r["sport"], r["market"], r["band"], ""), (r["sport"], "*", r["band"], ""),
+              (r["sport"], r["market"], ALL, "")]
+        if r.get("maker") in MAKERS:
+            ks.append((r["sport"], "*", ALL, r["maker"]))
+        for k in ks:
             if k[2] is None:
                 continue
             kinds.setdefault(k, []).append(r)
     tested = []
-    for (sport, market, b), rs in sorted(kinds.items(), key=lambda kv: str(kv[0])):
+    for (sport, market, b, mk), rs in sorted(kinds.items(), key=lambda kv: str(kv[0])):
         if len(rs) < MIN_N:
             continue
         t = _test(rs)
         if t:
-            t.update(sport=sport, market=market, band=b)
+            t.update(sport=sport, market=market, band=b, **({"maker": mk} if mk else {}))
             tested.append(t)
     # Benjamini–Hochberg over every kind tested, the miner's control: the
     # largest rank whose p clears its share of ALPHA, and all below it.
@@ -218,7 +254,7 @@ def measure(rows: list, today: _dt.date | None = None) -> dict:
 
 
 def _key(k: dict) -> str:
-    return f"{k['sport']}|{k['market']}|{k['band']}"
+    return f"{k['sport']}|{k['market']}|{k['band']}" + (f"|{k['maker']}" if k.get("maker") else "")
 
 
 def refresh(conn, path=None, today: _dt.date | None = None) -> dict:
@@ -234,7 +270,7 @@ def refresh(conn, path=None, today: _dt.date | None = None) -> dict:
     for k in list(STANDING) + found["held"]:
         key = _key(k)
         h = dict(was.get(key) or {})
-        h.update({kk: k[kk] for kk in ("sport", "market", "band") if kk in k})
+        h.update({kk: k[kk] for kk in ("sport", "market", "band", "maker") if kk in k})
         h.setdefault("since", k.get("since") or today.isoformat())
         h["source"] = k.get("source") or h.get("source") or "measured"
         for kk in ("said", "hit", "n", "z", "gap_pts", "why"):
@@ -317,20 +353,25 @@ def holds(path=None) -> list:
     return out
 
 
-def reason(sport: str, market: str, gap, path=None) -> str | None:
-    """Why a Most Likely pick at this gap (``gap_of``) goes on paper, or None."""
-    r = {"sport": str(sport or "").lower(), "market": market, "band": band(gap)}
-    # The most specific hold that covers the pick says why: its own market
-    # before every market, its band before any price, the standing hold last.
-    ordered = sorted(holds(path), key=lambda h: (h.get("sport") == "*", h.get("market") == "*",
+def reason(sport: str, market: str, gap, path=None, maker: str | None = None) -> str | None:
+    """Why a Most Likely pick at this gap (``gap_of``), from this maker (``bold``, or None), goes on paper, or None."""
+    r = {"sport": str(sport or "").lower(), "market": market, "band": band(gap), "maker": maker}
+    # The most specific hold that covers the pick says why: its maker first, its own market before every market,
+    # its band before any price, the standing hold last.
+    ordered = sorted(holds(path), key=lambda h: (not h.get("maker"), h.get("sport") == "*", h.get("market") == "*",
                                                  h.get("band") == ALL))
     for h in ordered:
         if r["band"] is None and h.get("band") != ALL:
             continue
-        if not _in({"sport": h.get("sport"), "market": h.get("market"), "band": h.get("band")}, r):
+        if not _in({"sport": h.get("sport"), "market": h.get("market"), "band": h.get("band"),
+                    "maker": h.get("maker")}, r):
             continue
         if h.get("source") == "standing" or h.get("why"):
             what = h.get("why")
+        elif h.get("maker"):
+            what = (f"our {str(h.get('sport') or '').upper()} picks {MAKER_WORDS.get(h['maker'], h['maker'])} said "
+                    f"{float(h.get('said') or 0):.0%} and hit {float(h.get('hit') or 0):.0%} over "
+                    f"{int(h.get('n') or 0)}")
         else:
             scope = "" if h.get("market") == "*" else " " + str(h.get("market") or "").replace("_", " ")
             what = (f"our {str(h.get('sport') or '').upper()}{scope} picks {WORDS.get(h.get('band'), '')} "
@@ -370,7 +411,8 @@ def stamp(rows: list, sport: str, result: dict | None = None, path=None) -> int:
         g = gap_of(r)
         if g is not None:
             r["price_gap"] = round(g, 4)
-        why = None if r.get("locked") else reason(sport, r.get("market"), g, path)
+        why = None if r.get("locked") else reason(sport, r.get("market"), g, path,
+                                                  maker="bold" if r.get("bold") else None)
         if why:
             r["paper_hold"] = why
             n += 1
@@ -380,7 +422,7 @@ def stamp(rows: list, sport: str, result: dict | None = None, path=None) -> int:
 
 
 #: What the heartbeat says of each kind on paper.
-KIND_FIELDS = ("sport", "market", "band", "said", "hit", "n")
+KIND_FIELDS = ("sport", "market", "band", "maker", "said", "hit", "n")
 
 
 def verdict(out: dict) -> dict:

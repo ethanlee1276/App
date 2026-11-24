@@ -9736,6 +9736,25 @@ showcase games sit on the board as neutral, and the reports read only football's
 Bahamas game read as "at home" for its listed home side. Every league's reports now say a neutral site as one,
 "Where they play" included. Tests pin all of it.
 
+**AEE. Picks "bolder than the books" go on paper by their own record, and short weeks were measured** (step
+922; 24 November). Nothing to run. You asked for more that changes which bets get picked. The board's own record,
+split by where each pick came from, found one source behind nearly all of the football boards' overselling: the
+"bolder than the books" picks (our number ten points or more past every book, kept because a measured step or the
+player's own games explained it). On the NFL board they hit 122 of 237 where we said about 76% (overs 49 of 114);
+on college's, 501 of 900 where we said about 68%. Every other source holds up: the Most Likely list's own NFL
+overs hit 63.3% where we said 63.5%, and without the bold picks the NFL board hits 58.2% against 59.0% claimed. A
+bold pick 15 or more points over was already on paper (since 15 November), but one 10 to 15 over still posted, and
+the correction that pulls picks toward their price cannot go below the price, while the NFL's bold overs hit below
+theirs. So the paper hold (engine/paperhold, your rule of 15 November: record, don't post, until they run honest)
+now tests "every league's bold picks" as a kind of its own, on the same bar as every other kind, and holds them
+when they run hot; they come back by themselves once 30 held since run within five points of what we said. Held
+bold picks keep being journaled in the bold book, so the record keeps measuring them. The heartbeat's paper-hold
+line names the kind when it is on. Also measured today, and nothing changed because nothing cleared the bar:
+short weeks. Since 2006, games with both teams on short rest went 135 to 132 to the under against the closing
+total (the score landed 0.3 points over it), and on 2022 to 2025 players on short rest produced what their own
+form said (passing and receivers' targets a few percent above, rushing a couple below, none two standard errors
+out). So Thanksgiving week's totals and props carry no rest adjustment.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 
