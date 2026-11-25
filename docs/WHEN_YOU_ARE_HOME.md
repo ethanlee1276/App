@@ -9883,6 +9883,23 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AEM, measured: the odds feed bills for the markets it returns** (24 November, 7:10 PM ET, the heartbeat's first
+`odds_bill` after the deploy; nothing to run). Over the last day's game-by-game calls:
+
+| League | Calls | Billed | Our price table | What one call billed |
+|---|---|---|---|---|
+| College basketball | 30 | 271 | 390 | 8 (15 calls), 11 (9), 12 (3), 10 (1), 3 (2) |
+| College football | 12 | 125 | 168 | 9 to 12 |
+| NBA | 30 | 564 | 600 | 19 (27 calls), 16 to 18 (3) |
+| NHL | 10 | 128 | 150 | 11 to 15 |
+| NFL | 17 | 424 | 442 | 23 to 26 |
+
+So a call is billed for the markets the books have posted, not the ones we ask for: a college basketball game costs
+about 9 credits, not the 13 our table charges, and a game with no player props posted costs 3 (its three game
+markets). Pricing more college basketball games costs about a third less than step AEM's numbers: 10 games a pull
+would be about 2,000 credits a month more than now, not 6,000. Before raising it I'll check tonight's builds, which
+need the room (step AEO).
+
 **AEN. College football's Saturday prices more games for the same credits** (step 930; 24 November). Nothing to
 run. Decision A, done the way that costs nothing: a pull buys player prices for at most 12 games, the ranked and
 power-conference games first, and it bought those same 12 at every pull of the day until they kicked off, so on a

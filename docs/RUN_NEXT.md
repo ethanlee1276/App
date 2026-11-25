@@ -392,9 +392,9 @@ too make our picks better. C, like u said not a problem."
 - **A, more college games priced: the cost, worked out.** By the plan's own price table, 10 college basketball games a
   pull instead of 5 is about 6,000 more credits a month and 15 games about 12,100 more; December's plan has about
   1,800 left over after every league's target. So the real question is where the credits come from: another league's
-  pulls, or a bigger odds plan. The heartbeat now carries the API's own bill per game, and I'll bring back what more
-  games really cost once it has a day of calls, before anything changes. Step AEM in WHEN_YOU_ARE_HOME has the
-  numbers.
+  pulls, or a bigger odds plan. Measured that evening (the heartbeat's `odds_bill`): the feed bills for the markets
+  the books have posted, so a college basketball game costs about 9 credits, not 13, and 10 games a pull is about
+  2,000 more a month, not 6,000. Step AEM in WHEN_YOU_ARE_HOME has both sets of numbers.
 
 ## 000. Start here: every waiting check in one run (7 November)
 
