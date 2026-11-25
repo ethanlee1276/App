@@ -62,8 +62,14 @@ def test_a_chart_past_its_time_answers_now_and_is_rebuilt_behind_it():
         gate.set()
         assert _until(lambda: not CH._BUILDING)
         CH.ANSWER_TTL = keep
+        # The rebuild kept its answer under the TTL of -1 set above, past its time the moment it landed; kept as
+        # fresh here, or the next ask starts one more rebuild behind it, which (on a busy machine, gate 830) can
+        # land after the hour-old stamp below and answer for it.
+        with CH._LOCK:
+            CH._KEPT[key] = (time.time() + keep,) + tuple(CH._KEPT[key][1:])
         assert json.loads(CH.answer_json(path, "role", "nfl", "Amon-Ra St. Brown"))["games"] == [{"id": 2}], \
             "the rebuilt one replaced it"
+        assert not CH._BUILDING and len(built) == 2, "and, kept fresh, starts no other"
         # Older than the hour, the reader waits for a fresh one.
         with CH._LOCK:
             CH._KEPT[key] = (time.time() - CH.ANSWER_STALE_MAX - 5, CH._KEPT[key][1])
