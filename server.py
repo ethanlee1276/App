@@ -1170,6 +1170,112 @@ _BEHIND_LOCK = threading.Lock()
 _BEHIND_SAID = [False]
 
 
+#: KEPT ANSWERS SURVIVE A RESTART (step AHJ, 25 November 2026; Ethan: "Also data on the player page takes a long time
+#: to load" ... "Ok keep going and work more on these issues as they are not fixed"). A player's page, game log and
+#: market logs and a team's page are kept in memory (steps AFM, AGV, AHB, AHA), and every update restarts the server,
+#: so the first visit to each after one waited for a whole build (on the live site a hockey page's rows 3.4 s, a
+#: college page's roster 3.1 s, a team's page 1.5 to 4.7 s). Each kept answer is also written here; with none in
+#: memory, one on disk, built by the same code and younger than the hour, answers as the kept one would: at once,
+#: built again behind it past its five minutes, and built before it answers when its games' stamp has moved. Only the
+#: live server writes and reads them (main sets KEPT_ON_DISK), so no test reads another's.
+KEPT_ON_DISK = False
+KEPT_DIR = ROOT / "data" / "cache" / "kept"
+#: The source each kind is built from: a copy built by other code is never served.
+KEPT_CODE = {"player": ("engine/playerpage.py", "engine/gamelog.py", "engine/rosters.py"),
+             "gamelog": ("engine/gamelog.py", "engine/playerpage.py"),
+             "logs": ("engine/statlogs.py", "engine/gamelog.py"),
+             "team": ("engine/teamdex.py",)}
+#: Copies past the hour are taken off disk every this many writes (none of them answers then).
+KEPT_PRUNE_EVERY = 200
+_KEPT_CODES: dict = {}
+_KEPT_WRITES = [0]
+_KEPT_SAID = [False]
+
+
+def _kept_code(kind: str) -> str:
+    """A hash of the source a kind is built from (KEPT_CODE), once a process."""
+    hit = _KEPT_CODES.get(kind)
+    if hit is None:
+        h = hashlib.sha1(kind.encode())
+        for rel in KEPT_CODE.get(kind, ()):
+            try:
+                h.update((ROOT / rel).read_bytes())
+            except OSError:
+                h.update(b"?")
+        hit = _KEPT_CODES[kind] = h.hexdigest()[:16]
+    return hit
+
+
+def _kept_path(kind: str, key: tuple) -> Path:
+    return KEPT_DIR / kind / (hashlib.sha1(json.dumps([kind, list(key)]).encode()).hexdigest()[:24] + ".gz")
+
+
+def _kept_save(kind: str, key: tuple, entry: tuple) -> None:
+    """A kept answer, ``(at, body, stamp, *rest)``, written beside its copy in memory (the live server only)."""
+    if not KEPT_ON_DISK:
+        return
+    import gzip
+    at, body, stamp, *rest = entry
+    head = {"key": list(key), "at": at, "stamp": list(stamp) if isinstance(stamp, (tuple, list)) else stamp,
+            "rest": rest, "code": _kept_code(kind)}
+    path = _kept_path(kind, key)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        with gzip.open(tmp, "wb", compresslevel=1) as fh:
+            fh.write(json.dumps(head).encode() + b"\n" + body)
+        os.replace(tmp, path)
+    except (OSError, TypeError, ValueError) as exc:
+        if not _KEPT_SAID[0]:
+            _KEPT_SAID[0] = True
+            print(f"⚠️  a kept answer not written to disk ({kind}: {type(exc).__name__}: {exc}); kept answers answer "
+                  "from memory, and the first visit after the next restart waits for its build", file=sys.stderr)
+        return
+    _KEPT_WRITES[0] += 1
+    if _KEPT_WRITES[0] % KEPT_PRUNE_EVERY == 0:
+        _kept_prune()
+
+
+def _kept_prune(now: float | None = None) -> int:
+    """The copies past the hour taken off disk; how many."""
+    now = time.time() if now is None else now
+    gone = 0
+    try:
+        for d in KEPT_DIR.iterdir():
+            for f in d.glob("*.gz"):
+                try:
+                    if now - f.stat().st_mtime > PLAYER_PAGE_STALE_MAX:
+                        f.unlink()
+                        gone += 1
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return gone
+
+
+def _kept_load(kind: str, key: tuple, store: dict):
+    """The copy on disk for `key`, put into `store` (the kind's memory) and returned; None for none built by this
+    code and younger than the hour (the live server only)."""
+    if not KEPT_ON_DISK:
+        return None
+    import gzip
+    try:
+        with gzip.open(_kept_path(kind, key), "rb") as fh:
+            head_raw, _, body = fh.read().partition(b"\n")
+        head = json.loads(head_raw)
+        if head.get("code") != _kept_code(kind) or head.get("key") != list(key):
+            return None
+        at, stamp = float(head["at"]), head.get("stamp")
+        entry = (at, body, tuple(stamp) if isinstance(stamp, list) else stamp, *(head.get("rest") or ()))
+    except (OSError, ValueError, KeyError, TypeError, EOFError):
+        return None
+    if not body or time.time() - at >= PLAYER_PAGE_STALE_MAX:
+        return None
+    store.setdefault(key, entry)
+    return store.get(key)
+
+
 def _behind(key, build) -> bool:
     """`build()` once in the background for `key`; False when one is already running."""
     with _BEHIND_LOCK:
@@ -1246,7 +1352,8 @@ def _gamelog_keep(key: tuple, body: bytes) -> None:
             _GAMELOGS.pop(next(iter(_GAMELOGS)), None)
         except (StopIteration, RuntimeError):
             pass
-    _GAMELOGS[key] = (time.time(), body, stamp)
+    _GAMELOGS[key] = entry = (time.time(), body, stamp)
+    _kept_save("gamelog", key, entry)
 
 
 #: Team pages kept (step AHA): {(sport, team as asked, vs as asked): (built at, body, games stamp, team)}.
@@ -1285,7 +1392,8 @@ def _team_keep(key: tuple, body: bytes, sport: str, team: str) -> None:
             _TEAM_PAGES.pop(next(iter(_TEAM_PAGES)), None)
         except (StopIteration, RuntimeError):
             pass
-    _TEAM_PAGES[key] = (time.time(), body, stamp, team)
+    _TEAM_PAGES[key] = entry = (time.time(), body, stamp, team)
+    _kept_save("team", key, entry)
 
 
 def _team_rebuild(key: tuple, sport: str, name: str, opp: str) -> None:
@@ -1415,7 +1523,8 @@ def _player_logs_keep(key: tuple, sport: str, player: str, body: bytes) -> None:
             _PLAYER_LOGS.pop(next(iter(_PLAYER_LOGS)), None)
         except (StopIteration, RuntimeError):
             pass
-    _PLAYER_LOGS[key] = (time.time(), body, stamp)
+    _PLAYER_LOGS[key] = entry = (time.time(), body, stamp)
+    _kept_save("logs", key, entry)
 
 
 def _player_page_whole(body: bytes) -> bool:
@@ -1430,7 +1539,8 @@ def _player_page_keep(key: tuple, body: bytes, stamp=None) -> None:
             _PLAYER_PAGES.pop(next(iter(_PLAYER_PAGES)), None)
         except (StopIteration, RuntimeError):
             pass
-    _PLAYER_PAGES[key] = (time.time(), body, stamp)
+    _PLAYER_PAGES[key] = entry = (time.time(), body, stamp)
+    _kept_save("player", key, entry)
 
 
 def _player_games_stamp(sport: str, body_or_name) -> tuple | None:
@@ -5270,7 +5380,7 @@ class Handler(BaseHTTPRequestHandler):
         # past that, up to the hour while the player's games are the ones they were read from, answered at once and
         # read again behind; a box score of the player's since, and they are read before they answer.
         key = (sport, player.lower())
-        hit = _PLAYER_LOGS.get(key)
+        hit = _PLAYER_LOGS.get(key) or _kept_load("logs", key, _PLAYER_LOGS)          # one kept across a restart (AHJ)
         if hit and time.time() - hit[0] < PLAYER_PAGE_TTL:
             return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])
         if hit and time.time() - hit[0] < PLAYER_PAGE_STALE_MAX and (
@@ -5302,7 +5412,7 @@ class Handler(BaseHTTPRequestHandler):
         # five minutes; past that, up to the hour while the player's games are the ones it was read from, answered at
         # once and read again behind it; a box score of his since, and it is read before it answers.
         key = (sport, player.lower(), club, season)
-        hit = _GAMELOGS.get(key)
+        hit = _GAMELOGS.get(key) or _kept_load("gamelog", key, _GAMELOGS)             # one kept across a restart (AHJ)
         if hit and time.time() - hit[0] < PLAYER_PAGE_TTL:
             return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])
         if hit and time.time() - hit[0] < PLAYER_PAGE_STALE_MAX and (
@@ -5334,7 +5444,7 @@ class Handler(BaseHTTPRequestHandler):
         if sport not in playerpage.SPORTS and sport != "ufc":
             return self._send(400, b'{"error":"no player page for this sport"}', ".json")
         key = (sport, player.lower(), team, season)
-        hit = _PLAYER_PAGES.get(key)
+        hit = _PLAYER_PAGES.get(key) or _kept_load("player", key, _PLAYER_PAGES)       # one kept across a restart (AHJ)
         # WHERE A SLOW PAGE SPENDS ITS TIME (step AFK, 25 November 2026), as the team page says it (2026-11-18):
         # Amon-Ra St. Brown's page answered in 4.4 s once and 0.2 s a minute later. A built answer names each
         # part and its milliseconds (engine/playerpage.page `took`, then "build"); a kept one says "kept". Names
@@ -6782,7 +6892,7 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         # it was built (_team_games_stamp), answered at once and built again behind it; a game since, and it is built
         # before it answers. Keyed on the address as asked, so a kept page needs no lookup of the name either.
         key = (sport, name.strip().lower(), opp.strip().lower())
-        hit = _TEAM_PAGES.get(key)
+        hit = _TEAM_PAGES.get(key) or _kept_load("team", key, _TEAM_PAGES)             # one kept across a restart (AHJ)
         now = time.time()
         if hit and now - hit[0] < PLAYER_PAGE_TTL:
             return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])
@@ -7952,9 +8062,12 @@ SWITCH_INTERVAL_S = 0.0005
 
 
 def main() -> None:
+    global KEPT_ON_DISK
     sys.setswitchinterval(SWITCH_INTERVAL_S)
     args = sys.argv[1:]
     live = "--live" in args
+    # Kept answers are kept on disk too, across a restart, on the live site only (step AHJ).
+    KEPT_ON_DISK = live
     # `--bind 127.0.0.1` for a public deployment: the app sits behind a
     # reverse proxy that terminates TLS, and binding all interfaces would
     # leave the plain-HTTP port reachable from outside as well — the proxy

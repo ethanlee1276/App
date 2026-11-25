@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHJ. Kept answers survive a restart** (step 1002; 25 November; nothing to run). A player's page, game log and
+market logs and a team's page are kept once built (steps AFM, AGV, AHB, AHA), but only in the server's memory, and
+every update restarts the server: the first visit to each after an update waited for a whole build (a hockey page's
+rows 3.4 s, a college page's roster 3.1 s, a team page 1.5 to 4.7 s on the live site). Each kept answer is now
+written to disk as well (data/cache/kept, copies past the hour taken off). After a restart, a copy built by the same
+code and younger than the hour answers at once, as the kept one would, and is built again behind it once it is past
+five minutes; a box score of the player's since, and it is built before it answers, as before. Only the live server
+keeps these copies. To read after the update: a page asked before the next update answers "kept" or "stale" after
+it, not a build.
+
 **AHI. A team page reads its league's list of teams once** (step 1001; 25 November; nothing to run). Every team
 page built read the sport's every game, row by row, to list the league's teams: 191 to 557 ms of the live site's
 hockey, basketball and baseball team pages (the "teams" part of their timing). The games now come back in one step,
