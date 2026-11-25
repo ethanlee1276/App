@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFP. A college player's page finds them on the roster by name** (step 958; 25 November; nothing to run).
+Follow-up to AFK. The timing line showed every college football player's page spending about half a second on the
+roster: Jeremiah Smith's 506 ms of 557, Julian Sayin's 490 of 536. To find one player, the page read every row of
+the college roster file (9.2 MB) and compared names. Each roster file is now indexed by name once, when it's read,
+and finding a player is a lookup. The other leagues' rosters are smaller (their roster part was 8 to 38 ms today)
+and use the same index.
+
 **AFO. The league ranks survive a restart** (step 957; 25 November; nothing to run). Follow-up to AFK. The player
 page's new timing line found the slow first loads. Right after today's update restarted the server, Kerby Joseph's
 page took 3.7 s to answer, 3.5 s of it building the league's table of defenders' places (where each one ranks), and

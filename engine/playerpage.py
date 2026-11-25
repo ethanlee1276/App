@@ -645,6 +645,30 @@ def _roster_doc(sport: str, data_dir=None) -> dict:
     return doc
 
 
+#: THE ROSTER BY NAME (step AFP, 25 November 2026; Ethan: "data on the player page takes a long time to load"). A
+#: page found its player by putting every row of the league's roster through `core_name`: on the live college
+#: roster (9.2 MB) that was about half a second of every college player's page (Jeremiah Smith's 506 ms of 557).
+#: Each roster file, as read, is indexed once by its names' cores, in its own order.
+_ROSTER_BY_NAME: dict = {}
+
+
+def _roster_names(sport: str, data_dir=None) -> dict:
+    """{core name: [(club, row)]} over the league's published roster, rebuilt when the file is read again."""
+    doc = _roster_doc(sport, data_dir)
+    key = os.path.join(str(data_dir or ROSTER_DIR), f"rosters_{sport}.json")
+    hit = _ROSTER_BY_NAME.get(key)
+    if hit and hit[0] is doc:
+        return hit[1]
+    index: dict = {}
+    for club, entry in ((doc.get("teams") or {}).items()):
+        rows = (entry.get("players") if isinstance(entry, dict) else entry) or []
+        for r in rows:
+            if isinstance(r, dict):
+                index.setdefault(core_name(r.get("player") or ""), []).append((club, r))
+    _ROSTER_BY_NAME[key] = (doc, index)
+    return index
+
+
 def roster_row(sport: str, player: str, team: str = "", data_dir=None, position: str = "") -> dict:
     """His row on the published roster: on his club's where the club is known;
     else the one row of that name (two men of one name are neither).
@@ -662,12 +686,7 @@ def roster_row(sport: str, player: str, team: str = "", data_dir=None, position:
     want = core_name(player)
     if not want:
         return {}
-    hits = []
-    for club, entry in ((_roster_doc(sport, data_dir).get("teams") or {}).items()):
-        rows = (entry.get("players") if isinstance(entry, dict) else entry) or []
-        for r in rows:
-            if isinstance(r, dict) and core_name(r.get("player") or "") == want:
-                hits.append(dict(r, team=r.get("team") or club))
+    hits = [dict(r, team=r.get("team") or club) for club, r in _roster_names(sport, data_dir).get(want, ())]
     if team:
         mine = [r for r in hits if r.get("team") == team]
         if mine:
