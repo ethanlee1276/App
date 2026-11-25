@@ -70,12 +70,19 @@ def test_the_slider_runs_through_the_books_half_from_a_step_under_his_lowest_to_
       const steals = { line: 0.5, side: "under", logs: [2, 0, 1, 1, 1, 1, 0, 1, 3].map((v) => ({ value: v })) };
       const points = { line: 20.5, logs: [25, 31, 14, 8, 22].map((v) => ({ value: v })) };
       const whole = { line: 6, logs: [4, 7, 9].map((v) => ({ value: v })) };
+      const kept = { player: "P", market_label: "Receptions", line: 3, side: "over", logs: whole.logs };
+      _lineAdj.set(lineAdjKey(kept), { line: 3.5, side: "UNDER" });
+      const offGrid = lineAdjState(kept);
+      _lineAdj.set(lineAdjKey(kept), { line: 5, side: "UNDER" });
       return [lineAdjRange(steals), lineAdjRange(points), lineAdjRange(whole), lineAdjState(steals),
-              lineAdjReadHTML(points, 20.5, "OVER"), lineAdjReadHTML(steals, 1.5, "UNDER")];""")
+              lineAdjReadHTML(points, 20.5, "OVER"), lineAdjReadHTML(steals, 1.5, "UNDER"), offGrid,
+              lineAdjState(kept)];""")
     if got is None:
         print("      (skipped: no node)")
         return
-    steals, points, whole, state, read_pts, read_stl = got
+    steals, points, whole, state, read_pts, read_stl, off_grid, on_grid = got
+    assert off_grid == {"line": 3, "side": "OVER"}, ("the book moved to a whole number: its line again", off_grid)
+    assert on_grid == {"line": 5, "side": "UNDER"}, on_grid
     assert steals == {"lo": 0.5, "hi": 3.5, "frac": 0.5}, "never under the book's lowest line, a step over his best"
     assert points == {"lo": 7.5, "hi": 31.5, "frac": 0.5}
     assert whole == {"lo": 3, "hi": 9, "frac": 0}, "a whole line through whole numbers"

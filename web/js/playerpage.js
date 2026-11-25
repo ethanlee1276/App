@@ -848,7 +848,10 @@ function lineAdjRange(r) {
   return { lo, hi, frac };
 }
 function lineAdjState(r) {
-  const a = _lineAdj.get(lineAdjKey(r));
+  let a = _lineAdj.get(lineAdjKey(r));
+  // A line kept off tonight's steps (the book moved from 2.5 to 3, the reader's 3.5 kept) is the book's again.
+  const k = a && a.line != null ? a.line - lineAdjRange(r).frac : 0;
+  if (Math.abs(k - Math.round(k)) > 1e-9) a = null;
   if (!a && r.history) return { line: null, side: "OVER" };
   return { line: a ? a.line : Number(r.line), side: a ? a.side : lineAdjBook(r) };
 }
