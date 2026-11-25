@@ -773,7 +773,13 @@ function renderPlayerPage(host, player, sport) {
   plrMarkets(page, kept);
   plrFrameOn(sport, team);
   // Drawn, so Home's waiting blocks may go on (app.js boardHeld, step AFK).
-  const fill = (d) => { window._plrDrawn = true; if (page.isConnected) plrFill(page, d); };
+  // ...and so may its market cards' charts (app.js mountCharts, step AFN): the page's own numbers first.
+  const fill = (d) => {
+    window._plrDrawn = true;
+    if (page.isConnected) window._plrFilledRoute = state.playerSlug;
+    if (page.isConnected) plrFill(page, d);
+    if (typeof chartsAfterPage === "function") chartsAfterPage();
+  };
   if (cached) fill(cached);
   else plrFetch(sport, player, team).then(fill);
 }

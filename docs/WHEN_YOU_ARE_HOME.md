@@ -9883,6 +9883,15 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFN. A player's numbers come before its charts** (step 956; 25 November; nothing to run). Follow-up to AFK. A
+player's page opened cold asked the server for the player's own numbers and, at the same moment, for every chart on
+its market cards (a running back's: routes, carries, role and tonight's matchup). That's five answers at once from a
+server with one core, so the numbers at the top of the page waited behind charts further down. The cards' charts now
+wait until the page's numbers have landed, at most four seconds. Also, when the page was drawn twice before the
+player's games came back (the board arriving in between), it asked for them twice; now it asks once. One thing I
+found measuring this: my page timings include the test tool's own delay in noticing that the page drew. In the one
+load I checked at phone speed it was 0.6 s, so I only compare timings taken the same way with each other.
+
 **AFM. A kept answer past its time answers at once** (step 955; 25 November; nothing to run). Follow-up to AFK.
 The server keeps each player's page for five minutes, each chart for fifteen and the sign-up screen's numbers for
 one, and the first reader after that waited for a whole rebuild. Today Amon-Ra St. Brown's page once took 4.4 s,

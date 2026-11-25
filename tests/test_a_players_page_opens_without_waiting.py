@@ -74,7 +74,7 @@ def test_home_waits_while_a_cold_player_page_draws():
     assert "if (boardHeld()) return boardNext();" in nxt and "}, boardHeld() ? 300 : 0);" in nxt
     assert "if (boardHeld()) return setTimeout(idleStale, 300);" in _fn(APP, "function idleStale() {")
     assert "while (boardHeld()) await new Promise((r) => setTimeout(r, 300));" in _fn(APP, "function prefetchLeaguesSoon() {")
-    assert "const fill = (d) => { window._plrDrawn = true; if (page.isConnected) plrFill(page, d); };" in PAGE
+    assert ("    window._plrDrawn = true;\n    if (page.isConnected) window._plrFilledRoute = state.playerSlug;\n    if (page.isConnected) plrFill(page, d);\n    if (typeof chartsAfterPage === \"function\") chartsAfterPage();\n") in PAGE
 
 
 def test_the_page_does_not_wait_on_what_it_does_not_show():

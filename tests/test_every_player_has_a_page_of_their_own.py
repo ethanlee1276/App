@@ -442,7 +442,7 @@ def test_the_server_serves_it_free_and_the_players_page_becomes_it():
     # ...and the pick a tap opened it on (PICKTAP1), redrawn only when it changed.
     assert "    plrTappedInto(same);\n    return;\n  }" in mount
     assert "if (cached) fill(cached);" in mount and \
-        "const fill = (d) => { window._plrDrawn = true; if (page.isConnected) plrFill(page, d); };" in mount, \
+        ("    window._plrDrawn = true;\n    if (page.isConnected) window._plrFilledRoute = state.playerSlug;\n    if (page.isConnected) plrFill(page, d);\n    if (typeof chartsAfterPage === \"function\") chartsAfterPage();\n") in mount, \
         "a first visit draws at once from the visit's copy"
     assert ('  const b = e.target.closest && e.target.closest(".plr .gl-open");' in PAGE
             and "  e.stopPropagation();\n  plrShow(page, \"log\");\n  plrToTabs(page);\n}, true);" in PAGE), \

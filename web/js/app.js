@@ -14743,13 +14743,15 @@ async function leagueSearchAfterPause(q, seq, host) {
 /* A hit's logs come from the hit's OWN league. Reading state.sport here
    asked the NFL endpoint for a WNBA guard and got an empty card back —
    the exact shape of "search found him but the page has nothing". */
+const _logsAsk = new Map();
 async function leagueLogs(player, sport) {
-  const lg = sport || state.sport;
-  try {
-    const r = await fetch(`/api/players/logs?sport=${encodeURIComponent(lg)}&player=${encodeURIComponent(player)}`);
-    if (r.ok) return (await r.json()).stats || {};
-  } catch (e) {}
-  return {};
+  const lg = sport || state.sport, key = `${lg}|${player}`;
+  // ONE ASK FOR TWO DRAWS (step AFN): a page drawn again before the first draw's logs came back (the board
+  // landing) asked the server for the same player's logs a second time.
+  if (!_logsAsk.has(key)) _logsAsk.set(key, fetch(`/api/players/logs?sport=${encodeURIComponent(lg)}&player=${encodeURIComponent(player)}`)
+    .then((r) => (r.ok ? r.json() : {})).then((d) => (d && d.stats) || {}, () => ({}))
+    .finally(() => _logsAsk.delete(key)));
+  return _logsAsk.get(key);
 }
 
 /* ---------------- A search that forgives ----------------
@@ -15035,9 +15037,22 @@ function chartSlot(r) {
   const lg = (r && r.sport) || state.sport, m = String((r && r.market) || "");
   return r && r.player ? `<div class="cc-slot" data-cc="${escapeAttr(r.player)}" data-lg="${lg}" data-mkt="${escapeAttr(m)}" data-pos="${escapeAttr(r.position || "")}" data-opp="${escapeAttr(r.opponent || "")}"></div>` : "";
 }
-function mountCharts(root) {
-  const els = root.querySelectorAll(".cc-slot:not([data-on])");
-  if (els.length) ccLoad().then((m) => m && m.mount && els.forEach((el) => el.isConnected && m.mount(el)));
+let _ccHeld = [];
+function mountCharts(root, all) {
+  /* A PLAYER'S OWN NUMBERS FIRST (step AFN, 2026-11-25; Ethan: "data on the player page takes a long time to
+     load"). A page opened cold asked for its market cards' charts beside its own numbers: five answers at once
+     from a one-core server, the top of the page's among them. On a player's address the charts in the players
+     view wait until that page's numbers have landed (js/playerpage.js renderPlayerPage), never past four
+     seconds. Not by state.view: that view is drawn before the switch to it lands. */
+  const now = [...root.querySelectorAll(".cc-slot:not([data-on])")].filter((el) => all || !(state.playerSlug
+    && window._plrFilledRoute !== state.playerSlug && el.closest("#players-board") && _ccHeld.push(el)));
+  if (_ccHeld.length) setTimeout(chartsAfterPage, 4000);
+  if (now.length) ccLoad().then((m) => m && m.mount && now.forEach((el) => el.isConnected && !el.dataset.on && m.mount(el)));
+}
+function chartsAfterPage() {
+  const held = _ccHeld;
+  _ccHeld = [];
+  if (held.length) mountCharts({ querySelectorAll: () => held }, true);
 }
 /* A PAGE REDRAWN AROUND A CHART KEEPS IT. The pick page and the player
    page redraw every minute with the board; a chart drawn again each time
@@ -22011,33 +22026,6 @@ async function openTeam(sport, team, vs, tab) {
    Every name is a door to the player page, which is the whole point of
    putting a squad here: the team page is where somebody arrives from
    search, and until now it was a dead end with a table on it. */
-/* THE STAT PAGE, ESPN-shaped. Ethan, 2026-09-10, with their team tab
-   open beside ours: "now the ESPN uses theirs as an example of how we
-   should make ours work and the data we could show." Theirs is a
-   leaders strip over Passing / Rushing / Receiving; this is the same
-   page built out of `player_game_logs`, the table the props already
-   grade against.
-
-   The COLUMNS come from the engine rather than from here, and that is
-   deliberate: a column exists when somebody on the team has a number
-   for it, so the college board draws the six its feed writes and the
-   NFL draws eight, with no second table to keep in step. What neither
-   draws is LNG or BIG — a longest run is a play-level fact and a game
-   log does not hold the plays. */
-function teamLeadersHTML(st) {
-  const rows = ((st || {}).leaders || []).filter((L) => L && L.player);
-  if (!rows.length) return "";
-  return `<div class="tld">${rows.map((L) => `
-    <button class="tld-card" type="button"
-            data-player-page="${escapeAttr(slugify(L.player))}">
-      <span class="tld-k">${escapeHtml(L.title)} ${escapeHtml(/_yds$/.test(L.market || "") ? "yards"
-        : String(marketWord(L.market) || "").toLowerCase())}</span>
-      <span class="tld-who">${escapeHtml(L.player)}${L.position
-        ? ` <span class="tld-pos">${escapeHtml(L.position)}</span>` : ""}</span>
-      <span class="tld-v">${Math.round(L.value).toLocaleString()}</span>
-    </button>`).join("")}</div>`;
-}
-
 let _teamOppAll = false;
 
 // renderTeamPage is in js/more.js, loaded the first time its page opens (loadRoom).

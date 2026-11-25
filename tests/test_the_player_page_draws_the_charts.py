@@ -55,7 +55,7 @@ def test_the_overview_has_a_charts_slot_under_the_last_game():
     fill = _fn(PAGE, "plrFill")
     assert fill.index('set(".plr-prev", plrPrevHTML(d));') < fill.index("plrChartsInto(page, d);") < fill.index(
         'set(".plr-splitlet", plrSplitletHTML(d));')
-    assert "function chartSlot(r)" in APP and "function mountCharts(root)" in APP, "the pick page's own door"
+    assert "function chartSlot(r)" in APP and "function mountCharts(root, all)" in APP, "the pick page's own door"
 
 
 def _run(cases):

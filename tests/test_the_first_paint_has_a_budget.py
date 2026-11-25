@@ -409,6 +409,9 @@ APP_JS_BUDGET_KB = 290
 #: 384 kept on 2026-11-24, TRIMMED UNDER IT again (steps ADT-ADY put a finished game's close and the board's
 #: begun/decided words on the boot path, 115 B over): venueMark, teamStatsHTML and pmxHeroHTML moved to
 #: js/more.js, the only file that draws them. The first visit went 393,331 -> 392,336 B.
+#: 384 kept on 2026-11-25, TRIMMED UNDER IT again (steps AFK and AFN put a player page's waits and its charts'
+#: hold on the boot path, 158 B over once compacted): teamLeadersHTML moved to js/more.js, the only file that
+#: draws it. The first visit went 393,374 -> 393,189 B.
 BOOT_BUDGET_KB = 384
 
 

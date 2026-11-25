@@ -6291,3 +6291,32 @@ function pmxHeroHTML() {
     </div>
   </header>`;
 }
+
+/* THE TEAM PAGE'S LEADERS (moved from app.js, step AFN, 2026-11-25: the first visit's budget; this file is the
+   only one that draws them). */
+/* THE STAT PAGE, ESPN-shaped. Ethan, 2026-09-10, with their team tab
+   open beside ours: "now the ESPN uses theirs as an example of how we
+   should make ours work and the data we could show." Theirs is a
+   leaders strip over Passing / Rushing / Receiving; this is the same
+   page built out of `player_game_logs`, the table the props already
+   grade against.
+
+   The COLUMNS come from the engine rather than from here, and that is
+   deliberate: a column exists when somebody on the team has a number
+   for it, so the college board draws the six its feed writes and the
+   NFL draws eight, with no second table to keep in step. What neither
+   draws is LNG or BIG — a longest run is a play-level fact and a game
+   log does not hold the plays. */
+function teamLeadersHTML(st) {
+  const rows = ((st || {}).leaders || []).filter((L) => L && L.player);
+  if (!rows.length) return "";
+  return `<div class="tld">${rows.map((L) => `
+    <button class="tld-card" type="button"
+            data-player-page="${escapeAttr(slugify(L.player))}">
+      <span class="tld-k">${escapeHtml(L.title)} ${escapeHtml(/_yds$/.test(L.market || "") ? "yards"
+        : String(marketWord(L.market) || "").toLowerCase())}</span>
+      <span class="tld-who">${escapeHtml(L.player)}${L.position
+        ? ` <span class="tld-pos">${escapeHtml(L.position)}</span>` : ""}</span>
+      <span class="tld-v">${Math.round(L.value).toLocaleString()}</span>
+    </button>`).join("")}</div>`;
+}
