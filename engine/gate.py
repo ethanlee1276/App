@@ -1183,6 +1183,7 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
             # `server.board_bytes` reads it when it is at least as new.
             _write_served_sidecar(full, payload, srv)
             _step("sidecar")
+            _write_picks_sidecar(full, payload)
     _publish_parts(label, took)
     return (str(public), str(full))
 
@@ -1216,6 +1217,33 @@ def served_sidecar(full_path) -> Path:
     name, so `full_board_file` can never hand it out by URL."""
     p = Path(full_path)
     return p.with_name(p.name + ".served")
+
+
+def picks_sidecar(full_path) -> Path:
+    """Where a private board's count of tonight's picks lives (step AGS). Not a `.json` name either."""
+    p = Path(full_path)
+    return p.with_name(p.name + ".picks")
+
+
+def _write_picks_sidecar(full: Path, payload) -> None:
+    """``{"picks", "date"}`` beside the private copy, written after it.
+
+    TONIGHT'S COUNT WITHOUT THE BOARD (step AGS, 25 November 2026; Ethan: "Ok keep going and work more on these
+    issues as they are not fixed"). The sign-up screen's first look counts each league's picks for tonight, and read
+    every league's whole private board to do it (up to 18 MB each): 1.84 s of its rebuild on the live site, in the
+    one process every page waits on, every rebuild a board had changed since. The build already holds the board, so
+    it writes the count beside it; a reader takes it when it is at least as new as the board, and reads the board
+    itself otherwise. Never costs a publish."""
+    try:
+        from .pushalerts import _picks
+        side = picks_sidecar(full)
+        tmp = side.with_name(side.name + ".tmp")
+        doc = payload if isinstance(payload, dict) else {}
+        with open(tmp, "w") as fh:
+            fh.write(json.dumps({"picks": _picks(doc), "date": str(doc.get("date") or "")}))
+        os.replace(tmp, side)
+    except Exception:                                        # noqa: BLE001 — the reader reads the board instead
+        pass
 
 
 def _write_served_sidecar(full: Path, payload, srv=None) -> None:

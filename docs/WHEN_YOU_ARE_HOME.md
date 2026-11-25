@@ -9883,6 +9883,14 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGS. Tonight's pick count is written beside each board** (step 987; 25 November; nothing to run). AGQ's split
+showed where the sign-up screen's rebuild goes: 1.84 s counting tonight's picks, which read every league's whole
+private board (the NFL's runs to 18 MB) whenever one had changed, and they change every few minutes. Each board build
+now writes a tiny file beside its board with the count and the date, and the count is read from there when it is at
+least as new as the board (else from the board, as before). The record summary it also reads (885 KB) is now read
+once per change. AGP already keeps its "last graded pick". What is left of that rebuild is the game reports' record
+on the first build after a restart (1.9 s), which is then kept.
+
 **AGR. A name a chart doesn't hold costs a lookup, not the whole table** (step 986; 25 November; nothing to
 run). Checked live after the update that carried AGJ to AGO: the role charts asked before the update answered off
 the disk in 50 to 59 ms (Gibbs, Kucherov, Soto; they were 11 to 34 s), and ones nobody had opened were built in 0.1

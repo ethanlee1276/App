@@ -55,6 +55,25 @@ def _load(path: Path) -> dict:
         return {}
 
 
+#: A file read once a change (step AGS): the record's head is 885 KB, read on every rebuild of the first look.
+_KEPT_FILES: dict = {}
+
+
+def _load_kept(path: Path) -> dict:
+    """`_load`, kept until the file's time or size moves. Readers treat it as read-only."""
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return {}
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _KEPT_FILES.get(str(path))
+    if hit and hit[0] == stamp:
+        return hit[1]
+    got = _load(path)
+    _KEPT_FILES[str(path)] = (stamp, got)
+    return got
+
+
 #: TONIGHT'S COUNTS, A BOARD READ ONCE A CHANGE (step AGH, 25 November 2026; Ethan: "data on the player page takes a
 #: long time to load"). The sign-up screen's first look (engine/firstlook) counts tonight's picks league by league
 #: off each league's whole board, and was rebuilt about once a minute: 1.8 s of the server's own time each, in the
@@ -73,6 +92,18 @@ def _board_count(path: Path) -> tuple:
     hit = _COUNTS.get(str(path))
     if hit and hit[0] == stamp:
         return hit[1]
+    # The build's own count beside its board, when written after it (engine/gate._write_picks_sidecar, step AGS):
+    # a few bytes, where the board is up to 18 MB.
+    from engine import gate
+    side = gate.picks_sidecar(path)
+    try:
+        if side.stat().st_mtime_ns >= st.st_mtime_ns:
+            doc = json.loads(side.read_text(encoding="utf-8"))
+            got = (int(doc.get("picks") or 0), str(doc.get("date") or ""))
+            _COUNTS[str(path)] = (stamp, got)
+            return got
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
     from engine import pushalerts as PA
     board = PA._load(path)
     got = (PA._picks(board), str(board.get("date") or ""))
@@ -95,7 +126,7 @@ def build(web: Path = WEB, today: _dt.date | None = None, took=None) -> dict:
             t0[0] = now
     web = Path(web)
     today = today or _dt.date.today()
-    rec = _load(web / "data" / "record_head.json") or _load(web / "data" / "record.json")
+    rec = _load_kept(web / "data" / "record_head.json") or _load_kept(web / "data" / "record.json")
     mark("record")
     # The picks we stake since 2026-10-31 (engine/stakeplan), as the site leads.
     ov = (rec.get("staked") or {}).get("overall") or rec.get("overall") or {}
