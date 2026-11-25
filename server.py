@@ -1142,6 +1142,9 @@ _UNSUB_IN_LOG = re.compile(r"(/unsubscribe/|/unsubscribe/?\?t=)[^\s\"&]+")
 
 #: The strategy lab's answer, kept until the journal changes (Handler._record_lab).
 _LAB_CACHE: dict = {}
+#: The Record's bet list, per filter, with the journal's stamp it was read at (step AGP); at most this many kept.
+_BETS_CACHE: dict = {}
+BETS_CACHE_MAX = 256
 #: The first screen's members' side (engine/firstlook), kept five minutes: every
 #: stranger's first page asks for it, and it reads every league's board. A minute
 #: until step AGH (25 November 2026): each rebuild was 1.8 s of this process's own
@@ -6832,6 +6835,18 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                 or (since and not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", since)) \
                 or not 0 <= offset <= 100000:
             return self._send(400, b'{"error":"bad filter"}', ".json")
+        # KEPT PER FILTER UNTIL THE JOURNAL CHANGES (step AGP, 25 November 2026): every ask counted and sorted every
+        # settled bet (577 ms on the live site, 400 of it the server's own work, which every other page waits on), and
+        # the answer changes only when a bet is journalled or settled.
+        key = (sport, kind, result, since, offset)
+        try:
+            from engine import ledger as L
+            stamp = L.change_stamp()
+        except Exception:                                    # noqa: BLE001
+            stamp = None
+        hit = _BETS_CACHE.get(key)
+        if hit is not None and stamp is not None and hit[0] == stamp:
+            return self._send(200, hit[1], ".json")
         try:
             from engine import ledger as L
             conn = L.connect()
@@ -6843,7 +6858,12 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                 conn.close()
         except Exception:                                    # noqa: BLE001
             return self._send(503, b'{"error":"record unavailable"}', ".json")
-        return self._send(200, json.dumps(out).encode(), ".json")
+        body = json.dumps(out).encode()
+        if stamp is not None:
+            if len(_BETS_CACHE) >= BETS_CACHE_MAX:
+                _BETS_CACHE.clear()
+            _BETS_CACHE[key] = (stamp, body)
+        return self._send(200, body, ".json")
 
     def _firstlook(self):
         """What the sign-up screen and the plans show of the members' side
@@ -6870,7 +6890,7 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         so a page full of readers trying rules costs one query."""
         try:
             from engine import ledger as L
-            stamp = os.path.getmtime(str(L.DEFAULT_DB))
+            stamp = L.change_stamp()                         # the file and its write-ahead log (step AGP)
         except Exception:                                    # noqa: BLE001
             stamp = None
         hit = _LAB_CACHE.get("body")

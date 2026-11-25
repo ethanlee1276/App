@@ -23,6 +23,7 @@ import datetime
 import json
 import functools as _functools
 import math
+import os
 import re
 import sqlite3
 import statistics
@@ -753,6 +754,23 @@ def _stamp_model_sha(conn) -> None:
             f"BEGIN UPDATE bets SET model_sha = '{sha}' WHERE id = NEW.id; END")
     except sqlite3.OperationalError:
         pass                  # a connection without the column: nothing to stamp
+
+
+def change_stamp(path: str | Path | None = None) -> tuple:
+    """What says the journal changed: the (mtime, size) of the file and of its write-ahead log.
+
+    A settle commits into the log first (WAL, engine/db.tune) and the file itself moves only when the log is
+    checkpointed into it, so the file's own time alone can stand still over fresh settles (step AGP, 25 November
+    2026). A copy of an answer kept against this pair is answered again until a write lands in either."""
+    base = str(path if path is not None else DEFAULT_DB)
+    out = []
+    for f in (base, base + "-wal"):
+        try:
+            st = os.stat(f)
+            out.append((st.st_mtime_ns, st.st_size))
+        except OSError:
+            out.append(None)
+    return tuple(out)
 
 
 def connect(path: str | Path | None = None) -> sqlite3.Connection:

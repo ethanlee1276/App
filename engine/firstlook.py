@@ -88,6 +88,10 @@ def proof(now: float | None = None, conn=None) -> dict | None:
     return out or None
 
 
+#: The newest graded pick and the journal's stamp it was read at (step AGP).
+_LAST: dict = {}
+
+
 def last_graded(conn) -> dict | None:
     """The newest settled pick of the headline record, or None."""
     from engine import ledger as L
@@ -199,18 +203,29 @@ def build(web: Path = WEB, today: _dt.date | None = None, conn=None, took=None) 
     mark("counts")
     out["free_pick"] = free_pick(web, today)
     mark("free")
-    own = conn is None
-    if own:
+    # The newest graded pick, read again only once the journal changed (step AGP, 25 November 2026): the record
+    # page's first page, counted and sorted, was 1.2 s of every rebuild on the live site.
+    stamp, kept = None, False
+    if conn is None:
         from engine import ledger as L
+        stamp = L.change_stamp()
+        if _LAST.get("stamp") == stamp and "last" in _LAST:
+            out["last"], kept = _LAST["last"], True
+    if not kept:
+        own = conn is None
+        if own:
+            from engine import ledger as L
+            try:
+                conn = L.connect()
+            except sqlite3.Error:
+                conn = None
         try:
-            conn = L.connect()
-        except sqlite3.Error:
-            conn = None
-    try:
-        out["last"] = last_graded(conn) if conn is not None else None
-    finally:
+            out["last"] = last_graded(conn) if conn is not None else None
+        finally:
+            if own and conn is not None:
+                conn.close()
         if own and conn is not None:
-            conn.close()
+            _LAST.update(stamp=stamp, last=out["last"])
     mark("last")
     out["proof"] = proof()
     mark("proof")

@@ -9883,6 +9883,14 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGP. The Record's bet list is read once per change to the record** (step 984; 25 November; nothing to run).
+The Record's list of settled bets counted and sorted every settled bet on every visit: 577 ms on the live site, 400
+of it the server's own work, which every other page waits behind. The sign-up screen's "newest graded pick" read the
+same list on every rebuild (1.2 s of one). Both only change when a bet is journalled or settled, so each answer is
+now kept until the record changes. "Changed" looks at the record file and its write-ahead log together: a settle
+lands in the log first and the file itself only moves later, so the file's own time alone could stand still over
+fresh results. The strategy lab's kept answer used the file's time alone; it uses the same check now.
+
 **AGO. The other charts read the player's own rows too** (step 983; 25 November; nothing to run). After the 16:31
 UTC update every role chart said where its time went, and it was what AGN fixes: the player's seasons took 11.3 s of
 Jahmyr Gibbs's 11.5, 10.3 s of Jeremiah Smith's 11.1, 23.0 s of Kucherov's 23.4 and 32.6 s of Soto's 34.3, while the
