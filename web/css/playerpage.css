@@ -219,7 +219,7 @@ html:not([data-theme="light"]) body.plr-on #view-players .gl-table .gl-fix {
 .la-sd { border: 0; background: transparent; color: var(--text-dim); font: inherit; font-size: var(--fs-2xs);
   font-weight: 700; min-height: 32px; padding: 0 12px; border-radius: 999px; cursor: pointer; }
 .la-sd.on { background: var(--grad-chip); color: var(--text); }
-.la-price { font-size: var(--fs-2xs); color: var(--text-dim); line-height: 1.45; }
+.la-price { font-size: var(--fs-2xs); color: var(--text-dim); line-height: var(--lh-snug); }
 .la-price b { color: var(--text); }
 .la-price[hidden] { display: none; }
 .la-row { display: flex; align-items: center; gap: 10px; }
