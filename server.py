@@ -1330,7 +1330,7 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def do_GET(self):
-        self._clock = (time.perf_counter(), time.thread_time())      # every answer's own timing (_send, step AFL)
+        self._clock = (time.perf_counter(), time.thread_time(), time.process_time())  # _send (steps AFL, AGK)
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/") and self._rate_limited(RATE_READ_PER_MIN):
             return
@@ -1522,7 +1522,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._static(parsed.path)
 
     def do_POST(self):
-        self._clock = (time.perf_counter(), time.thread_time())      # every answer's own timing (_send, step AFL)
+        self._clock = (time.perf_counter(), time.thread_time(), time.process_time())  # _send (steps AFL, AGK)
         parsed = urlparse(self.path)
         # The billing webhook (/api/billing/webhook — Stripe; Paddle is
         # retired, audit E-19) is exempt from the rate limiter below: it is
@@ -7493,10 +7493,16 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         # thread runs at a time, so a slow answer is slow work or a wait for its turn: `all` is its milliseconds
         # since the request was read, `cpu` this thread's own processor time in them. Names and numbers only;
         # a second Server-Timing line joins any the handler sent (the team page's parts, the player page's).
+        # `proc` (step AGK, 25 November 2026) is the whole process's processor time in them, every thread's: near
+        # `all`, the server was busy the whole time and the answer waited its turn behind other work; well under it,
+        # the wait was the disk or the network (Nikita Kucherov's role chart took 22.6 s with 2.5 s of its own).
         clock = getattr(self, "_clock", None)
         if clock is not None and str(getattr(self, "path", "")).startswith("/api/"):
-            self.send_header("Server-Timing", f"all;dur={(time.perf_counter() - clock[0]) * 1000.0:.0f}, "
-                                              f"cpu;dur={(time.thread_time() - clock[1]) * 1000.0:.0f}")
+            line = (f"all;dur={(time.perf_counter() - clock[0]) * 1000.0:.0f}, "
+                    f"cpu;dur={(time.thread_time() - clock[1]) * 1000.0:.0f}")
+            if len(clock) > 2:
+                line += f", proc;dur={(time.process_time() - clock[2]) * 1000.0:.0f}"
+            self.send_header("Server-Timing", line)
         # When the payload came from a file on disk, say when that file was
         # last written. The site's freshness chip used to time its own
         # fetch, which is always a few seconds old — so a phone across town

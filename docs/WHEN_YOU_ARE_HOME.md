@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGK. Every answer says whether it waited behind other work or on the disk** (step 979; 25 November; nothing to
+run). Each answer from the server already said its time (`all`) and its own processor time (`cpu`): Kucherov's role
+chart 22.6 s with 2.5 s of its own. The other 20 s is either a wait behind other work in the same process (one
+Python thread runs at a time) or a wait on the disk, and the two need different fixes. Each answer now also says the
+whole process's processor time while it was made (`proc`): near `all`, the server was busy the whole time and the
+answer waited its turn; well under it, the wait was the disk.
+
 **AGJ. A chart built before an update answers at once after it** (step 978; 25 November; nothing to run). Every
 update restarts the server, and a chart it had built was kept only in its memory, so the first person to open each
 chart after an update waited for it to be built again (a role chart built while you wait took 13 to 33 seconds in
