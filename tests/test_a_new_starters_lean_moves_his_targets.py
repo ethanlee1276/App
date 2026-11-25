@@ -190,10 +190,18 @@ def test_the_red_zone_split_is_measured_too_and_the_verdicts_reach_the_heartbeat
     line = F.verdict_line([("A", 1204, {"setting": 10, "passes": False, "worse": 3, "interval": (-0.1, 0.0)}),
                            ("B", 199, {"setting": 0.2, "passes": True, "worse": 1, "interval": (0.001, 0.01)}),
                            ("R", 3, {"setting": None})])
-    assert line == ("chemfit: A fails at 10 (1204; 3 season(s) worse, interval (-0.1, 0.0)); "
-                    "B passes at 0.2 (199; 1 season(s) worse, interval (0.001, 0.01)); R too few (3)"), line
+    assert line == "chemfit: A fails (1204); B passes at 0.2 (199); R too few (3)", line
+    detail = F.detail_line([("A", 1204, {"setting": 10, "passes": False, "worse": 3, "interval": (-0.1, 0.0)}),
+                            ("R", 3, {"setting": None})])
+    assert detail == "chemfit detail: A at 10 (1204; 3 season(s) worse, interval (-0.1, 0.0))", detail
+    # STEP AGF: every verdict fits the heartbeat's 200 characters, six tests at their longest; 25 November's line
+    # was cut before Z's.
+    six = [(t, 76950, {"setting": 320, "passes": t in "BZ", "worse": 3, "interval": (-0.01336, 0.04159)})
+           for t in ("A", "B", "C", "S", "R", "Z")]
+    assert len(F.verdict_line(six)) <= 200 and F.verdict_line(six).endswith("Z passes at 320 (76950)")
     src = (ROOT / "engine" / "chemfit.py").read_text(encoding="utf-8")
-    assert 'if __name__ == "__main__":\n    raise SystemExit(main())' in src and "print(verdict_line(verdicts))" in src
+    assert 'if __name__ == "__main__":\n    raise SystemExit(main())' in src
+    assert "    print(detail_line(verdicts))\n    print(verdict_line(verdicts))\n    return 0" in src, "the verdicts last"
     assert 'lean_cases(games, key="rz", by="rz_by_starter", min_game=4, min_career=12)' in src
 
 

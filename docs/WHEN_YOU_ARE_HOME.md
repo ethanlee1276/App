@@ -9883,6 +9883,14 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGF. This Wednesday's chemistry verdicts, and a line that fits** (step 974; 25 November; nothing to run). The
+Wednesday measurement (ACL) ran at 00:41 to 00:49 Eastern. Off the heartbeat: A fails (7,695 cases, three seasons
+worse), B passes at 0.2 (338 cases, one season worse; B is the new starter's lean that already ships), and R, a
+returning starter's old target shares with a club, fails (33 cases, two seasons worse), so it changes nothing. Z's
+verdict (the red-zone split) was cut off: the heartbeat keeps 200 characters of a job's last line, and the line ran
+longer. Nothing ships for Z until it can be read. The last line now says each verdict short ("Z passes at 0.2
+(338)"), the seasons-worse and interval detail on the line before it, so next Wednesday's reads whole.
+
 **AGE. An update no longer empties the league places** (step 973; 25 November; nothing to run). The saved league
 tables (AFO) carry a stamp of the code that built them, the whole of engine/playerpage.py and engine/gamelog.py, so
 every update to either threw every table away, and each league's places were missing from its pages until it was

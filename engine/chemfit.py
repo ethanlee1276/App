@@ -319,20 +319,31 @@ def main(argv=None) -> int:
     print(f"\nWhat ships: engine/qblean.LEAN_W = {qblean.LEAN_W}")
     # THE LAST LINE SAYS EVERY VERDICT (step ACL): the Wednesday refit runs this on the box, and a job's last line
     # is what the heartbeat shows of it (maintenance._record_job), so each test's answer can be read off the site.
+    # The heartbeat keeps 200 characters of it (maintenance.scrub_public), so the detail goes on the line before
+    # and the last says each verdict short (step AGF: on 25 November the long line was cut before Z's).
+    print(detail_line(verdicts))
     print(verdict_line(verdicts))
     return 0
 
 
 def verdict_line(verdicts: list) -> str:
-    """"chemfit: A fails (1204 cases); B passes at 0.2 (199); R too few (3); Z ..." from [(test, cases, judged)]."""
+    """"chemfit: A fails (1204); B passes at 0.2 (199); R too few (3)" from [(test, cases, judged)]: every test's
+    verdict, short enough for the heartbeat's 200 characters (step AGF)."""
     bits = []
     for test, n, r in verdicts:
         if r.get("setting") is None:
             bits.append(f"{test} too few ({n})")
         else:
-            bits.append(f"{test} {'passes' if r.get('passes') else 'fails'} at {r['setting']} ({n}; "
-                        f"{r.get('worse', 0)} season(s) worse, interval {r.get('interval')})")
+            bits.append(f"{test} {('passes at ' + str(r['setting'])) if r.get('passes') else 'fails'} ({n})")
     return "chemfit: " + "; ".join(bits)
+
+
+def detail_line(verdicts: list) -> str:
+    """Each judged test's setting, seasons worse and interval, the line before the verdicts (it was the last line
+    until step AGF): "chemfit detail: A at 10 (1204; 3 season(s) worse, interval (-0.1, 0.0)); ..."."""
+    bits = [f"{test} at {r['setting']} ({n}; {r.get('worse', 0)} season(s) worse, interval {r.get('interval')})"
+            for test, n, r in verdicts if r.get("setting") is not None]
+    return "chemfit detail: " + ("; ".join(bits) if bits else "none judged")
 
 
 if __name__ == "__main__":
