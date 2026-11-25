@@ -1047,9 +1047,9 @@ def _allowed_line(allowed: dict | None, stat: str, opp: str, n_default: int = 32
 #: Rams, a fade on Tucker Kraft that read "LA gives up the second-fewest passing yards (198 a game)": "you're not
 #: going into specifics about how many passing yards they give up to tight ends, and for receivers you're not going
 #: into specifics on how many passing yards they give up to receivers, and same for touchdown props ... how a real
-#: sports bettor would use it". Every football read says, first, what the defence gives up a game to his position
-#: in each stat his bets are on, at any rank: yards, catches, touchdowns (a passer's yards, touchdowns and the
-#: interceptions it forces). (stat, words).
+#: sports bettor would use it". Every football read says, after his share, what the defence gives up a game to his
+#: position in each stat his bets are on, at any rank: yards, catches, touchdowns (a back's carries too; a passer's
+#: yards, completions, attempts, touchdowns and the interceptions it forces). (stat, words).
 #:
 #: SHOWN, AND COUNTED ONLY WHERE MEASURED. Re-measured that day (`python3 positionfit.py`) on 2022-2025: every
 #: receiver and tight end game from week 4 with three games before it and 15+ yards a game, 7,321 games; what he
@@ -1862,7 +1862,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         mstat = _D.model_stat((pos or "").upper(), head)
         if mstat:
             defense_line = rank_fact(allowed, mstat, opp, n_teams)[1]
-    # His share is said with what was noticed and not counted, first; before it, what the defence gives up to his
+    # His share is said with what was noticed and not counted, first; then what the defence gives up to his
     # position in each stat his bets are on, less what a counted reason says already (step AHO).
     # College football's ratings come in as ``shown_allowed`` (step AHO): said on the card, never a vote, since no
     # college read was measured counting them.
@@ -1872,7 +1872,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     position_td = ""
     if seen and group in ("wr", "te", "rb"):
         position_td = _td_sentence(seen, f"{group}_td", opp, POSITION_PLURAL[group], n_teams)
-    notes = ([vs_position] if vs_position else []) + role + notes
+    notes = role + ([vs_position] if vs_position else []) + notes
     # A LEAN THAT RESTS ON THE WEATHER ALONE points only at the markets the
     # weather moves (WEATHER_LEAN): rain backs a back's carries, never his
     # rushing yards.
@@ -2198,8 +2198,8 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             tracking=own_track,
             targets=top_targets(usage, team) if group == "qb" else None,
             league_iw=league_iw_rate(ch) if group == "qb" else None,
-            contact=(contact or {}).get(opp[team]), weather=weather,
-            shown_allowed=(shown_allowed or {}).get(opp[team]))
+            shown_allowed=(shown_allowed or {}).get(opp[team]),
+            contact=(contact or {}).get(opp[team]), weather=weather)
         read["notes"] = list(read.get("notes") or []) + maybe_lines
         # HIS OWN LISTING, when it is short of out: the read assumes he plays.
         if own_status in ("QUESTIONABLE", "GTD"):
@@ -2994,8 +2994,9 @@ def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None =
         scan = scan_game(home, away, ratings=ratings, charts={}, defenders_now={},
                          props=gprops, opponent_adjusted=False, usage=usage or {},
                          injuries=[i for i in injuries or [] if getattr(i, "team", "") in (home, away)],
+                         shown_allowed=allowed,
                          pulled=gd.get("pulled_players") or [], weather=gd.get("weather"),
-                         points=pts, line_words=words, shown_allowed=allowed)
+                         points=pts, line_words=words)
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         # THE SAME FURNITURE THE NFL SCAN CARRIES (Ethan, 2026-09-26: "we

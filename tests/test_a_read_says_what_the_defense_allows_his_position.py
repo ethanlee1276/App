@@ -9,8 +9,9 @@ Re-measured that day (positionfit.py, 2022-2025, 7,321 receiver and tight end ga
 catchers' games 103% / 93% of their usual yards, the position's own number 103% / 94%, and counting both as one vote
 102% / 94%. So what holds:
 
-  * every read says, first among its notes, what the defence gives up a game to his position — yards, catches and
-    touchdowns (a passer's: yards, touchdowns, interceptions forced), each with its rank, at any rank;
+  * every read says, among its notes after his share of the work, what the defence gives up a game to his
+    position — yards, catches and touchdowns (a passer's: yards, completions, attempts, touchdowns, interceptions
+    forced), each with its rank, at any rank;
   * a stat already said as a counted reason is left out of that line, which then says "also";
   * the counted reason for a catcher says the pass defence is overall, and no position number becomes a vote;
   * the report's matchup cards and its fade and breakout cards carry the line;

@@ -229,7 +229,7 @@ def test_no_board_path_keeps_nothing_and_writes_no_section():
 
 def test_the_builds_pass_their_board_path_and_ask_reads_it():
     assert "_greport.attach(result, allowed=_allowed, season=args.season, out=args.out)" in NFL
-    assert "meta=_gr_meta, out=args.out)" in CFB
+    assert "meta=_gr_meta, out=args.out," in CFB
     _d, out = _tree()
     _attach(_board(), out, "2026-10-20T09:05:00")
     b = _board(spread=-3.5)

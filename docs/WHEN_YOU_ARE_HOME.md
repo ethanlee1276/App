@@ -9911,8 +9911,9 @@ receivers, and same for touchdown props ... how a real sports bettor would use i
 tight-end numbers when they sat in the league's top or bottom quarter, so a middling tight-end defense went unsaid.
 
 - **What a card says now.** Every NFL and college football read, and every report card built from it (the matchup
-  cards, Breakout candidates and Fades), says first among its notes what the defense gives up a game to his
-  position, in every stat his bets are on, each with its rank, at any rank: "Against tight ends, LA allows 47
+  cards, Breakout candidates and Fades), says among its notes, right after the player's share of the work, what the
+  defense gives up a game to his position, in every stat his bets are on, each with its rank, at any rank:
+  "Against tight ends, LA allows 47
   receiving yards (the 15th-fewest), 4.6 catches (the 15th-most) and 0.1 touchdowns (the second-fewest) a game — of
   32 defenses, over 11 games". A back's says his rushing yards on the carries allowed (and the yards a carry), his
   catches, receiving yards and touchdowns; a passer's, his yards, completions, attempts, touchdowns and the

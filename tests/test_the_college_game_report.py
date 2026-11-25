@@ -187,7 +187,9 @@ def test_nothing_that_is_the_nfls_alone():
 
 def test_the_build_hangs_it_and_the_paywall_takes_it():
     assert ("_greport.attach(out, season=_gr_season_of('cfb', args.date), sport='cfb',\n"
-            "                                   meta=_gr_meta, out=args.out)") in BUILD
+            "                                   meta=_gr_meta, out=args.out,\n"
+            "                                   allowed=_cfb_allowed_now(conn, _gr_season_of('cfb', args.date), "
+            "args.date))") in BUILD
     assert BUILD.index("_lo.attach_to_board(out, \"cfb\")") < BUILD.index("_greport.attach(out") \
         < BUILD.index("_potd.attach(out, \"cfb\")")
     board, _rep = _report()
