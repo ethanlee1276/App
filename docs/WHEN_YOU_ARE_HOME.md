@@ -9883,6 +9883,17 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGM. A roster rewritten the same is read once** (step 981; 25 November; nothing to run). Timing college pages on
+the live site: Jeremiah Smith's page took 1.4 s, 1.3 s of it finding him on the college roster, and the next
+college pages took no time there. The roster step rewrites every league's roster file every half hour with a new
+build time and, nearly always, the same rosters, and every reader of the file took a new time to mean new rosters:
+every half hour the first college page read the 9.2 MB college file again, the player search rebuilt its list of
+41,888 names behind itself, and a team's roster tab, a player's link and Ask read the file on every single ask. All
+of that is one process, so each read held up every other page too. Now one shared reader (engine/rosterfile) checks
+a rewritten file's contents, leaving the build time aside: the same rosters keep the copy already read (with the new
+build time put on it), and only rosters that changed are read again. The roster files are also read 60 seconds after
+a restart, before the first page asks.
+
 **AGL. A basketball shot chart reads the league's zones off their index** (step 980; 25 November; nothing to
 run). A shot chart sets each zone beside the league's percentage there, and read it by every shot's kind, which
 meant going to each row of the season (a college season is hundreds of thousands of shots) for every chart built.

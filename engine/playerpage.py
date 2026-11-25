@@ -204,6 +204,7 @@ def tile_kind(sport: str, kind: str, stats: dict) -> str:
 _MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
            "November", "December")
 _RANKS: dict = {}
+#: No longer read: the parsed rosters live in engine/rosterfile (step AGM); tests still clear this.
 _ROSTERS: dict = {}
 
 
@@ -575,6 +576,13 @@ def warm(db_path=None, delay: float = 60.0) -> threading.Thread:
     first), so no player's page waits on one. Returns the thread."""
     def run():
         time.sleep(delay)
+        # Each league's roster, parsed and indexed by name, so the first page after a restart does not wait for it
+        # (step AGM: the college file is 9.2 MB, 1.3 s of the first college page).
+        for sport in KINDS:
+            try:
+                _roster_names(sport)
+            except Exception:                             # noqa: BLE001 — that page reads it on first ask
+                pass
         path = str(db_path or _db.DEFAULT_DB)
         if not os.path.exists(path):
             return
@@ -651,21 +659,10 @@ def _build_table(conn, sport: str, season: int, kind: str) -> dict:
 
 # --- the roster's facts --------------------------------------------------------------------
 def _roster_doc(sport: str, data_dir=None) -> dict:
-    path = os.path.join(str(data_dir or ROSTER_DIR), f"rosters_{sport}.json")
-    try:
-        stamp = os.stat(path).st_mtime
-    except OSError:
-        return {}
-    hit = _ROSTERS.get(path)
-    if hit and hit[0] == stamp:
-        return hit[1]
-    try:
-        with open(path, encoding="utf-8") as fh:
-            doc = json.load(fh)
-    except (OSError, ValueError):
-        doc = {}
-    _ROSTERS[path] = (stamp, doc)
-    return doc
+    """The league's published roster, parsed once per content (engine/rosterfile, step AGM): the half-hourly rewrite
+    of the same rosters keeps the parse, and with it the index by name built from it (_roster_names)."""
+    from . import rosterfile
+    return rosterfile.doc(os.path.join(str(data_dir or ROSTER_DIR), f"rosters_{sport}.json")) or {}
 
 
 #: THE ROSTER BY NAME (step AFP, 25 November 2026; Ethan: "data on the player page takes a long time to load"). A

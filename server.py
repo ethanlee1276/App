@@ -999,10 +999,10 @@ def _live_roster(sport, team):
     """This club's entry on the league's roster board (web/data/
     rosters_<sport>.json — the live feed where the league has one), or
     None. The Roster tab draws it; the depth chart orders it."""
-    try:
-        with open(ROOT / "web" / "data" / f"rosters_{sport}.json", encoding="utf-8") as fh:
-            blob = json.load(fh)
-    except (OSError, ValueError):
+    # Parsed once per content (engine/rosterfile, step AGM): the college file is 9.2 MB, and this read it every ask.
+    from engine import rosterfile
+    blob = rosterfile.doc(ROOT / "web" / "data" / f"rosters_{sport}.json")
+    if blob is None:
         return None
     clubs = blob.get("teams") or {}
     entry = clubs.get(team) or {}

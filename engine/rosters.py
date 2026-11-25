@@ -158,15 +158,12 @@ def attach_birthdays(games: list[dict], league: str, data_dir="web/data") -> int
     roster that will not read costs the line and nothing else."""
     import json
     import datetime as dt
-    path = Path(data_dir) / f"rosters_{league}.json"
+    from . import rosterfile
     try:
-        mtime = path.stat().st_mtime
-        hit = _ROSTER_CACHE.get(str(path))
-        if not hit or hit[0] != mtime:
-            hit = (mtime, json.loads(path.read_text()))
-            _ROSTER_CACHE[str(path)] = hit
-        roster = hit[1]
+        roster = rosterfile.doc(Path(data_dir) / f"rosters_{league}.json")     # once per content (step AGM)
     except Exception:                                        # noqa: BLE001
+        return 0
+    if roster is None:
         return 0
     try:
         from zoneinfo import ZoneInfo

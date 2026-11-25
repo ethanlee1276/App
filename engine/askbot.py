@@ -3329,7 +3329,8 @@ def roster(team: str = "", player: str = "", position: str = "", sport: str = ""
     keep = ("position", "depth_pos", "depth_order", "number", "status", "injury", "age", "years_exp", "college")
     pos = str(position or "").strip().upper()
     for s in _leagues(sport, prefer):
-        data = _load_json(_web(data_dir) / f"rosters_{s}.json")
+        from . import rosterfile
+        data = rosterfile.doc(_web(data_dir) / f"rosters_{s}.json") or {}      # once per content (step AGM)
         teams = {k: v for k, v in (data.get("teams") or {}).items() if isinstance(v, dict)}
         if not teams:
             continue

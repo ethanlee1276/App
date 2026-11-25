@@ -219,7 +219,9 @@ def _board(sport: str, web: Path = WEB) -> dict:
 
 
 def _roster(sport: str, web: Path = WEB) -> dict:
-    return _load(Path(web) / "data" / f"rosters_{sport}.json")
+    """The league's published roster, parsed once per content (engine/rosterfile, step AGM)."""
+    from . import rosterfile
+    return rosterfile.doc(Path(web) / "data" / f"rosters_{sport}.json") or {}
 
 
 def find_player(slug: str, web: Path = WEB) -> dict | None:

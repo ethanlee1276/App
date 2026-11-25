@@ -779,12 +779,22 @@ def _roster_players(sport: str, data_dir=None) -> list[dict]:
         return out
 
 
+#: The list each roster parse gave, by file (step AGM): the same parse, the same list, so the search's names built
+#: from it (_ROSTER_INDEX) stand through the build's half-hourly rewrite of the same rosters.
+_READ: dict = {}
+
+
 def _read_roster(path: str) -> list[dict]:
-    """Every player on a published roster file, as the search keeps them."""
-    import json
+    """Every player on a published roster file, as the search keeps them. Raises when there is no file to read
+    (a search keeps the roster in hand); the same rosters rewritten give the same list (engine/rosterfile)."""
+    from . import rosterfile
+    doc = rosterfile.doc(path)
+    if doc is None:
+        raise OSError(f"no roster at {path}")
+    hit = _READ.get(path)
+    if hit and hit[0] is doc:
+        return hit[1]
     out: list[dict] = []
-    with open(path, encoding="utf-8") as fh:
-        doc = json.load(fh)
     for team, entry in (doc.get("teams") or {}).items():
         # `{team: {"players": [...]}}`, which is what `rosters.build`
         # publishes — the roster page reads the same shape. A bare
@@ -803,6 +813,7 @@ def _read_roster(path: str) -> list[dict]:
                             "position": str(pl.get("position") or ""),
                             "headshot": str(pl.get("headshot") or ""),
                             "number": "" if num in (None, "") else str(num)})
+    _READ[path] = (doc, out)
     return out
 
 
@@ -834,7 +845,9 @@ def _reread_roster(sport: str, key, path: str) -> None:
             if hit:
                 _ROSTER[key] = (time.time(),) + tuple(hit[1:])
             return
-        _ROSTER_INDEX[key] = (out, NameIndex(((p["player"], 0) for p in out), at=time.time()))
+        hit = _ROSTER_INDEX.get(key)
+        if hit is None or hit[0] is not out:              # the same rosters rewritten: the names stand (step AGM)
+            _ROSTER_INDEX[key] = (out, NameIndex(((p["player"], 0) for p in out), at=time.time()))
         _ROSTER[key] = (time.time(), out, stamp)
     finally:
         with _NAMES_LOCK:
