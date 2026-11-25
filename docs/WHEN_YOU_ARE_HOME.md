@@ -9883,6 +9883,15 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHA. A team's page is kept as a player's page is** (step 995; 25 November; nothing to run). Timed on the live
+site after AGV: a team's page (/api/team) was built on every visit. Asked twice in a row it still took the server
+0.46 to 0.49 s (Oilers, Knicks) and 1.0 s for the Yankees; asked the first time 0.9 to 3.8 s (the Oilers 2.3 s, 1.4 s
+of it the depth chart; the Yankees 3.8 s), in the one process every other page waits behind. It is kept now as a
+player's page and game log are: five minutes; past that, up to the hour while the team has played no game since (its
+games' count and newest row in the history file), answered at once and built again behind it; a game since, and it
+is built before it answers. One season's schedule (the Schedule tab's chips) and an answer that asks the reader to
+choose between two teams are not kept. To look at after the update: a team page asked twice, the second "kept".
+
 **AGZ. The sign-up screen's newest graded pick is read alone** (step 994; 25 November; nothing to run). After AGS
 went live the sign-up screen's rebuild read its boards in 8 ms (633 to 1,840 ms before), and its slowest part was
 the newest graded pick ("last", 564 ms): it read the Record's whole first page (a count of every settled bet, fifty

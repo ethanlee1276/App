@@ -205,7 +205,10 @@ def test_in_a_browser_the_page_is_asked_at_once_and_draws_before_the_injury_file
     finally:
         srv.shutdown()
     assert got["asked_with_logs_held"], "the page's answer is asked while the market logs are still out"
-    assert not got["drawn_before_logs"], "the page draws with its markets, once the logs land"
+    # SINCE STEP AGX the page draws as soon as its own numbers land, and its market cards (the foot of the page)
+    # join it when the logs do: waiting for them first put Jalen Brunson's header 0.57 s after his numbers at a
+    # phone's speed.
+    assert got["drawn_before_logs"], "the page draws before its market logs land"
     assert got["injury_file_asked_and_held"] and got["page"]["hero"], "drawn while the injury file was still out"
     assert not got["page"]["flag"].strip(), got["page"]
     assert got["tagged"], "the header's tag fills in when the injury file lands"

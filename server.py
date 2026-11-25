@@ -1248,6 +1248,153 @@ def _gamelog_keep(key: tuple, body: bytes) -> None:
     _GAMELOGS[key] = (time.time(), body, stamp)
 
 
+#: Team pages kept (step AHA): {(sport, team as asked, vs as asked): (built at, body, games stamp, team)}.
+_TEAM_PAGES: dict = {}
+TEAM_KEEP = 300
+
+
+def _team_answer(code: int, body: bytes, ext: str = ".json", headers=None) -> tuple:
+    """`_team_made`'s answer, as the handler's `_send` takes it."""
+    return code, body, headers, None
+
+
+def _team_games_stamp(sport: str, team: str | None):
+    """(games, highest rowid) of the team's games on file: a final since moves it. None when it cannot be read, which
+    never matches a kept page's stamp, so the page is built before it answers."""
+    if not team:
+        return None
+    try:
+        from engine import db as _hdb
+        conn = _hdb.connect(str(_hdb.DEFAULT_DB))
+        try:
+            r = conn.execute("SELECT COUNT(*), MAX(rowid) FROM games WHERE sport=? AND (home=? OR away=?)",
+                             (sport, team, team)).fetchone()
+            return int(r[0] or 0), int(r[1] or 0)
+        finally:
+            conn.close()
+    except Exception:                                     # noqa: BLE001 — unreadable: a fresh build tells
+        return None
+
+
+def _team_keep(key: tuple, body: bytes, sport: str, team: str) -> None:
+    """A team page kept with its games' stamp, the oldest out past TEAM_KEEP."""
+    stamp = _team_games_stamp(sport, team)
+    if len(_TEAM_PAGES) >= TEAM_KEEP:
+        try:                          # the oldest out; another thread may be writing beside this one
+            _TEAM_PAGES.pop(next(iter(_TEAM_PAGES)), None)
+        except (StopIteration, RuntimeError):
+            pass
+    _TEAM_PAGES[key] = (time.time(), body, stamp, team)
+
+
+def _team_rebuild(key: tuple, sport: str, name: str, opp: str) -> None:
+    """A kept team page built again behind its kept copy."""
+    code, body, _headers, team = _team_made(sport, name, opp)
+    if code == 200 and team:
+        _team_keep(key, body, sport, team)
+
+
+def _team_made(sport: str, name: str, opp: str = "", only: str = "", season=None) -> tuple:
+    """A team's page as ``(status, body, headers, team)``: what /api/team answers (its handler says what is in it),
+    with the team it resolved to (None for an answer that is not one team's page). Never raises."""
+    try:
+        from engine import teamdex
+        from engine.db import connect
+        conn = connect()
+        # WHERE A SLOW PAGE SPENDS ITS TIME (2026-11-18): a college team's
+        # page answered in 4 seconds warm and 22 to 56 cold, and the box's
+        # data cannot be timed from anywhere else. Each part is timed into a
+        # Server-Timing header (names and milliseconds, nothing else), which
+        # any request can read and the page ignores.
+        took: list = []
+
+        def timed(part, fn):
+            t0 = time.perf_counter()
+            try:
+                return fn()
+            finally:
+                took.append((part, (time.perf_counter() - t0) * 1000.0))
+        teamdex.trace_start()
+        try:
+            known = timed("teams", lambda: teamdex.teams(conn, sport))
+            if not known:
+                # A SPORT WITH NO FINALS ON THIS BOX is a real state,
+                # not an error: baseball's history has not been
+                # ingested here. Saying so lets the page print the
+                # reason instead of an empty table.
+                return _team_answer(200, json.dumps({
+                    "sport": sport, "resolved": [], "no_finals": True,
+                }).encode(), ".json")
+            hits = teamdex.resolve(name, sport, known)
+            if not hits:
+                return _team_answer(200, json.dumps({
+                    "sport": sport, "query": name, "resolved": [],
+                }).encode(), ".json")
+            if len(hits) > 1 and teamdex._norm(name) not in {
+                    teamdex._norm(h) for h in hits}:
+                # AMBIGUOUS, and the page asks rather than guessing.
+                # "Los Angeles" is two teams; picking one for him is
+                # how a lookup becomes a lie he cannot see.
+                return _team_answer(200, json.dumps({
+                    "sport": sport, "query": name,
+                    "resolved": [{"team": t,
+                                  "name": teamdex.label(t, sport)}
+                                 for t in hits],
+                }).encode(), ".json")
+            team = hits[0]
+            if only == "schedule":
+                return _team_answer(200, json.dumps({
+                    "sport": sport, "team": team,
+                    "schedule": _schedule_or_empty(teamdex, conn, sport, team, season),
+                }).encode(), ".json")
+            out = {"sport": sport, "team": team,
+                   "name": teamdex.label(team, sport),
+                   "profile": timed("profile", lambda: teamdex.profile(conn, sport, team)),
+                   "opponents": timed("opponents", lambda: teamdex.opponents(conn, sport, team)),
+                   # WHO PLAYS FOR IT. Ethan, 2026-09-10: "We should
+                   # be showing more info too when you look up a team
+                   # on the search page. We should show a depth chart
+                   # and player stats and all that shit." Its own
+                   # try: a squad is the newest thing on this page
+                   # and the record below it has been right since
+                   # 09-09 — one bad read of `player_game_logs` must
+                   # not take a working page down with it.
+                   "squad": timed("squad", lambda: _squad_or_empty(teamdex, conn, sport, team)),
+                   # The stat page ESPN's own team tab draws —
+                   # leaders, then Passing/Rushing/Receiving. Same
+                   # guard, same reason (Ethan, 2026-09-10: "ESPN
+                   # uses theirs as an example of how we should make
+                   # ours work and the data we could show").
+                   "stats": timed("stats", lambda: _stats_or_empty(teamdex, conn, sport, team)),
+                   # The Schedule and Depth Chart tabs (Ethan,
+                   # 2026-09-24, beside ESPN's Packers page). Same
+                   # guard: either failing costs its own tab.
+                   "schedule": timed("schedule", lambda: _schedule_or_empty(teamdex, conn, sport, team)),
+                   # WHO IS ON IT TODAY (Ethan, 2026-10-03: "make sure
+                   # our rosters are good ... every single sport"):
+                   # the league's live roster board where there is one.
+                   "roster": timed("roster", lambda: _live_roster(sport, team))}
+            out["depth"] = timed("depth", lambda: _depth_chart(sport, team, conn, out["roster"]))
+            if opp.strip():
+                rivals = teamdex.resolve(opp, sport, known)
+                if rivals:
+                    out["head_to_head"] = teamdex.head_to_head(
+                        conn, sport, team, rivals[0])
+                else:
+                    out["vs_unknown"] = opp
+            # …and each team-data read under them, in order, with how it was
+            # answered (engine/teamdex: its game keys, its days, or a scan).
+            inner = [f'td{i}_{step};dur={ms:.0f};desc="{how}"'
+                     for i, (step, ms, how) in enumerate(teamdex.trace_take()[:24])]
+            timing = ", ".join([f"{part};dur={ms:.0f}" for part, ms in took] + inner)
+            return 200, json.dumps(out).encode(), ([("Server-Timing", timing)] if timing else None), team
+        finally:
+            teamdex.trace_take()
+            conn.close()
+    except Exception:                                    # noqa: BLE001
+        return _team_answer(503, b'{"error":"team history unavailable"}', ".json")
+
+
 def _player_page_whole(body: bytes) -> bool:
     """An answer with its league places (or none to have): one built while its table was being built (step AFU)
     is sent but never kept, so the next ask, the page's own a few seconds on, finds the table."""
@@ -6583,104 +6730,28 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             return self._send(400, b'{"error":"unknown sport"}', ".json")
         if not name.strip():
             return self._send(400, b'{"error":"team is required"}', ".json")
-        try:
-            from engine import teamdex
-            from engine.db import connect
-            conn = connect()
-            # WHERE A SLOW PAGE SPENDS ITS TIME (2026-11-18): a college team's
-            # page answered in 4 seconds warm and 22 to 56 cold, and the box's
-            # data cannot be timed from anywhere else. Each part is timed into a
-            # Server-Timing header (names and milliseconds, nothing else), which
-            # any request can read and the page ignores.
-            took: list = []
-
-            def timed(part, fn):
-                t0 = time.perf_counter()
-                try:
-                    return fn()
-                finally:
-                    took.append((part, (time.perf_counter() - t0) * 1000.0))
-            teamdex.trace_start()
-            try:
-                known = timed("teams", lambda: teamdex.teams(conn, sport))
-                if not known:
-                    # A SPORT WITH NO FINALS ON THIS BOX is a real state,
-                    # not an error: baseball's history has not been
-                    # ingested here. Saying so lets the page print the
-                    # reason instead of an empty table.
-                    return self._send(200, json.dumps({
-                        "sport": sport, "resolved": [], "no_finals": True,
-                    }).encode(), ".json")
-                hits = teamdex.resolve(name, sport, known)
-                if not hits:
-                    return self._send(200, json.dumps({
-                        "sport": sport, "query": name, "resolved": [],
-                    }).encode(), ".json")
-                if len(hits) > 1 and teamdex._norm(name) not in {
-                        teamdex._norm(h) for h in hits}:
-                    # AMBIGUOUS, and the page asks rather than guessing.
-                    # "Los Angeles" is two teams; picking one for him is
-                    # how a lookup becomes a lie he cannot see.
-                    return self._send(200, json.dumps({
-                        "sport": sport, "query": name,
-                        "resolved": [{"team": t,
-                                      "name": teamdex.label(t, sport)}
-                                     for t in hits],
-                    }).encode(), ".json")
-                team = hits[0]
-                if only == "schedule":
-                    return self._send(200, json.dumps({
-                        "sport": sport, "team": team,
-                        "schedule": _schedule_or_empty(teamdex, conn, sport, team, season),
-                    }).encode(), ".json")
-                out = {"sport": sport, "team": team,
-                       "name": teamdex.label(team, sport),
-                       "profile": timed("profile", lambda: teamdex.profile(conn, sport, team)),
-                       "opponents": timed("opponents", lambda: teamdex.opponents(conn, sport, team)),
-                       # WHO PLAYS FOR IT. Ethan, 2026-09-10: "We should
-                       # be showing more info too when you look up a team
-                       # on the search page. We should show a depth chart
-                       # and player stats and all that shit." Its own
-                       # try: a squad is the newest thing on this page
-                       # and the record below it has been right since
-                       # 09-09 — one bad read of `player_game_logs` must
-                       # not take a working page down with it.
-                       "squad": timed("squad", lambda: _squad_or_empty(teamdex, conn, sport, team)),
-                       # The stat page ESPN's own team tab draws —
-                       # leaders, then Passing/Rushing/Receiving. Same
-                       # guard, same reason (Ethan, 2026-09-10: "ESPN
-                       # uses theirs as an example of how we should make
-                       # ours work and the data we could show").
-                       "stats": timed("stats", lambda: _stats_or_empty(teamdex, conn, sport, team)),
-                       # The Schedule and Depth Chart tabs (Ethan,
-                       # 2026-09-24, beside ESPN's Packers page). Same
-                       # guard: either failing costs its own tab.
-                       "schedule": timed("schedule", lambda: _schedule_or_empty(teamdex, conn, sport, team)),
-                       # WHO IS ON IT TODAY (Ethan, 2026-10-03: "make sure
-                       # our rosters are good ... every single sport"):
-                       # the league's live roster board where there is one.
-                       "roster": timed("roster", lambda: _live_roster(sport, team))}
-                out["depth"] = timed("depth", lambda: _depth_chart(sport, team, conn, out["roster"]))
-                if opp.strip():
-                    rivals = teamdex.resolve(opp, sport, known)
-                    if rivals:
-                        out["head_to_head"] = teamdex.head_to_head(
-                            conn, sport, team, rivals[0])
-                    else:
-                        out["vs_unknown"] = opp
-                # …and each team-data read under them, in order, with how it was
-                # answered (engine/teamdex: its game keys, its days, or a scan).
-                inner = [f'td{i}_{step};dur={ms:.0f};desc="{how}"'
-                         for i, (step, ms, how) in enumerate(teamdex.trace_take()[:24])]
-                timing = ", ".join([f"{part};dur={ms:.0f}" for part, ms in took] + inner)
-                return self._send(200, json.dumps(out).encode(), ".json",
-                                  headers=[("Server-Timing", timing)] if timing else None)
-            finally:
-                teamdex.trace_take()
-                conn.close()
-        except Exception:                                    # noqa: BLE001
-            return self._send(503, b'{"error":"team history unavailable"}',
-                              ".json")
+        if only:
+            # One season's schedule (the Schedule tab's chips): small, never kept.
+            code, out, headers, _team_code = _team_made(sport, name, opp, only, season)
+            return self._send(code, out, ".json", headers=headers)
+        # KEPT AS A PLAYER'S PAGE IS (step AHA, 25 November 2026; Ethan: "Ok keep going and work more on these issues
+        # as they are not fixed"). A team's page was built again on every visit: 0.5 s of the server's own time warm on
+        # the live site (Knicks, Oilers), 1.3 s for the Yankees, and 2.3 to 3.8 s the first time, in the one process
+        # every page waits behind. Five minutes kept; past that, up to the hour while the team has played no game since
+        # it was built (_team_games_stamp), answered at once and built again behind it; a game since, and it is built
+        # before it answers. Keyed on the address as asked, so a kept page needs no lookup of the name either.
+        key = (sport, name.strip().lower(), opp.strip().lower())
+        hit = _TEAM_PAGES.get(key)
+        now = time.time()
+        if hit and now - hit[0] < PLAYER_PAGE_TTL:
+            return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])
+        if hit and now - hit[0] < PLAYER_PAGE_STALE_MAX and _team_games_stamp(sport, hit[3]) == hit[2]:
+            _behind(("team", key), lambda: _team_rebuild(key, sport, name, opp))
+            return self._send(200, hit[1], ".json", headers=[("Server-Timing", "stale;dur=0")])
+        code, out, headers, team = _team_made(sport, name, opp)
+        if code == 200 and team:
+            _team_keep(key, out, sport, team)
+        return self._send(code, out, ".json", headers=headers)
 
     def _game(self, q):
         """Any game's page — every game on every team's schedule

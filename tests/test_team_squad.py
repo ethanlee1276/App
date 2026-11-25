@@ -170,9 +170,11 @@ def test_the_positions_read_in_the_roster_pages_own_order():
 
 # --- the door and the page --------------------------------------------------
 def test_the_endpoint_hands_the_squad_over():
-    i = SRV.index("def _team(self, q):")
-    block = SRV[i:SRV.index("\n    def ", i + 1)]
+    # The page is built by _team_made since step AHA (the handler keeps its answers, as a player's page does).
+    i = SRV.index("def _team_made(")
+    block = SRV[i:SRV.index("\ndef ", i + 1)]
     assert '"squad": timed("squad", lambda: _squad_or_empty' in block
+    assert "_team_made(sport, name, opp)" in SRV[SRV.index("def _team(self, q):"):]
 
 
 def test_a_bad_squad_read_cannot_take_the_record_down_with_it():
