@@ -100,19 +100,30 @@ def _reads(c: Ctx, *, pos=None, not_pos=None) -> list:
             and (not_pos is None or str(r.get("pos") or "").upper() not in not_pos)]
 
 
+#: A reason's first word that is an article, lowered after a colon like any other word ("Against: a lopsided
+#: game", never "Against: A lopsided game").
+ARTICLES = ("A ", "An ", "The ")
+
+
 def _lower_first(x: str) -> str:
     """A reason as the middle of a sentence: its first letter small, unless
     the first word is a code or a name in capitals ("PHI rarely ...")."""
+    if x.startswith(ARTICLES):
+        return x[0].lower() + x[1:]
     return x[0].lower() + x[1:] if len(x) > 1 and x[1].islower() else x
 
 
 def _verdict(r: dict, tone: str | None = None, both: bool = False) -> dict:
     """A read as a player card: his reasons for (shine) or against
-    (struggle), or both (a starter)."""
+    (struggle), or both (a starter). A starter's or a goalie's card leads
+    with the case for its own label (25 November 2026: "Tough matchup" over
+    his strengths, the case for it under "Against:"), the other side after."""
     tone = tone or {"breakout": "up", "good": "up", "tough": "down", "avoid": "down"}.get(r.get("read"), "")
     pro = [str(x) for x in r.get("pro") or [] if x]
     con = [str(x) for x in r.get("con") or [] if x]
-    if both:
+    if both and tone == "down":
+        why = con[:3] + [f"In favor: {_lower_first(x)}" for x in pro[:2]]
+    elif both:
         why = pro[:3] + [f"Against: {_lower_first(x)}" for x in con[:2]]
     else:
         why = (pro if tone == "up" else con)[:3]

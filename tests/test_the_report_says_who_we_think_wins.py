@@ -134,8 +134,8 @@ def test_the_other_leagues_say_their_own_facts():
     assert "bets on our baseball ratings alone against the price lost 12.4%" in mlb[-1]
     rep, _ = LEAGUES._attach(LEAGUES._nhl_board(), "nhl")
     nhl = _text(_verdict(rep))
-    assert any("In net: Anthony Stolarz (TOR) has saved 4.2 goals more than expected; Jeremy Swayman (BOS) "
-               "has allowed 3.4 goals more than expected" in s for s in nhl), nhl
+    assert any("In net: Anthony Stolarz (TOR) has stopped 4.2 more goals than expected lately; Jeremy Swayman "
+               "(BOS) has let in 3.4 more goals than expected lately" in s for s in nhl), nhl
     board, meta = LEAGUES._nba_board()
     rep, _ = LEAGUES._attach(board, "nba", meta=meta)
     nba = _verdict(rep)

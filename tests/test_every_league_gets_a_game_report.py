@@ -197,8 +197,10 @@ def test_the_mlb_report_reads_the_pitching_matchup_the_park_and_the_reads():
     cards = next(b for b in pitch["blocks"] if b["type"] == "verdicts")["items"]
     assert [c["title"] for c in cards] == ["Zack Wheeler", "Javier Assad"]
     assert "Against: wind blowing out at 16 mph." in cards[0]["why"], cards[0]["why"]
-    # A reason that opens on a team's code keeps its capitals.
-    assert "Against: PHI rarely strikes out (21.0%)." in cards[1]["why"], cards[1]["why"]
+    # A tough matchup leads with its case (25 November 2026), a reason that opens on a team's code keeping its
+    # capitals; what is in his favor comes after.
+    assert cards[1]["why"][:2] == ["PHI rarely strikes out (21.0%).", "Expected ERA 4.60."], cards[1]["why"]
+    assert cards[1]["why"][2] == "In favor: expected ERA 4.60.", cards[1]["why"]
     watch = next(s for s in rep["sections"] if s["key"] == "watch")
     shine = next(b for b in watch["blocks"] if b["type"] == "verdicts")["items"][0]
     assert shine["title"] == "Kyle Schwarber" and shine["verdict"] == "up" and len(shine["why"]) == 4

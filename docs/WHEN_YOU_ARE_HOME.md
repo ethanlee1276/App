@@ -9888,7 +9888,11 @@ report: the case for the Patriots named three of the Bears' four starters out (M
 word) while the short version and the injury list named all four; a case now names three and counts the rest ("and
 one more"). One meeting read "NE has won 1 of the last 1 meeting; against the spread NE is 1-0; 0 went over the
 total and 1 under", and now reads "NE won the last meeting; NE covered; it went under the total". The copied text of
-a player with no verdict word read "D'Andre Swift =  —"; the "=" now goes only with a word.
+a player with no verdict word read "D'Andre Swift =  —"; the "=" now goes only with a word. Hockey's "Who we think wins"
+said a goalie "has saved 4.2 goals more than expected" where its In net section said "has stopped 4.2 more goals
+than expected lately"; it now uses the In net words. A starter's or goalie's card marked "Tough matchup" listed his
+strengths first and the reasons for its own label under "Against:"; it now leads with those reasons and puts his
+strengths under "In favor:".
 
 **AEV. One expected score per report** (step 938; 25 November). Nothing to run. A report's short version rounded
 the score the lines expect to whole points, while the verdict and the market section used a decimal: one college

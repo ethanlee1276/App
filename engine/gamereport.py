@@ -4979,11 +4979,12 @@ def verdict_evidence(c: Ctx) -> dict:
                 abs(ga[c.away] - ga[c.home]) >= VERDICT_GSAX_GAP:
             best = max(c.teams, key=lambda t: ga[t])
             other = c.opp[best]
-            def saved(x):
-                return (f"saved {_num(x)} goals more than expected" if x >= 0 else
-                        f"allowed {_num(abs(x))} goals more than expected")
-            out[best].append(f"In net: {gs[best]['starter']} ({best}) has {saved(ga[best])}; "
-                             f"{gs[other]['starter']} ({other}) has {saved(ga[other])}")
+            # THE IN NET SECTION'S OWN WORDS (25 November 2026): this said "has
+            # saved 4.2 goals more than expected" where every other section
+            # said "has stopped 4.2 more goals than expected lately".
+            from .nhl.scan import gsax_words
+            out[best].append(f"In net: {gs[best]['starter']} ({best}) {gsax_words(ga[best])}; "
+                             f"{gs[other]['starter']} ({other}) {gsax_words(ga[other])}")
     for t in c.teams:
         gone = [x for x in ((c.meta.get("absences") or {}).get(t) or {}).get("out") or []
                 if isinstance(x, dict) and x.get("player") and (_f(x.get("mpg")) or 0) >= VERDICT_ROTATION_MPG]
