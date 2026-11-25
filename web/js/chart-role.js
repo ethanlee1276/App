@@ -224,7 +224,11 @@
 
   Q.draw("role", {
     one: "number", splitsTitle: "Every split · the stretch, home and away, started or not",
-    listTitle: (g, d = now()) => `That game beside the season · ${(d.metrics || []).length} numbers`,
+    // "1 number", not "1 numbers" (A'ja Wilson's role chart, step AFZ).
+    listTitle: (g, d = now()) => {
+      const n = (d.metrics || []).length;
+      return `That game beside the season · ${n} ${n === 1 ? "number" : "numbers"}`;
+    },
     items: (g, d = now()) => d.metrics || [],
     count: (L, d = now()) => {
       const m = lead(d), a = (L.avg || {})[m.key];

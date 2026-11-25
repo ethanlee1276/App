@@ -36,6 +36,13 @@ def test_the_switch_and_its_waiting_chips_read_the_tab():
     assert bar.count("${esc(tabOf(k))}") == 2 and "kindOf(k, S.sport).chip" not in bar
 
 
+
+def test_the_role_charts_list_says_one_number():
+    """Step AFZ: A'ja Wilson's role chart read "That game beside the season · 1 numbers"."""
+    role = (ROOT / "web" / "js" / "chart-role.js").read_text(encoding="utf-8")
+    assert 'return `That game beside the season · ${n} ${n === 1 ? "number" : "numbers"}`;' in role
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:
