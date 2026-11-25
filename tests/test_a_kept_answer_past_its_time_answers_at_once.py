@@ -70,9 +70,10 @@ def test_a_chart_past_its_time_answers_now_and_is_rebuilt_behind_it():
         assert json.loads(CH.answer_json(path, "role", "nfl", "Amon-Ra St. Brown"))["games"] == [{"id": 2}], \
             "the rebuilt one replaced it"
         assert not CH._BUILDING and len(built) == 2, "and, kept fresh, starts no other"
-        # Older than the hour, the reader waits for a fresh one.
+        # Older than its window (a chart of his own games, a day: step AGJ), the reader waits for a fresh one.
+        assert CH._stale_max(key) == 24 * 60 * 60
         with CH._LOCK:
-            CH._KEPT[key] = (time.time() - CH.ANSWER_STALE_MAX - 5, CH._KEPT[key][1])
+            CH._KEPT[key] = (time.time() - CH._stale_max(key) - 5, CH._KEPT[key][1])
         CH.answer_json(path, "role", "nfl", "Amon-Ra St. Brown")
         assert len(built) == 3 and not CH._BUILDING
     finally:

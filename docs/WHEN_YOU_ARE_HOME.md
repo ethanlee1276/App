@@ -9883,6 +9883,18 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGJ. A chart built before an update answers at once after it** (step 978; 25 November; nothing to run). Every
+update restarts the server, and a chart it had built was kept only in its memory, so the first person to open each
+chart after an update waited for it to be built again (a role chart built while you wait took 13 to 33 seconds in
+the timings below), and that is right when you look after I tell you an update is out. Each chart the server builds
+is now also saved beside the history file (`data/cache/charts/`), with a stamp of the player's games and when it was
+built. After a restart, one that isn't in memory is read from there and shown at once if the player hasn't played
+since, and a new one is built behind it, since the update may have changed the code that draws it. A new game of
+his since, and the reader waits for a fresh one, as before. A chart of the player's own games is shown that way up
+to a day after it was built (it was an hour); a matchup, which also reads the opponent's games, keeps the hour. The
+folder keeps a day and the newest 4,000. A chart answered that way says `disk` in its timing line, so I can see it
+working from here. A chart nobody has opened yet still builds while you wait; AGI's parts say where that time goes.
+
 **AGI. Every role chart says where its time goes** (step 977; 25 November; nothing to run). Timing other
 leagues' charts cold on the live site: Nikita Kucherov's role chart took 22.6 s (2.5 s of the server's own work),
 Juan Soto's 32.8 s (5.1 s), Jeremiah Smith's 13.4 s (the college shares AGG fixes); the NBA's and college

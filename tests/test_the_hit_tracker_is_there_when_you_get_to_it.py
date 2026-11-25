@@ -191,8 +191,13 @@ def test_the_kept_answers_stay_under_their_cap_and_the_database_is_opened_only_t
         assert not any(k[3] == "P0" for k in CH._KEPT), "the oldest read out first"
         CH.answer_json(path, "spray", "mlb", "P8")
         assert len(opened) == 9, "a kept answer opens nothing"
-        CH.answer_json(path, "spray", "mlb", "P0")
-        assert len(opened) == 10, "the one read out is built again"
+        # The one read out answers off the disk (step AGJ), his games checked, and is built again behind it.
+        assert json.loads(CH.answer_json(path, "spray", "mlb", "P0"))["player"] == "P0"
+        for _ in range(100):
+            if not CH._BUILDING:
+                break
+            time.sleep(0.02)
+        assert len(opened) == 11, "his games read, then the build behind it"
         CH.answer = lambda *a, **k: {"player": "Big", "pad": "x" * 2000, "games": [1]}
         CH.answer_json(path, "spray", "mlb", "Big")
         assert not any(k[3] == "Big" for k in CH._KEPT), "one answer never crowds out the rest"

@@ -18,10 +18,15 @@ has a row yet — the charts being filled is not the same as none for him.
 
 from __future__ import annotations
 
+import gzip
+import hashlib
 import json
+import os
+import shutil
 import sys
 import threading
 import time
+import zlib
 from collections import OrderedDict
 
 
@@ -222,6 +227,11 @@ ANSWER_TTL = 15 * 60
 #: 25 November 2026): Amon-Ra St. Brown's role chart, asked a while after it was kept, took 7.5 s to answer, where
 #: the kept one answers in a dictionary lookup. Older than this, the reader waits for a fresh one.
 ANSWER_STALE_MAX = 60 * 60
+#: ...a chart of his own games, up to a day (step AGJ, 25 November 2026). Each kept answer carries his games' stamp
+#: (step AFQ): a box score of his since, and the reader waits for a fresh one whatever its age, so what a day adds is
+#: only the reader who comes back to him hours later answered at once. A matchup also reads his opponent's games,
+#: which his stamp does not see, so it keeps the hour.
+OWN_STALE_MAX = 24 * 60 * 60
 #: ...and the kept answers stay under this many bytes, oldest read out first.
 ANSWER_CAP = 32 * 1024 * 1024
 _KEPT: "OrderedDict[tuple, tuple]" = OrderedDict()
@@ -260,10 +270,15 @@ def answer_json(db_path, kind: str, sport: str, player: str, season: int | None 
             if hit and now < hit[0]:
                 _KEPT.move_to_end(key)
                 return hit[1]
-        # Past its fifteen minutes, not past the hour, and his games as they were when it was built: answered now,
+        # Not in memory (a restart since it was built, or read out under the cap): the one kept on disk, as past its
+        # time (step AGJ).
+        disk = hit is None and _disk_load(key, took)
+        if disk:
+            hit = disk
+        # Past its fifteen minutes, not past its window, and his games as they were when it was built: answered now,
         # rebuilt behind it, one build at a time (step AFM). A box score of his landed since (step AFQ): the reader
         # waits for the fresh one, so a game just played is never answered with the chart from before it.
-        if hit and now < hit[0] - ANSWER_TTL + ANSWER_STALE_MAX and _same_games(hit, db_path, sport, player):
+        if hit and now < hit[0] - ANSWER_TTL + _stale_max(key) and _same_games(hit, db_path, sport, player):
             with _LOCK:
                 if key not in _BUILDING:
                     _BUILDING[key] = threading.Event()
@@ -349,22 +364,137 @@ def _behind(key: tuple, args: tuple) -> None:
             ev.set()
 
 
-def _keep(key: tuple, body: bytes, stamp=None) -> None:
+def _stale_max(key: tuple) -> float:
+    """How long after it was built a kept answer still answers at once while his games are the same."""
+    return ANSWER_STALE_MAX if key[1] in TOLD_OPP else max(ANSWER_STALE_MAX, OWN_STALE_MAX)
+
+
+def _keep(key: tuple, body: bytes, stamp=None, expires: float | None = None, disk: bool = True) -> None:
     with _LOCK:
         old = _KEPT.pop(key, None)
         if old:
             _BYTES[0] -= len(old[1])
         if len(body) > ANSWER_CAP // 8:
             return                       # one answer never crowds out the rest
-        _KEPT[key] = (time.time() + ANSWER_TTL, body, stamp)
+        _KEPT[key] = (time.time() + ANSWER_TTL if expires is None else expires, body, stamp)
         _BYTES[0] += len(body)
         while _BYTES[0] > ANSWER_CAP and _KEPT:
             _, (_, b, *_) = _KEPT.popitem(last=False)
             _BYTES[0] -= len(b)
+    if disk:
+        _disk_save(key, body, stamp)
+
+
+# --- the answers, kept on disk -----------------------------------------------------------
+#: CHARTS SURVIVE A RESTART (step AGJ, 25 November 2026; Ethan: "Ok keep going and work more on these issues as they
+#: are not fixed"). Every update restarts the server, and the kept answers lived only in its memory: the first reader
+#: of each chart after an update waited for its build, Jahmyr Gibbs's role chart 26.4 s and Juan Soto's 32.8 s on the
+#: live site. Each chart kept is also written beside the history file (cache/charts/), with his games' stamp and when
+#: it was built. One missing from memory is read from there and answers at once while his games are the ones it was
+#: built from, and a new one is built behind it: an update may have changed the code that built it, so one off the
+#: disk is never taken as fresh. A box score of his since, and the reader waits for a fresh one, as with a kept one.
+#: Kept a day at most, the newest DISK_CAP.
+DISK_CAP = 4000
+_DISK_SAID = [False]
+_DISK_DIRS: set = set()
+_DISK_SAVES = [0]
+
+
+def _disk_file(key: tuple) -> str:
+    """Where an answer is kept on disk: cache/charts/ beside its history file; "" for a database in memory."""
+    path = str(key[0] or "")
+    if not path or path == ":memory:" or path.startswith("file:"):
+        return ""
+    name = hashlib.sha1(json.dumps(list(key[1:])).encode()).hexdigest()[:24]
+    return os.path.join(os.path.dirname(os.path.abspath(path)), "cache", "charts", f"{name}.gz")
+
+
+def _disk_save(key: tuple, body: bytes, stamp=None) -> None:
+    """An answer written to disk, as its key, his games' stamp and when, then the bytes the endpoint sends."""
+    path = _disk_file(key)
+    if not path:
+        return
+    where = os.path.dirname(path)
+    head = json.dumps({"key": list(key[1:]), "stamp": list(stamp) if stamp else None,
+                       "built": time.time()}).encode()
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        os.makedirs(where, exist_ok=True)
+        with open(tmp, "wb") as fh:
+            fh.write(gzip.compress(head + b"\n" + body, compresslevel=5))
+        os.replace(tmp, path)
+    except OSError as exc:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        # It still answers from memory; only the next restart builds it again, so say so once.
+        if not _DISK_SAID[0]:
+            _DISK_SAID[0] = True
+            print(f"⚠️  a chart not kept on disk ({type(exc).__name__}: {exc}): a restart builds it again",
+                  file=sys.stderr)
+        return
+    with _LOCK:
+        _DISK_DIRS.add(where)
+        _DISK_SAVES[0] += 1
+        prune = _DISK_SAVES[0] % 50 == 1
+    if prune:
+        _disk_prune(where)
+
+
+def _disk_prune(where: str) -> None:
+    """Past a day, or past the newest DISK_CAP, gone (and a write a crash left behind)."""
+    try:
+        with os.scandir(where) as it:
+            files = [(e.stat().st_mtime, e.path) for e in it if e.name.endswith((".gz", ".tmp"))]
+    except OSError:
+        return
+    now = time.time()
+    files.sort(reverse=True)
+    for i, (mtime, path) in enumerate(files):
+        if i >= DISK_CAP or now - mtime > max(ANSWER_STALE_MAX, OWN_STALE_MAX) or (
+                path.endswith(".tmp") and now - mtime > 600):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+
+def _disk_load(key: tuple, took=None):
+    """The answer kept on disk, held in memory as past its time, as ``(expires, body, stamp)``; None when there is
+    none, it is past its window, or it cannot be read."""
+    path = _disk_file(key)
+    if not path:
+        return None
+    t0 = time.perf_counter()
+    try:
+        with open(path, "rb") as fh:
+            raw = gzip.decompress(fh.read())
+        head, _, body = raw.partition(b"\n")
+        meta = json.loads(head)
+    except (OSError, EOFError, ValueError, zlib.error):
+        return None
+    if not isinstance(meta, dict) or meta.get("key") != json.loads(json.dumps(list(key[1:]))) or not body:
+        return None
+    built, now = float(meta.get("built") or 0.0), time.time()
+    if now - built > _stale_max(key):
+        return None
+    stamp = tuple(meta["stamp"]) if meta.get("stamp") else None
+    expires = min(built + ANSWER_TTL, now - 1)
+    _keep(key, body, stamp, expires=expires, disk=False)
+    with _LOCK:
+        _DISK_DIRS.add(os.path.dirname(path))
+    if took is not None:
+        took.append(("disk", (time.perf_counter() - t0) * 1000.0))
+    return expires, body, stamp
 
 
 def forget() -> None:
-    """Every kept answer dropped (a test's fresh database, a rebuilt table)."""
+    """Every kept answer dropped (a test's fresh database, a rebuilt table), on disk too."""
     with _LOCK:
         _KEPT.clear()
         _BYTES[0] = 0
+        dirs = list(_DISK_DIRS)
+        _DISK_DIRS.clear()
+    for where in dirs:
+        shutil.rmtree(where, ignore_errors=True)
