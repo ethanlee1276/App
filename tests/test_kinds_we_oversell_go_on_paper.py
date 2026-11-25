@@ -261,6 +261,23 @@ def test_a_bold_pick_goes_on_paper_and_one_from_the_list_at_the_same_gap_stays()
         in v["kinds"], v["kinds"]
 
 
+def test_the_pass_counts_each_leagues_bold_picks_matched_and_missed():
+    """STEP AFR (25 November 2026): the morning's pass had the NFL's bold picks as a kind on paper and college's as
+    no kind at all. The pass counts, per league, the bold book's settled picks, the ones a board pick matches, and
+    the ones a board pick matches on everything but the day, and the heartbeat carries it."""
+    nfl = _kind(60, 0.76, 30, day="2026-11-08", sport="nfl", market="receptions", edge=0.12)
+    cfb = _kind(50, 0.70, 28, day="2026-11-08", sport="cfb", market="rush_yds", edge=0.12)
+    marks = [dict(r, category="bold") for r in nfl] + [dict(r, category="bold", day="2026-11-09") for r in cfb]
+    conn = _journal(nfl + cfb + marks)
+    got = P.bold_census(conn)
+    assert got == {"cfb": {"book": 50, "matched": 0, "other_day": 50},
+                   "nfl": {"book": 60, "matched": 60, "other_day": 0}}, got
+    out = P.refresh(conn, _tmp(), today=TODAY)
+    assert P.verdict(out)["bold"] == got, "on the heartbeat beside the kinds"
+    assert "bold" not in P.verdict({"holds": []}), "a state saved before the count says nothing of it"
+    assert P.bold_census(sqlite3.connect(":memory:")) == {"error": "OperationalError"}, "an unread journal says so"
+
+
 def test_bold_picks_held_on_paper_come_back_on_their_own_record():
     path = _tmp()
     conn = _bold_journal()

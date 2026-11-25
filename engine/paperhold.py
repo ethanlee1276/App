@@ -190,6 +190,36 @@ def bold_keys(conn) -> set:
         return set()
 
 
+def bold_census(conn) -> dict:
+    """Per league, the bold book's settled picks (``book``), how many a board pick matches on `_bet_key`
+    (``matched``: those are the ones read as bold), and how many match a board pick on everything but the day
+    (``other_day``). STEP AFR (25 November 2026): on the morning's pass the NFL's bold picks were a kind on paper
+    (said 72%, hit 51% over 245) and college's were no kind at all, where the bold book's college picks had said
+    about 68% and hit 56% over about 900; which of the two keys missed is a question only the box's journal can
+    answer, so the pass counts it. Counts only; {"error": ...} where the journal cannot be read."""
+    try:
+        cols = "sport, date, game_day, player, market, side"
+        bold = [dict(r) for r in conn.execute(
+            f"SELECT {cols} FROM bets WHERE category=? AND status IN ('won','lost')", (BOLD_CATEGORY,))]
+        board = [dict(r) for r in conn.execute(
+            f"SELECT {cols} FROM bets WHERE category IN ({','.join('?' * len(FAMILY))}) "
+            "AND status IN ('won','lost')", FAMILY)]
+    except Exception as exc:                                 # noqa: BLE001 — said, never a quiet zero
+        return {"error": type(exc).__name__}
+    full = {_bet_key(r) for r in board}
+    dayless = {(k[0], k[2], k[3], k[4]) for k in full}
+    out: dict = {}
+    for r in bold:
+        k = _bet_key(r)
+        c = out.setdefault(k[0], {"book": 0, "matched": 0, "other_day": 0})
+        c["book"] += 1
+        if k in full:
+            c["matched"] += 1
+        elif (k[0], k[2], k[3], k[4]) in dayless:
+            c["other_day"] += 1
+    return dict(sorted(out.items()))
+
+
 def _test(rows: list) -> dict | None:
     """Wins against the chances we stated (losspatterns._slice_test)."""
     n = len(rows)
@@ -306,7 +336,8 @@ def refresh(conn, path=None, today: _dt.date | None = None) -> dict:
             holds.pop(key)
     out = {"measured_on": today.isoformat(), "records": len(rows), "tested": found["tested"],
            "holds": sorted(holds.values(), key=lambda h: h["key"]),
-           "released": sorted(released.values(), key=lambda h: h["key"])}
+           "released": sorted(released.values(), key=lambda h: h["key"]),
+           "bold": bold_census(conn)}
     save(out, path)
     return out
 
@@ -437,4 +468,6 @@ def verdict(out: dict) -> dict:
     kinds = [{k: h.get(k) for k in KIND_FIELDS if h.get(k) is not None} for h in holds]
     return {"records": (out or {}).get("records"), "tested": (out or {}).get("tested"),
             "on_paper": dict(sorted(on.items())), "back": dict(sorted(back.items())),
-            "kinds": sorted(kinds, key=lambda k: (str(k.get("sport")), str(k.get("market")), str(k.get("band"))))}
+            "kinds": sorted(kinds, key=lambda k: (str(k.get("sport")), str(k.get("market")), str(k.get("band")))),
+            # Each league's bold picks: in the book, read as bold, and missed on the day alone (bold_census).
+            **({"bold": out["bold"]} if (out or {}).get("bold") else {})}

@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFR. Why college's bold picks aren't a kind on paper yet** (step 960; 25 November; nothing to run). Checking
+step AEE on the morning's learn pass (03:17 Eastern): the NFL's picks bolder than the books are a kind on paper, as
+meant (they said 71.9% and hit 51.0% over 245 settled picks). College's are no kind at all, though the bold book's
+college picks had said about 68% and hit about 56% over about 900 when I measured them. A bold pick counts toward
+its kind only when the same bet is also among the board's own picks, matched on league, game day, player, market
+and side, so college's bold rows and board rows aren't matching on one of those, and nothing on the site shows
+which. The nightly pass now counts it per league: the bold book's settled picks, how many matched a board pick, and
+how many match on everything except the day. It's on the heartbeat beside the paper holds after tonight's pass,
+and I'll fix the key it points to.
+
 **AFQ. A kept page past its time still waits for a game that just landed** (step 959; 25 November; nothing to
 run). Follow-up to AFM. Since AFM, a player's page or chart the server built more than five minutes ago (charts:
 fifteen) answers at once and is rebuilt in the background, if it's under an hour old. On a game day that could show
