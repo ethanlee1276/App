@@ -66,7 +66,7 @@ def test_a_club_is_its_own_chip_never_a_player():
         "a defender filed DEF stays; a name that is no club in its league stays"
     assert PS.drop_clubs([{"player": "Detroit Lions"}], "nfl") == []
     src = (ROOT / "engine" / "statlogs.py").read_text(encoding="utf-8")
-    assert "return drop_clubs(_search_conn(conn, sport, q, limit, data_dir), sport)" in src
+    assert "return drop_clubs(_search_conn(conn, sport, q, limit, data_dir, took=took), sport)" in src
     assert "return drop_clubs(no_guess_beside_an_answer(merge(per, q, limit, order, prefer=prefer)))" in \
         (ROOT / "engine" / "playersearch.py").read_text(encoding="utf-8")
 

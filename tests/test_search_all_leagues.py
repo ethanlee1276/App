@@ -233,7 +233,7 @@ def test_one_league_can_still_be_asked_for_explicitly():
     src = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
     i = src.index("def _players_search(")
     body = src[i:src.index("\n    def ", i + 10)]
-    assert '"scope"' in body and "statlogs.search(sport, term)" in body
+    assert '"scope"' in body and "statlogs.search(sport, term, took=took)" in body
 
 
 # --- the page -------------------------------------------------------------
