@@ -4,6 +4,12 @@
     {
       "date": "2026-11-25",
       "kind": "improvement",
+      "title": "Hockey reads show the numbers, not only the ranks",
+      "body": "Hockey matchup reads now give the count beside every defense rank: shots allowed a game, 5-on-5 expected goals allowed and goals allowed, and for a goalie the shots the other team takes."
+    },
+    {
+      "date": "2026-11-25",
+      "kind": "improvement",
       "title": "Football reads show what a defense allows each position",
       "body": "Every football matchup read, and every game report card, now shows what the defense gives up a game to the player's own position: yards, catches and touchdowns for receivers, tight ends and backs, and touchdowns and interceptions for quarterbacks, each with its rank. Touchdown lines show the number beside the rank. We checked four seasons first: for receivers and tight ends, the defense's passing yards allowed overall separated good games from bad at least as well as the position's own numbers, and counting both made the read worse. So the verdict still rests on the overall number, and the position numbers are shown beside it."
     },

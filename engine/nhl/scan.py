@@ -128,14 +128,20 @@ def read_skater(name: str, p: dict, team: str, opp: str, teams: dict, ctx: dict,
     shots_rank = _ranks(teams, "sog_against", high_is_more=True).get(opp)
     ga_rank = _ranks(teams, "ga", high_is_more=True).get(opp)
     xga_rank = _ranks(teams, "xga_ev", high_is_more=True).get(opp)
+    # THE NUMBER BESIDE THE RANK (step AHO; Ethan, on a football fade that named a rank and no count: "you're not
+    # going into specifics"): every hockey reason says how many, a game.
     if shots_rank and shots_rank <= RANK_EDGE:
-        said(pro, f"{opp} gives up {_most(shots_rank, 'most')} shots a game", RL.DEFENSE)
+        said(pro, f"{opp} gives up {_most(shots_rank, 'most')} shots{_pg(teams, opp, 'sog_against') or ' a game'}",
+             RL.DEFENSE)
     elif shots_rank and shots_rank > len(teams) - RANK_EDGE:
-        said(con, f"{opp} allows {_most(len(teams) - shots_rank + 1, 'fewest')} shots a game", RL.DEFENSE)
+        said(con, f"{opp} allows {_most(len(teams) - shots_rank + 1, 'fewest')} shots"
+                  f"{_pg(teams, opp, 'sog_against') or ' a game'}", RL.DEFENSE)
     if xga_rank and xga_rank <= RANK_EDGE:
-        said(pro, f"{opp} gives up {_most(xga_rank, 'most')} 5-on-5 chances (expected goals against)", RL.DEFENSE)
+        said(pro, f"{opp} gives up {_most(xga_rank, 'most')} 5-on-5 chances "
+                  f"({_pg(teams, opp, 'xga_ev', '', 2, ' ')}expected goals against a game)", RL.DEFENSE)
     elif xga_rank and xga_rank > len(teams) - RANK_EDGE:
-        said(con, f"{opp} allows {_most(len(teams) - xga_rank + 1, 'fewest')} 5-on-5 chances", RL.DEFENSE)
+        said(con, f"{opp} allows {_most(len(teams) - xga_rank + 1, 'fewest')} 5-on-5 chances "
+                  f"({_pg(teams, opp, 'xga_ev', '', 2, ' ')}expected goals against a game)", RL.DEFENSE)
     sv, lsv = them.get("sv"), league.get("sv", M.LEAGUE_SV)
     gsax = them.get("gsax")
     if them.get("starter") and them.get("starter_sure") and gsax is not None:
@@ -150,7 +156,7 @@ def read_skater(name: str, p: dict, team: str, opp: str, teams: dict, ctx: dict,
             said(con, f"Faces {them['starter']}, .{round(sv * 1000):03d} save rate — among the better starters",
                  RL.GOALIE)
     elif ga_rank and ga_rank <= RANK_EDGE:
-        said(pro, f"{opp} allows {_most(ga_rank, 'most')} goals a game", RL.GOALIE)
+        said(pro, f"{opp} allows {_most(ga_rank, 'most')} goals{_pg(teams, opp, 'ga') or ' a game'}", RL.GOALIE)
     xg = me.get("xg")
     if xg is not None and xg >= HIGH_XG:
         said(pro, f"{team} is expected to score {xg:.1f} — a high-event night", RL.POINTS)
@@ -214,14 +220,19 @@ def read_goalie(name: str, team: str, opp: str, teams: dict, ctx: dict, headshot
     # The shots he should face are ONE question — how many come at him —
     # whether it is asked of their attack or of his own team's defence.
     if shots_rank and shots_rank <= RANK_EDGE:
-        said(pro, f"{opp} shoots {_most(shots_rank, 'most')} a game", RL.DEFENSE)
+        said(pro, (f"{opp} takes {_most(shots_rank, 'most')} shots{_pg(teams, opp, 'sog_for')}"
+                   if _pg(teams, opp, 'sog_for') else f"{opp} shoots {_most(shots_rank, 'most')} a game"), RL.DEFENSE)
     elif shots_rank and shots_rank > len(teams) - RANK_EDGE:
-        said(con, f"{opp} shoots {_most(len(teams) - shots_rank + 1, 'fewest')} a game", RL.DEFENSE)
+        few = _most(len(teams) - shots_rank + 1, 'fewest')
+        said(con, (f"{opp} takes {few} shots{_pg(teams, opp, 'sog_for')}" if _pg(teams, opp, 'sog_for')
+                   else f"{opp} shoots {few} a game"), RL.DEFENSE)
     allow_rank = _ranks(teams, "sog_against", high_is_more=True).get(team)
     if allow_rank and allow_rank <= RANK_EDGE:
-        said(pro, f"{team} gives up {_most(allow_rank, 'most')} shots — busy night in net", RL.DEFENSE)
+        said(pro, f"{team} gives up {_most(allow_rank, 'most')} shots{_pg(teams, team, 'sog_against')} — busy night "
+                  f"in net", RL.DEFENSE)
     elif allow_rank and allow_rank > len(teams) - RANK_EDGE:
-        said(con, f"{team} allows {_most(len(teams) - allow_rank + 1, 'fewest')} shots", RL.DEFENSE)
+        said(con, f"{team} allows {_most(len(teams) - allow_rank + 1, 'fewest')} shots"
+                  f"{_pg(teams, team, 'sog_against')}", RL.DEFENSE)
     if me.get("xg") is not None and them.get("xg") is not None and them["xg"] - me["xg"] >= 1.0:
         said(con, "A lopsided game — the goalie can be pulled and the script changes", RL.BLOWOUT)
     if not me.get("starter_sure"):
@@ -275,6 +286,14 @@ def scan(games: list[dict], players: dict, teams: dict, ctx: dict, league: dict,
 
 def _ord(n: int) -> str:
     return f"{n}{'th' if 11 <= n % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def _pg(teams: dict, t: str, key: str, before: str = " (", digits: int = 1, after: str = " a game)") -> str:
+    """" (33.1 a game)": a team's number a game beside its rank (step AHO); "" without one."""
+    v = ((teams or {}).get(t) or {}).get(key)
+    if not isinstance(v, (int, float)):
+        return ""
+    return f"{before}{v:.{digits}f}{after}"
 
 
 def _most(rank: int, word: str) -> str:

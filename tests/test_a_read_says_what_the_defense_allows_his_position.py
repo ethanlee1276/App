@@ -134,6 +134,23 @@ def test_a_missed_game_reads_the_packers_last_game():
     assert "in GB's last game" in A.note(r, None), "no report, the code's own possessive"
 
 
+def test_a_hockey_reason_says_the_number_beside_the_rank():
+    """The same in hockey (step AHP): "BOS gives up the 2nd-most shots (34.2 a game)", never the rank alone."""
+    from engine.nhl import scan as N
+    teams = {f"T{i:02d}": {"sog_against": 25.0 + i * 0.3, "ga": 2.5 + i * 0.03, "xga_ev": 2.0 + i * 0.02,
+                           "sog_for": 30 - i * 0.2} for i in range(32)}
+    teams["BOS"] = {"sog_against": 34.2, "ga": 3.61, "xga_ev": 2.88, "sog_for": 24.0}
+    r = N.read_skater("Auston Matthews", {"games": []}, "T00", "BOS", teams, {}, {})
+    assert r["pro"] == ["BOS gives up the 2nd-most shots (34.2 a game)",
+                        "BOS gives up the most 5-on-5 chances (2.88 expected goals against a game)",
+                        "BOS allows the most goals (3.6 a game)"], r["pro"]
+    g = N.read_goalie("Goalie X", "T05", "BOS", teams, {"T05": {"starter_sure": True, "starter_share": 0.8}})
+    assert g["con"] == ["BOS takes the 2nd-fewest shots (24.0 a game)", "T05 allows the 6th-fewest shots (26.5 a game)"]
+    # No number, the rank as before.
+    bare = {t: {k: (None if k == "sog_against" else v) for k, v in row.items()} for t, row in teams.items()}
+    assert N._pg(bare, "BOS", "sog_against") == ""
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     fails = 0

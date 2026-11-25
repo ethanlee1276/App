@@ -9883,6 +9883,15 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHP. Hockey's reads say the number beside the rank** (step 1008; 25 November; nothing to run). Following step
+AHO into the other leagues. A hockey read said "BOS gives up the sixth-most shots a game", with the rank and no
+count. Every hockey defense reason now says how many, a game: "BOS gives up the 2nd-most shots (34.2 a game)", "the
+most 5-on-5 chances (2.88 expected goals against a game)", "the most goals (3.6 a game)". A goalie's says the shots
+the other side takes and his own team allows. Basketball's reasons already carried the number ("PHX allows the
+most points a game (121.4)"). They cannot be split by position: the box scores name a position for the five
+starters only (engine/hoopsdvp), so they stay by stat. Baseball's are already split by the batter's side (a
+pitcher's slugging allowed to lefties or righties).
+
 **AHO. Every football read says what the defense gives up to the player's own position** (step 1007; 25
 November; nothing to run). Ethan, on the Packers at the Rams, a fade of Tucker Kraft that read "LA gives up the
 second-fewest passing yards (198 a game)": "you're not going into specifics about how many passing yards they give
