@@ -9883,6 +9883,18 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGB + AGC. Checked live after AFT to AFY went out (14:48 UTC), and two follow-ups** (steps 970 and 971; 25
+November; nothing to run). Timed again on Amon-Ra St. Brown's page (three loads at phone speed, the same tool), right
+after the restart while the server rebuilt its tables: his Recent games now drew 0.03, 0.05 and 0.14 s after the
+season card (this morning 0.45, 1.97 and 0.04 s after it). On two loads the log was still asked late (the page asked at
+1.87 s, the log at 2.54 s): it went through js/gamelog.js, and waited for that file to load first. It's asked
+straight off now, the file loading beside it (AGB), and the answer is kept where the Game Log menu looks, so opening
+that menu asks nothing again. Cameron Boozer's college page answered in 0.14 to 0.65 s without its league places and
+got them 42 s later, the table built right after the restart while every other one was being rebuilt too (before
+AFU, the whole page waited 29 s). The page's last try for them was at 45 s, so it now tries once more, at 48 s after
+the fourth (AGC). Amon-Ra's and Travis Kelce's logs lead with Receiving on the live site, Bijan Robinson's with
+Rushing and Lamar Jackson's with Passing (AFW).
+
 **AGA. The WNBA days missing their shooting are read again** (step 969; 25 November; nothing to run). A'ja
 Wilson's last game of the season (9 October) showed minutes, points, rebounds, assists, steals, blocks and turnovers,
 and no field goals, threes or free throws, so her page's Previous game card had three tiles where every other

@@ -39,15 +39,20 @@ def _const(src, head):
 def _node(body):
     if not shutil.which("node"):
         return None
-    prog = ("const calls = []; let pageAsks = 0, logsAtAnswer = null;\n"
+    prog = ("const calls = [], logs = []; let pageAsks = 0, logsAtAnswer = null;\n"
             "const escapeHtml = (s) => String(s);\n"
             "const glTableHTML = (d) => `T${d.games.length}`;\n"
+            "const GL_CACHE = new Map();\n"
             "const loadRoom = async () => true;\n"
             "async function glFetch(sport, player, season, team) { calls.push([sport, player, season, team]);"
             " await new Promise((r) => setTimeout(r, 5));"
             " return { sport, player: 'Amon-Ra St. Brown', season: 2026, team: 'DET', games: [{ week: 12 }] }; }\n"
-            "const fetch = async (u) => { pageAsks++; await new Promise((r) => setTimeout(r, 30));"
-            " if (logsAtAnswer === null) logsAtAnswer = calls.length;"
+            "const LOG = { sport: 'nfl', player: 'Amon-Ra St. Brown', season: 2026, team: 'DET', games: [{ week: 12 }] };\n"
+            "const fetch = async (u) => {\n"
+            "  if (u.startsWith('/api/players/gamelog?')) { logs.push(u); await new Promise((r) => setTimeout(r, 5));"
+            " return { ok: true, json: async () => LOG }; }\n"
+            "  pageAsks++; await new Promise((r) => setTimeout(r, 30));"
+            " if (logsAtAnswer === null) logsAtAnswer = logs.length;"
             " return { ok: true, json: async () => ({ player: 'Amon-Ra St. Brown', season: 2026, team: 'DET' }) }; };\n"
             + _const(PAGE, "const PLR_CACHE = new Map();") + _const(PAGE, "const PLR_ASK = new Map();")
             + _const(PAGE, "const PLR_LOG = new Map();")
@@ -69,13 +74,17 @@ def test_the_log_is_asked_with_the_page_and_used_once_it_lands():
         "const asked = logsAtAnswer;\n"
         "const slot = { isConnected: true, innerHTML: '' };\n"
         "await plrRecentInto(slot, { ...d, sport: 'nfl' }, { player: 'Amon-Ra St. Brown', team: 'DET' });\n"
-        "console.log(JSON.stringify({ asked, calls, pageAsks, drawn: slot.innerHTML.includes('Recent games') }));")
+        "console.log(JSON.stringify({ asked, logs, calls, pageAsks, drawn: slot.innerHTML.includes('Recent games'),"
+        " kept: GL_CACHE.has('nfl|Amon-Ra St. Brown||DET') }));")
     if got is None:
         print("      (skipped: no node)")
         return
     assert got["asked"] == 1, "the log was asked before the page's own answer landed"
-    assert got["calls"] == [["nfl", "Amon-Ra St. Brown", "", "DET"]], "and only once: the card uses that answer"
+    assert got["logs"] == ["/api/players/gamelog?sport=nfl&player=Amon-Ra+St.+Brown&team=DET"], \
+        "straight off, not through js/gamelog.js (step AGB): its ask is glFetch's, the season unpicked"
+    assert got["calls"] == [], "and only once: the card uses that answer"
     assert got["pageAsks"] == 1 and got["drawn"], got
+    assert got["kept"], "kept where the Game Log menu's own ask looks first"
 
 
 def test_an_answer_naming_another_season_or_club_asks_afresh():
@@ -87,12 +96,12 @@ def test_an_answer_naming_another_season_or_club_asks_afresh():
         "await plrRecentInto(slot, { sport: 'nfl', player: 'Amon-Ra St. Brown', season: 2025, team: '' },"
         " { player: 'Amon-Ra St. Brown', team: '' });\n"
         "await plrRecentInto(slot, { sport: 'nfl', player: 'Amon-Ra St. Brown', season: 2026, team: 'DET' });\n"
-        "console.log(JSON.stringify({ calls }));")
+        "console.log(JSON.stringify({ calls, logs }));")
     if got is None:
         print("      (skipped: no node)")
         return
-    assert got["calls"] == [["nfl", "Amon-Ra St. Brown", "", ""],
-                            ["nfl", "Amon-Ra St. Brown", 2026, "DET"],
+    assert got["logs"] == ["/api/players/gamelog?sport=nfl&player=Amon-Ra+St.+Brown"], got["logs"]
+    assert got["calls"] == [["nfl", "Amon-Ra St. Brown", 2026, "DET"],
                             ["nfl", "Amon-Ra St. Brown", 2025, ""],
                             ["nfl", "Amon-Ra St. Brown", 2026, "DET"]], \
         "asked without a club but answered with one; another season; no ask on record: each asks as before"
@@ -102,11 +111,11 @@ def test_a_season_picked_and_a_fighter_ask_no_log():
     got = _node(
         "await plrFetch('nfl', 'Amon-Ra St. Brown', 'DET', 2025);\n"
         "await plrFetch('ufc', 'Alex Pereira', '');\n"
-        "console.log(JSON.stringify({ calls, pageAsks }));")
+        "console.log(JSON.stringify({ calls, logs, pageAsks }));")
     if got is None:
         print("      (skipped: no node)")
         return
-    assert got == {"calls": [], "pageAsks": 2}, got
+    assert got == {"calls": [], "logs": [], "pageAsks": 2}, got
 
 
 def test_the_page_keeps_what_it_was_asked_with():

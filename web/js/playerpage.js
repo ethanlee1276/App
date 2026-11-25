@@ -48,12 +48,18 @@ let _plrNews = null;
 //: The requests in flight, so a page asked for while its address resolves (app.js renderPlayers) is asked once.
 const PLR_ASK = new Map();
 //: HIS RECENT GAMES, ASKED BESIDE HIS NUMBERS (step AFT): the game log took the server 12 to 18 ms, but was asked
-//: only once the page's own answer had landed, a round trip after it. Asked with the page's first ask now.
+//: only once the page's own answer had landed, a round trip after it. Asked with the page's first ask now, and
+//: straight off (step AGB): asked through js/gamelog.js, it waited for that file to load first (timed live: the page
+//: asked at 1.87 s, the log at 2.54 s). The file loads beside it, for the table; glFetch's own ask is the same URL.
 const PLR_LOG = new Map();
 function plrLogSoon(sport, player, team) {
   const key = `${sport}|${player}|${team || ""}`;
-  if (!PLR_LOG.has(key)) PLR_LOG.set(key, loadRoom("js/gamelog.js", "css/gamelog.css")
-    .then((ok) => (ok && typeof glFetch === "function" ? glFetch(sport, player, "", team) : null), () => null));
+  if (!PLR_LOG.has(key)) {
+    const q = new URLSearchParams({ sport, player });
+    if (team) q.set("team", String(team));
+    PLR_LOG.set(key, fetch(`/api/players/gamelog?${q}`).then((r) => (r.ok ? r.json() : null)).catch(() => null));
+    loadRoom("js/gamelog.js", "css/gamelog.css");
+  }
   return PLR_LOG.get(key);
 }
 function plrFetch(sport, player, team, season) {
@@ -66,9 +72,11 @@ function plrFetch(sport, player, team, season) {
 /* ITS LEAGUE PLACES, A FEW SECONDS ON (step AFU): a season whose league table the server has not built yet (an older
    one, or the first page after an update) is answered without its places, the table built behind it
    (engine/playerpage.rank_table), rather than after a wait: Cameron Boozer's college page took 29 s. The page asks
-   again at 3, 6, 12 and 24 s and redraws its season card once they are in. */
+   again at 3, 6, 12, 24 and 48 s and redraws its season card once they are in. */
 function plrRanksLater(page, was, tries = 0) {
-  if (tries > 3) return;
+  // Five tries, to 93 s (step AGC): right after an update, with every table being built again, Cameron Boozer's
+  // came in 42 s on, a breath before the fourth try (45 s).
+  if (tries > 4) return;
   setTimeout(() => {
     if (!page.isConnected || !page._ask) return;
     const { sport } = page._plr, { player, team } = page._ask;
@@ -330,8 +338,10 @@ async function plrRecentInto(slot, d, asked) {
   // The log asked beside the page (plrLogSoon) when it is the one this answer names: his stored name, this
   // season, the club the page was asked with being the club it answered (a name two players share, step AFF).
   const early = asked && await (PLR_LOG.get(`${d.sport}|${asked.player}|${asked.team || ""}`) || null);
-  const log = early && early.player === d.player && early.season === d.season
-    && (asked.team || "") === (d.team || "") ? early : await glFetch(d.sport, d.player, d.season, d.team);
+  const fits = early && early.player === d.player && early.season === d.season && (asked.team || "") === (d.team || "");
+  // ...and kept where the Game Log menu's own ask (glFetch, the season unpicked) looks first.
+  if (fits && typeof GL_CACHE !== "undefined") GL_CACHE.set(`${d.sport}|${asked.player}||${asked.team || ""}`, early);
+  const log = fits ? early : await glFetch(d.sport, d.player, d.season, d.team);
   if (!slot.isConnected || !log || !(log.games || []).length) return;
   slot.innerHTML = `<section class="plr-card"><h3>Recent games</h3>${glTableHTML({ ...log, games: log.games.slice(0, 5), played: 0 })}
     <button class="btn plr-go" type="button" data-plr-go="log">Full game log</button></section>`;

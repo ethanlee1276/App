@@ -6,7 +6,8 @@ season at start and the tables are kept on disk (step AFO), but a page for an ol
 the reader waited: Cameron Boozer's college page (his newest season is 2025-26) took 29.3 s on the live site,
 28.7 s of it the college table (7.1 s of the server's own time). The site's pages now never wait: a table neither
 kept nor on disk is built behind the page, the answer comes without its places and says "ranks_pending", the server
-keeps no copy of it, and the page asks again at 3, 6, 12 and 24 s and redraws its season card once they are in.
+keeps no copy of it, and the page asks again at 3, 6, 12, 24 and 48 s (step AGC: Boozer's came in 42 s on
+right after an update) and redraws its season card once they are in.
 `warm` leaves a table a page started to that build, and marks its own, so one table is never built twice at once.
 Called directly (tools, tests), `page` still builds the table first, as before.
 
@@ -152,7 +153,9 @@ def _node(answers, tries_body):
             "const setTimeout = (f, ms) => { delays.push(ms); Promise.resolve().then(f); };\n"
             "const loadRoom = async () => false;\n"
             f"const ANSWERS = {json.dumps(answers)};\n"
-            "const fetch = async (u) => { asked.push(u); const a = ANSWERS[Math.min(asked.length - 1, ANSWERS.length - 1)];"
+            "const fetch = async (u) => { if (u.startsWith('/api/players/gamelog?'))"
+            " return { ok: true, json: async () => ({}) };\n"
+            "  asked.push(u); const a = ANSWERS[Math.min(asked.length - 1, ANSWERS.length - 1)];"
             " return { ok: true, json: async () => JSON.parse(JSON.stringify(a)) }; };\n"
             "const plrSeasonHTML = (d) => `rank ${(d.headline[0] || {}).rank}`;\n"
             + const("const PLR_CACHE = new Map();") + const("const PLR_ASK = new Map();") + const("const PLR_LOG = new Map();")
@@ -190,7 +193,7 @@ def test_the_page_asks_again_and_redraws_its_season_card():
     assert got == {"delays": [3000, 6000], "asks": 3, "card": "rank 2", "kept": 2}, got
 
 
-def test_the_page_stops_asking_after_four_tries():
+def test_the_page_stops_asking_after_five_tries():
     got = _node([PENDING],
                 "const first = await plrFetch('nfl', 'Sam Hands', 'BUF');\n"
                 "plrRanksLater(page, first);\n" + SETTLE +
@@ -198,7 +201,7 @@ def test_the_page_stops_asking_after_four_tries():
     if got is None:
         print("      (skipped: no node)")
         return
-    assert got == {"delays": [3000, 6000, 12000, 24000], "asks": 5, "card": "rank null"}, got
+    assert got == {"delays": [3000, 6000, 12000, 24000, 48000], "asks": 6, "card": "rank null"}, got
 
 
 def test_the_page_starts_asking_when_its_answer_says_so():
