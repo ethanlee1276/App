@@ -431,14 +431,17 @@ def test_the_server_serves_it_free_and_the_players_page_becomes_it():
            '  ["splits", "Splits"], ["log", "Game Log"]];' in PAGE, "ESPN's six menus"
     i = PAGE.index("function renderPlayerPage(host, player, sport) {")
     mount = PAGE[i:PAGE.index("\n}\n", i)]
-    assert "while (host.firstChild) kept.appendChild(host.firstChild);" in mount
+    assert "for (const c of [...host.childNodes]) if (c !== same) kept.appendChild(c);" in mount, \
+        "the host's cards are kept; the page itself never (two draws asked before js/playerpage.js landed, step AFK)"
     assert "tonight.replaceChildren(kept);" in PAGE, "the market cards this page always drew are kept, in Overview"
-    assert ("  if (same) {\n    plrMarkets(same, kept);\n    host.replaceChildren(same);\n"
+    assert ("  if (same) {\n    if (kept.childNodes.length) plrMarkets(same, kept);\n    host.replaceChildren(same);\n"
             "    plrFrameOn(sport, same._plr.team);\n") in mount, \
         "the 30-second redraw puts the same page back, only its market cards fresh (in its club's colours, PLRWASH1)"
     # ...and the pick a tap opened it on (PICKTAP1), redrawn only when it changed.
     assert "    plrTappedInto(same);\n    return;\n  }" in mount
-    assert "if (cached) plrFill(page, cached);" in mount, "a first visit draws at once from the visit's copy"
+    assert "if (cached) fill(cached);" in mount and \
+        "const fill = (d) => { window._plrDrawn = true; if (page.isConnected) plrFill(page, d); };" in mount, \
+        "a first visit draws at once from the visit's copy"
     assert ('  const b = e.target.closest && e.target.closest(".plr .gl-open");' in PAGE
             and "  e.stopPropagation();\n  plrShow(page, \"log\");\n  plrToTabs(page);\n}, true);" in PAGE), \
         "on the page, the card's Game log opens the Game Log menu, not a sheet over it"

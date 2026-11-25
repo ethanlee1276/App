@@ -2644,6 +2644,7 @@ function prefetchLeaguesSoon() {
     ? (f) => requestIdleCallback(f, { timeout: 5000 })
     : (f) => setTimeout(f, 2000);
   later(async () => {
+    while (boardHeld()) await new Promise((r) => setTimeout(r, 300));
     const seen = new Set();
     for (const b of document.querySelectorAll(".sport-btn[data-sport]")) {
       const s = b.dataset.sport;
@@ -4738,6 +4739,7 @@ function idleStale() {
     : (f) => setTimeout(f, 250);
   _staleIdle = later(() => {
     _staleIdle = null;
+    if (boardHeld()) return setTimeout(idleStale, 300);
     const next = _stalePages.keys().next();
     if (next.done) return;
     const draw = _stalePages.get(next.value);
@@ -4819,15 +4821,20 @@ function drawBoard() {
   boardNext();
 }
 
+/* A PLAYER'S PAGE OPENED COLD DRAWS FIRST (step AFK, 2026-11-25; Ethan: "data on the player page takes a long
+   time to load"). Home's queued blocks, the idle pages and the other leagues' copies wait until it has drawn
+   (playerpage.js plrFill), never past nine seconds in. */
+const boardHeld = () => state.view === "players" && !!state.playerSlug && !window._plrDrawn && performance.now() < 9e3;
 function boardNext() {
   if (_boardTimer || !_boardQueue.length) return;
   _boardTimer = setTimeout(() => {
     _boardTimer = null;
+    if (boardHeld()) return boardNext();
     const until = performance.now() + BOARD_SLICE_MS;
     do drawBlock(_boardQueue.shift());
     while (_boardQueue.length && performance.now() < until);
     boardNext();
-  }, 0);
+  }, boardHeld() ? 300 : 0);
 }
 
 /* Everything still waiting, in order, now: one of their pages is opening. */
@@ -5207,20 +5214,25 @@ function renderEmptySlate() {
    edge audit showed the model's opinion ALONE doesn't beat the close.
    Every row says where its number comes from.
    ============================================================ */
-let _recordCache = null;
+let _recordCache = null, _recordAsk = null;
 async function loadRecordOnce() {
   if (_recordCache !== null) return _recordCache;
+  // ONE REQUEST FOR EVERY CALLER (step AFK): three of Home's blocks asked at once and the file came down twice.
+  if (_recordAsk) return _recordAsk;
   /* THE SLIM COPY FIRST (the speed pass, 2026-10-09). record_head.json is
      the record without the sections only the Record page reads — that
      page fetches the whole file itself — and it was over half the bytes
      Home downloaded for its first screen. A box that has not exported
      since this shipped has no slim copy yet; the whole record answers. */
-  try {
-    let res = await boardFetch("data/record_head.json", { cache: "no-cache" });
-    if (!res.ok) res = await boardFetch("data/record.json", { cache: "no-cache" });
-    _recordCache = res.ok ? adoptPooledRecord(await res.json()) : {};
-  } catch (e) { _recordCache = {}; }
-  return _recordCache;
+  _recordAsk = (async () => {
+    try {
+      let res = await boardFetch("data/record_head.json", { cache: "no-cache" });
+      if (!res.ok) res = await boardFetch("data/record.json", { cache: "no-cache" });
+      _recordCache = res.ok ? adoptPooledRecord(await res.json()) : {};
+    } catch (e) { _recordCache = {}; }
+    return _recordCache;
+  })();
+  try { return await _recordAsk; } finally { _recordAsk = null; }
 }
 
 /* ONE RECORD. Ethan, 2026-09-22: "we want both records and all that
@@ -14298,8 +14310,11 @@ async function renderPlayers() {
      own page, with no door out to the pick page. */
   const routed = !!(q && state.playerSlug);
   // Cached after the first call; every row and card tags a current
-  // designation from it, whatever the sport.
-  await loadInjuryBoard();
+  // designation from it, whatever the sport. A player's own page does not
+  // wait for it: plrFill tags him when it lands (step AFK). It still yields
+  // once, so of two draws asked in one breath only the newer goes on.
+  const inj = loadInjuryBoard();
+  await (routed ? 0 : inj);
   if (seq !== _playersSeq) return;
   /* THE BOARD MAY NOT BE HERE YET, and this function is the reason that
      went unnoticed. It AWAITS the injury board first, so a throw on the
@@ -14379,6 +14394,8 @@ async function renderPlayers() {
           renderPlayerPage(host, m.player, "ufc");
           return;
         }
+        // HIS PAGE IS ASKED NOW (step AFK), beside his logs, not after them: renderPlayerPage finds it asked.
+        loadRoom("js/playerpage.js", "css/playerpage.css").then((ok) => ok && plrFetch(m.sport, m.player, m.team || ""));
         if (!playerStats(m.player)) {
           const st = await leagueLogs(m.player, m.sport);
           if (seq !== _playersSeq) return;
@@ -14717,7 +14734,7 @@ async function leagueSearchAfterPause(q, seq, host) {
   if (!_leagueCache.has(`${state.sport}|${q}`)) {
     if (host) host.innerHTML = `<div class="section-title minor">Searching ${escapeHtml(lgCode(state.sport))} players
       <span class="sub">— “${escapeHtml(state.search.trim())}”</span></div>`;
-    await new Promise((r) => setTimeout(r, LEAGUE_PAUSE_MS));
+    if (!state.playerSlug) await new Promise((r) => setTimeout(r, LEAGUE_PAUSE_MS));
     if (seq !== _playersSeq) return null;
   }
   return leagueSearch(q);
@@ -25807,6 +25824,7 @@ function openPlayerRoute(slug, shown, pick) {
   // search and not a player page.
   state.playerSlug = slugify(slug);
   state.search = name;
+  loadRoom("js/playerpage.js", "css/playerpage.css");
   const inp = document.getElementById("player-search");
   if (inp) inp.value = name;
   switchView("players");

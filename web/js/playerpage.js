@@ -45,9 +45,15 @@ const PLR_TWO_YEARS = ["nba", "nhl", "cbb"];
 const PLR_PICK = {};
 let _plrNews = null;
 
-async function plrFetch(sport, player, team, season) {
+//: The requests in flight, so a page asked for while its address resolves (app.js renderPlayers) is asked once.
+const PLR_ASK = new Map();
+function plrFetch(sport, player, team, season) {
   const key = `${sport}|${player}|${team || ""}|${season || ""}`;
-  if (PLR_CACHE.has(key)) return PLR_CACHE.get(key);
+  if (PLR_CACHE.has(key)) return Promise.resolve(PLR_CACHE.get(key));
+  if (!PLR_ASK.has(key)) PLR_ASK.set(key, plrAsk(key, sport, player, team, season).finally(() => PLR_ASK.delete(key)));
+  return PLR_ASK.get(key);
+}
+async function plrAsk(key, sport, player, team, season) {
   let body = null;
   try {
     const q = new URLSearchParams({ sport, player });
@@ -741,10 +747,14 @@ function renderPlayerPage(host, player, sport) {
   const r0 = ((typeof _profRows !== "undefined" && _profRows.get(player)) || [])[0] || {};
   const team = r0.team || "", key = `${sport}|${player}`;
   const kept = document.createDocumentFragment();
-  while (host.firstChild) kept.appendChild(host.firstChild);
   const same = _plrLive && _plrLive.key === key ? _plrLive.page : null;
+  // TWO DRAWS ASKED BEFORE THIS FILE LANDED (step AFK): app.js holds each call until js/playerpage.js loads
+  // (roomCall), so both run then, and the second finds the first's page in the host; moving the page into its
+  // own markets threw ("the new child element contains the parent"). The page is never its own new content:
+  // with nothing new beside it, its markets (the newer draw's cards, moved in by the first) stay as they are.
+  for (const c of [...host.childNodes]) if (c !== same) kept.appendChild(c);
   if (same) {
-    plrMarkets(same, kept);
+    if (kept.childNodes.length) plrMarkets(same, kept);
     host.replaceChildren(same);
     plrFrameOn(sport, same._plr.team);
     // A pick tapped since this page was last drawn opens it on the Overview, where the pick heads it.
@@ -762,8 +772,10 @@ function renderPlayerPage(host, player, sport) {
   plrTappedInto(page);
   plrMarkets(page, kept);
   plrFrameOn(sport, team);
-  if (cached) plrFill(page, cached);
-  else plrFetch(sport, player, team).then((d) => { if (page.isConnected) plrFill(page, d); });
+  // Drawn, so Home's waiting blocks may go on (app.js boardHeld, step AFK).
+  const fill = (d) => { window._plrDrawn = true; if (page.isConnected) plrFill(page, d); };
+  if (cached) fill(cached);
+  else plrFetch(sport, player, team).then(fill);
 }
 
 async function plrSplitsFor(page, season) {

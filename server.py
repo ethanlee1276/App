@@ -4973,24 +4973,33 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, b'{"error":"no player page for this sport"}', ".json")
         key = (sport, player.lower(), team, season)
         hit = _PLAYER_PAGES.get(key)
+        # WHERE A SLOW PAGE SPENDS ITS TIME (step AFK, 25 November 2026), as the team page says it (2026-11-18):
+        # Amon-Ra St. Brown's page answered in 4.4 s once and 0.2 s a minute later. A built answer names each
+        # part and its milliseconds (engine/playerpage.page `took`, then "all"); a kept one says "kept". Names
+        # and numbers only; the page ignores it.
         if hit and time.time() - hit[0] < PLAYER_PAGE_TTL:
-            return self._send(200, hit[1], ".json")
+            return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])
+        took: list = []
+        t0 = time.perf_counter()
         try:
             if sport == "ufc":
                 from engine.ufc import fighterpage
                 made = fighterpage.page(player)
             else:
-                made = playerpage.page(sport, player, team=team, season=int(season) if season.isdigit() else None)
+                made = playerpage.page(sport, player, team=team, season=int(season) if season.isdigit() else None,
+                                       took=took)
             body = json.dumps(made or {}).encode()
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the player page could not be read"}', ".json")
+        took.append(("all", (time.perf_counter() - t0) * 1000.0))
         if len(_PLAYER_PAGES) >= PLAYER_PAGE_KEEP:
             try:                          # the oldest out; another thread may be writing beside this one
                 _PLAYER_PAGES.pop(next(iter(_PLAYER_PAGES)), None)
             except (StopIteration, RuntimeError):
                 pass
         _PLAYER_PAGES[key] = (time.time(), body)
-        return self._send(200, body, ".json")
+        timing = ", ".join(f"{part};dur={ms:.0f}" for part, ms in took)
+        return self._send(200, body, ".json", headers=[("Server-Timing", timing)])
 
     def _parlay_check(self, body: dict):
         """The engine's parlay rules for a ticket the reader is building.

@@ -145,7 +145,14 @@ def _fnbody(name):
 def test_the_pages_load_the_board_before_painting():
     assert "loadInjuryBoard()" in _fnbody("async function renderFantasy("), \
         "fantasy renders synchronously from its payload — the board must ride the same await"
-    assert "await loadInjuryBoard()" in _fnbody("async function renderPlayers(")
+    # Every list and card waits for the board. A player's own page does not (step AFK, 25 November 2026; Ethan:
+    # "data on the player page takes a long time to load"): its cards' name rows are hidden on the page, and the
+    # header's tag fills in when the file lands.
+    body = _fnbody("async function renderPlayers(")
+    assert "const inj = loadInjuryBoard();\n  await (routed ? 0 : inj);" in body
+    page_css = open(os.path.join(ROOT, "web", "css", "playerpage.css"), encoding="utf-8").read()
+    assert ".plr-tonight .profile-head > :not(.grade) { display: none; }" in page_css
+    assert "flag.innerHTML = injTag(d.sport, d.player);" in APP, "js/playerpage.js plrFill, once the file answers"
 
 
 def test_the_short_map_reads_longest_first():

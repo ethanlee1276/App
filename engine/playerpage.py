@@ -828,23 +828,38 @@ def _record(by_id: dict, team: str, through: str, sport: str = "") -> str:
     return f"{w}-{l}" + (f"-{t}" if t else "")
 
 
-def page(sport: str, player: str, team: str = "", season=None, db_path=None, data_dir=None) -> dict:
+def page(sport: str, player: str, team: str = "", season=None, db_path=None, data_dir=None, took=None) -> dict:
     """Everything his page's menus show; ``{}`` for a league with no layout or
-    a name neither the history file nor a roster knows."""
+    a name neither the history file nor a roster knows.
+
+    ``took``, a list, gets each part's milliseconds as ``(part, ms)``, in order:
+    server.py sends them as a Server-Timing header (step AFK, 25 November 2026:
+    Amon-Ra St. Brown's page took 4.4 s to answer once and 0.2 s a minute later,
+    and the box's data cannot be timed from anywhere else)."""
     if sport not in GL.LAYOUTS or not player:
         return {}
+    clock = [time.perf_counter()]
+
+    def mark(part):
+        if took is not None:
+            now = time.perf_counter()
+            took.append((part, (now - clock[0]) * 1000.0))
+            clock[0] = now
     path = str(db_path or _db.DEFAULT_DB)
     rows: list = []
     seasons: list = []
     conn = _db.connect(path) if os.path.exists(path) else None
+    mark("open")
     try:
         if conn is not None:
             player = stored_name(conn, sport, player, team, data_dir) or player
+            mark("name")
             seasons = GL.seasons_of(conn, sport, player)
             if seasons:
                 rows = conn.execute(
                     "SELECT season, period, game_id, team, opponent, position, home, market, value "
                     "FROM player_game_logs WHERE sport=? AND player=?", (sport, player)).fetchall()
+            mark("rows")
         by_season: dict = {}
         for yr, period, gid, club, opp, pos, home, market, val in rows:
             gs = by_season.setdefault(int(yr), {})
@@ -857,16 +872,19 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                 g["stats"][market] = float(val)
         by_season = {yr: {(g["period"], g["game_id"]): g for g in GL.collapse(sport, list(gs.values()))}
                      for yr, gs in by_season.items()}
+        mark("merge")
         newest = max((g for gs in by_season.values() for g in gs.values()), key=lambda g: g["period"], default=None)
         my_team = team or ((newest or {}).get("team") or "")
         # What the logs say the player plays, never a basketball box score's starter flag
         # (engine/rosters.shown_position): "Duke Blue Devils · S" was that flag.
         logged = rosters.shown_position(sport, (newest or {}).get("position"))
         row = roster_row(sport, player, my_team, data_dir, position=logged)
+        mark("roster")
         position = rosters.shown_position(sport, row.get("position")) or logged
         out = {"sport": sport, "player": player, "team": row.get("team") or my_team, "position": position,
                "bio": bio(sport, player, row, position), "notes": notes(sport, player, row, data_dir),
                "seasons": seasons}
+        mark("notes")
         if not seasons:
             note = no_stats_note(sport, position) or (
                 NOT_FBS if _school_without_games(conn, sport, out["team"]) else "")
@@ -876,6 +894,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         season = int(season) if season and str(season).isdigit() and int(season) in seasons else seasons[0]
         out["season"] = season
         by_id, by_pair = GL._results(conn, sport, season)
+        mark("results")
         games = []
         for g in by_season.get(season, {}).values():
             res = by_id.get(g["game_id"]) or by_pair.get((g["period"], frozenset((g["team"], g["opponent"]))))
@@ -899,6 +918,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         kind = role(sport, position, summed)
         out["role"] = kind
         per_game = sport in HOOPS
+        mark("games")
 
         # The headline, with the league's places.
         places = rank_table(conn, sport, season, kind, db_path=path) if kind and conn is not None else {}
@@ -906,6 +926,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                             "rank": (places.get(sp[0]) or {}).get(player) if sp[7] else None,
                             "per_game": sp[4], "low": sp[5]}
                            for sp, v in headline_specs(sport, kind, summed, gp)]
+        mark("ranks")
         # GAMES ON FILE THIS SEASON AND NONE PLAYED (hurt, inactive, nothing in
         # the box score), none still waiting for a line: the Overview shows the
         # newest season the player did play, said as such, where it showed
@@ -977,6 +998,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
             add(f"vs:{opp}", f"vs {opp}", chosen)
         out["splits"] = {"season": season, "groups": _shape(groups), "rows": split_rows,
                          **({} if averages else {"totals": True})}
+        mark("splits")
 
         # Season by season.
         counts = lambda g: GL._played(sport, g["stats"]) and GL.has_line(sport, g["stats"])   # noqa: E731
@@ -999,6 +1021,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                          "total": {"gp": len(every), "values": _line(sport, cgroups, _sum(every), len(every),
                                                                      per_game)}}
         out["bio"].update({"first_season": min(seasons), "last_season": max(seasons), "games": len(every)})
+        mark("career")
         return out
     finally:
         if conn is not None:

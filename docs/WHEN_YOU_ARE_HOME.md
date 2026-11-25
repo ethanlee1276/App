@@ -9883,6 +9883,30 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFK. A player's page stops waiting on what it doesn't show** (step 953; 25 November; nothing to run). You said:
+"Also data on the player page takes a long time to load". I opened Amon-Ra St. Brown's page on the live site three
+times in a row with the browser's processor slowed to a phone's (four times slower). His season's numbers showed at
+8.3 s, then 2.3 s, then 2.4 s. On the first load the server took 4.4 s to build his page. On the other two it had the
+page kept (it keeps each one five minutes) and answered in 0.2 to 0.3 s. Then I asked the server for 13 other NFL
+players' pages nobody had opened lately: 12 answered in 0.2 to 0.6 s and one took 2.8 s. So the slow build isn't
+every player's; something on the box is slow now and then, and I can't see what from here. The page's answer now says
+where its time went (a Server-Timing header: each part of the build and its milliseconds, or "kept"). I'll read it
+off the next slow one and fix that part.
+
+On the page itself, before it asked for the player's numbers it waited on things it doesn't show:
+- **the injury file.** The page's cards hide the name row the tag sits in, and the tag beside the player's name in
+  the page's header fills in when the file lands, as it already did. Every other list still waits for the file;
+- **the search box's typing pause** (280 ms), on an address nobody is typing into;
+- **the player's market charts.** The page asked for its own numbers only after the charts' games answered, and
+  fetched its script only when it drew. Now it asks for both at once, and the script loads as the address opens;
+- **Home.** Home kept drawing its sections, the pages it keeps ready and the other leagues' boards meanwhile. They
+  now wait until the page has drawn, never more than nine seconds after the site opens;
+- **the record file**, downloaded twice when three of Home's sections asked for it at once. It's asked once now.
+
+One bug turned up while making this: two draws of the page asked for before its script arrived both ran when it did,
+and the second one threw an error, so the page never showed. That's fixed, and a test opens the page that way. I'll
+time his page again once this is live, the same way, and add what changed here.
+
 **AFJ. A college game report counts each game once** (step 952; 25 November; nothing to run). Follow-up to AFE.
 A game report quotes a player's form: his last games, his season's totals and how often he cleared a number ("6+
 catches in 5 of 8"). It reads the stored games by day, so the copies AFE found (a game on two days, or Buffalo as BUF
