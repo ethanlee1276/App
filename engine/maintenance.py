@@ -2048,7 +2048,8 @@ REREAD_TRIES = 3
 #: minutes, points, rebounds, assists and threes until it learned steals, blocks and turnovers (13 October) and
 #: field goals, free throws and offensive rebounds (20 October), after the WNBA's season had ended, so every WNBA
 #: player page showed four columns (MIN, PTS, REB, AST) where the NBA's show fifteen. RUN_NEXT 00i (step VH) read
-#: 2026 again by hand; the night now reads each stored WNBA day with no steals on file again, newest first (the
+#: 2026 again by hand; the night now reads each stored WNBA day with no field goals on file again (no steals, until
+#: step AGA), newest first (the
 #: season a reader opens first: oldest first, 2026 waited behind two older seasons, ten nights at forty a night),
 #: WNBA_REFILL_DAYS_PER_NIGHT a night and each WNBA_REFILL_TRIES times at most, until none is left.
 WNBA_REFILL_SEASONS = (2024, 2025, 2026)
@@ -2057,14 +2058,18 @@ WNBA_REFILL_TRIES = 2
 
 
 def wnba_days_short(hconn, seasons=WNBA_REFILL_SEASONS) -> list:
-    """The stored WNBA days, newest first, whose player lines carry no steals (filed before the box kept them)."""
+    """The stored WNBA days, newest first, whose player lines carry no field-goal tries (filed before the box kept
+    them). FIELD GOALS, NOT STEALS (step AGA, 25 November 2026): the reader learned steals on 13 October and field
+    goals on 20 October, and a day read again between the two kept its steals and never its shooting: A'ja Wilson's
+    last game of the season (9 October) showed MIN, PTS, REB, AST, STL, BLK and TO and no FG, 3PT or FT. Field goals
+    were the last columns learned, so a day without them is short of every later one."""
     if hconn is None or not seasons:
         return []
     marks = ",".join("?" * len(seasons))
     try:
         rows = hconn.execute(
             f"SELECT DISTINCT period FROM player_game_logs WHERE sport='wnba' AND season IN ({marks}) "
-            f"AND period NOT IN (SELECT DISTINCT period FROM player_game_logs WHERE sport='wnba' AND market='stl') "
+            f"AND period NOT IN (SELECT DISTINCT period FROM player_game_logs WHERE sport='wnba' AND market='fga') "
             f"ORDER BY period DESC", tuple(seasons)).fetchall()
     except Exception:                                         # noqa: BLE001
         return []

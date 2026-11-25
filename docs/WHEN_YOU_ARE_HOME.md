@@ -9883,6 +9883,14 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGA. The WNBA days missing their shooting are read again** (step 969; 25 November; nothing to run). A'ja
+Wilson's last game of the season (9 October) showed minutes, points, rebounds, assists, steals, blocks and turnovers,
+and no field goals, threes or free throws, so her page's Previous game card had three tiles where every other
+basketball page has four. The nightly re-read (ABO) picks WNBA days with no steals on file, but the box reader learned
+steals on 13 October and field goals on 20 October, and a day read once in between kept its steals and never got its
+shooting. It now picks days with no field-goal tries, which covers both kinds; they fill in over the next nights, as
+ABO's did. The NBA's first nights of the season are complete (checked on Jalen Brunson's and Victor Wembanyama's logs).
+
 **AFZ. "1 number"** (step 968; 25 November; nothing to run). A'ja Wilson's role chart read "That game beside the
 season · 1 numbers"; it says "1 number" now.
 

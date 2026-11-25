@@ -6,7 +6,8 @@ show fifteen: the box-score reader learned steals, blocks and turnovers (13 Octo
 and offensive rebounds (20 October) after the WNBA's season had ended, and RUN_NEXT 00i, the re-read by hand,
 was never run. What these hold:
 
-  * the stored WNBA days whose lines carry no steals are found, newest first (`wnba_days_short`): the season a
+  * the stored WNBA days whose lines carry no field-goal tries are found (no steals was the test until step AGA:
+    a day read between the two dates kept its steals and never its shooting), newest first (`wnba_days_short`): the season a
     reader opens first is read first (22 November, the same day: oldest first left 2026 ten nights away);
   * the night reads them again, a few dozen a night and each twice at most, until none is left, and says how
     many are left (`wnba_box_refill`); a scoreboard that does not answer stops it for the night;
@@ -45,10 +46,12 @@ def test_the_days_filed_before_every_column_are_found_newest_first():
     c = _conn()
     _store(c, "2026-07-02")
     _store(c, "2026-06-01")
-    _store(c, "2026-07-10", markets=("min", "pts", "reb", "ast", "stl", "blk"))   # read with every column
+    _store(c, "2026-07-12", markets=("min", "pts", "reb", "ast", "stl", "blk", "tov", "fgm", "fga"))   # every column
+    # STEP AGA: read again between 13 and 20 October, it has its steals and no shooting (A'ja Wilson's 9 October).
+    _store(c, "2026-07-10", markets=("min", "pts", "reb", "ast", "stl", "blk", "tov"))
     _store(c, "2023-07-01", season=2023)                                           # outside the seasons
     db.upsert_player_logs(c, [dict(_line("2026-06-01", "x", "pts", 3.0), sport="nba")])
-    assert M.wnba_days_short(c) == ["2026-07-02", "2026-06-01"], M.wnba_days_short(c)
+    assert M.wnba_days_short(c) == ["2026-07-10", "2026-07-02", "2026-06-01"], M.wnba_days_short(c)
     assert M.wnba_days_short(None) == []
 
 
@@ -67,7 +70,7 @@ def test_the_night_reads_them_again_until_none_is_left():
     assert asked == ["2026-06-05", "2026-06-03"] and said[-1].endswith("2 day(s) read again with every column, 1 left")
     assert M.wnba_box_refill(state, c, ingest, log=said.append, per_night=2) == 1
     assert asked[-1] == "2026-06-01" and said[-1].endswith("none left")
-    assert M.wnba_box_refill(state, c, ingest, log=said.append) == 0, "nothing to do once every day has its steals"
+    assert M.wnba_box_refill(state, c, ingest, log=said.append) == 0, "nothing to do once every day has its shooting"
 
 
 def test_a_day_the_feed_cannot_fill_is_read_twice_at_most_and_a_dead_scoreboard_stops_the_night():
