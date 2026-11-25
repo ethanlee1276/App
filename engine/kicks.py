@@ -275,8 +275,10 @@ def chart(conn, player: str, season: int | None = None) -> dict:
     by_moment += _split(every, lambda k: "close" if k["sd"] is not None and abs(k["sd"]) <= CLOSE else "",
                         [("close", f"Within {CLOSE} points either way")])
     latest = out_games[0] if out_games else {}
-    meta = conn.execute("SELECT position, jersey FROM kicks WHERE sport='nfl' AND player=? AND season=? "
-                        "AND position != '' ORDER BY period DESC LIMIT 1", (name, pick)).fetchone()
+    from .db import pinned
+    # His newest row of the season off his own index, not the league's season off the table's key (step AGO).
+    meta = pinned(conn, "SELECT position, jersey FROM kicks{hint} WHERE sport='nfl' AND player=? AND season=? "
+                        "AND position != '' ORDER BY period DESC LIMIT 1", "kicks_player", (name, pick)).fetchone()
     return {"player": name, "sport": "nfl", "seasons": seasons, "season": pick,
             "team": latest.get("team", ""), "position": (meta[0] if meta else "") or "K",
             "jersey": (meta[1] if meta else "") or "", "games": out_games, "season_line": _line(every),

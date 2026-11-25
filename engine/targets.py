@@ -527,8 +527,10 @@ def chart(conn, player: str, season: int | None = None, sport: str = "nfl") -> d
                 for key, label, lo, hi in ZONES
                 if any(t["yl"] is not None and lo <= t["yl"] <= hi for t in every)]
     latest = out_games[0] if out_games else {}
-    meta = conn.execute("SELECT position, jersey FROM targets WHERE sport=? AND player=? AND season=? "
-                        "AND position != '' ORDER BY period DESC LIMIT 1", (sport, name, pick)).fetchone()
+    from .db import pinned
+    # His newest row of the season off his own index, not the league's season off the table's key (step AGO).
+    meta = pinned(conn, "SELECT position, jersey FROM targets{hint} WHERE sport=? AND player=? AND season=? "
+                        "AND position != '' ORDER BY period DESC LIMIT 1", "targets_player", (sport, name, pick)).fetchone()
     return {"player": name, "sport": sport, "air": sport == "nfl", "seasons": seasons, "season": pick,
             "routes": bool(charted), "team": latest.get("team", ""),
             "position": (meta[0] if meta else "") or "", "jersey": (meta[1] if meta else "") or "",

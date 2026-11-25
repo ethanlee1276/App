@@ -9883,6 +9883,15 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGO. The other charts read the player's own rows too** (step 983; 25 November; nothing to run). After the 16:31
+UTC update every role chart said where its time went, and it was what AGN fixes: the player's seasons took 11.3 s of
+Jahmyr Gibbs's 11.5, 10.3 s of Jeremiah Smith's 11.1, 23.0 s of Kucherov's 23.4 and 32.6 s of Soto's 34.3, while the
+whole server's own work in those seconds stayed between 1.4 and 4.2 s: the wait was the disk, walking every row the
+league has. Looking for the same shape elsewhere: the carry chart's read of a runner's carries, and the carry, route,
+passing and kicking charts' read of a player's position and number, were planned the same way (every play of the
+league's season, to find his). They now go by the player's own index too. The other leagues' chart reads were
+already right.
+
 **AGN. The role chart reads the player's own rows, not the league's** (step 982; 25 November; nothing to run).
 This is what made Kucherov's role chart take 22.6 s and Soto's 32.8 s. The chart asks the database for the
 player's seasons, then for one season's games in order, over a few kinds of numbers at once. Our database file has

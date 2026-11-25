@@ -863,6 +863,20 @@ def column_exists_or_raise(exc: sqlite3.OperationalError) -> None:
         raise exc
 
 
+def pinned(conn, sql: str, index: str, args=()):
+    """`sql` run with its ``{hint}`` as ``INDEXED BY index``; run without it on a file that has no such index.
+    Returns the cursor.
+
+    ONE PLAYER'S ROWS, NOT THE LEAGUE'S (steps AGN and AGO, 25 November 2026). This file carries no statistics for
+    SQLite to plan by, and a read of one player's season sorted by its games (ORDER BY period, ...) was planned off
+    the table's own key (sport, season, period, ...), which is in that order: every row of the league's season,
+    read to keep his. Pinned to the index that leads with the player, it reads his rows alone and sorts those."""
+    try:
+        return conn.execute(sql.format(hint=f" INDEXED BY {index}"), args)
+    except sqlite3.OperationalError:
+        return conn.execute(sql.format(hint=""), args)
+
+
 def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     path = Path(path)
     if str(path) != ":memory:":

@@ -155,10 +155,8 @@ def _pinned(conn, sql: str, index: str, args) -> list:
     of the league's season. Nikita Kucherov's role chart took 22.6 s on the live site and Juan Soto's 32.8 s. Off
     his own rows: on 2.6 million hockey rows here, 208 ms and 17 ms became 1 ms and under 1. A file without the index
     reads as before."""
-    try:
-        return conn.execute(sql.format(hint=f" INDEXED BY {index}"), args).fetchall()
-    except sqlite3.OperationalError:
-        return conn.execute(sql.format(hint=""), args).fetchall()
+    from .db import pinned
+    return pinned(conn, sql, index, args).fetchall()
 
 
 def _logged(conn, sport: str, name: str, season: int) -> list:

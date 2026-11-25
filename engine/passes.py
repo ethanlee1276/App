@@ -526,8 +526,10 @@ def chart(conn, player: str, season: int | None = None, sport: str = "nfl") -> d
                          "td": sum(1 for t in v if t["td"]), "int": sum(1 for t in v if t["int"])}
                         for k, v in to.items()), key=lambda x: (-x["tgt"], -x["yds"], x["to"]))[:8]
     latest = out_games[0] if out_games else {}
-    meta = conn.execute("SELECT position, jersey FROM passes WHERE sport=? AND player=? AND season=? "
-                        "AND position != '' ORDER BY period DESC LIMIT 1", (sport, name, pick)).fetchone()
+    from .db import pinned
+    # His newest row of the season off his own index, not the league's season off the table's key (step AGO).
+    meta = pinned(conn, "SELECT position, jersey FROM passes{hint} WHERE sport=? AND player=? AND season=? "
+                        "AND position != '' ORDER BY period DESC LIMIT 1", "passes_player", (sport, name, pick)).fetchone()
     line = _line(every)
     return {"player": name, "sport": sport, "seasons": seasons, "season": pick, "air": not college,
             "team": latest.get("team", ""), "position": (meta[0] if meta else "") or "",

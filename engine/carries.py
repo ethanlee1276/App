@@ -524,9 +524,10 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
     if not seasons:
         return {}
     pick = int(season) if season and int(season) in seasons else seasons[0]
-    cur = conn.execute(
-        "SELECT * FROM carries WHERE sport=? AND player=? AND season=? ORDER BY period, game_id",
-        (sport, name, pick))
+    from .db import pinned
+    # His season's carries off his own index, not the league's season off the table's key (step AGO).
+    cur = pinned(conn, "SELECT * FROM carries{hint} WHERE sport=? AND player=? AND season=? ORDER BY period, game_id",
+                 "carries_player", (sport, name, pick))
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     games: dict = {}
@@ -586,9 +587,8 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
         kinds = {"designed": _line([c for c in every if not c["sc"]]),
                  "scramble": _line([c for c in every if c["sc"]])}
     latest = out_games[0] if out_games else {}
-    meta = conn.execute(
-        "SELECT position, jersey FROM carries WHERE sport=? AND player=? AND season=? "
-        "AND position != '' ORDER BY period DESC LIMIT 1", (sport, name, pick)).fetchone()
+    meta = pinned(conn, "SELECT position, jersey FROM carries{hint} WHERE sport=? AND player=? AND season=? "
+                        "AND position != '' ORDER BY period DESC LIMIT 1", "carries_player", (sport, name, pick)).fetchone()
     return {
         "player": name, "sport": sport, "holes": holes, "seasons": seasons, "season": pick,
         "team": latest.get("team", ""), "position": (meta[0] if meta else "") or "",
