@@ -249,13 +249,17 @@ def test_the_server_serves_it_free_and_the_page_has_its_door():
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
     assert 'if parsed.path in ("/api/players/gamelog", "/api/players/gamelog/"):' in srv
     i = srv.index("def _players_gamelog(self, q):")
-    body = srv[i:srv.index("def _parlay_check(self, body: dict):", i)]
+    handler = srv[i:srv.index("def _parlay_check(self, body: dict):", i)]
+    # The log is made by _gamelog_made and kept as the page is since step AGV.
+    assert "body = _gamelog_made(sport, player, club, season)" in handler
+    i = srv.index("def _gamelog_made(")
+    body = srv[i:srv.index("def _gamelog_keep(", i)]
     assert ("gamelog.season_log(sport, name, int(season) if season.isdigit() else None,\n"
-            "                                     team=club or None) if name else {}") in body, \
+            "                             team=club or None) if name else {}") in body, \
         "his club where the page knows it (step AFF: a name two players share)"
     assert "name = _pp.stored_name(conn, sport, player)" in body, \
         "whose games these are, by the player page's own rule (a near name on another club is someone else)"
-    assert "_entitled" not in body, "a box score is a fact, free like his other logs"
+    assert "_entitled" not in body + handler, "a box score is a fact, free like his other logs"
     i = APP.index("function chartDoor(")
     door = APP[i:APP.index("\n}\n", i)]
     assert '<button class="btn gl-open" type="button" data-gl="${escapeAttr(player)}" data-lg="${lg}">Game log</button>' \
@@ -367,7 +371,7 @@ def test_the_sheet_wears_his_club_s_colours_his_face_and_each_opponent_s_mark():
     css = (ROOT / "web" / "css" / "gamelog.css").read_text(encoding="utf-8")
     assert "#gl-overlay.gl-club { background: var(--gl-wash); }" in css and ".gl-band {" in css and ".gl-pill {" in css
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
-    body = srv[srv.index("def _players_gamelog(self, q):"):srv.index("def _players_page(self, q):")]
+    body = srv[srv.index("def _gamelog_made("):srv.index("def _gamelog_keep(")]       # made there since step AGV
     assert 'out["headshot"] = row["headshot"]' in body, "the roster's photo rides on the log"
 
 if __name__ == "__main__":

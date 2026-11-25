@@ -1205,6 +1205,49 @@ def _player_page_made(sport: str, player: str, team: str, season: str, took=None
     return json.dumps(made or {}).encode()
 
 
+#: Game logs (Handler._players_gamelog), kept as the player pages are (step AGV), the oldest dropped past this many.
+_GAMELOGS: dict = {}
+GAMELOG_KEEP = 400
+
+
+def _gamelog_made(sport: str, player: str, club: str, season: str) -> bytes:
+    """One player's season log, encoded (engine/gamelog.season_log), with his roster photo."""
+    from engine import gamelog
+    # The page's own rule for whose games these are (engine/playerpage
+    # .stored_name): a near name on another club is someone else.
+    from engine import db as _hdb, playerpage as _pp
+    conn = _hdb.connect()
+    try:
+        name = _pp.stored_name(conn, sport, player)
+    finally:
+        conn.close()
+    out = gamelog.season_log(sport, name, int(season) if season.isdigit() else None,
+                             team=club or None) if name else {}
+    # HIS FACE ON THE LOG'S HEADER (LOGLOOK1, 2026-11-16; Ethan: "use team colors
+    # and headshots ... how like espn looks"): the roster's photo, as his page
+    # has it (engine/playerpage.roster_row); none is no face, never an error.
+    if out and out.get("player"):
+        try:
+            row = _pp.roster_row(sport, out["player"], str(out.get("team") or ""),
+                                 position=str(out.get("position") or ""))
+            if row.get("headshot"):
+                out["headshot"] = row["headshot"]
+        except Exception:                                # noqa: BLE001
+            pass
+    return json.dumps(out or {}).encode()
+
+
+def _gamelog_keep(key: tuple, body: bytes) -> None:
+    """A log kept with the stamp of its player's games (_player_games_stamp), the oldest out past GAMELOG_KEEP."""
+    stamp = _player_games_stamp(key[0], body)
+    if len(_GAMELOGS) >= GAMELOG_KEEP:
+        try:                          # the oldest out; another thread may be writing beside this one
+            _GAMELOGS.pop(next(iter(_GAMELOGS)), None)
+        except (StopIteration, RuntimeError):
+            pass
+    _GAMELOGS[key] = (time.time(), body, stamp)
+
+
 def _player_page_whole(body: bytes) -> bool:
     """An answer with its league places (or none to have): one built while its table was being built (step AFU)
     is sent but never kept, so the next ask, the page's own a few seconds on, finds the table."""
@@ -5065,32 +5108,25 @@ class Handler(BaseHTTPRequestHandler):
         club = (q.get("team") or [""])[0][:8].strip().upper()
         if sport not in gamelog.LAYOUTS:
             return self._send(400, b'{"error":"no game log for this sport"}', ".json")
+        # KEPT AS THE PAGE IS (step AGV, 25 November 2026; Ethan: "Ok keep going and work more on these issues as they
+        # are not fixed"). Every player page asks for its log beside its numbers, and the log was read again on every
+        # visit: 0.1 to 0.7 s of the server's time on the live site (Juan Soto's, a 162-game season, 0.67 s). Kept
+        # five minutes; past that, up to the hour while the player's games are the ones it was read from, answered at
+        # once and read again behind it; a box score of his since, and it is read before it answers.
+        key = (sport, player.lower(), club, season)
+        hit = _GAMELOGS.get(key)
+        if hit and time.time() - hit[0] < PLAYER_PAGE_TTL:
+            return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])
+        if hit and time.time() - hit[0] < PLAYER_PAGE_STALE_MAX and (
+                hit[2] is None or _player_games_stamp(sport, hit[2][0]) == hit[2]):
+            _behind(("gamelog", key), lambda: _gamelog_keep(key, _gamelog_made(sport, player, club, season)))
+            return self._send(200, hit[1], ".json", headers=[("Server-Timing", "stale;dur=0")])
         try:
-            # The page's own rule for whose games these are (engine/playerpage
-            # .stored_name): a near name on another club is someone else.
-            from engine import db as _hdb, playerpage as _pp
-            conn = _hdb.connect()
-            try:
-                name = _pp.stored_name(conn, sport, player)
-            finally:
-                conn.close()
-            out = gamelog.season_log(sport, name, int(season) if season.isdigit() else None,
-                                     team=club or None) if name else {}
+            body = _gamelog_made(sport, player, club, season)
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the game log could not be read"}', ".json")
-        # HIS FACE ON THE LOG'S HEADER (LOGLOOK1, 2026-11-16; Ethan: "use team colors
-        # and headshots ... how like espn looks"): the roster's photo, as his page
-        # has it (engine/playerpage.roster_row); none is no face, never an error.
-        if out and out.get("player"):
-            try:
-                from engine import playerpage
-                row = playerpage.roster_row(sport, out["player"], str(out.get("team") or ""),
-                                            position=str(out.get("position") or ""))
-                if row.get("headshot"):
-                    out["headshot"] = row["headshot"]
-            except Exception:                            # noqa: BLE001
-                pass
-        return self._send(200, json.dumps(out or {}).encode(), ".json")
+        _gamelog_keep(key, body)
+        return self._send(200, body, ".json")
 
     def _players_page(self, q):
         """One player's page (engine/playerpage): the roster's facts, his

@@ -9883,6 +9883,12 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGV. A player's game log is kept as his page is** (step 990; 25 November; nothing to run). Every player page
+asks for the player's game log alongside its numbers, and the log was read again from the database on every
+visit: 0.1 to 0.7 s of the server's own work on the live site (Juan Soto's 162-game season, 0.67 s). It is now kept
+the way the page is: five minutes; after that, up to an hour while the player has no new game, answered at once and
+re-read behind it; if a box score of his has landed since, it is re-read before it answers.
+
 **AGU. The sign-up screen's last build answers after an update** (step 989; 25 November; nothing to run). The
 sign-up screen's numbers (tonight's picks, last night, the record, the newest graded pick) lived only in the
 server's memory, so the first visitor after every update waited for a whole build of them: 4.4 s on the live site
