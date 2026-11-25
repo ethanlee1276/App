@@ -9968,8 +9968,13 @@ On the page itself, before it asked for the player's numbers it waited on things
 - **the record file**, downloaded twice when three of Home's sections asked for it at once. It's asked once now.
 
 One bug turned up while making this: two draws of the page asked for before its script arrived both ran when it did,
-and the second one threw an error, so the page never showed. That's fixed, and a test opens the page that way. I'll
-time his page again once this is live, the same way, and add what changed here.
+and the second one threw an error, so the page never showed. That's fixed, and a test opens the page that way.
+
+Timed again once AFK to AFQ were live (13:24 UTC, three loads at phone speed, the same tool): the header drew at 1.7
+to 2.0 s (before: 2.2 to 4.1 s), and his season's numbers at 2.25 and 2.26 s on the two loads the server had his
+page ready for (before: 2.31 and 2.38 s). The first load waited 3.7 s for the server to build the receivers' rank
+table after the restart and showed the numbers at 5.8 s (before: 8.3 s); since AFO that table is saved. These times
+include the tool's own delay in noticing a draw (0.6 s in the one load I checked), the same before and after.
 
 **AFJ. A college game report counts each game once** (step 952; 25 November; nothing to run). Follow-up to AFE.
 A game report quotes a player's form: his last games, his season's totals and how often he cleared a number ("6+
