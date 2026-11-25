@@ -9923,6 +9923,13 @@ alone and the seasons before come from their kept copies. The comps come out the
 (tested against the old whole-history read). On the test history this season's part read in 0.021 seconds where the
 whole history took 0.254. The first build after the deploy reads every season once to make the kept copies.
 
+**AEQ. The freshness check finds the newest day of stats in a few seeks** (step 933; 24 November). Nothing to run.
+Every daily league's board says how current its stats are (the banner when they fall behind). Its "player stats"
+date was one read over every one of the league's rows, and with no statistics SQLite walked a whole index for it:
+the "freshness" part of college basketball's build ran 20 to 26 seconds on game nights that evening. It now asks the
+newest two seasons directly, one seek each, and gives the same date (tested against the old read, including rows
+dated after today and rows filed under no season).
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 

@@ -110,6 +110,30 @@ DAILY_TABLES = {
 }
 
 
+def latest_log_day(conn, sport: str, day: str):
+    """`_LOGS`'s answer, the newest day on or before ``day`` with a player's row, in a few seeks (step AEQ, 24
+    November 2026). As one MAX over the sport, SQLite (no statistics on the box's file) walked every entry of the
+    (sport, player, season, period) index: college basketball's "freshness" part of the build ran 20 to 26 seconds
+    on game nights that evening. A day's rows sit in its season, so the newest two seasons are asked on the table's
+    own key (sport, season, period, ...), each one seek, with the rows filed under no season beside them."""
+    got = []
+    top = conn.execute("SELECT MAX(season) FROM player_game_logs WHERE sport=?", (sport,)).fetchone()[0]
+    for _ in range(2):
+        if top is None:
+            break
+        got.append(conn.execute("SELECT MAX(period) FROM player_game_logs WHERE sport=? AND season=? AND period<=?",
+                                (sport, top, day)).fetchone()[0])
+        top = conn.execute("SELECT MAX(season) FROM player_game_logs WHERE sport=? AND season<?",
+                           (sport, top)).fetchone()[0]
+    got.append(conn.execute("SELECT MAX(period) FROM player_game_logs WHERE sport=? AND season IS NULL AND period<=?",
+                            (sport, day)).fetchone()[0])
+    found = [g for g in got if g is not None]
+    if found and any(g is not None for g in got[:2]):
+        return max(found)
+    # Nothing in the newest two seasons on or before the day: the one read over the sport, as before.
+    return conn.execute(_LOGS, (sport, day)).fetchone()[0]
+
+
 def daily(conn, sport: str, today: datetime.date | None = None) -> dict:
     """{"season", "played": ISO date or None, "unit": "day", "tables", "behind"}
     — `football_weeks`'s answer for a league keyed by date.
@@ -128,7 +152,8 @@ def daily(conn, sport: str, today: datetime.date | None = None) -> dict:
     tables: dict = {}
     for name, q in DAILY_TABLES.get(sport, {}).items():
         try:
-            tables[name] = conn.execute(q, (sport, today.isoformat())).fetchone()[0]
+            tables[name] = (latest_log_day(conn, sport, today.isoformat()) if q is _LOGS
+                            else conn.execute(q, (sport, today.isoformat())).fetchone()[0])
         except Exception:                                    # noqa: BLE001
             tables[name] = None
     behind = [] if not played else [n for n, d in tables.items() if not d or str(d) < str(played)]
