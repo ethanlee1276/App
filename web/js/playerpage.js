@@ -63,6 +63,25 @@ function plrFetch(sport, player, team, season) {
   if (!PLR_ASK.has(key)) PLR_ASK.set(key, plrAsk(key, sport, player, team, season).finally(() => PLR_ASK.delete(key)));
   return PLR_ASK.get(key);
 }
+/* ITS LEAGUE PLACES, A FEW SECONDS ON (step AFU): a season whose league table the server has not built yet (an older
+   one, or the first page after an update) is answered without its places, the table built behind it
+   (engine/playerpage.rank_table), rather than after a wait: Cameron Boozer's college page took 29 s. The page asks
+   again at 3, 6, 12 and 24 s and redraws its season card once they are in. */
+function plrRanksLater(page, was, tries = 0) {
+  if (tries > 3) return;
+  setTimeout(() => {
+    if (!page.isConnected || !page._ask) return;
+    const { sport } = page._plr, { player, team } = page._ask;
+    const key = `${sport}|${player}|${team || ""}|`;
+    if (PLR_CACHE.get(key) === was) PLR_CACHE.delete(key);
+    plrFetch(sport, player, team).then((d) => {
+      if (!page.isConnected || !d || !d.player) return;
+      if (d.ranks_pending) return plrRanksLater(page, d, tries + 1);
+      const el = page.querySelector(".plr-season"), html = plrSeasonHTML(d);
+      if (el && html) el.innerHTML = html;
+    });
+  }, 3000 * 2 ** tries);
+}
 async function plrAsk(key, sport, player, team, season) {
   let body = null;
   try {
@@ -795,6 +814,7 @@ function renderPlayerPage(host, player, sport) {
     if (page.isConnected) window._plrFilledRoute = state.playerSlug;
     if (page.isConnected) plrFill(page, d);
     if (typeof chartsAfterPage === "function") chartsAfterPage();
+    if (d && d.ranks_pending && page.isConnected) plrRanksLater(page, d);
   };
   if (cached) fill(cached);
   else plrFetch(sport, player, team).then(fill);

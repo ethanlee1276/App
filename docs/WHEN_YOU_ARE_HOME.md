@@ -9883,6 +9883,18 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFU. A player's page never waits on a league table** (step 963; 25 November; nothing to run). Follow-up to
+AFO. Timing the other leagues' player pages on the live site: most answered in 0.1 to 0.7 s, but Cameron Boozer's
+college basketball page took 29.3 s, 28.7 s of it building college basketball's league table for 2025-26, the
+season his places are read from (his newest college season; 7.1 s of it was the server's own work, the rest waiting
+on the disk and its turn). The server builds each league's newest season at start and keeps the tables on disk
+(AFO), but an older season's table (a player who has left the league, or a past season picked in Splits) was built
+while the reader waited, and so was every table right after an update to the page's code, until the startup build
+got to it. Now the page answers at once without the places, the table is built behind it, and the page asks again
+at 3, 6, 12 and 24 s and fills them in. An answer without its places is never kept, so the next reader gets them.
+One more to watch: A'ja Wilson's WNBA page took 2.7 s, 2.6 s of it reading her games off the disk (0.1 s of the
+server's own work); Caitlin Clark's took 0.25 s right after.
+
 **AFT. A player's recent games are asked with his page** (step 962; 25 November; nothing to run). Follow-up to
 AFK. The Overview's Recent games card read the player's game log, which takes the server 12 to 18 ms, but the page
 asked for it only after its own numbers had arrived. Timed live on Amon-Ra St. Brown's page (three loads at phone

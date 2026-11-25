@@ -412,11 +412,20 @@ def _league_once_a_week(conn, sport: str, season: int, markets) -> dict:
     return out
 
 
-def rank_table(conn, sport: str, season: int, kind: str, db_path=None) -> dict:
+def rank_table(conn, sport: str, season: int, kind: str, db_path=None, wait: bool = True) -> dict | None:
     """{headline key: {player: place}} for one season and one kind of player.
     Kept, and rebuilt in the background once RANK_TTL old while the old one
     answers; built here only the first time (`warm` builds them at start).
-    A table missing from memory is read from disk first (`_ranks_load`)."""
+    A table missing from memory is read from disk first (`_ranks_load`).
+
+    NEVER BUILT WHILE A READER WAITS (step AFU, 25 November 2026; Ethan: "data
+    on the player page takes a long time to load"). `warm` builds each league's
+    newest season, so a page for an older one built its table on the reader's
+    ask: Cameron Boozer's college page (his newest season is 2025-26) took
+    29.3 s on the live site, 28.7 s of it the college table (7.1 s of the
+    server's own time, the rest the disk and its turn). With ``wait`` False
+    (the site's pages) a table neither kept nor on disk is built behind the
+    page and None comes back: the page answers without its places this once."""
     key = (sport, int(season), kind)
     hit = _RANKS.get(key)
     if not hit:
@@ -427,6 +436,9 @@ def rank_table(conn, sport: str, season: int, kind: str, db_path=None) -> dict:
         if time.time() - hit[0] >= RANK_TTL:
             _refresh_later(key, db_path)
         return hit[1]
+    if not wait:
+        _refresh_later(key, db_path)
+        return None
     table = _build_table(conn, sport, int(season), kind)
     _RANKS[key] = (time.time(), table)
     _ranks_save(_ranks_file(conn, key, db_path), _RANKS[key][0], table)
@@ -568,17 +580,21 @@ def warm(db_path=None, delay: float = 60.0) -> threading.Thread:
                     continue
                 for kind in kinds:
                     key = (sport, int(row[0]), kind)
-                    if key in _RANKS:
+                    # One build of a table at a time: one a page started behind it (step AFU) is left to finish.
+                    if key in _RANKS or key in _REFRESHING:
                         continue
                     kept = _ranks_load(_ranks_file(conn, key, path))       # kept on disk (step AFO)
                     if kept and time.time() - kept[0] < RANK_TTL:
                         _RANKS[key] = kept
                         continue
+                    _REFRESHING.add(key)
                     try:
                         _RANKS[key] = (time.time(), _build_table(conn, *key))
                         _ranks_save(_ranks_file(conn, key, path), *_RANKS[key])
                     except Exception:                     # noqa: BLE001 — that table is built on first ask
                         continue
+                    finally:
+                        _REFRESHING.discard(key)
         finally:
             conn.close()
     t = threading.Thread(target=run, name="playerpage-warm", daemon=True)
@@ -935,7 +951,8 @@ def _record(by_id: dict, team: str, through: str, sport: str = "") -> str:
     return f"{w}-{l}" + (f"-{t}" if t else "")
 
 
-def page(sport: str, player: str, team: str = "", season=None, db_path=None, data_dir=None, took=None) -> dict:
+def page(sport: str, player: str, team: str = "", season=None, db_path=None, data_dir=None, took=None,
+         wait_ranks: bool = True) -> dict:
     """Everything his page's menus show; ``{}`` for a league with no layout or
     a name neither the history file nor a roster knows.
 
@@ -1028,7 +1045,12 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         mark("games")
 
         # The headline, with the league's places.
-        places = rank_table(conn, sport, season, kind, db_path=path) if kind and conn is not None else {}
+        places = rank_table(conn, sport, season, kind, db_path=path, wait=wait_ranks) \
+            if kind and conn is not None else {}
+        if places is None:
+            # Its table is being built behind this answer (step AFU): no places this once, and said so, so the
+            # server keeps no copy of it and the page asks again for them (js/playerpage.js plrRanksLater).
+            places, out["ranks_pending"] = {}, True
         out["headline"] = [{"key": sp[0], "label": sp[1], "title": sp[2], "value": v,
                             "rank": (places.get(sp[0]) or {}).get(player) if sp[7] else None,
                             "per_game": sp[4], "low": sp[5]}

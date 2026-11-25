@@ -1193,9 +1193,16 @@ def _player_page_made(sport: str, player: str, team: str, season: str, took=None
         from engine.ufc import fighterpage
         made = fighterpage.page(player)
     else:
+        # Never waiting on a league table not built yet (step AFU): built behind, the page says "ranks_pending".
         made = playerpage.page(sport, player, team=team, season=int(season) if season.isdigit() else None,
-                               took=took)
+                               took=took, wait_ranks=False)
     return json.dumps(made or {}).encode()
+
+
+def _player_page_whole(body: bytes) -> bool:
+    """An answer with its league places (or none to have): one built while its table was being built (step AFU)
+    is sent but never kept, so the next ask, the page's own a few seconds on, finds the table."""
+    return b'"ranks_pending"' not in body
 
 
 def _player_page_keep(key: tuple, body: bytes, stamp=None) -> None:
@@ -1233,7 +1240,8 @@ def _player_games_stamp(sport: str, body_or_name) -> tuple | None:
 def _player_page_fresh(sport: str, player: str, team: str, season: str, key: tuple) -> None:
     """A page built anew and kept, with the stamp of its player's games read before it."""
     body = _player_page_made(sport, player, team, season)
-    _player_page_keep(key, body, _player_games_stamp(sport, body))
+    if _player_page_whole(body):                         # else the one kept answers until its table is in
+        _player_page_keep(key, body, _player_games_stamp(sport, body))
 
 
 def _firstlook_build() -> None:
@@ -5082,7 +5090,8 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the player page could not be read"}', ".json")
         took.append(("build", (time.perf_counter() - t0) * 1000.0))
-        _player_page_keep(key, body, _player_games_stamp(sport, body))
+        if _player_page_whole(body):
+            _player_page_keep(key, body, _player_games_stamp(sport, body))
         timing = ", ".join(f"{part};dur={ms:.0f}" for part, ms in took)
         return self._send(200, body, ".json", headers=[("Server-Timing", timing)])
 
