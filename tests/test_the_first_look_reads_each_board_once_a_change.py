@@ -85,7 +85,8 @@ def test_the_first_look_says_its_parts_and_is_rebuilt_every_five_minutes():
     assert [p for p, _ in took] == ["record", "night", "boards", "free", "last", "proof", "reports"], took
     assert all(ms >= 0 for _, ms in took) and "record" in out
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
-    assert "FIRSTLOOK_TTL_S = 300" in srv and "_FIRSTLOOK.update(at=time.time(), body=body, took=took)" in srv
+    # The build's time is also what is written to disk with it since step AGU.
+    assert "FIRSTLOOK_TTL_S = 300" in srv and "_FIRSTLOOK.update(at=at, body=body, took=took)" in srv
     fn = srv[srv.index("    def _firstlook(self"):srv.index("    def _record_lab(self")]
     assert 'headers=[("Server-Timing", parts)] if parts else None' in fn
 

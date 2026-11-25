@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGU. The sign-up screen's last build answers after an update** (step 989; 25 November; nothing to run). The
+sign-up screen's numbers (tonight's picks, last night, the record, the newest graded pick) lived only in the
+server's memory, so the first visitor after every update waited for a whole build of them: 4.4 s on the live site
+after the 17:1x UTC update. That's the first page a new visitor sees. Each build is now also saved
+(`data/cache/firstlook.json`); after a restart, one under half an hour old answers at once and a new one is built
+behind it.
+
 **AGT. A rewritten roster re-indexes its names from memory** (step 988; 25 November; nothing to run). Timing
 college pages after the 17:1x UTC update: Ryan Williams's took 7.8 s, 7.4 of it finding him on the roster. The
 college roster had just been rewritten with real changes, so the page re-indexed its 41,888 names while the search

@@ -1250,12 +1250,43 @@ def _player_page_fresh(sport: str, player: str, team: str, season: str, key: tup
         _player_page_keep(key, body, _player_games_stamp(sport, body))
 
 
+#: THE SIGN-UP SCREEN'S LAST BUILD SURVIVES A RESTART (step AGU, 25 November 2026; Ethan: "Ok keep going and work
+#: more on these issues as they are not fixed"). The first look lived only in memory, so the first visitor after
+#: every update waited for a whole build of it: 4.4 s on the live site after the 17:1x UTC update. Each build is also
+#: written here; with none in memory, one younger than FIRSTLOOK_STALE_MAX_S answers at once and a new one is built
+#: behind it, as a kept one past its time is.
+FIRSTLOOK_FILE = ROOT / "data" / "cache" / "firstlook.json"
+
+
 def _firstlook_build() -> None:
     from engine import firstlook
     took: list = []
     body = json.dumps(firstlook.build(WEB, took=took), separators=(",", ":")).encode()
     # The last build's parts, said on every answer (Handler._firstlook), as a player page says its own (step AFK).
-    _FIRSTLOOK.update(at=time.time(), body=body, took=took)
+    at = time.time()
+    _FIRSTLOOK.update(at=at, body=body, took=took)
+    try:
+        FIRSTLOOK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = FIRSTLOOK_FILE.with_name(FIRSTLOOK_FILE.name + f".{os.getpid()}.tmp")
+        tmp.write_bytes(json.dumps({"at": at, "body": body.decode("utf-8")}).encode())
+        os.replace(tmp, FIRSTLOOK_FILE)
+    except OSError:
+        pass                     # it still answers from memory; only the next restart builds it first
+
+
+def _firstlook_kept() -> bool:
+    """The build kept on disk, into memory, when it is young enough to answer (step AGU); False otherwise."""
+    try:
+        doc = json.loads(FIRSTLOOK_FILE.read_text(encoding="utf-8"))
+        at, body = float(doc["at"]), str(doc["body"]).encode("utf-8")
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    if time.time() - at > FIRSTLOOK_STALE_MAX_S or not body:
+        return False
+    _FIRSTLOOK.setdefault("body", body)
+    _FIRSTLOOK.setdefault("at", at)
+    _FIRSTLOOK.setdefault("took", [("disk", 0.0)])
+    return True
 
 class Handler(BaseHTTPRequestHandler):
     #: Seconds a socket may sit idle mid-request before the thread gives up
@@ -6869,6 +6900,8 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         """What the sign-up screen and the plans show of the members' side
         (engine/firstlook): tonight's counts, last night, the record and the
         newest graded pick. Public — every part of it already is."""
+        if _FIRSTLOOK.get("body") is None:
+            _firstlook_kept()                                # the last build, off the disk (step AGU)
         age = time.time() - _FIRSTLOOK.get("at", 0)
         if _FIRSTLOOK.get("body") is None or age > FIRSTLOOK_STALE_MAX_S:
             try:

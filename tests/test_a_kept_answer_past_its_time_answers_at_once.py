@@ -247,6 +247,8 @@ def test_the_first_look_past_its_minute_answers_now():
     keep = dict(server._FIRSTLOOK)
     server._FIRSTLOOK.clear()
     server._firstlook_build = build
+    # No build kept on disk from another run (step AGU): this one starts with nothing.
+    keep_file, server.FIRSTLOOK_FILE = server.FIRSTLOOK_FILE, Path(tempfile.mkdtemp()) / "firstlook.json"
     sent = []
     try:
         h = _handler(sent)
@@ -265,6 +267,61 @@ def test_the_first_look_past_its_minute_answers_now():
     finally:
         gate.set()
         server._firstlook_build = real
+        server.FIRSTLOOK_FILE = keep_file
+        server._FIRSTLOOK.clear()
+        server._FIRSTLOOK.update(keep)
+
+
+def test_the_first_looks_last_build_answers_after_a_restart():
+    """Step AGU: the first look lived in memory alone, and the first visitor after each update waited for a whole
+    build (4.4 s live after the 17:1x UTC update). Each build is written to disk; with none in memory, one younger than
+    FIRSTLOOK_STALE_MAX_S answers at once and a new one is built behind it."""
+    import server
+    real_build = server._firstlook_build
+    keep, keep_file = dict(server._FIRSTLOOK), server.FIRSTLOOK_FILE
+    server.FIRSTLOOK_FILE = Path(tempfile.mkdtemp()) / "cache" / "firstlook.json"
+    built, slow = [], threading.Event()
+
+    def stand_in(web, took=None):
+        built.append(1)
+        if len(built) == 2:
+            slow.wait(5)                                      # the build behind is slow; the reader never waits
+        return {"tonight": [], "n": len(built)}
+    try:
+        from engine import firstlook
+        real_fl = firstlook.build
+        firstlook.build = stand_in
+        try:
+            server._FIRSTLOOK.clear()
+            server._firstlook_build()                         # a build, as the server before the restart made it
+            assert server.FIRSTLOOK_FILE.exists() and json.loads(server._FIRSTLOOK["body"])["n"] == 1
+            server._FIRSTLOOK.clear()                         # the restart: memory gone, the disk not
+            sent = []
+            h = _handler(sent)
+            t0 = time.time()
+            h._firstlook()
+            assert json.loads(sent[-1][1])["n"] == 1 and time.time() - t0 < 1.0 and len(built) == 1, \
+                "the last build, at once, and no build in front of it"
+            doc = json.loads(server.FIRSTLOOK_FILE.read_text())
+            doc["at"] = time.time() - server.FIRSTLOOK_TTL_S - 5
+            server.FIRSTLOOK_FILE.write_text(json.dumps(doc))
+            server._FIRSTLOOK.clear()
+            h._firstlook()
+            assert json.loads(sent[-1][1])["n"] == 1, "past its five minutes it still answers at once..."
+            assert _until(lambda: len(built) == 2), "...and is built again behind it"
+            slow.set()
+            assert _until(lambda: not server._BEHIND), "the build behind it done, and on disk"
+            doc["at"] = time.time() - server.FIRSTLOOK_STALE_MAX_S - 5
+            server.FIRSTLOOK_FILE.write_text(json.dumps(doc))
+            server._FIRSTLOOK.clear()
+            h._firstlook()
+            assert len(built) == 3 and json.loads(sent[-1][1])["n"] == 3, "past half an hour: built first"
+        finally:
+            slow.set()
+            firstlook.build = real_fl
+    finally:
+        server._firstlook_build = real_build
+        server.FIRSTLOOK_FILE = keep_file
         server._FIRSTLOOK.clear()
         server._FIRSTLOOK.update(keep)
 
