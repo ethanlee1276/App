@@ -9901,6 +9901,9 @@ found (the examples are the tests' fixtures, not tonight's games):
   "TOR takes the second-most shots (33.2 a game), and BOS allows the sixth-most (31.5 a game)".
 - **Basketball injuries.** "Tyler Herro (MIA) — out, ankle" now says what goes missing: "— 34 minutes and 22.7
   points a game over the last 3" (in the test's fixture; his newest ten games at most, three at least).
+- **A card says his share once.** A breakout or fade card's role line says his share of the work, and the read's
+  own note said it again as the card's first bullet ("Commands 31% of the targets (10 a game)"). The note now
+  gives its place to the next one, the line on what the defense gives up to his position.
 - **Left as they are.** Baseball's "bullpen ranks 6th" has no number beside it, but the season is over; it is on
   the list for spring. Basketball's defense lines already carry their numbers.
 

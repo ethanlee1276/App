@@ -108,6 +108,11 @@ def card(r: dict, tone: str, *, pick: str = "", role: str = "", form=None) -> di
     con = [str(x) for x in r.get("con") or [] if x]
     mine, other = (pro, con) if tone == "up" else (con, pro)
     notes = [str(x) for x in r.get("notes") or [] if x]
+    if role:
+        # HIS SHARE ONCE (step AHR): the card's role line says it, so the read's own share note (engine/gamescan's
+        # ``role``) gives its place to the next one (what the defence gives up to his position).
+        said = {str(x) for x in r.get("role") or [] if x}
+        notes = [x for x in notes if x not in said]
     why = [_sentence(w) for w in mine[:REASONS_N] + notes[:NOTES_N]]
     if other:
         # The reason as the scan wrote it: its first word may be a name.

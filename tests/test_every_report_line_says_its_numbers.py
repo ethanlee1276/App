@@ -11,7 +11,8 @@ a rank or a word ("lately") with no number, was in other report sections. What h
   * a hockey goalie's form says the games it covers ("over the last 18 games", not "lately"), and his starts say of
     how many ("started 70% of the Bruins' last 10 games");
   * hockey's busy-night line says the shots a game beside the ranks;
-  * a basketball injury line says what the player puts up (minutes and points a game over the last ten).
+  * a basketball injury line says what the player puts up (minutes and points a game over the last ten);
+  * a breakout or fade card says his share once, on its role line, and the next note takes the place.
 
     python3 tests/test_every_report_line_says_its_numbers.py
 """
@@ -90,6 +91,21 @@ def test_a_basketball_injury_says_what_goes_missing():
     assert "Tyler Herro (MIA) — out, ankle — 34 minutes and 22.7 points a game over the last 3." in inj, inj
     from engine import leaguereport as L
     assert L._recent_line({"minutes": [30, 31]}) == {}, "two games say nothing"
+
+
+def test_a_card_says_his_share_once():
+    """The card's role line says his share; the read's own share note gives its place to the next note."""
+    from engine import breakouts as BO, gamescan as S
+    allowed = {"qb_pass_yds": {"pg": 198.0, "rank": 31, "of": 32, "games": 11},
+               "wr_rec_yds": {"pg": 111.0, "rank": 31, "of": 32, "games": 11}}
+    r = S.player_read("Puka Nacua", "LA", "GB", "WR", usage={"tgt_share": 0.31, "targets_pg": 10.0, "games": 11},
+                      ratings={}, room=None, scheme=None, split=None, tackling=None, line_out=None, mates_out=None,
+                      n_teams=32, allowed=allowed, points=22.0, line_words="", weather=None)
+    assert r["notes"][0] == r["role"][0] == "Commands 31% of the targets (10 a game)", r["notes"]
+    why = BO.card(r, "down", role="31% of the targets (10 a game)")["why"]
+    assert not any("Commands 31%" in w for w in why), why
+    assert any(w.startswith("Against wide receivers, GB allows 111 receiving yards") for w in why), why
+    assert any("Commands 31%" in w for w in BO.card(r, "down")["why"]), "no role line on the card: the note stays"
 
 
 if __name__ == "__main__":
