@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHK. A baseball hitter's page reads the season's starters once for everyone** (step 1003; 25 November;
+nothing to run). Each hitter's page read the season's every starting pitcher (about 4,900 rows) for its splits by
+the starter's hand, the same rows for every hitter: Juan Soto's "splits" part was 369 ms on the live site. They are
+read in one step now and kept ten minutes while no starter is added. A college page's season results (about 900
+games for the player's clubs and their opponents, 87 to 157 ms of a college basketball page) come back in one step
+too. To read after the update: a hitter's "splits" part and a college page's "results" part.
+
 **AHJ. Kept answers survive a restart** (step 1002; 25 November; nothing to run). A player's page, game log and
 market logs and a team's page are kept once built (steps AFM, AGV, AHB, AHA), but only in the server's memory, and
 every update restarts the server: the first visit to each after an update waited for a whole build (a hockey page's

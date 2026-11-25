@@ -579,7 +579,9 @@ def _results(conn, sport: str, season: int, clubs=None, ids=None) -> tuple[dict,
         sql += f" AND (home IN ({marks}) OR away IN ({marks})" + (
             f" OR game_id IN ({','.join('?' * len(known))}))" if known else ")")
         args += cl + cl + known
-    for r in conn.execute(sql, args):
+    # In one step of the database (step AHK): a college page's read returns about 900 games, and row by row each took
+    # the interpreter back past whatever else the server was doing.
+    for r in _db.rows_at_once(conn, sql, tuple(args), n=7):
         g = {"period": str(r[0]), "home": r[2], "away": r[3], "hs": r[4], "as": r[5], "date": r[6],
              "game_id": str(r[1]), "season": season}
         by_id[str(r[1])] = g

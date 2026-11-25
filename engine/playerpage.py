@@ -918,16 +918,41 @@ def _line(sport: str, groups, s: dict, gp: int, per_game: bool) -> dict:
             for k, _, cols in groups for c in cols}
 
 
+#: Each season's starters' hands, kept per database file (`starter_hands`): (when, the starters' highest rowid, hands).
+_HANDS: dict = {}
+#: How long a season's kept hands stand while no starter has been added (`starter_hands`).
+HANDS_TTL = 600.0
+
+
 def starter_hands(conn, season: int) -> dict:
     """``{(day, club): hand}``: the hand of each club's starter, a day at a
     time, for a season's MLB games. A club with two starters on a day (a
     doubleheader) is left out: which game a hitter's row is cannot be told
-    from the day alone."""
+    from the day alone.
+
+    KEPT, THE SAME FOR EVERY HITTER (step AHK, 25 November 2026; Ethan: "Ok keep going and work more on these issues
+    as they are not fixed"). Each hitter's page read the season's every starter (about 4,900 rows) for its splits by
+    the starter's hand: Juan Soto's "splits" part was 369 ms on the live site. Read in one step and kept ten minutes
+    per database file while no starter is added. Readers treat it as read-only: it is shared."""
+    path = ""
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str(row[2] or "") if row else ""
+        top = conn.execute("SELECT MAX(rowid) FROM game_starters").fetchone()[0] if path else None
+    except Exception:                                         # noqa: BLE001
+        path, top = "", None
+    key = (path, int(season))
+    hit = _HANDS.get(key) if path else None
+    if hit and hit[1] == top and time.time() - hit[0] < HANDS_TTL:
+        return hit[2]
     seen: dict = {}
-    for period, team, throws in conn.execute(
-            "SELECT period, team, throws FROM game_starters WHERE sport='mlb' AND season=?", (int(season),)):
+    for period, team, throws in _db.rows_at_once(
+            conn, "SELECT period, team, throws FROM game_starters WHERE sport='mlb' AND season=?", (int(season),), n=3):
         seen.setdefault((str(period)[:10], team), []).append(str(throws or "").upper()[:1])
-    return {k: v[0] for k, v in seen.items() if len(v) == 1 and v[0] in ("L", "R")}
+    hands = {k: v[0] for k, v in seen.items() if len(v) == 1 and v[0] in ("L", "R")}
+    if path:
+        _HANDS[key] = (time.time(), top, hands)
+    return hands
 
 
 def _date_of(sport: str, g: dict, res: dict | None) -> str:
