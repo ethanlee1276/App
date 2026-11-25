@@ -67,6 +67,8 @@ FITS = (
     ("engine.playerfit", "number", ("engine.projection",), "per-player memory, adopted market by market"),
     ("engine.defensefit", "number", ("engine.defensevs",), "how much of a defense's rating reaches one player (TRANSFER)"),
     ("engine.cfb.defensefit", "number", ("engine.defensevs",), "the college twin (TRANSFER_CFB)"),
+    ("positionfit", "card", ("engine.gamescan",),
+     "which defence number a catcher's read counts (step AHO): the overall one; his position's is said beside it"),
     ("engine.wxfit", "number", ("engine.weather",), "wind, cold and rain, measured 2016-2025"),
     ("engine.matefit", "number", ("engine.teammates",), "a teammate out at the same position (the lineup step)"),
     ("engine.qbfit", "number", ("engine.qbchange",), "a missing starting quarterback, for the team's receivers and backs"),

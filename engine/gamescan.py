@@ -1051,14 +1051,14 @@ def _allowed_line(allowed: dict | None, stat: str, opp: str, n_default: int = 32
 #: in each stat his bets are on, at any rank: yards, catches, touchdowns (a passer's yards, touchdowns and the
 #: interceptions it forces). (stat, words).
 #:
-#: SHOWN, AND COUNTED ONLY WHERE MEASURED. Re-measured that day on 2022-2025 (every receiver and tight end game from
-#: week 4 with three games before it and 15+ yards a game, 7,321 games; what he gained against his own average, by
-#: the defence's rank in the games before): the defence's passing yards overall, top quarter against bottom quarter,
-#: split them 103% / 93% of their usual yards (every season); the position's own number 103% / 94%; counting the
-#: position's softest or stingiest third too, as one vote with it, 102% / 94% (weaker in 2024, and wrong-way for
-#: receivers that year). Touchdowns allowed
-#: to receivers or tight ends split nothing. So the vote stays the overall number (defensevs.MODEL_STAT), and the
-#: position's numbers are said in full beside it, never as a reason.
+#: SHOWN, AND COUNTED ONLY WHERE MEASURED. Re-measured that day (`python3 positionfit.py`) on 2022-2025: every
+#: receiver and tight end game from week 4 with three games before it and 15+ yards a game, 7,321 games; what he
+#: gained against his own average, by the defence's rank in the games before. The defence's passing yards overall,
+#: top quarter against bottom quarter, split them 103% / 93% of their usual yards (every season); the position's own
+#: number 103% / 94%; counting the position's softest or stingiest third too, as one vote with it, 102% / 94%
+#: (weaker in 2024, and wrong-way for receivers that year). Touchdowns allowed to receivers or tight ends split
+#: nothing. So the vote stays the overall number (defensevs.MODEL_STAT), and the position's numbers are said in
+#: full beside it, never as a reason.
 POSITION_STATS = {
     "wr": (("wr_rec_yds", "receiving yards"), ("wr_rec", "catches"), ("wr_td", "touchdowns")),
     "te": (("te_rec_yds", "receiving yards"), ("te_rec", "catches"), ("te_td", "touchdowns")),
