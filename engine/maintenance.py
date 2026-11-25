@@ -2989,6 +2989,46 @@ def build_team_index(log=print, now: float | None = None, path=None, state_path=
         conn.close()
 
 
+#: THE COLLEGE COPIES, COUNTED (step AFG, 2026-11-25; engine/cfbdedupe.census): this season's, once a day by the
+#: chores after the night's college rows land, kept here and shown on the heartbeat (launch._cfb_copies_public).
+CFB_COPIES_STATE = ROOT / "data" / "cache" / "cfb_copies.json"
+
+
+def run_cfb_census(log=print, today: _dt.date | None = None, path=None, state_path=None) -> dict:
+    """Count this college season's stored copies of one game (engine/cfbdedupe.census) and keep the count. Writes
+    nothing to the history file; never raises. {} without the file or when the count failed."""
+    import time as _t
+    from . import cfbdedupe, db
+    today = today or _dt.date.today()
+    season = today.year if today.month >= 8 else today.year - 1
+    db_path = Path(path or db.DEFAULT_DB)
+    if not db_path.exists():
+        return {}
+    t0 = _t.monotonic()
+    try:
+        conn = db.connect(str(db_path))
+        try:
+            got = cfbdedupe.census(conn, season)
+        finally:
+            conn.close()
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  ⚠️  the college copies not counted ({type(exc).__name__}: {exc})")
+        return {}
+    doc = {"at": round(_t.time()), "season": season, "seconds": round(_t.monotonic() - t0, 1), **got}
+    _keep_index_state(Path(state_path or CFB_COPIES_STATE), doc)
+    log(f"  cfb copies: {got['games']:,} player-game(s) of {season} filed more than once, "
+        f"{got['copies']:,} extra row(s) (step AFG)")
+    return doc
+
+
+def _run_cfb_census(log, today) -> None:
+    """`run_cfb_census` in the chores, never in the suite's sandbox (`_run_push`'s rule)."""
+    from . import modelstate
+    if os.environ.get(modelstate.ENV_VAR):
+        return
+    run_cfb_census(log, today=today)
+
+
 def _run_team_index(log) -> None:
     """`build_team_index` in this cycle, never in the suite's sandbox (`_run_push`'s rule), never fatal."""
     from . import modelstate
@@ -3754,6 +3794,8 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                         log(f"  ⚠️  cfb rank fit skipped: {_rexc}")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  cfb player backfill failed: {exc}")
+        # THE COLLEGE COPIES, COUNTED, once the night's rows are in (step AFG).
+        _run_cfb_census(log, today)
 
         # Play-by-play refresh — the measured red-zone roles. The file is
         # ~100MB, so once a week (Tuesdays, after Monday night) is the

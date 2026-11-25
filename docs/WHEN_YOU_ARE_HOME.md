@@ -9883,6 +9883,15 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFG. The college copies are counted each night** (step 949; 25 November; nothing to run). Follow-up to AFE.
+The cards and the college model now read each college game once, but the stored copies are still there, and the board
+can't show which feed files them (it doesn't carry game ids). So each night, after the college rows land, the daily
+chores count this season's copies without removing any: how many player-games are stored more than once, each extra
+row by kind (same day and teams, a day apart, the opponent under another code, the player's school under another code,
+the other side) and by the shapes of the two ids (ESPN's number, a box-score copy, away@home), with two examples of
+each. The heartbeat carries it as `cfb_copies`. I'll read the first count tomorrow and fix the feed that's filing them,
+then extend the cleanup with a count first, as on 14 November.
+
 **AFF. Two players with one name: each card keeps its own player's games** (step 948; 25 November; nothing to run).
 The history file keeps games under a player's name, and the NFL has two Byron Youngs. On the live board his Tackles +
 Assists chart held weeks 6, 7 and 8 twice each, one game from each of them (against Carolina and Arizona, Dallas and

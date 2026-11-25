@@ -6379,6 +6379,19 @@ def _team_index_public() -> dict:
         return {}
 
 
+def _cfb_copies_public() -> dict:
+    """THE COLLEGE COPIES, COUNTED (engine/maintenance.run_cfb_census, step AFG): this season's player-games filed
+    more than once, by kind and by the two ids' shapes, with two examples a kind; {} before the first count. Never
+    fails."""
+    try:
+        from engine.maintenance import CFB_COPIES_STATE
+        doc = json.loads(CFB_COPIES_STATE.read_text())
+        return {k: doc[k] for k in ("at", "season", "seconds", "rows", "games", "copies", "kinds", "ids", "examples")
+                if k in doc}
+    except Exception:  # noqa: BLE001 — the heartbeat never fails for a side read
+        return {}
+
+
 def _write_heartbeat(interval: int, swept: str = "ran") -> None:
     """web/data/heartbeat.json — one small fact per cycle, never fatal."""
     try:
@@ -6456,6 +6469,9 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             # THE GAME LOGS' INDEX ON THE TEAM (step AES, 2026-11-25): built
             # once in the quiet hours; its last try's outcome.
             "team_index": _team_index_public(),
+            # THE COLLEGE COPIES, COUNTED (step AFG, 2026-11-25): what each stored
+            # copy of a college game is, and the ids it sits under, once a day.
+            "cfb_copies": _cfb_copies_public(),
         }))
         os.replace(tmp, p)
     except OSError:

@@ -197,6 +197,83 @@ def apply(conn, logs: dict, games: dict) -> int:
     return n
 
 
+#: WHAT THE COPIES ARE, COUNTED, NOT REMOVED (step AFG, 2026-11-25). On the live board
+#: on 25 November, 112 of 186 college market logs held a game twice, eleven days after
+#: this module's cleanup, and the reads merge them now (engine/gamelog.games_once).
+#: Which writer files them again is a question about game ids the board does not show,
+#: so the nightly chores count them by kind and by the two ids' shapes
+#: (`census`, maintenance.run_cfb_census), and the heartbeat carries the count.
+KINDS = ("same day, same teams", "a day apart, same teams", "the opponent under another code",
+         "his school under another code", "the other side", "other")
+#: Examples kept a kind.
+CENSUS_EXAMPLES = 2
+
+
+def _id_shape(gid) -> str:
+    """A game id's shape: a provisional copy, ESPN's number, away@home, or else."""
+    g = str(gid or "")
+    if g.endswith(BOX):
+        return "box"
+    if g.isdigit():
+        return "espn"
+    return "away@home" if "@" in g else "other"
+
+
+def copy_kind(head, row) -> str:
+    """How ``row`` copies ``head``, the earliest row of its game (`KINDS`)."""
+    if row["team"] == head["team"] and row["opponent"] == head["opponent"]:
+        return KINDS[0] if str(row["period"]) == str(head["period"]) else KINDS[1]
+    if row["team"] == head["team"]:
+        return KINDS[2]
+    if row["opponent"] == head["opponent"]:
+        return KINDS[3]
+    if row["team"] == head["opponent"] and row["opponent"] == head["team"]:
+        return KINDS[4]
+    return KINDS[5]
+
+
+def census(conn, season: int) -> dict:
+    """A season's stored copies, counted: {"rows": rows read, "games": player-games filed more than once,
+    "copies": rows beyond the first of their game, "kinds": {kind: rows}, "ids": {kind: {"espn+box": rows}},
+    "examples": {kind: ["player, market, day: ids"]}}. Writes nothing. Copies are found as `plan_logs` finds
+    them, a day or less apart, but within one player's market whatever the teams (`copy_kind`)."""
+    q = ("SELECT period, game_id, player, team, opponent, market FROM player_game_logs "
+         "WHERE sport='cfb' AND season=? ORDER BY market, player, period")
+    out = {"rows": 0, "games": 0, "copies": 0, "kinds": {}, "ids": {}, "examples": {}}
+    games: set = set()
+    key, buf = None, []
+
+    def flush():
+        for group in clusters(buf):
+            if len(group) < 2:
+                continue
+            head = group[0]
+            games.add((head["player"], str(head["period"])))
+            for r in group[1:]:
+                kind = copy_kind(head, r)
+                shape = "+".join(sorted((_id_shape(head["game_id"]), _id_shape(r["game_id"]))))
+                out["copies"] += 1
+                out["kinds"][kind] = out["kinds"].get(kind, 0) + 1
+                ids = out["ids"].setdefault(kind, {})
+                ids[shape] = ids.get(shape, 0) + 1
+                ex = out["examples"].setdefault(kind, [])
+                if len(ex) < CENSUS_EXAMPLES:
+                    ex.append(f"{head['player']}, {head['market']}, {head['period']}: {head['game_id']} "
+                              f"({head['team']} v {head['opponent']}) and {r['game_id']} on {r['period']} "
+                              f"({r['team']} v {r['opponent']})")
+
+    for r in conn.execute(q, (int(season),)):
+        out["rows"] += 1
+        k = (r["market"], r["player"])
+        if k != key:
+            flush()
+            key, buf = k, []
+        buf.append(r)
+    flush()
+    out["games"] = len(games)
+    return out
+
+
 def seasons_of(conn) -> list:
     return [int(r[0]) for r in conn.execute(
         "SELECT DISTINCT season FROM player_game_logs WHERE sport='cfb' AND season IS NOT NULL "
