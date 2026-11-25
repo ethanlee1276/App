@@ -9883,6 +9883,15 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AES. An index on the team for the game logs, built once at 4 AM** (step 935; 25 November). Nothing to run. The
+basketball boards read their games' players by team, and nothing in the history file was indexed by team, so each
+build looked through every row of two college seasons (about 2.2 million) to keep ten teams': 17 to 62 seconds of
+each college basketball build that evening. A new index on (league, team, season, date) lets that read go straight
+to the teams' rows. Building it on the box's file takes minutes and blocks writes to the history while it runs, so
+it is never built by a build: the cycle builds it once between 4 and 6 AM Eastern, when nothing is played, if the
+disk has 3 GB free (it had 10.4). If a try does not build, the next try waits a day. The heartbeat's `team_index`
+says how it went and how long it took.
+
 **AER. Eight college basketball games a pull, priced at what the feed bills** (step 934; 25 November). Nothing to
 run. Decision A, done: college basketball now buys player prices for 8 games a pull (the ranked and power-conference
 games first), not 5. Each game is priced at what the feed has billed for one over the last week, rounded up (10 a

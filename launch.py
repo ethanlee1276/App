@@ -6368,6 +6368,17 @@ def _odds_bill_public() -> dict:
     return v
 
 
+def _team_index_public() -> dict:
+    """THE GAME LOGS' INDEX ON THE TEAM (engine/maintenance.build_team_index, step AES): its last try's outcome
+    ({"result", "seconds", "tried", "free_gb"}, or {"result", "error"}), {} before any try. Never fails."""
+    try:
+        from engine.maintenance import TEAM_INDEX_STATE
+        doc = json.loads(TEAM_INDEX_STATE.read_text())
+        return {k: doc[k] for k in ("result", "seconds", "tried", "free_gb", "error") if k in doc}
+    except Exception:  # noqa: BLE001 — the heartbeat never fails for a side read
+        return {}
+
+
 def _write_heartbeat(interval: int, swept: str = "ran") -> None:
     """web/data/heartbeat.json — one small fact per cycle, never fatal."""
     try:
@@ -6442,6 +6453,9 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             # WHAT ONE GAME REALLY COSTS, BY LEAGUE (step AEM, 2026-11-24): the
             # API's own bill for the last day's game-by-game calls, counts only.
             "odds_bill": _odds_bill_public(),
+            # THE GAME LOGS' INDEX ON THE TEAM (step AES, 2026-11-25): built
+            # once in the quiet hours; its last try's outcome.
+            "team_index": _team_index_public(),
         }))
         os.replace(tmp, p)
     except OSError:

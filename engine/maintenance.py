@@ -2894,6 +2894,94 @@ def game_rank_boot_due(store: dict, state: dict, today: _dt.date,
     return tried.get(sport) != today.isoformat()
 
 
+#: THE GAME LOGS' INDEX ON THE TEAM, BUILT ONCE (step AES, 25 November 2026; engine/db.TEAM_INDEX). In these hours,
+#: Eastern, when nothing is played, with this much disk free; a try that did not build waits TEAM_INDEX_RETRY_S
+#: before the next. Its outcome is kept in TEAM_INDEX_STATE, which the heartbeat shows (launch._team_index_public).
+TEAM_INDEX_HOURS = (4, 5)
+TEAM_INDEX_FREE_GB = 3.0
+TEAM_INDEX_RETRY_S = 20 * 3600
+TEAM_INDEX_STATE = ROOT / "data" / "cache" / "team_index.json"
+
+
+def _eastern_hour(now: float) -> int:
+    try:
+        from zoneinfo import ZoneInfo
+        return _dt.datetime.fromtimestamp(now, ZoneInfo("America/New_York")).hour
+    except Exception:                                         # noqa: BLE001
+        return _dt.datetime.fromtimestamp(now, _dt.timezone(_dt.timedelta(hours=-5))).hour
+
+
+def _keep_index_state(path: Path, doc: dict) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(doc))
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def build_team_index(log=print, now: float | None = None, path=None, state_path=None,
+                     hours=TEAM_INDEX_HOURS, free_gb: float | None = None) -> str:
+    """Build engine/db.TEAM_INDEX once, in the quiet hours. "there" when it exists; "not now" outside the hours or
+    inside a retry's wait; "no room" short of disk; "built", its seconds logged and kept; "failed", the error logged
+    and kept; "no history" without the file. Never raises. Asked every cycle: before the hours it is one look at the
+    file's schema."""
+    import sqlite3
+    import time as _t
+    from . import db
+    now = _t.time() if now is None else float(now)
+    state_path = Path(state_path or TEAM_INDEX_STATE)
+    db_path = Path(path or db.DEFAULT_DB)
+    if not db_path.exists():
+        return "no history"
+    try:
+        # A plain connection: never the schema's, which a first connect runs.
+        conn = sqlite3.connect(str(db_path), timeout=60)
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  ⚠️  the game logs' index on the team not looked at ({type(exc).__name__}: {exc})")
+        return "failed"
+    try:
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE type='index' AND name=?", (db.TEAM_INDEX,)).fetchone():
+            return "there"
+        if _eastern_hour(now) not in hours:
+            return "not now"
+        if now - float(_read_state(state_path).get("tried") or 0) < TEAM_INDEX_RETRY_S:
+            return "not now"
+        free = (_free_bytes(db_path.parent) / 1e9) if free_gb is None else float(free_gb)
+        if free < TEAM_INDEX_FREE_GB:
+            _keep_index_state(state_path, {"tried": now, "result": "no room", "free_gb": round(free, 1)})
+            log(f"  history: the game logs' index on the team waits for disk ({free:.1f} GB free, "
+                f"{TEAM_INDEX_FREE_GB:.0f} GB wanted)")
+            return "no room"
+        _keep_index_state(state_path, {"tried": now, "result": "building"})
+        t0 = _t.monotonic()
+        conn.execute(db.TEAM_INDEX_SQL)
+        conn.commit()
+        secs = round(_t.monotonic() - t0, 1)
+        _keep_index_state(state_path, {"tried": now, "result": "built", "seconds": secs, "free_gb": round(free, 1)})
+        log(f"  history: the game logs' index on the team built in {secs:.0f}s (step AES)")
+        return "built"
+    except Exception as exc:                                  # noqa: BLE001
+        _keep_index_state(state_path, {"tried": now, "result": "failed",
+                                       "error": f"{type(exc).__name__}: {exc}"[:200]})
+        log(f"  ⚠️  the game logs' index on the team not built ({type(exc).__name__}: {exc})")
+        return "failed"
+    finally:
+        conn.close()
+
+
+def _run_team_index(log) -> None:
+    """`build_team_index` in this cycle, never in the suite's sandbox (`_run_push`'s rule), never fatal."""
+    from . import modelstate
+    if os.environ.get(modelstate.ENV_VAR):
+        return
+    try:
+        build_team_index(log)
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  ⚠️  the game logs' index on the team skipped: {exc}")
+
+
 def run_if_due(force: bool = False, harvest: bool = True, log=print,
                state_path: Path | None = None, today: _dt.date | None = None) -> bool:
     """Run the daily chores if they haven't run yet today.
@@ -2930,6 +3018,9 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     # And the phones' alerts, every cycle (throttled inside to one look in
     # five minutes): a board's picks going up, last night graded.
     _run_push(log)
+    # And the game logs' index on the team, once, in the hours nothing is
+    # played (step AES): before then, one look at the file's schema.
+    _run_team_index(log)
     state = _load_state(state_path)
     if not force and state.get("last_done") == today.isoformat():
         # The day's chores are done, and they read the charts' plays; a

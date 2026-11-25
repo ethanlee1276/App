@@ -839,6 +839,17 @@ def mark_schema(conn, path, done: dict = None) -> None:
         pass                           # unremembered simply means "redo it"
 
 
+#: THE GAME LOGS BY TEAM (step AES, 25 November 2026). A basketball board reads its games' players by team
+#: (nba_build.player_history: ``team IN (...)`` over two seasons), and no index of player_game_logs holds the team, so
+#: the read looked up every row of both seasons to keep its teams': college basketball's took 17 to 62 seconds of a
+#: game-night build on 24 November, about 2.2 million rows for ten teams. This index holds (sport, team, season,
+#: period). It is NOT in SCHEMA: building it on the box's file takes minutes and holds the history's write lock, too
+#: long for whatever connection meets it first, a build under its ten-minute limit among them. The night's chores
+#: build it once, in the hours nothing is played (engine/maintenance.build_team_index).
+TEAM_INDEX = "idx_logs_team"
+TEAM_INDEX_SQL = f"CREATE INDEX IF NOT EXISTS {TEAM_INDEX} ON player_game_logs (sport, team, season, period)"
+
+
 def column_exists_or_raise(exc: sqlite3.OperationalError) -> None:
     """The one error an `ALTER TABLE ... ADD COLUMN` probe may swallow.
 
