@@ -280,7 +280,8 @@ def test_the_night_reads_them_and_a_command_reads_them_all():
 
 def test_the_page_endpoint_answers_for_a_fighter():
     assert 'if sport not in playerpage.SPORTS and sport != "ufc":' in SERVER
-    assert "from engine.ufc import fighterpage\n                made = fighterpage.page(player)" in SERVER
+    assert "from engine.ufc import fighterpage\n        made = fighterpage.page(player)" in SERVER, \
+        "server._player_page_made (step AFM)"
 
 
 def test_the_page_is_the_player_pages_frame_with_a_fighters_menus():

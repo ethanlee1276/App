@@ -9883,6 +9883,14 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFM. A kept answer past its time answers at once** (step 955; 25 November; nothing to run). Follow-up to AFK.
+The server keeps each player's page for five minutes, each chart for fifteen and the sign-up screen's numbers for
+one, and the first reader after that waited for a whole rebuild. Today Amon-Ra St. Brown's page once took 4.4 s,
+his role chart 7.5 s (three other players' took 0.7 to 0.8 s) and the sign-up numbers 2.5 s. Now a kept answer past
+its time is sent at once and rebuilt in the background for the next reader, as long as it's under an hour old (the
+sign-up numbers: ten minutes). Older than that, the reader waits for a fresh one, so nothing shown is hours old. A
+player's first page of the day still waits for its build; the timing line from AFL will say where that time goes.
+
 **AFL. Every answer says where its time went** (step 954; 25 November; nothing to run). Follow-up to AFK. The
 web server shares one process with the build loop's settling and chores and the watchers (the builds themselves
 already run as separate processes at a lower priority), and only one of the process's threads runs at a time. So a

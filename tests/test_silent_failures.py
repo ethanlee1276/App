@@ -233,6 +233,11 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # day, so the first failure in a process prints "mail log not
         # written (<error>)" to the service's log, which no quiet day does.
         "note_send",
+        # A KEPT CHART REBUILT BEHIND ITS ANSWER (engine/charts._behind, step AFM, 2026-11-25), caught by this
+        # sweep the hour it was written: None either way, and a failure leaves the kept chart answering, which
+        # looks like a chart nothing changed in; so the first failure in a process prints "a chart not rebuilt
+        # behind its kept answer (<error>)" into the service's log, which no quiet day does.
+        "_behind",
         # THE KEPT GAME-LOG READS' NOTES (engine/logcache._note, 2026-11-09),
         # caught by this sweep the hour it was written, the shape of the mail
         # log: a lost note must never cost the read it describes, and the

@@ -19,6 +19,7 @@ has a row yet — the charts being filled is not the same as none for him.
 from __future__ import annotations
 
 import json
+import sys
 import threading
 import time
 from collections import OrderedDict
@@ -201,6 +202,10 @@ def answer(conn, kind: str, sport: str, player: str, season: int | None = None,
 # --- the answers, kept ------------------------------------------------------------
 #: A built chart is kept this long, as the bytes the endpoint sends.
 ANSWER_TTL = 15 * 60
+#: ...and past that, up to this long after it was built, it ANSWERS AT ONCE and is rebuilt behind it (step AFM,
+#: 25 November 2026): Amon-Ra St. Brown's role chart, asked a while after it was kept, took 7.5 s to answer, where
+#: the kept one answers in a dictionary lookup. Older than this, the reader waits for a fresh one.
+ANSWER_STALE_MAX = 60 * 60
 #: ...and the kept answers stay under this many bytes, oldest read out first.
 ANSWER_CAP = 32 * 1024 * 1024
 _KEPT: "OrderedDict[tuple, tuple]" = OrderedDict()
@@ -230,34 +235,69 @@ def answer_json(db_path, kind: str, sport: str, player: str, season: int | None 
     database is opened only when a build is needed."""
     told = kind in TOLD_OPP
     key = (str(db_path), kind, sport, player, season, opp if told else "", fam if told else "")
+    args = (db_path, kind, sport, player, season, opp, fam)
     mine = False
     for _ in range(2):
         with _LOCK:
             hit = _KEPT.get(key)
-            if hit and time.time() < hit[0]:
+            now = time.time()
+            if hit and now < hit[0]:
                 _KEPT.move_to_end(key)
                 return hit[1]
             ev = _BUILDING.get(key)
+            # Past its fifteen minutes, not past the hour: answered now, rebuilt behind it (one build at a time).
+            if hit and now < hit[0] - ANSWER_TTL + ANSWER_STALE_MAX:
+                _KEPT.move_to_end(key)
+                if ev is None:
+                    _BUILDING[key] = threading.Event()
+                    threading.Thread(target=_behind, args=(key, args), daemon=True, name="chart-behind").start()
+                return hit[1]
             if ev is None:
                 ev = _BUILDING[key] = threading.Event()
                 mine = True
                 break
         ev.wait(60)
     try:
-        from . import db as _db
-        conn = _db.connect(str(db_path))
-        try:
-            out = answer(conn, kind, sport, player, season, opp=opp, fam=fam)
-        finally:
-            conn.close()
-        body = json.dumps(out).encode()
-        if out and not out.get("filling"):
-            _keep(key, body)
-        return body
+        return _built(key, *args)
     finally:
         if mine:
             with _LOCK:
                 _BUILDING.pop(key, None)
+            ev.set()
+
+
+def _built(key: tuple, db_path, kind, sport, player, season, opp, fam) -> bytes:
+    """One answer built from the database, kept when it is a chart."""
+    from . import db as _db
+    conn = _db.connect(str(db_path))
+    try:
+        out = answer(conn, kind, sport, player, season, opp=opp, fam=fam)
+    finally:
+        conn.close()
+    body = json.dumps(out).encode()
+    if out and not out.get("filling"):
+        _keep(key, body)
+    return body
+
+
+_BEHIND_SAID = [False]
+
+
+def _behind(key: tuple, args: tuple) -> None:
+    """A kept answer rebuilt in the background. A failure leaves the kept one answering until the hour is up,
+    which looks like a chart nothing changed in; so the first failure in a process says so, once, in the
+    service's log (as engine/playerpage._rebuild_ranks does)."""
+    try:
+        _built(key, *args)
+    except Exception as exc:                              # noqa: BLE001 — the kept answer stands meanwhile
+        if not _BEHIND_SAID[0]:
+            _BEHIND_SAID[0] = True
+            print(f"⚠️  a chart not rebuilt behind its kept answer ({key[1]}, {key[2]}: {type(exc).__name__}: "
+                  f"{exc}): the kept one answers until it is an hour old", file=sys.stderr)
+    finally:
+        with _LOCK:
+            ev = _BUILDING.pop(key, None)
+        if ev is not None:
             ev.set()
 
 

@@ -1151,6 +1151,65 @@ FIRSTLOOK_TTL_S = 60
 _PLAYER_PAGES: dict = {}
 PLAYER_PAGE_TTL = 300
 PLAYER_PAGE_KEEP = 400
+#: KEPT PAST ITS TIME, IT ANSWERS AT ONCE AND IS REBUILT BEHIND IT (step AFM, 25 November 2026; Ethan: "data on
+#: the player page takes a long time to load"). A player's page asked six minutes after it was kept waited for a
+#: whole build (Amon-Ra St. Brown's took 4.4 s once), and the sign-up screen's first look 2.5 s once a minute. Up
+#: to these ages the kept answer is sent and one build in the background replaces it; older, the reader waits for
+#: a fresh one, so a page never shows what is hours old.
+PLAYER_PAGE_STALE_MAX = 3600
+FIRSTLOOK_STALE_MAX_S = 600
+_BEHIND: set = set()
+_BEHIND_LOCK = threading.Lock()
+_BEHIND_SAID = [False]
+
+
+def _behind(key, build) -> bool:
+    """`build()` once in the background for `key`; False when one is already running."""
+    with _BEHIND_LOCK:
+        if key in _BEHIND:
+            return False
+        _BEHIND.add(key)
+
+    def run():
+        try:
+            build()
+        except Exception as exc:                         # noqa: BLE001 — the kept answer stands meanwhile
+            # ...which looks like a page nothing changed on, so the first failure in a process says so, once.
+            if not _BEHIND_SAID[0]:
+                _BEHIND_SAID[0] = True
+                print(f"⚠️  an answer not rebuilt behind its kept copy ({key[0]}: {type(exc).__name__}: {exc}): "
+                      "the kept one answers until it is too old, then the reader waits for a build", file=sys.stderr)
+        finally:
+            with _BEHIND_LOCK:
+                _BEHIND.discard(key)
+    threading.Thread(target=run, daemon=True, name="answer-behind").start()
+    return True
+
+
+def _player_page_made(sport: str, player: str, team: str, season: str, took=None) -> bytes:
+    """One player's page, encoded: engine/playerpage, or a fighter's engine/ufc/fighterpage."""
+    from engine import playerpage
+    if sport == "ufc":
+        from engine.ufc import fighterpage
+        made = fighterpage.page(player)
+    else:
+        made = playerpage.page(sport, player, team=team, season=int(season) if season.isdigit() else None,
+                               took=took)
+    return json.dumps(made or {}).encode()
+
+
+def _player_page_keep(key: tuple, body: bytes) -> None:
+    if len(_PLAYER_PAGES) >= PLAYER_PAGE_KEEP:
+        try:                          # the oldest out; another thread may be writing beside this one
+            _PLAYER_PAGES.pop(next(iter(_PLAYER_PAGES)), None)
+        except (StopIteration, RuntimeError):
+            pass
+    _PLAYER_PAGES[key] = (time.time(), body)
+
+
+def _firstlook_build() -> None:
+    from engine import firstlook
+    _FIRSTLOOK.update(at=time.time(), body=json.dumps(firstlook.build(WEB), separators=(",", ":")).encode())
 
 class Handler(BaseHTTPRequestHandler):
     #: Seconds a socket may sit idle mid-request before the thread gives up
@@ -4981,25 +5040,18 @@ class Handler(BaseHTTPRequestHandler):
         # and numbers only; the page ignores it. (_send adds the answer's own "all" and "cpu", step AFL.)
         if hit and time.time() - hit[0] < PLAYER_PAGE_TTL:
             return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])
+        # Past its five minutes, not past the hour: sent now, rebuilt behind it (step AFM), and said so ("stale").
+        if hit and time.time() - hit[0] < PLAYER_PAGE_STALE_MAX:
+            _behind(("player", key), lambda: _player_page_keep(key, _player_page_made(sport, player, team, season)))
+            return self._send(200, hit[1], ".json", headers=[("Server-Timing", "stale;dur=0")])
         took: list = []
         t0 = time.perf_counter()
         try:
-            if sport == "ufc":
-                from engine.ufc import fighterpage
-                made = fighterpage.page(player)
-            else:
-                made = playerpage.page(sport, player, team=team, season=int(season) if season.isdigit() else None,
-                                       took=took)
-            body = json.dumps(made or {}).encode()
+            body = _player_page_made(sport, player, team, season, took=took)
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the player page could not be read"}', ".json")
         took.append(("build", (time.perf_counter() - t0) * 1000.0))
-        if len(_PLAYER_PAGES) >= PLAYER_PAGE_KEEP:
-            try:                          # the oldest out; another thread may be writing beside this one
-                _PLAYER_PAGES.pop(next(iter(_PLAYER_PAGES)), None)
-            except (StopIteration, RuntimeError):
-                pass
-        _PLAYER_PAGES[key] = (time.time(), body)
+        _player_page_keep(key, body)
         timing = ", ".join(f"{part};dur={ms:.0f}" for part, ms in took)
         return self._send(200, body, ".json", headers=[("Server-Timing", timing)])
 
@@ -6748,14 +6800,14 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         """What the sign-up screen and the plans show of the members' side
         (engine/firstlook): tonight's counts, last night, the record and the
         newest graded pick. Public — every part of it already is."""
-        now = time.time()
-        if _FIRSTLOOK.get("body") is None or now - _FIRSTLOOK.get("at", 0) > FIRSTLOOK_TTL_S:
-            from engine import firstlook
+        age = time.time() - _FIRSTLOOK.get("at", 0)
+        if _FIRSTLOOK.get("body") is None or age > FIRSTLOOK_STALE_MAX_S:
             try:
-                _FIRSTLOOK.update(at=now, body=json.dumps(firstlook.build(WEB),
-                                                          separators=(",", ":")).encode())
+                _firstlook_build()
             except Exception:                                # noqa: BLE001
                 return self._send(503, b'{"error":"unavailable"}', ".json")
+        elif age > FIRSTLOOK_TTL_S:
+            _behind("firstlook", _firstlook_build)          # sent now, rebuilt behind it (step AFM)
         return self._send(200, _FIRSTLOOK["body"], ".json")
 
     def _record_lab(self):

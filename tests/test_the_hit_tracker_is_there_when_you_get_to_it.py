@@ -111,16 +111,20 @@ def test_a_built_chart_is_kept_and_built_once():
         finally:
             shutil.rmtree(d2, ignore_errors=True)
         assert len(built) == 5
-        # Fifteen minutes, then built again.
+        # Fifteen minutes, then built again: behind the kept one, which answers meanwhile (step AFM).
         keep = CH.ANSWER_TTL
         CH.ANSWER_TTL = -1
         try:
-            CH.answer_json(path, "spray", "mlb", "Juan Soto")
-            CH.answer_json(path, "spray", "mlb", "Juan Soto")
+            first = CH.answer_json(path, "spray", "mlb", "Juan Soto")
+            assert CH.answer_json(path, "spray", "mlb", "Juan Soto") == first
+            for _ in range(50):
+                if len(built) >= 7:
+                    break
+                time.sleep(0.05)
         finally:
             CH.ANSWER_TTL = keep
         assert [b[1] for b in built[5:]] == ["Juan Soto", "Juan Soto"]
-        assert CH.ANSWER_TTL == 15 * 60
+        assert CH.ANSWER_TTL == 15 * 60 and CH.ANSWER_STALE_MAX == 60 * 60
     finally:
         CH.answer = real
         CH.forget()

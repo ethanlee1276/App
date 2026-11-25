@@ -139,7 +139,9 @@ def test_the_endpoint_is_public_and_kept_a_minute():
     assert 'if parsed.path in ("/api/firstlook", "/api/firstlook/"):' in SERVER
     fn = SERVER[SERVER.index("    def _firstlook(self"):SERVER.index("    def _record_lab(self")]
     assert "_account" not in fn and "_entitled" not in fn, "nothing in it is anyone's"
-    assert "now - _FIRSTLOOK.get(\"at\", 0) > FIRSTLOOK_TTL_S" in fn and "FIRSTLOOK_TTL_S = 60" in SERVER
+    assert "elif age > FIRSTLOOK_TTL_S:" in fn and "FIRSTLOOK_TTL_S = 60" in SERVER
+    # Past its minute it is sent at once and rebuilt behind it (step AFM, 25 November 2026); past ten, rebuilt first.
+    assert '_behind("firstlook", _firstlook_build)' in fn and "FIRSTLOOK_STALE_MAX_S = 600" in SERVER
 
 
 # --- the wall in the page ----------------------------------------------------------

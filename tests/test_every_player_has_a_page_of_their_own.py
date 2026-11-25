@@ -404,7 +404,9 @@ def test_the_server_serves_it_free_and_the_players_page_becomes_it():
     assert 'if parsed.path in ("/api/players/page", "/api/players/page/"):' in srv
     i = srv.index("def _players_page(self, q):")
     body = srv[i:srv.index("\n    def ", i + 10)]
-    assert "playerpage.page(sport, player, team=team," in body and "_entitled" not in body, "facts, free"
+    made = srv[srv.index("def _player_page_made("):srv.index("\ndef ", srv.index("def _player_page_made(") + 10)]
+    assert "playerpage.page(sport, player, team=team," in made and "_entitled" not in body + made, "facts, free"
+    assert "body = _player_page_made(sport, player, team, season, took=took)" in body
     assert 'return self._send(400, b\'{"error":"no player page for this sport"}\', ".json")' in body
     assert "PLAYER_PAGE_TTL = 300" in srv and "PLAYER_PAGE_KEEP = 400" in srv
     assert ('function renderPlayerPage(...a) { return roomCall(renderPlayerPage, "renderPlayerPage", '
