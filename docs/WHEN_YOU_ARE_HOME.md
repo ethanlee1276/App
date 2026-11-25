@@ -9883,6 +9883,15 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGL. A basketball shot chart reads the league's zones off their index** (step 980; 25 November; nothing to
+run). A shot chart sets each zone beside the league's percentage there, and read it by every shot's kind, which
+meant going to each row of the season (a college season is hundreds of thousands of shots) for every chart built.
+A college basketball shot chart took 4.0 s on the live site, and this is the one read in it that covers the whole
+season; the rest read the player's own shots and games. Only a field goal has a zone, so the shots with one
+are the field goals, and the index on (season, zone, made) answers alone with the same numbers: on 715,000 college
+shots here, 378 ms the old way and 55 ms the new. The league's zones are also kept half an hour, and the matchup's
+zones by defense read their own index the same way.
+
 **AGK. Every answer says whether it waited behind other work or on the disk** (step 979; 25 November; nothing to
 run). Each answer from the server already said its time (`all`) and its own processor time (`cpu`): Kucherov's role
 chart 22.6 s with 2.5 s of its own. The other 20 s is either a wait behind other work in the same process (one

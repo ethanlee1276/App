@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import math
 import re
+import time
 
 FIELD_GOALS = ("2pt", "3pt")
 FREE_THROW = "freethrow"
@@ -650,15 +651,39 @@ def _splits(rows: list, key, order=None) -> list:
     return out
 
 
+#: The league's zone percentages, per database file, table and season, and when they were read (step AGL).
+_LEAGUE: dict = {}
+LEAGUE_TTL = 30 * 60
+
+
 def _league(conn, season: int, league: str = "nba") -> dict:
     """The league's field-goal percentage in each zone that season, from
-    every stored shot."""
+    every stored shot.
+
+    OFF THE INDEX ALONE, AND KEPT HALF AN HOUR (step AGL, 25 November 2026; Ethan: "Ok keep going and work more on
+    these issues as they are not fixed"). Read by each shot's kind, this went to every row of the season, a college
+    season's hundreds of thousands, for every shot chart built (a college basketball shot chart took 4.0 s on the
+    live site, and this is its one read of the whole season). Only a field goal has a zone (a free throw's is "", as is a game's empty marker's), so the shots with
+    one are the field goals, and the (season, zone, made) index answers alone: on 715,000 college shots here, 378 ms
+    read by kind and 55 ms off the index, the same numbers. Kept half an hour per database file (never for one in
+    memory, which a test opens fresh): a night's games move them a little."""
+    table = table_of(league)
+    try:
+        path = str(conn.execute("PRAGMA database_list").fetchone()[2] or "")
+    except Exception:                                              # noqa: BLE001
+        path = ""
+    key = (path, table, int(season))
+    hit = _LEAGUE.get(key) if path else None
+    if hit and time.time() - hit[0] < LEAGUE_TTL:
+        return dict(hit[1])
     out = {}
-    for z, n, m in conn.execute(f"SELECT zone, COUNT(*), SUM(made) FROM {table_of(league)} WHERE season=? "
-                                "AND kind IN ('2pt', '3pt') GROUP BY zone", (int(season),)):
+    for z, n, m in conn.execute(f"SELECT zone, COUNT(*), SUM(made) FROM {table} WHERE season=? AND zone != '' "
+                                "GROUP BY zone", (int(season),)):
         if z and n:
             out[z] = round((m or 0) / n, 3)
-    return out
+    if path:
+        _LEAGUE[key] = (time.time(), out)
+    return dict(out)
 
 
 #: The box-score stats drawn beside a game's shots, off the player logs.

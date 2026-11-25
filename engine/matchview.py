@@ -258,9 +258,11 @@ def _nba(conn, season: int, league: str = "nba") -> dict:
 
     def build():
         out: dict = {}
+        # Only a field goal has a zone, so the (season, opponent, zone, made) index answers alone, without a read of
+        # every shot's row for its kind (step AGL, engine/nba/shots._league).
         for opp, zone, n, made in conn.execute(
                 f"SELECT opponent, zone, COUNT(*), SUM(made) FROM {table_of(league)} WHERE season=? "
-                "AND kind IN ('2pt', '3pt') GROUP BY opponent, zone", (season,)):
+                "AND zone != '' GROUP BY opponent, zone", (season,)):
             _add(out, opp, zone, n, float(made or 0))
         return out
     return _memo(conn, (league, season), build)
