@@ -1062,9 +1062,12 @@ def _allowed_line(allowed: dict | None, stat: str, opp: str, n_default: int = 32
 POSITION_STATS = {
     "wr": (("wr_rec_yds", "receiving yards"), ("wr_rec", "catches"), ("wr_td", "touchdowns")),
     "te": (("te_rec_yds", "receiving yards"), ("te_rec", "catches"), ("te_td", "touchdowns")),
-    "rb": (("rb_rush_yds", "rushing yards"), ("rb_rec", "catches"), ("rb_rec_yds", "receiving yards"),
-           ("rb_td", "touchdowns")),
-    "qb": (("qb_pass_yds", "passing yards"), ("qb_pass_td", "passing touchdowns"), ("qb_pass_int", "interceptions")),
+    "rb": (("rb_rush_yds", "rushing yards"), ("rb_rush_att", "carries"), ("rb_rec", "catches"),
+           ("rb_rec_yds", "receiving yards"), ("rb_td", "touchdowns")),
+    # A passer's: his yards, completions and attempts (each a market the board prices), touchdowns and the
+    # interceptions the defence forces. His legs have their own line (_ground_line).
+    "qb": (("qb_pass_yds", "passing yards"), ("qb_pass_cmp", "completions"), ("qb_pass_att", "pass attempts"),
+           ("qb_pass_td", "passing touchdowns"), ("qb_pass_int", "interceptions")),
 }
 POSITION_PLURAL = {"wr": "wide receivers", "te": "tight ends", "rb": "running backs", "qb": "quarterbacks"}
 
@@ -1101,6 +1104,16 @@ def position_line(group: str, allowed: dict | None, opp: str, n_default: int = 3
         n = int(r.get("of") or n_default)
         games = games or r.get("games")
         num = f"{pg:.1f}" if pg < 10 else f"{pg:.0f}"
+        if group == "rb" and stat == "rb_rush_att":
+            # The carries beside the yards: what a back gains a carry against this defence.
+            yds = ((allowed or {}).get("rb_rush_yds") or {}).get("pg")
+            ypc = f"{yds / pg:.1f} yards a carry; " if isinstance(yds, (int, float)) and pg > 0 else ""
+            if allows and allows[-1][0] == "rb_rush_yds":
+                allows[-1] = ("rb_rush_yds", f"{allows[-1][1]} on {num} carries ({ypc}{_place(int(rank), n)} in "
+                                             f"carries)")
+            else:
+                allows.append((stat, f"{num} carries ({ypc}{_place(int(rank), n)})"))
+            continue
         if group == "rb" and stat == "rb_rec_yds" and allows and allows[-1][0] == "rb_rec":
             allows[-1] = ("rb_rec", allows[-1][1].replace(" catches (", f" catches for {num} yards (", 1)
                           .replace(")", f"; {_place(int(rank), n)} in yards)", 1))
@@ -1119,7 +1132,9 @@ def position_line(group: str, allowed: dict | None, opp: str, n_default: int = 3
     if forces:
         said.append(f"forces {join(forces)}")
     over = f", over {games} games" if games else ""
-    return f"Against {POSITION_PLURAL.get(group, group)}, {opp} {' and '.join(said)} a game — of {n} defenses{over}"
+    # "allows A, B and C, and forces D": the comma keeps the two "and"s apart.
+    both = ", and " if len(allows) > 1 and forces else " and "
+    return f"Against {POSITION_PLURAL.get(group, group)}, {opp} {both.join(said)} a game — of {n} defenses{over}"
 
 
 #: The words for engine/defensevs.STATS, as a sentence says them.

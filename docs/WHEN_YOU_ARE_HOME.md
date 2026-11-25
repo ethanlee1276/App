@@ -9903,8 +9903,9 @@ tight-end numbers when they sat in the league's top or bottom quarter, so a midd
   cards, Breakout candidates and Fades), says first among its notes what the defense gives up a game to his
   position, in every stat his bets are on, each with its rank, at any rank: "Against tight ends, LA allows 47
   receiving yards (the 15th-fewest), 4.6 catches (the 15th-most) and 0.1 touchdowns (the second-fewest) a game — of
-  32 defenses, over 11 games". A back's says his catches, receiving yards and touchdowns; a passer's, his
-  touchdowns and the interceptions the defense forces. A stat already given as a reason is left out and the line
+  32 defenses, over 11 games". A back's says his rushing yards on the carries allowed (and the yards a carry), his
+  catches, receiving yards and touchdowns; a passer's, his yards, completions, attempts, touchdowns and the
+  interceptions the defense forces. A stat already given as a reason is left out and the line
   says "also". The reason itself now says which number it is: "LA gives up the second-fewest passing yards overall".
 - **Why the verdict still counts the overall number.** Before deciding whether the position's numbers should also
   count, I measured it (new `python3 positionfit.py`; 2022-2025, 7,321 receiver and tight end games from week 4,

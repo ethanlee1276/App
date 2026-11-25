@@ -79,6 +79,17 @@ def test_receivers_backs_and_passers_get_their_own_line():
     assert love["notes"][0] == ("Against quarterbacks, LA also allows 1.1 passing touchdowns (the 4th-fewest) and "
                                 "forces 0.9 interceptions (the 10th-most) a game — of 32 defenses, over 11 games")
     assert love["notes"][0].count("a game") == 1
+    # Every stat his bets are on: a back's carries (and what he gains a carry), a passer's completions and attempts.
+    more = dict(LA, rb_rush_att=_row(23.6, 21), qb_pass_cmp=_row(21.0, 21), qb_pass_att=_row(33.2, 24))
+    assert S.position_line("rb", more, "LA").startswith(
+        "Against running backs, LA allows 88 rushing yards (the 8th-fewest) on 24 carries (3.7 yards a carry; the "
+        "12th-fewest in carries), 3.9 catches for 30 yards"), S.position_line("rb", more, "LA")
+    assert S.position_line("rb", more, "LA", skip={"rb_rush_yds"}).startswith(
+        "Against running backs, LA also allows 24 carries (3.7 yards a carry; the 12th-fewest), 3.9 catches")
+    assert S.position_line("qb", more, "LA", skip={"qb_pass_yds"}) == (
+        "Against quarterbacks, LA also allows 21 completions (the 12th-fewest), 33 pass attempts (the 9th-fewest) and "
+        "1.1 passing touchdowns (the 4th-fewest), and forces 0.9 interceptions (the 10th-most) a game — of 32 "
+        "defenses, over 11 games")
 
 
 def test_the_line_reads_any_rank_and_nothing_without_ratings():
