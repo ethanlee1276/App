@@ -9883,6 +9883,11 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFY. A chart switch names what it counts** (step 967; 25 November; nothing to run). A player's chart switch
+reads each chart's name and its count ("Targets 97", "Shots 356"). Aaron Judge's read "Hits 285" over a season of 57
+hits: the hit tracker counts plate appearances, and a goalie's save map counts the shots faced, not the saves. Those
+two switches now read "At the plate 285" and "Shots faced"; every other chart's name already was its count.
+
 **AFX. A basketball season's pills say "a game"** (step 966; 25 November; nothing to run). Jalen Brunson's
 season card read "17 games · 2 turnovers" under his 26.5 points: basketball's season line is a game's average, and
 the pills under the four numbers let through only whole numbers, so his 2.0 turnovers a game read like two all

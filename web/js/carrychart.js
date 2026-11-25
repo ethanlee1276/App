@@ -108,7 +108,10 @@
     passes: { chip: "Passes", title: "Passing chart", noun: "throws", one: "throw", where: "where the throws go",
               dist: "Throw distribution", all: "All throws",
               sec: "every throw: how far, which side, complete or not, and the sacks taken" },
-    spray: { chip: "Hits", title: "Hit tracker", noun: "plate appearances", one: "plate appearance",
+    /* A SWITCH'S COUNT IS WHAT ITS LABEL SAYS (step AFY): the switch reads a chart's name and its count, and the
+       hit tracker's count is plate appearances, so Aaron Judge's read "Hits 285" with 57 hits; a goalie's save map
+       counts the shots faced. `tab`, where set, is the switch's label; `chip` stays the eyebrow's word. */
+    spray: { chip: "Hits", tab: "At the plate", title: "Hit tracker", noun: "plate appearances", one: "plate appearance",
              where: "where the balls land", dist: "Hit distribution", all: "All balls",
              sec: "every ball put in play: how hard, how high, how far and where it landed" },
     pitches: { chip: "Pitches", title: "Pitch chart", noun: "pitches", one: "pitch", where: "the plan of attack",
@@ -120,7 +123,7 @@
     shotmap: { chip: "Shots", title: "Shot map", noun: "shot attempts", one: "shot attempt", where: "where the shots come from",
                dist: "Shot distribution", all: "All shots",
                sec: "every shot taken: where from, on goal, missed or blocked, and the goals" },
-    saves: { chip: "Saves", title: "Save map", noun: "shots faced", one: "shot faced", where: "where the goals go in",
+    saves: { chip: "Saves", tab: "Shots faced", title: "Save map", noun: "shots faced", one: "shot faced", where: "where the goals go in",
              dist: "Shots faced", all: "All shots",
              sec: "every shot on goal faced: where from, saved or scored" },
     role: { chip: "Role", title: "Role chart", noun: "games", one: "number", where: "role this season",
@@ -2338,13 +2341,15 @@
   }
   //: The charts whose zones the matchup view reads tonight's opponent on.
   const MATCHED = new Set(["carries", "routes", "passes", "shots", "shotmap", "saves", "spray", "pitches"]);
+  //: The switch's word for a chart: what its count counts (KIND `tab`), else its chip.
+  const tabOf = (k) => kindOf(k, S.sport).tab || kindOf(k, S.sport).chip;
   function kindBar() {
     const pend = (C && C.pend) || [];
     if (!C || !C.kinds || C.kinds.length + pend.length < 2) return "";
     const n = C.counts || {};
     return `<div class="cc-kinds" role="group" aria-label="Which chart">${C.kinds.map((k) =>
-      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${esc(kindOf(k, S.sport).chip)}${k === "matchup" ? `<small>vs ${esc(S.opp || "")}</small>` : n[k] ? `<small>${n[k]}</small>` : ""}</button>`).join("")}${pend.map((k) =>
-      `<span class="cc-chip cc-pend" aria-hidden="true">${esc(kindOf(k, S.sport).chip)}</span>`).join("")}</div>`;
+      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${esc(tabOf(k))}${k === "matchup" ? `<small>vs ${esc(S.opp || "")}</small>` : n[k] ? `<small>${n[k]}</small>` : ""}</button>`).join("")}${pend.map((k) =>
+      `<span class="cc-chip cc-pend" aria-hidden="true">${esc(tabOf(k))}</span>`).join("")}</div>`;
   }
   //: What a chart shows, in a line: the pick page's section heading, the overlay's line under his name.
   function descOf(kind, sport) {
