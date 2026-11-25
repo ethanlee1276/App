@@ -9892,7 +9892,8 @@ a player with no verdict word read "D'Andre Swift =  —"; the "=" now goes only
 said a goalie "has saved 4.2 goals more than expected" where its In net section said "has stopped 4.2 more goals
 than expected lately"; it now uses the In net words. A starter's or goalie's card marked "Tough matchup" listed his
 strengths first and the reasons for its own label under "Against:"; it now leads with those reasons and puts his
-strengths under "In favor:".
+strengths under "In favor:". A basketball report's "Blowout watch" was worded one way in its facts and another in
+its short version; both now say the same sentence.
 
 **AEV. One expected score per report** (step 938; 25 November). Nothing to run. A report's short version rounded
 the score the lines expect to whole points, while the verdict and the market section used a decimal: one college

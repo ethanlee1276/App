@@ -105,6 +105,12 @@ def _reads(c: Ctx, *, pos=None, not_pos=None) -> list:
 ARTICLES = ("A ", "An ", "The ")
 
 
+#: A basketball game with a spread of 10 or more, in one sentence wherever a report says it (the facts and the
+#: short version said it in two ways, 25 November 2026).
+BLOWOUT_WATCH = ("Blowout watch: with a spread of 10 or more, the starters' minutes are the first thing a coach "
+                 "takes back if it turns lopsided")
+
+
 def _lower_first(x: str) -> str:
     """A reason as the middle of a sentence: its first letter small, unless
     the first word is a code or a name in capitals ("PHI rarely ...")."""
@@ -786,8 +792,7 @@ def nba_facts(c: Ctx) -> dict | None:
         items.append(teams_only)
     claims = [None] * len(items)
     if any("blowout" in (_spot(c, t).get("flags") or []) for t in c.teams):
-        items.append("Blowout watch: a spread of 10 or more — starters' minutes are the first thing a "
-                     "coach takes back in a lopsided game")
+        items.append(BLOWOUT_WATCH)
         # What a finished game checks it by (engine/reportfacts): the margin.
         claims.append({"kind": "blowout"})
     block = _claimed_list(list(zip(items, claims)))
@@ -1018,8 +1023,7 @@ def nba_short(c: Ctx, built: dict) -> dict | None:
                                                                   for r in brk[:3])))
     items += _shine_short(c, [r for r in c.reads if r.get("read") != "breakout"])
     if any("blowout" in (_spot(c, t).get("flags") or []) for t in c.teams):
-        items.append("Blowout watch: with a spread of 10 or more, the starters' minutes are the first thing "
-                     "a coach takes back if it turns lopsided.")
+        items.append(BLOWOUT_WATCH + ".")
     par = parlay_sentence(c)
     if par:
         items.append(par)
