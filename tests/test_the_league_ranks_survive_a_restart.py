@@ -9,7 +9,7 @@ the box is after the boards are rebuilt. Now:
   * each table built is written beside the history file (cache/ranks/<league>_<season>_<kind>.json), with when it
     was built and a stamp of the code that built it (engine/playerpage.py and engine/gamelog.py);
   * a table missing from memory is read from there; past RANK_TTL (six hours) it answers while a new one is built,
-    as a kept one always has; a file written by other code is not read;
+    as a kept one always has; so does one written by other code (step AGE), built over behind it;
   * `warm` takes a fresh file instead of building, and `forget_ranks` drops the files with the tables.
 
 Offline. Run directly: `python3 tests/test_the_league_ranks_survive_a_restart.py`
@@ -73,7 +73,7 @@ def test_a_table_built_is_kept_on_disk_and_read_back_after_a_restart():
     PP._RANKS.clear()
 
 
-def test_an_old_file_answers_while_a_new_table_is_built_and_other_codes_file_is_not_read():
+def test_an_old_file_answers_while_a_new_table_is_built_and_so_does_other_codes():
     path = _history()
     PP._RANKS.clear()
     os.makedirs(os.path.dirname(_file(path)), exist_ok=True)
@@ -92,15 +92,22 @@ def test_an_old_file_answers_while_a_new_table_is_built_and_other_codes_file_is_
         time.sleep(0.02)
     assert PP._RANKS[key][1]["yds"]["Jared Goff"] == 1, "and a new one replaces it"
     assert json.loads(Path(_file(path)).read_text(encoding="utf-8"))["table"]["yds"]["Jared Goff"] == 1
-    # A file another version of the code wrote is built over, never read.
+    # A file another version of the code wrote answers too, as an old one: at once, and built over behind it
+    # (step AGE; until then it was never read, so every update emptied every league's places for a while).
     PP._RANKS.clear()
     Path(_file(path)).write_text(json.dumps({"built": time.time(), "code": "elsewhere", "table": old}),
                                  encoding="utf-8")
     conn = db.connect(path)
     try:
-        assert PP.rank_table(conn, "nfl", 2026, "passing", db_path=path)["yds"]["Jared Goff"] == 1
+        assert PP.rank_table(conn, "nfl", 2026, "passing", db_path=path, wait=False) == old
     finally:
         conn.close()
+    for _ in range(300):
+        if key not in PP._REFRESHING and PP._RANKS[key][1] != old:
+            break
+        time.sleep(0.02)
+    assert PP._RANKS[key][1]["yds"]["Jared Goff"] == 1, "and the new code's replaces it"
+    assert json.loads(Path(_file(path)).read_text(encoding="utf-8"))["code"] == PP._RANKS_CODE
     PP._RANKS.clear()
 
 
@@ -117,6 +124,19 @@ def test_warm_takes_a_fresh_file_and_forget_drops_the_files():
     finally:
         PP._build_table = real
     assert ("nfl", 2026, "passing") in PP._RANKS and "passing" not in calls, calls
+    # Warm puts another code's file in first, so pages answer with it, then builds it again (step AGE).
+    PP._RANKS.clear()
+    doc = json.loads(Path(_file(path)).read_text(encoding="utf-8"))
+    Path(_file(path)).write_text(json.dumps(dict(doc, code="elsewhere")), encoding="utf-8")
+    seen = []
+    PP._build_table = lambda conn, sport, season, kind: (
+        seen.append((kind, ("nfl", 2026, "passing") in PP._RANKS)), real(conn, sport, season, kind))[1]
+    try:
+        PP.warm(db_path=path, delay=0).join(timeout=60)
+    finally:
+        PP._build_table = real
+    assert ("passing", True) in seen, "answering with the old one while it built the new"
+    assert json.loads(Path(_file(path)).read_text(encoding="utf-8"))["code"] == PP._RANKS_CODE
     assert PP.forget_ranks("nfl", db_path=path) >= 1
     assert not [f for f in os.listdir(os.path.dirname(_file(path))) if f.startswith("nfl_")], "the files go too"
     PP._RANKS.clear()

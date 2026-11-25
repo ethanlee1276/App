@@ -9883,6 +9883,12 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGE. An update no longer empties the league places** (step 973; 25 November; nothing to run). The saved league
+tables (AFO) carry a stamp of the code that built them, the whole of engine/playerpage.py and engine/gamelog.py, so
+every update to either threw every table away, and each league's places were missing from its pages until it was
+built again: Cameron Boozer's came in 42 s after the 14:48 update. A table the code before an update built now
+answers at once, as an old one, and the new code's is built behind it, as happens to any table six hours old.
+
 **AGD. A player's page reads only the games it looks up, and a game filed under another code reads from his
 side** (step 972; 25 November; nothing to run). Watching Cameron Boozer's page answer while its places were built,
 80 to 350 ms of each of its answers was one read: every game of college basketball's season (about 6,000), to find

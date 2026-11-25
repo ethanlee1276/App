@@ -498,7 +498,13 @@ def _ranks_save(path: str, built: float, table: dict) -> None:
 
 
 def _ranks_load(path: str):
-    """``(built, table)`` kept on disk by this code, or None."""
+    """``(built, table)`` kept on disk, or None.
+
+    ONE THE CODE BEFORE AN UPDATE BUILT ANSWERS TOO, AS AN OLD ONE (step AGE, 25 November 2026): the stamp covers
+    this whole file and engine/gamelog.py, so every update to either threw every kept table away, and each league's
+    places were missing from its pages until it was built again (Cameron Boozer's, 42 s after the 14:48 update). A
+    table another version of the code built comes back as built at 0, past RANK_TTL: it answers at once and a new one
+    is built behind it, as any old table is."""
     if not path or not os.path.exists(path):
         return None
     try:
@@ -506,9 +512,9 @@ def _ranks_load(path: str):
             doc = json.load(fh)
     except (OSError, ValueError):
         return None
-    if not isinstance(doc, dict) or doc.get("code") != _RANKS_CODE or not isinstance(doc.get("table"), dict):
+    if not isinstance(doc, dict) or not isinstance(doc.get("table"), dict):
         return None
-    return float(doc.get("built") or 0.0), doc["table"]
+    return (float(doc.get("built") or 0.0) if doc.get("code") == _RANKS_CODE else 0.0), doc["table"]
 
 
 def _refresh_later(key: tuple, db_path=None) -> threading.Thread | None:
@@ -584,9 +590,10 @@ def warm(db_path=None, delay: float = 60.0) -> threading.Thread:
                     if key in _RANKS or key in _REFRESHING:
                         continue
                     kept = _ranks_load(_ranks_file(conn, key, path))       # kept on disk (step AFO)
-                    if kept and time.time() - kept[0] < RANK_TTL:
-                        _RANKS[key] = kept
-                        continue
+                    if kept:
+                        _RANKS[key] = kept                 # answers now, however old (step AGE)
+                        if time.time() - kept[0] < RANK_TTL:
+                            continue
                     _REFRESHING.add(key)
                     try:
                         _RANKS[key] = (time.time(), _build_table(conn, *key))
