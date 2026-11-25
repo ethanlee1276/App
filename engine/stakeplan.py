@@ -119,7 +119,7 @@ MARKET_BENCH = ({"sport": "nfl", "market": "pass_cmp", "since": "2026-11-18", "w
                 # November), the rule Ethan set for its two sister markets: the NFL's carries. Its Edge picks 40-46,
                 # -6.7 units (11% lost on the stake); over 544 same-day picks in every book it said 58.8% and hit
                 # 50.2% (engine/losspatterns, p = 0.00003), its overs said 57.6% and hit 47.2%; and the line moved
-                # against it on 76% of its Edge picks before the start. Benched 25 November, the Thursday games first.
+                # against it on 76% of its Edge picks before the start. Benched 25 November, Wednesday night's Packers at the Rams first.
                 {"sport": "nfl", "market": "rush_att", "since": "2026-11-25", "words": "carries",
                  "was": "40-46, -6.7 units"})
 #: A benched market is staked again once this many of its picks graded since

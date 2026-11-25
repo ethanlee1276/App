@@ -9888,7 +9888,7 @@ think. All I want is picks that win the most on there"), the rule you set for th
 and learn") and pass attempts ("bench them"): the NFL's rush-attempt Edge picks are 40-46 for -6.7 units, losing 11%
 of what they staked; across 544 same-day picks in every book they said 58.8% and hit 50.2% (the nightly loss finder,
 p = 0.00003), their overs said 57.6% and hit 47.2%, and the line moved against 76% of the Edge picks before kickoff.
-From Thursday's games on, they carry no stake and ride no parlay; they are still posted, graded and learned from, and
+From Wednesday night's Packers at the Rams on, they carry no stake and ride no parlay; they are still posted, graded and learned from, and
 the bench lifts itself once 60 newer picks have made money at flat stakes. College's carries made money (11-7) and
 are not benched. The Most Likely board's carries stay, already tempered by the nightly calibration ("ran hot").
 
