@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFH. Last season's weeks say their season on an NFL card** (step 950; 25 November; nothing to run). An NFL card
+names each game by its week, and its ten games can reach back across the summer. On the live board this morning, 191
+NFL market logs had a week number twice, this season's and last season's, with nothing saying which was which ("Wk 9"
+and "Wk 9"). The head-to-head view already wrote an earlier season's week with its year, "’25 Wk 9". Every NFL card now
+does the same: its chart, its log table, the line slider's redraw, the pick page's game rows and the fantasy weekly
+chart. This season's weeks read as before.
+
 **AFG. The college copies are counted each night** (step 949; 25 November; nothing to run). Follow-up to AFE.
 The cards and the college model now read each college game once, but the stored copies are still there, and the board
 can't show which feed files them (it doesn't carry game ids). So each night, after the college rows land, the daily

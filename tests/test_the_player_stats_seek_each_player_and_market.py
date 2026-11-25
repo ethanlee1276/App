@@ -136,7 +136,9 @@ def test_the_board_reads_the_same_through_a_file():
     recs = [{"player": f"Player {k:02d}"} for k in range(12)] + [{"player": None}, "not a row"]
     got = S.for_board(recs, "nfl", db_path=str(path))
     c = db.connect(str(path))
-    want = S._query_scan(c, "nfl", S.SPORT_MARKETS["nfl"], sorted({f"Player {k:02d}" for k in range(12)}))
+    # The board marks an earlier season's weeks against the season being played (step AFH), as the old read can.
+    want = S._query_scan(c, "nfl", S.SPORT_MARKETS["nfl"], sorted({f"Player {k:02d}" for k in range(12)}),
+                         S._season_now("nfl"))
     c.close()
     assert _same(got, want) and len(got) == 11, "every player but the one too thin to chart"
 

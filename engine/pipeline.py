@@ -159,7 +159,11 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
              "week": g.week, "opponent": g.opponent,
              "value": g.value, "home": g.home,
              **({"snaps": round(float(g.snaps), 2)} if getattr(g, "snaps", None) is not None else {}),
-             **({"partial": True} if getattr(g, "partial", False) else {})}
+             **({"partial": True} if getattr(g, "partial", False) else {}),
+             # A game carried in from last season says which (step AFH): its
+             # week is that season's, and "Wk 9" twice on one chart was two years.
+             **({"season": nfl_season_of(_SLATE_DATE.get("date")) - 1}
+                if sport == "nfl" and getattr(g, "prior", False) else {})}
             for g in prop.logs
         ],
         "form": {

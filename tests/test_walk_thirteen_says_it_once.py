@@ -103,8 +103,8 @@ def test_an_nfl_playoff_week_reads_as_its_round():
         assert out.returncode == 0, out.stderr
         assert json.loads(out.stdout) == ["Conference", "Wild Card", "Super Bowl", "Wk 9", "Wk 19", "Wk 18"]
     hist = _fn(APP, "historyProfileHTML")
-    assert "nflWeekWord(l.week, r0.sport)" in hist and "`Wk ${l.week}`" not in hist
-    assert APP.count("nflWeekWord(l.week, r.sport || state.sport)") == 2, "the priced card's table and its chart"
+    assert "nflWeekWord(l.week, r0.sport, l.season)" in hist and "`Wk ${l.week}`" not in hist
+    assert APP.count("nflWeekWord(l.week, r.sport || state.sport, l.season)") == 2, "the priced card's table and its chart"
     assert "const NFL_ROUNDS = NFL_ROUND;" in MORE, "one table for the site"
 
 

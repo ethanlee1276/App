@@ -861,8 +861,8 @@ function lineAdjBars(r, line, side) {
   const logs = r.logs || [], mlb = state.sport !== "nfl";
   const nfl = logs.length && logs[0].week != null && !logs[0].date;
   const when = (l) => (r.history
-    ? (nfl ? nflWeekWord(l.week, r.sport) : (l.date ? formatGameDate(l.date) : `G ${l.week}`))
-    : (mlb ? (l.date ? formatGameDate(l.date) : "G " + l.week) : nflWeekWord(l.week, r.sport || state.sport)));
+    ? (nfl ? nflWeekWord(l.week, r.sport, l.season) : (l.date ? formatGameDate(l.date) : `G ${l.week}`))
+    : (mlb ? (l.date ? formatGameDate(l.date) : "G " + l.week) : nflWeekWord(l.week, r.sport || state.sport, l.season)));
   return gamelogBars(logs.map((l) => l.value), {
     ...(line == null ? {} : { line, side }), fit: true, w: 320, h: 72,
     stroke: r.history ? teamPrimaryIn(r.sport, r.team) : teamPrimary(r.team),

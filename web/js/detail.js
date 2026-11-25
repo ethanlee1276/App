@@ -211,7 +211,7 @@ function propLogRows(r, logs, line, over, n) {
     const v = Number(g.value);
     const ok = Number.isFinite(v) && won(v);
     const when = g.date ? String(g.date).slice(5)
-      : (g.week != null ? `Wk ${g.week}` : "—");
+      : (g.week != null ? `${g.season ? `’${String(g.season).slice(2)} ` : ""}Wk ${g.week}` : "—");
     const extra = [];
     if (g.wind != null) extra.push(`${g.wind} mph wind`);
     if (g.park) extra.push(String(g.park));

@@ -15297,7 +15297,7 @@ function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
     const hit = under ? l.value < r.line : l.value > r.line;
     // "Wk" is football vocabulary — an MLB log without a stored date is
     // still a GAME index, not a week.
-    const when = mlb ? (l.date ? formatGameDate(l.date) : `G ${l.week}`) : nflWeekWord(l.week, r.sport || state.sport);
+    const when = mlb ? (l.date ? formatGameDate(l.date) : `G ${l.week}`) : nflWeekWord(l.week, r.sport || state.sport, l.season);
     return `<tr><td>${escapeHtml(when)}</td><td>${l.home ? "vs" : "@"} ${escapeHtml(l.opponent)}</td>
       <td class="num ${hit ? "hit" : "miss"}">${l.value}</td></tr>`;
   }).join("");
@@ -15317,7 +15317,7 @@ function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
       <div class="profile-spark" data-player="${escapeAttr(r.player || "")}" data-mkt="${escapeAttr(r.market_label || "")}">${gamelogBars(vals, {
         line: r.line, side: r.side, fit: true, stroke: teamPrimary(r.team), w: 320, h: 72,
         labels: (r.logs || []).map((l) =>
-          `${mlb ? (l.date ? formatGameDate(l.date) : "G " + l.week) : nflWeekWord(l.week, r.sport || state.sport)} ${l.home ? "vs" : "@"} ${l.opponent}`),
+          `${mlb ? (l.date ? formatGameDate(l.date) : "G " + l.week) : nflWeekWord(l.week, r.sport || state.sport, l.season)} ${l.home ? "vs" : "@"} ${l.opponent}`),
       })}</div>
       <table class="log-table">
         <tr><th>${mlb ? "Game" : "Week"}</th><th>Opponent</th><th style="text-align:right">${escapeHtml(r.market_label)}</th></tr>
@@ -15421,8 +15421,8 @@ function propDepthHTML(r) {
    "Wk 21 vs SEA", last January's conference final filed as week 21, as if it came after this season's first week
    (walk 13, 2026-11-18). The team page's and the game log's tables say the same (more.js, gamelog.js). */
 const NFL_ROUND = { 19: "Wild Card", 20: "Divisional", 21: "Conference", 22: "Super Bowl" };
-function nflWeekWord(week, sport) {
-  return (sport === "nfl" && NFL_ROUND[week]) || `Wk ${week}`;
+function nflWeekWord(week, sport, season) {
+  return (season ? `’${String(season).slice(2)} ` : "") + ((sport === "nfl" && NFL_ROUND[week]) || `Wk ${week}`);
 }
 
 /* A market nobody priced tonight: the history IS the content. Chart and
@@ -15431,7 +15431,7 @@ function nflWeekWord(week, sport) {
 function historyProfileHTML(r0, label, logs, chips, tail = "") {
   const vals = logs.map((l) => l.value);
   const nfl = logs.length && logs[0].week != null && !logs[0].date;
-  const when = (l) => (nfl ? nflWeekWord(l.week, r0.sport)
+  const when = (l) => (nfl ? nflWeekWord(l.week, r0.sport, l.season)
     : (l.date ? formatGameDate(l.date) : `G ${l.week}`));
   const rows = logs.map((l) => `<tr><td>${escapeHtml(when(l))}</td>
       <td>${l.home ? "vs" : "@"} ${escapeHtml(l.opponent)}</td>
@@ -21475,7 +21475,7 @@ async function _ffDossierCharts(name, position) {
       return `<div class="ffd-chart"><span class="ffd-chart-l">${escapeHtml(label)}</span>
         ${gamelogBars(logs.map((g) => g.value), {
           w: 320, h: 56, stroke: "var(--brand)",
-          labels: logs.map((g) => `Wk ${g.week} ${g.home ? "vs" : "@"} ${g.opponent}`),
+          labels: logs.map((g) => `${nflWeekWord(g.week, "nfl", g.season)} ${g.home ? "vs" : "@"} ${g.opponent}`),
         })}</div>`;
     }).join("");
 }

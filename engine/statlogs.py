@@ -209,9 +209,12 @@ def for_board(recommendations, sport: str, db_path=None) -> dict:
         # November, the same games on every build of the same slate.
         import hashlib
         from . import gamelog, logcache
+        season = _season_now(sport)
         return logcache.memo(conn, "player_stats", sport, None,
-                             lambda: _query(conn, sport, markets, players, teams), code=(__file__, gamelog.__file__),
+                             lambda: _query(conn, sport, markets, players, teams, season),
+                             code=(__file__, gamelog.__file__),
                              extra={"players": hashlib.sha1("\n".join(players).encode()).hexdigest(),
+                                    "season": season,
                                     "teams": hashlib.sha1("\n".join(f"{p}|{t}" for p, t in sorted(teams.items()))
                                                           .encode()).hexdigest()})
     finally:
@@ -976,7 +979,7 @@ def for_player(sport: str, player: str, db_path=None) -> dict:
         return {}
     conn = _db.connect(path)
     try:
-        return _query(conn, sport, markets, [player]).get(player, {})
+        return _query(conn, sport, markets, [player], season=_season_now(sport)).get(player, {})
     finally:
         conn.close()
 
@@ -1225,6 +1228,16 @@ def _versus_once(sport: str, markets, opp: str, rows) -> list:
             break
     return out
 
+def _season_now(sport: str) -> int | None:
+    """The NFL season being played (or the one just ended, until March), by
+    today's date; None for any other league, whose logs carry their dates."""
+    if sport != "nfl":
+        return None
+    import datetime as _dt
+    d = _dt.date.today()
+    return d.year - 1 if d.month < 3 else d.year
+
+
 def other_clubs(rows, team: str | None = None) -> set:
     """The clubs of ANOTHER PLAYER OF THE SAME NAME, from one name's rows as
     ``(season, period, club)``: the clubs whose games sit in a week or a day
@@ -1256,11 +1269,12 @@ def other_clubs(rows, team: str | None = None) -> set:
     return out
 
 
-def _query(conn, sport, markets, players, teams: dict | None = None) -> dict:
+def _query(conn, sport, markets, players, teams: dict | None = None, season: int | None = None) -> dict:
     """``player_stats`` for ``players``: each one's last ``N_GAMES`` in each
     market, newest first, players listed newest first. ``teams`` is each
     player's club where the caller knows it (the board's rows): where one name
-    holds two men (`other_clubs`), his club's games are his.
+    holds two men (`other_clubs`), his club's games are his. ``season`` is the
+    NFL season being played: a game of an earlier one carries its season.
 
     ONE SEEK PER PLAYER AND MARKET (2026-11-08). The single read below
     (`_query_scan`) asks for every season of every priced player, sorted
@@ -1312,6 +1326,11 @@ def _query(conn, sport, markets, players, teams: dict | None = None) -> dict:
                     g = {"opponent": r[3], "home": bool(r[4]), "value": float(r[5])}
                     if sport == "nfl":
                         g["week"] = int(r[1])
+                        # AN EARLIER SEASON'S WEEK SAYS WHICH (step AFH, 2026-11-25): ten
+                        # games reach back across the summer, and on the live board 191
+                        # NFL logs showed a week number twice, this season's and last's.
+                        if season is not None and int(r[0]) < season:
+                            g["season"] = int(r[0])
                     else:
                         g["date"] = str(r[1])
                     lst.append(g)
@@ -1320,7 +1339,7 @@ def _query(conn, sport, markets, players, teams: dict | None = None) -> dict:
     except sqlite3.OperationalError as exc:
         if "no such index" not in str(exc):
             raise
-        return _query_scan(conn, sport, markets, players)
+        return _query_scan(conn, sport, markets, players, season)
     out: dict[str, dict[str, list]] = {}
     for player in sorted(grouped, key=lambda p: (newest[p], p), reverse=True):
         keep = _kept(sport, markets, grouped[player])
@@ -1397,13 +1416,13 @@ def _query_once(conn, sport, markets, players) -> dict:
     return out
 
 
-def _query_scan(conn, sport, markets, players) -> dict:
+def _query_scan(conn, sport, markets, players, season: int | None = None) -> dict:
     """The single read `_query` replaced: every season of every player,
     sorted newest first, ten kept a pair. Kept for a file without the
     (sport, market, player) index."""
     ids = [m for m, _ in markets]
     rows = conn.execute(
-        "SELECT player, market, period, opponent, home, value "
+        "SELECT player, market, period, opponent, home, value, season "
         "FROM player_game_logs "
         f"WHERE sport=? AND market IN ({','.join('?' * len(ids))}) "
         f"AND player IN ({','.join('?' * len(players))}) "
@@ -1424,6 +1443,8 @@ def _query_scan(conn, sport, markets, players) -> dict:
         # formats both with one code path: NFL logs are weeks, MLB games.
         if sport == "nfl":
             g["week"] = int(r["period"])
+            if season is not None and int(r["season"]) < season:
+                g["season"] = int(r["season"])
         else:
             g["date"] = str(r["period"])
         lst.append(g)

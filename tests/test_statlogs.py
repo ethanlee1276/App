@@ -75,7 +75,9 @@ def test_every_ingested_market_ships_for_a_board_player():
     assert len(rush) == statlogs.N_GAMES
     assert rush[0]["week"] == 4 and rush[1]["week"] == 3
     assert all(isinstance(g["week"], int) for g in rush)
-    assert all(set(g) == {"opponent", "home", "value", "week"} for g in rush)
+    assert all(set(g) == {"opponent", "home", "value", "week"} for g in rush[:4])
+    # Last season's weeks say their season (step AFH): "’25 Wk 12" on the card.
+    assert all(set(g) == {"opponent", "home", "value", "week", "season"} and g["season"] == 2025 for g in rush[4:])
 
 
 def test_two_games_is_an_anecdote_and_ships_nothing():

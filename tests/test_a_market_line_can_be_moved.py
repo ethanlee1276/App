@@ -108,7 +108,8 @@ def test_the_card_draws_it_under_its_chart_and_the_redraw_holds_off():
     fill = _fn("lineAdjFill")
     assert 'spark.insertAdjacentHTML("afterend", html);' in fill and "lineAdjDraw(spark.nextElementSibling" in fill
     bars = _fn("lineAdjBars")
-    assert "nflWeekWord(l.week, r.sport || state.sport)" in bars and "nflWeekWord(l.week, r.sport) :" in bars
+    assert ("nflWeekWord(l.week, r.sport || state.sport, l.season)" in bars
+            and "nflWeekWord(l.week, r.sport, l.season) :" in bars), "the first draw's labels, last season's year too"
     assert "teamPrimaryIn(r.sport, r.team) : teamPrimary(r.team)" in bars, "each card's own colour, as app.js drew it"
     for sel in (".line-adj {", ".la-range {", ".la-step {", ".la-sd.on {", ".la-reset[hidden] {", ".la-price {"):
         assert sel in CSS, sel
