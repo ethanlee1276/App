@@ -4922,6 +4922,9 @@ class Handler(BaseHTTPRequestHandler):
         sport = (q.get("sport") or [""])[0].lower()
         player = (q.get("player") or [""])[0][:60]
         season = (q.get("season") or [""])[0][:4]
+        # His club where the page knows it: a name two players share is his
+        # club's games (engine/statlogs.other_clubs).
+        club = (q.get("team") or [""])[0][:8].strip().upper()
         if sport not in gamelog.LAYOUTS:
             return self._send(400, b'{"error":"no game log for this sport"}', ".json")
         try:
@@ -4933,7 +4936,8 @@ class Handler(BaseHTTPRequestHandler):
                 name = _pp.stored_name(conn, sport, player)
             finally:
                 conn.close()
-            out = gamelog.season_log(sport, name, int(season) if season.isdigit() else None) if name else {}
+            out = gamelog.season_log(sport, name, int(season) if season.isdigit() else None,
+                                     team=club or None) if name else {}
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the game log could not be read"}', ".json")
         # HIS FACE ON THE LOG'S HEADER (LOGLOOK1, 2026-11-16; Ethan: "use team colors

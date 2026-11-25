@@ -284,7 +284,7 @@ function plrTonightTitle(page) {
 }
 async function plrRecentInto(slot, d) {
   if (!slot || typeof glFetch !== "function") return;
-  const log = await glFetch(d.sport, d.player, d.season);
+  const log = await glFetch(d.sport, d.player, d.season, d.team);
   if (!slot.isConnected || !log || !(log.games || []).length) return;
   slot.innerHTML = `<section class="plr-card"><h3>Recent games</h3>${glTableHTML({ ...log, games: log.games.slice(0, 5), played: 0 })}
     <button class="btn plr-go" type="button" data-plr-go="log">Full game log</button></section>`;
@@ -619,9 +619,9 @@ function plrFill(page, d) {
 async function plrLogInto(page, season) {
   const slot = page.querySelector("[data-plr-panel=\"log\"]");
   if (!slot || typeof glFetch !== "function") return;
-  const { sport, player, key } = page._plr;
+  const { sport, player, key, team } = page._plr;
   if (!season && slot.dataset.drawn) return;
-  const d = await glFetch(sport, player, season || (PLR_PICK[key] || {}).log);
+  const d = await glFetch(sport, player, season || (PLR_PICK[key] || {}).log, team);
   if (!slot.isConnected) return;
   // A punter's page says why it has no games (engine/playerpage.no_stats_note).
   const quiet = !(d && (d.games || []).length) && page._plr.noStats;

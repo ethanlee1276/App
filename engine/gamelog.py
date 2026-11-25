@@ -571,7 +571,7 @@ def seasons_of(conn, sport: str, player: str) -> list[int]:
         (sport, player)) if r[0] is not None]
 
 
-def season_log(sport: str, player: str, season: int | None = None, db_path=None) -> dict:
+def season_log(sport: str, player: str, season: int | None = None, db_path=None, team: str | None = None) -> dict:
     """``{player, sport, season, seasons, team, position, groups, games, totals,
     per_game}`` for one player's season, the newest game first; ``{}`` where
     the league has no layout, the file is missing or he has no games."""
@@ -597,9 +597,15 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
         by_id, by_pair = _results(conn, sport, season)
     finally:
         conn.close()
+    if sport not in ONE_A_WEEK:
+        # ONE NAME, TWO MEN (engine/statlogs.other_clubs): the other man's clubs
+        # are not this page's, the club its card reads (``team``) is.
+        from .statlogs import other_clubs
+        other = other_clubs([(season, r[0], r[2]) for r in rows], team)
+        rows = [r for r in rows if r[2] not in other] if other else rows
     games: dict = {}
-    for period, gid, team, opp, pos, home, market, val in rows:
-        g = games.setdefault((str(period), str(gid)), {"period": str(period), "game_id": str(gid), "team": team,
+    for period, gid, club, opp, pos, home, market, val in rows:
+        g = games.setdefault((str(period), str(gid)), {"period": str(period), "game_id": str(gid), "team": club,
                                                        "opponent": opp, "position": pos, "home": home, "stats": {}})
         if pos and not g["position"]:
             g["position"] = pos                    # a box score's pinch hitter has none (engine/mlb/fulllines)

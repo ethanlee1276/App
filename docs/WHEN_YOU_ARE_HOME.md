@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFF. Two players with one name: each card keeps its own player's games** (step 948; 25 November; nothing to run).
+The history file keeps games under a player's name, and the NFL has two Byron Youngs. On the live board his Tackles +
+Assists chart held weeks 6, 7 and 8 twice each, one game from each of them (against Carolina and Arizona, Dallas and
+Las Vegas, Washington and the Chargers), and his game log the same. He was the only player on the NFL board this
+morning with a week twice. A player is on one team in a week, so where one name has two teams in the same week (or
+the same day, in the daily leagues), the card now reads only the games of the team the board lists him on, ten of
+them, and the player page asks the game log for that team too. A player traded between teams never has two in one
+week, so he keeps every game. College football is left to the merge in AFE, since there one school can sit under
+two codes (BUF and BUFF) and look like two teams.
+
 **AFD. Every market card on a player page has the same row of tiles** (step 947; 25 November; nothing to run). A
 market with a line tonight shows L1, L3, L5, L10 and Season over its chart. A market with no line tonight (or a locked
 board's, for a free account) is drawn from the player's stored games and showed no tiles at all, so tapping from

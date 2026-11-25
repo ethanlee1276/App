@@ -14,13 +14,15 @@ const GL_CACHE = new Map();
 const GL_SPORT = { nfl: "NFL", cfb: "College Football", nba: "NBA", wnba: "WNBA", cbb: "College Basketball",
   nhl: "NHL", mlb: "MLB" };
 
-async function glFetch(sport, player, season) {
-  const key = `${sport}|${player}|${season || ""}`;
+async function glFetch(sport, player, season, team) {
+  const key = `${sport}|${player}|${season || ""}|${team || ""}`;
   if (GL_CACHE.has(key)) return GL_CACHE.get(key);
   let body = null;
   try {
     const q = new URLSearchParams({ sport, player });
     if (season) q.set("season", String(season));
+    // His club: a name two players share is his club's games (step AFF).
+    if (team) q.set("team", String(team));
     const r = await fetch(`/api/players/gamelog?${q}`);
     body = r.ok ? await r.json() : null;
   } catch (e) { body = null; }

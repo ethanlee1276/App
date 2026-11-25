@@ -191,6 +191,10 @@ def for_board(recommendations, sport: str, db_path=None) -> dict:
     markets = SPORT_MARKETS.get(sport)
     players = sorted({r.get("player") for r in recommendations or []
                       if isinstance(r, dict) and r.get("player")})
+    teams: dict = {}
+    for r in recommendations or []:
+        if isinstance(r, dict) and r.get("player") and r.get("team"):
+            teams.setdefault(r["player"], str(r["team"]))
     if not markets or not players:
         return {}
     path = str(db_path or _db.DEFAULT_DB)
@@ -206,8 +210,10 @@ def for_board(recommendations, sport: str, db_path=None) -> dict:
         import hashlib
         from . import gamelog, logcache
         return logcache.memo(conn, "player_stats", sport, None,
-                             lambda: _query(conn, sport, markets, players), code=(__file__, gamelog.__file__),
-                             extra={"players": hashlib.sha1("\n".join(players).encode()).hexdigest()})
+                             lambda: _query(conn, sport, markets, players, teams), code=(__file__, gamelog.__file__),
+                             extra={"players": hashlib.sha1("\n".join(players).encode()).hexdigest(),
+                                    "teams": hashlib.sha1("\n".join(f"{p}|{t}" for p, t in sorted(teams.items()))
+                                                          .encode()).hexdigest()})
     finally:
         conn.close()
 
@@ -1219,9 +1225,42 @@ def _versus_once(sport: str, markets, opp: str, rows) -> list:
             break
     return out
 
-def _query(conn, sport, markets, players) -> dict:
+def other_clubs(rows, team: str | None = None) -> set:
+    """The clubs of ANOTHER PLAYER OF THE SAME NAME, from one name's rows as
+    ``(season, period, club)``: the clubs whose games sit in a week or a day
+    beside his own club's. His club is ``team`` (the board's) where given, else
+    the club of his newest row. Empty where no week or day holds two clubs.
+
+    ONE NAME, TWO MEN (2026-11-25). The logs are filed by name, and the NFL has
+    two Byron Youngs. On the live board his Tackles + Assists chart held weeks
+    6, 7 and 8 twice each, one game from each man (Carolina and Arizona, Dallas
+    and Las Vegas, Washington and the Chargers). A player is on one club in a
+    week, so a week with two clubs in it is two men; a club that never shares a
+    week with his (a team he was traded from) stays his."""
+    by: dict = {}
+    newest = None
+    for season, period, club in rows:
+        if not club:
+            continue
+        k = (season, str(period))
+        by.setdefault(k, set()).add(club)
+        if newest is None or k > newest[0]:
+            newest = (k, club)
+    if newest is None or not any(len(v) > 1 for v in by.values()):
+        return set()
+    mine = team or newest[1]
+    out: set = set()
+    for clubs in by.values():
+        if mine in clubs:
+            out |= clubs - {mine}
+    return out
+
+
+def _query(conn, sport, markets, players, teams: dict | None = None) -> dict:
     """``player_stats`` for ``players``: each one's last ``N_GAMES`` in each
-    market, newest first, players listed newest first.
+    market, newest first, players listed newest first. ``teams`` is each
+    player's club where the caller knows it (the board's rows): where one name
+    holds two men (`other_clubs`), his club's games are his.
 
     ONE SEEK PER PLAYER AND MARKET (2026-11-08). The single read below
     (`_query_scan`) asks for every season of every priced player, sorted
@@ -1244,7 +1283,7 @@ def _query(conn, sport, markets, players) -> dict:
     ids = [m for m, _ in markets]
     if sport in ONE_A_WEEK:
         return _query_once(conn, sport, markets, players)
-    q = ("SELECT season, period, game_id, opponent, home, value "
+    q = ("SELECT season, period, game_id, opponent, home, value, team "
          "FROM player_game_logs INDEXED BY idx_logs_lookup "
          "WHERE sport=? AND market=? AND player=? "
          "ORDER BY season DESC, period DESC, game_id DESC LIMIT ?")
@@ -1253,8 +1292,16 @@ def _query(conn, sport, markets, players) -> dict:
     try:
         for player in players:
             per: dict[str, list] = {}
+            got = {m: conn.execute(q, (sport, m, player, N_GAMES)).fetchall() for m in ids}
+            other = other_clubs([(r[0], r[1], r[6]) for rows in got.values() for r in rows], (teams or {}).get(player))
+            if other:
+                # Deeper, so his own ten are whole once the other man's games are out.
+                deep = {m: conn.execute(q, (sport, m, player, N_GAMES * 3)).fetchall() for m in ids}
+                other |= other_clubs([(r[0], r[1], r[6]) for rows in deep.values() for r in rows],
+                                     (teams or {}).get(player))
+                got = {m: [r for r in rows if r[6] not in other][:N_GAMES] for m, rows in deep.items()}
             for m in ids:
-                rows = conn.execute(q, (sport, m, player, N_GAMES)).fetchall()
+                rows = got.get(m)
                 if not rows:
                     continue
                 top = (rows[0][0], str(rows[0][1]), str(rows[0][2]))
