@@ -418,7 +418,8 @@ def test_the_whole_board_is_priced_in_one_request():
     assert "cost=CFB_ODDS_COST" not in launch
     build = _read("cfb_build.py")
     assert "PLAYER_EVENT_CAP = 12" in build
-    assert "cands[:cap]" in build, \
+    # The cap on what a pull buys, in `pull_plan` since step AEN (every game not bought is read from the cache).
+    assert "set(want[:max(0, int(cap))])" in build, \
         "the player pull lost its cap — an uncapped Saturday is 300 credits"
     assert "affordable_events" in build, \
         "the cap is board policy alone again — the budget gets no say"
