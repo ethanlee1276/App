@@ -9883,6 +9883,20 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AET. College basketball's game reports read the college ratings** (step 936; 25 November). Nothing to run. A
+college game report's "Our team ratings alone" line, and the slip checker's read of a college ticket, used each
+team's plain average margin with last season's beside it: not adjusted for who a team played, so a mid-major that
+beat five small schools by twenty read as a top team, and never measured. The Race page already fits the college
+ratings that fix that (adjusted for every opponent, measured on four seasons of results: 15,945 games). Each time
+the race fits them it now keeps them in a small file, and the reports and the slip checker read that file (up to 36
+hours old). The line now says what the ratings were fitted on and that they have not been measured against the
+price yet. Where no fit is kept, or a school has not played yet, the old average margins stand.
+
+**AEO–AER, measured on Tuesday night** (24 November, 7:57 PM ET; nothing to run). The college basketball build on
+the new code took about 171 seconds with its saved reads warm, against 416 at 6:48 PM before them: team profiles
+and the scan 44 → 14 seconds, comps 40 → 4, the stat spreads' read 76 → 15, the fantasy write 43 → 2. The first
+build after the deploy took about 480 seconds, because a code change makes every saved read start over once.
+
 **AES. An index on the team for the game logs, built once at 4 AM** (step 935; 25 November). Nothing to run. The
 basketball boards read their games' players by team, and nothing in the history file was indexed by team, so each
 build looked through every row of two college seasons (about 2.2 million) to keep ten teams': 17 to 62 seconds of

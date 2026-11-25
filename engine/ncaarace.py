@@ -1145,6 +1145,50 @@ def prior_ratings(conn, season: int) -> dict:
 #: seasons on each would spend the box's one processor on noise.
 REBUILD_S = 2 * 3600
 
+#: THE RATINGS, KEPT FOR THE GAME REPORTS (step AET, 25 November 2026). A college game report's "our team
+#: ratings alone" and the slip checker's college model read each team's average margin, last season's beside
+#: it (engine/futuresdata.blended_ratings): not adjusted for who a team played, the fault this module's
+#: ratings were built to fix (a mid-major that beats five small schools by twenty reads as a top-ten team),
+#: and never measured. The race fits the measured ratings (engine/cbbratings: four seasons, 15,945 games) on
+#: every run that plays the season out; each fit is kept here, small, for them to read.
+RATINGS_FILE = "cbb_ratings.json"
+#: A kept fit older than this is not read: the race fits at most every two hours on a day it is built, and a
+#: morning's reports may come before the day's first run.
+RATINGS_MAX_AGE_S = 36 * 3600
+
+
+def _ratings_path():
+    from .sources import fetch as F
+    return F._cache_path(RATINGS_FILE)
+
+
+def keep_ratings(day: _dt.date, ratings: dict, prior: dict, played: int, path=None, now: float | None = None) -> None:
+    """Keep one fit: the day, when, the ratings, the games behind them and the home court and spread they
+    are read with. Written whole or not at all."""
+    import os
+    import time
+    p = path or _ratings_path()
+    doc = {"date": day.isoformat(), "at": time.time() if now is None else float(now), "season": season_of(day),
+           "ratings": ratings, "played": int(played), "prior_schools": len(prior or {}),
+           "hca": CR.HCA, "sd": CR.SD, "prior_games": CR.PRIOR_GAMES}
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+    os.replace(tmp, p)
+
+
+def kept_ratings(path=None, now: float | None = None) -> dict | None:
+    """The last fit kept (`keep_ratings`), or None: none kept, unreadable, or older than RATINGS_MAX_AGE_S."""
+    import time
+    try:
+        doc = json.loads((path or _ratings_path()).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(doc, dict) or not isinstance(doc.get("ratings"), dict) or not doc["ratings"]:
+        return None
+    age = (time.time() if now is None else float(now)) - float(doc.get("at") or 0.0)
+    return doc if 0.0 <= age <= RATINGS_MAX_AGE_S else None
+
 
 def publish(conn, day: _dt.date, out_path: str = "web/data/ncaa_race.json", fetch=None) -> str:
     """Build the race and write it through the gate. Returns the build-log
@@ -1185,6 +1229,10 @@ def publish(conn, day: _dt.date, out_path: str = "web/data/ncaa_race.json", fetc
     prior = prior_ratings(conn, season) if conn is not None else {}
     done = [g for g in games if _played(g) and g.get("date", "") <= day.isoformat()]
     ratings = CR.adjusted(done, prior=prior)
+    try:
+        keep_ratings(day, ratings, prior, len(done))
+    except Exception as exc:                                       # noqa: BLE001
+        print(f"  ⚠️  the college ratings were not kept for the game reports ({type(exc).__name__}: {exc})")
     # This week's poll, ESPN's own (a build handed its own reader, a test's,
     # never reaches for it); the scoreboard's ranks stand in without it.
     poll: dict = {}

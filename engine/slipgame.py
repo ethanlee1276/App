@@ -26,8 +26,11 @@ history database the builds read:
   * basketball — no board prices an NBA or WNBA game line, so the read uses
     the one game model we keep for them, the futures simulation's
     (`futures.win_prob` on `futuresdata.blended_ratings`), for the moneyline
-    and the spread. Nothing of ours projects a basketball total, so a total
-    gets the facts and no number.
+    and the spread; college basketball reads its own ratings, adjusted for
+    every opponent, as the Race page's last run fitted them (`_college`,
+    step AET), and the average margins only where none is kept. Nothing of
+    ours projects a basketball total, so a total gets the facts and no
+    number.
 
 THE MARKET HOLDS IT, as it holds every game line on the boards: the model's
 chance is pulled toward the market's own number by the haircut
@@ -193,6 +196,44 @@ def _hoops(conn, league: str, season: int):
     return _cached((league, "blend", season, _stamp(conn)), lambda: FD.blended_ratings(conn, league, season))
 
 
+def _college_kept():
+    """College basketball's ratings adjusted for every opponent, as the Race page's last run fitted them
+    (engine/ncaarace.kept_ratings), or None."""
+    try:
+        from . import ncaarace
+        return ncaarace.kept_ratings()
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"⚠️  the college ratings were not read ({type(exc).__name__}: {exc})")
+        return None
+
+
+def _college(home: str, away: str, neutral: bool, kept: dict | None) -> dict | None:
+    """COLLEGE BASKETBALL ON ITS OWN RATINGS (step AET, 25 November 2026): the Race page's ratings, points
+    better than an average Division I team on a neutral floor adjusted for every opponent played
+    (engine/cbbratings, measured on four seasons: 15,945 games), the home court off a neutral floor, the
+    margin's measured spread. None where none is kept or a Division I side has no rating in it yet (it has
+    not played): the average margins then stand, as before."""
+    from . import cbbratings as CR
+    if not kept:
+        return None
+    rated = kept.get("ratings") or {}
+    if any(CR.is_division_one(t) and t not in rated for t in (home, away)):
+        return None
+    hca, sd = float(kept.get("hca") or CR.HCA), float(kept.get("sd") or CR.SD)
+    rh, ra = CR.rating_of(rated, home), CR.rating_of(rated, away)
+
+    def said(t, r):
+        return f"{t} {r:+.1f}" if CR.is_division_one(t) else f"a school below Division I ({r:+.1f})"
+    words = (f"{said(home, rh)} and {said(away, ra)} points better than an average Division I team on a "
+             f"neutral floor, adjusted for every opponent played ({int(kept.get('played') or 0):,} games this "
+             f"season" + (", last season's rating counting as a few games of this one" if kept.get("prior_schools")
+                          else "") + ")")
+    inputs = [words, "a neutral floor — no home court" if neutral else f"the home court {hca:g} points"]
+    return {"kind": "normal", "margin_sd": sd, "margin": (rh - ra) + (0.0 if neutral else hca),
+            "p_home": CR.win_prob(rh, ra, neutral, hca=hca, sd=sd), "inputs": inputs, "no_total": True,
+            "ratings": "adjusted"}
+
+
 def model(conn, league: str, home: str, away: str, g: dict | None, today: str | None = None) -> dict:
     """The game as our model for this league sees it: the home side's win
     chance, the margin and its spread, the total and its spread, and the
@@ -252,6 +293,10 @@ def model(conn, league: str, home: str, away: str, g: dict | None, today: str | 
                 "margin": lam[0] - lam[1],
                 "inputs": [f"expected goals {home} {lam[0]:.2f}, {away} {lam[1]:.2f} in regulation, "
                            f"from each side's goals for and against"]}
+    if league == "cbb":
+        adj = _college(home, away, neutral, _college_kept())
+        if adj is not None:
+            return adj
     from . import futures as F
     ratings, prior_share, played = _hoops(conn, league, season)
     rh, ra = (ratings or {}).get(home), (ratings or {}).get(away)

@@ -439,6 +439,9 @@ class Ctx:
         # The build's history connection, for what only the database knows
         # (our team ratings' own chance, `ratings_chance`); None in a test.
         self.conn = conn
+        # Which of our ratings that chance came from, where the model says
+        # (engine/slipgame: "adjusted" for college basketball's own, step AET).
+        self.ratings_kind = None
         # This season's leak tables (engine/angles.nfl_tables), the NFL's.
         self.angle_tables = angles or {}
         # Our grades (engine/grades), the NFL's: {kind: {(team, name): grade}}.
@@ -4996,8 +4999,17 @@ VERDICT_NOTE_RATED = ("The call follows the price, the sharpest number on the bo
                       "The reasons above are the report's own data, for each side")
 
 
-def ratings_why(sport: str) -> str:
-    """Why our ratings' own chance is unproven in this league, in words."""
+#: What a league's ratings were measured on before any closing line graded
+#: them, by the kind the model names (engine/slipgame `ratings`).
+RATINGS_FITTED_ON = {
+    ("cbb", "adjusted"): ("they were fitted on four seasons of college results (15,945 games) and haven't "
+                          "been measured against the price yet"),
+}
+
+
+def ratings_why(sport: str, kind: str | None = None) -> str:
+    """Why our ratings' own chance is unproven in this league, in words.
+    ``kind`` is which ratings the chance came from (`Ctx.ratings_kind`)."""
     if sport in VERDICT_RATINGS_WHY:
         return VERDICT_RATINGS_WHY[sport]
     try:
@@ -5005,7 +5017,7 @@ def ratings_why(sport: str) -> str:
         e = measured(sport, "moneyline")
         shrink, n = float(e["shrink"]), int(e["n"])
     except Exception:                                        # noqa: BLE001
-        return "they haven't been measured against the price yet"
+        return RATINGS_FITTED_ON.get((sport, kind), "they haven't been measured against the price yet")
     if shrink <= 0.02:
         return f"over {n:,} graded games, their disagreements with the closing line carried nothing"
     return f"{shrink:.0%} of a disagreement with the closing line has held up, over {n:,} graded games"
@@ -5029,6 +5041,7 @@ def ratings_chance(c: Ctx) -> float | None:
             m = slipgame.model(c.conn, c.sport, c.home, c.away, g,
                                today=str(c.g.get("date") or "")[:10] or None)
             p = _f(m.get("p_home")) if isinstance(m, dict) else None
+            c.ratings_kind = m.get("ratings") if isinstance(m, dict) and p is not None else None
         except Exception:                                    # noqa: BLE001
             p = None
     return p if p is not None and 0.0 < p < 1.0 else None
@@ -5066,7 +5079,7 @@ def sec_verdict(c: Ctx) -> dict | None:
                                 "same": even or rfav == fav, "even": even}
         said = ("an even game" if even else f"{team_np(c, rfav)} {_pct(rp)}"
                 + ("" if rfav == fav else ", the other side from the price"))
-        nums.append(f"Our team ratings alone: {said}. Unproven: {ratings_why(c.sport)}")
+        nums.append(f"Our team ratings alone: {said}. Unproven: {ratings_why(c.sport, c.ratings_kind)}")
     sim = c.g.get("sim") or {}
     if _f(sim.get("p_home_win")) is not None:
         ph_sim = float(sim["p_home_win"])
