@@ -153,9 +153,16 @@ def test_the_player_page_reads_its_rows_so_and_the_server_takes_short_turns():
     assert '"FROM player_game_logs WHERE sport=? AND player=?", (sport, player), n=9, real=(8,))' in page
     import server
     assert server.SWITCH_INTERVAL_S == 0.0005
-    main = (ROOT / "server.py").read_text(encoding="utf-8")
-    body = main[main.index("def main() -> None:"):]
-    assert body.index("sys.setswitchinterval(SWITCH_INTERVAL_S)") < body.index("server.serve_forever()")
+    src = (ROOT / "server.py").read_text(encoding="utf-8")
+    settings = src[src.index("def live_settings() -> None:"):src.index("def main() -> None:")]
+    assert "sys.setswitchinterval(SWITCH_INTERVAL_S)" in settings
+    body = src[src.index("def main() -> None:"):]
+    assert body.index("live_settings()") < body.index("server.serve_forever()")
+    # The box's own entry point too (step AHM): launch.py builds its server from this Handler, never main().
+    launch = (ROOT / "launch.py").read_text(encoding="utf-8")
+    assert "BoundedHTTPServer, live_settings)" in launch
+    start = launch[launch.index("    seal_on_boot()\n"):]
+    assert start.index("live_settings()") < start.index("server = BoundedHTTPServer((bind, port), Handler)")
 
 
 def test_the_page_is_the_page_it_was():

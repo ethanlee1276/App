@@ -8061,13 +8061,23 @@ def _clear_unsealed_flag() -> None:
 SWITCH_INTERVAL_S = 0.0005
 
 
-def main() -> None:
+def live_settings() -> None:
+    """What the live site's process sets before it answers: the interpreter's short turns (SWITCH_INTERVAL_S, step
+    AHG) and kept answers kept on disk across a restart (KEPT_ON_DISK, step AHJ).
+
+    BOTH ENTRY POINTS CALL IT (step AHM, 25 November 2026), as both call seal_on_boot: the box runs launch.py, which
+    builds its own server from this file's Handler, and these two lived only in main() for an afternoon, so on the
+    live site neither was set: every page built again after the 20:58 UTC update, and the turns stayed Python's 5 ms."""
     global KEPT_ON_DISK
     sys.setswitchinterval(SWITCH_INTERVAL_S)
+    KEPT_ON_DISK = True
+
+
+def main() -> None:
     args = sys.argv[1:]
     live = "--live" in args
-    # Kept answers are kept on disk too, across a restart, on the live site only (step AHJ).
-    KEPT_ON_DISK = live
+    if live:
+        live_settings()
     # `--bind 127.0.0.1` for a public deployment: the app sits behind a
     # reverse proxy that terminates TLS, and binding all interfaces would
     # leave the plain-HTTP port reachable from outside as well — the proxy

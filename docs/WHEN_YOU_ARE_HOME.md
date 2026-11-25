@@ -9883,6 +9883,17 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHM. The box's own start sets what server.py's did** (step 1005; 25 November; nothing to run). The box runs
+launch.py, which builds its own server from server.py's Handler and never runs server.main(). Two of this
+afternoon's settings lived only in server.main(), so on the live site neither was ever set: the server's threads'
+short turns (step AHG; its one-step reads did ship, and they are the measured rows gain) and kept answers kept on disk
+across a restart (step AHJ: after the 20:58 UTC update every page was built again). Both now sit in one function,
+live_settings, which both entry points call, as both call the paywall seal. And launch.py warmed the player pages'
+rosters only after its whole startup build of the boards, minutes after a restart, so the first college pages after
+each update parsed the 9.2 MB college file themselves (711 ms, then 1,060 ms); the rosters are read first now. To
+read after the update: a page asked before the next update answers "kept" or "stale" after it (when the update leaves
+that page's code alone), and the first college page after it shows its roster part in milliseconds.
+
 **AHL. The settle pass stops asking the same unanswerable question every quarter hour** (step 1004; 25 November;
 nothing to run). Step AHH's timings answered on the first pass: of 575.3 s of preparation in an 809.5 s settle pass,
 573.3 s went to placing old journal rows on their game day. Those are NFL bets journalled under a week label

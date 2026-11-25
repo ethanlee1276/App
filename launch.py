@@ -39,7 +39,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 from server import (Handler, LIVE_FILES, seal_on_boot,  # reuse the --live server
-                    BoundedHTTPServer)
+                    BoundedHTTPServer, live_settings)
 from engine.secrets import load_local_secrets
 
 ROOT = Path(__file__).parent
@@ -12948,6 +12948,9 @@ def main() -> None:
     # meant the one machine it was written for never ran it. Same function
     # in both, so they cannot drift.
     seal_on_boot()
+    # AND THE LIVE PROCESS'S SETTINGS, the same way (step AHM): the interpreter's short turns and kept answers kept
+    # on disk across a restart lived only in server.main() for an afternoon, and so never ran here.
+    live_settings()
 
     try:
         # THE SAME BOUNDED SERVER server.main() uses. This is the
@@ -13015,6 +13018,13 @@ def main() -> None:
             statlogs.warm_search()
         except Exception as exc:                          # noqa: BLE001
             print(f"  ⚠️  search lists not built ahead ({exc}): each league's builds on its first search")
+        # The rosters a player's page reads, before the build too (step AHM): warmed only after it, the first college
+        # pages after an update parsed the 9.2 MB college file themselves.
+        try:
+            from engine import playerpage
+            playerpage.warm_rosters()
+        except Exception as exc:                          # noqa: BLE001
+            print(f"  ⚠️  rosters not read ahead ({exc}): each league's is read on its first page")
         try:
             with _BUILD_LOCK:
                 # The updater holds a restart while this runs (_note_sweep).

@@ -124,8 +124,14 @@ def test_only_the_live_server_writes_them_and_every_kept_answer_does():
                         ("team", "_TEAM_PAGES")):
         assert f'_kept_save("{kind}", key, entry)' in src, kind
         assert f'hit = {store}.get(key) or _kept_load("{kind}", key, {store})' in src, kind
+    settings = src[src.index("def live_settings() -> None:"):src.index("def main() -> None:")]
+    assert "KEPT_ON_DISK = True" in settings
     main = src[src.index("def main() -> None:"):]
-    assert "KEPT_ON_DISK = live" in main[:600]
+    assert "if live:\n        live_settings()" in main[:400]
+    # And the box's entry point (step AHM): launch.py never runs server.main(), so it sets them itself.
+    launch = (ROOT / "launch.py").read_text(encoding="utf-8")
+    start = launch[launch.index("    seal_on_boot()\n"):]
+    assert start.index("live_settings()") < start.index("server = BoundedHTTPServer((bind, port), Handler)")
 
 
 if __name__ == "__main__":

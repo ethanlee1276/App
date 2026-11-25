@@ -165,10 +165,14 @@ def test_every_reader_of_the_roster_files_reads_them_this_way():
                       ("engine/statlogs.py", "doc = rosterfile.doc(path)")):
         assert needle in (ROOT / f).read_text(encoding="utf-8"), f
     import inspect
-    assert "_roster_names(sport)" in inspect.getsource(PP.warm), "parsed behind a restart, before the first page"
+    assert "_roster_names(sport)" in inspect.getsource(PP.warm_rosters), "parsed behind a restart, before the first page"
     # Five seconds in, before the rank tables' minute (step AHK): a college page a minute after an update parsed it.
     warm = inspect.getsource(PP.warm)
-    assert PP.ROSTER_WARM_S == 5.0 and warm.index("_roster_names(sport)") < warm.index("time.sleep(max(0.0, delay - first))")
+    assert PP.ROSTER_WARM_S == 5.0 and warm.index("warm_rosters()") < warm.index("time.sleep(max(0.0, delay - first))")
+    # And on the box, before its startup build (step AHM): launch.py warmed the pages only after the whole build.
+    launch = (ROOT / "launch.py").read_text(encoding="utf-8")
+    chores = launch[launch.index("def _startup_chores() -> None:"):]
+    assert chores.index("playerpage.warm_rosters()") < chores.index("refresh_all()")
 
 
 if __name__ == "__main__":
