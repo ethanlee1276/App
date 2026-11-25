@@ -778,13 +778,13 @@ function plrMarkets(page, kept) {
   const tonight = page.querySelector(".plr-tonight");
   if (!tonight) return;
   tonight.replaceChildren(kept);
+  lineAdjFill(tonight);
+  if (tonight.firstElementChild) tonight.insertAdjacentHTML("afterbegin", `<h3 class="plr-h">${plrTonightTitle(page)}</h3>`);
   plrSeasonTiles(page);
   if (!tonight._seasonWatch && typeof MutationObserver === "function") {
     tonight._seasonWatch = new MutationObserver(() => plrSeasonTiles(page));
     tonight._seasonWatch.observe(tonight, { childList: true, subtree: true });
   }
-  lineAdjFill(tonight);
-  if (tonight.firstElementChild) tonight.insertAdjacentHTML("afterbegin", `<h3 class="plr-h">${plrTonightTitle(page)}</h3>`);
 }
 /* THE PICK A TAP OPENED THIS PAGE ON (app.js openPick; Ethan, 2026-11-17: a pick on the Edge and Most
    Likely boards "always send too the new player page"). It heads the Overview, drawn by the pick page's
