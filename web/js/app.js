@@ -13607,6 +13607,25 @@ function openGame(gid) {
   state.gameId = (g && gameSlug(g)) || gid;
   switchView("game");
 }
+/* THE GAME AND ITS REPORT (Ethan, 2026-11-25, circling Best Parlays' "Open the game and its report": "Also this
+   button isn't working"). It opened nothing: Best Parlays and Report Picks ("Open the report") drew the button and no
+   listener for it. It opens the game's page, then brings the report to the top once the page has drawn it. A page
+   with no report to show (locked, or none built) stays at its top, opened. */
+function openGameReport(gid) {
+  openGame(gid);
+  const t0 = Date.now();
+  const find = () => {
+    if (state.view !== "game") return;
+    const el = document.getElementById("gp-sec-report");
+    if (el) el.scrollIntoView({ behavior: state.quiet ? "auto" : "smooth", block: "start" });
+    else if (Date.now() - t0 < 8000) setTimeout(find, 100);
+  };
+  find();
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest(".bp-open[data-gid], .rpk-open[data-gid]");
+  if (b) openGameReport(b.dataset.gid);
+});
 
 /* ============================================================
    GAME SCRIPTS — which picks need the game to go the same way

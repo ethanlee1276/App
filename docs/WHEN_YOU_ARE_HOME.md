@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFB. "Open the game and its report" opens them** (step 944; 25 November; nothing to run). You, circling the button on a
+Best Parlays card: "Also this button isn't working". It never had: the page drew it on 21 November (step AAL) with
+nothing listening for a press, and Report Picks' "Open the report" button the same. The one test of it read its
+markup and never pressed it. Both now open the game's page and bring its report to the top once the page has drawn
+it (a game with no report to show opens at its top), and a browser test presses each and checks the report is on the
+screen; with the fix taken out, that test fails.
+
 **AFA. Every league's form tiles to one decimal** (step 943; 25 November; nothing to run). The tiles over a market
 card's chart (L1, L3, L5, L10, Season) print the averages each build hands over, and each build rounded them its own
 way: the NFL's to one place, basketball's and baseball's to two, hockey's not at all, so a hockey card could read "L3

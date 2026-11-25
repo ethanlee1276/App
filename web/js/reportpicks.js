@@ -11,8 +11,9 @@
    price, our chance, and on a finished game how it went), each saying where
    the report shows it, then the game's three-leg tickets and pairs as the
    report draws them (js/report.js gameTickets, graded once the game is
-   over). A pick opens the page it opens everywhere (app.js likelyOpen); the
-   game's name opens the game and its report. Every pick and ticket is graded
+   over). A pick opens the page it opens everywhere (app.js likelyOpen); a
+   game's name folds it open, and its "Open the report" button opens the game
+   and its report (app.js openGameReport). Every pick and ticket is graded
    on the Record page's "The Game Report Picks and Parlays" (record.js
    recReportBook), which this page's own Record tab draws too. */
 
