@@ -234,13 +234,18 @@ function plrSeasonPills(d, nums) {
   const shown = new Set((nums || []).map((h) => String(h.key || h.label || "").toLowerCase()));
   const group = (c.groups || []).find((g) => g.key === d.role) || (c.groups || [])[0] || {};
   const pills = row.gp ? [`${row.gp} ${row.gp === 1 ? "game" : "games"}`] : [];
+  // A GAME'S AVERAGE SAYS SO (step AFX): basketball's season line is a game's average, and only its whole numbers
+  // got through, so Jalen Brunson's 2.0 turnovers a game read "17 games · 2 turnovers". Said as an average now.
+  const avg = !!c.per_game;
   for (const col of group.cols || []) {
     const v = (row.values || {})[`${group.key}.${col.key}`];
-    if (pills.length >= 4 || v == null || !Number.isInteger(Number(v)) || shown.has(String(col.key).toLowerCase())
-        || PLR_PILL_SKIP.test(col.key) || plrIsRate(col)) continue;
+    const n = v == null || v === "" ? NaN : Number(v);
+    if (pills.length >= 4 || !Number.isFinite(n) || (!avg && !Number.isInteger(n))
+        || shown.has(String(col.key).toLowerCase()) || PLR_PILL_SKIP.test(col.key) || plrIsRate(col)) continue;
     // A plus-minus is said with its sign, "+28" (McDavid's pill read "28 plus-minus"), and a true minus.
-    const num = `${col.label === "+/-" && Number(v) > 0 ? "+" : ""}${Number(v).toLocaleString()}`;
-    pills.push(`${typeof trueMinus === "function" ? trueMinus(num) : num} ${String(col.title || col.label || col.key).toLowerCase()}`);
+    const num = `${col.label === "+/-" && n > 0 ? "+" : ""}${avg ? n.toFixed(1) : n.toLocaleString()}`;
+    pills.push(`${typeof trueMinus === "function" ? trueMinus(num) : num} ${
+      String(col.title || col.label || col.key).toLowerCase()}${avg ? " a game" : ""}`);
   }
   return pills.length ? `<div class="plr-pills">${pills.map((x) => `<span class="plr-pill">${escapeHtml(x)}</span>`)
     .join("")}</div>` : "";

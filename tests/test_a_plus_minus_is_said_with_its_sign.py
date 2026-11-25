@@ -63,7 +63,7 @@ def test_a_plus_minus_pill_carries_its_sign():
 
 
 def test_the_page_signs_by_the_columns_label():
-    assert 'col.label === "+/-" && Number(v) > 0 ? "+" : ""' in PLR
+    assert 'col.label === "+/-" && n > 0 ? "+" : ""' in PLR
 
 
 if __name__ == "__main__":

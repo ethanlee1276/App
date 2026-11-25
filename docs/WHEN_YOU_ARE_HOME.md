@@ -9883,6 +9883,12 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFX. A basketball season's pills say "a game"** (step 966; 25 November; nothing to run). Jalen Brunson's
+season card read "17 games · 2 turnovers" under his 26.5 points: basketball's season line is a game's average, and
+the pills under the four numbers let through only whole numbers, so his 2.0 turnovers a game read like two all
+season. In the NBA, the WNBA and college basketball the pills now say each average to a tenth, "a game" (his read
+"17 games · 33.9 minutes a game · 0.7 steals a game · 0.2 blocks a game"); every other league's are counts, as before.
+
 **AFW. A receiver's tables lead with Receiving** (step 965; 25 November; nothing to run). Looking at Amon-Ra St.
 Brown's page as a member sees it: his Recent games opened on a Rushing group of zeros (carries, yards, average), with
 his catches off the right of a phone's screen. The game log's layout lists passing, rushing, receiving, and every
