@@ -9883,6 +9883,12 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHC. The player search says where its time went** (step 997; 25 November; nothing to run). A player's page
+opened from its address asks the league search first, and on the live site a college search ("jeremiah smith") took
+2.9 s once, 0.26 s of it work and the rest waiting, then 16 ms asked again; its answer said nothing of which read
+waited. Its Server-Timing now says each part, as the page's own does: the names, the games counted for them, each
+hit's club and face, and the roster's top-up. To read after the update: the next slow search's parts.
+
 **AHB. A player's market logs are kept as the game log is** (step 996; 25 November; nothing to run). A player
 not priced tonight asks for their market logs (/api/players/logs) with their page, for the market cards at its foot,
 and they were read again on every visit: 20 to 100 ms of the server's own time on the live site (Jalen Brunson 46

@@ -254,7 +254,7 @@ def face(conn, sport: str, player: str) -> str:
 
 
 def search(sport: str, q: str, limit: int = 12, db_path=None,
-           data_dir=None) -> list[dict]:
+           data_dir=None, took=None) -> list[dict]:
     """Every player in the league whose name contains ``q``, newest first.
 
     Ethan, 2026-08-18: "You should be able too look up any player in the
@@ -279,7 +279,7 @@ def search(sport: str, q: str, limit: int = 12, db_path=None,
     conn = _db.connect(path)
     try:
         # A club's own row is offered as a team, never again as a player (SEARCHDUP1).
-        return drop_clubs(_search_conn(conn, sport, q, limit, data_dir), sport)
+        return drop_clubs(_search_conn(conn, sport, q, limit, data_dir, took=took), sport)
     finally:
         conn.close()
 
@@ -491,14 +491,25 @@ def _ranked_names(conn, sport: str, q: str, limit: int, fuzzy: bool = True) -> d
 
 
 def _search_conn(conn, sport: str, q: str, limit: int,
-                 data_dir=None) -> list[dict]:
+                 data_dir=None, took=None) -> list[dict]:
     """One league's hits on an already-open connection.
 
     Split out so the all-league search opens the database once instead of
     once per sport — five connections to answer one keystroke, on a box
     with one core, is a cost the page pays on every letter typed.
-    """
+
+    ``took``, a list, gets each part's milliseconds as ``(part, ms)`` (step AHC, 25 November 2026: a college search
+    took 2.9 s once on the live site, 0.26 s of it work, and 16 ms asked again; the search is the first ask of every
+    player page opened from its address, and said nothing of where its time went)."""
+    clock = [time.perf_counter()]
+
+    def mark(part):
+        if took is not None:
+            now = time.perf_counter()
+            took.append((part, (now - clock[0]) * 1000.0))
+            clock[0] = now
     ranked = _ranked_names(conn, sport, q, limit, fuzzy=False)
+    mark("names")
     if not ranked:
         # NOTHING HAS PLAYED UNDER THAT NAME — which is not the same as
         # nobody having it. The roster answers for the men the logs
@@ -535,6 +546,7 @@ def _search_conn(conn, sport: str, q: str, limit: int,
     except sqlite3.OperationalError:
         # A file older than idx_logs_player: the same answer, row by row.
         rows = conn.execute(sql.replace(" INDEXED BY idx_logs_player", ""), (sport, *names)).fetchall()
+    mark("games")
     place = {n: i for i, n in enumerate(names)}
     rows = sorted(rows, key=lambda r: (ranked[r["player"]],
                                        place[r["player"]] if ranked[r["player"]] == 3 else 0))[:int(limit)]
@@ -580,6 +592,7 @@ def _search_conn(conn, sport: str, q: str, limit: int,
                     "team": (t["team"] if t else "") or "",
                     "position": (t["position"] if t else "") or "",
                     "headshot": face})
+    mark("clubs")
     seen = _lend_roster(sport, out, data_dir)
     # TOPPED UP, NOT REPLACED. A man with a stat line outranks one
     # without, always — so the roster only ever fills the space the
@@ -588,6 +601,7 @@ def _search_conn(conn, sport: str, q: str, limit: int,
     found = any(r < 3 for r in ranked.values())
     if len(out) < int(limit):
         out += _roster_hits(sport, q, int(limit) - len(out), seen, data_dir, fuzzy=not found)
+    mark("roster")
     from .playersearch import no_guess_beside_an_answer
     return no_guess_beside_an_answer(out)
 

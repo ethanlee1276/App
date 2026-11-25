@@ -5233,7 +5233,12 @@ class Handler(BaseHTTPRequestHandler):
                 from engine.ufc import fighters
                 hits = fighters.search(term)
             elif sport in statlogs.SPORT_MARKETS:
-                hits = statlogs.search(sport, term)
+                # Where its time went, part by part (step AHC), as the page's own answer says.
+                took: list = []
+                hits = statlogs.search(sport, term, took=took)
+                timing = ", ".join(f"{part};dur={ms:.0f}" for part, ms in took)
+                return self._send(200, json.dumps({"players": hits}).encode(), ".json",
+                                  headers=[("Server-Timing", timing)] if timing else None)
             else:
                 return self._send(400, b'{"error":"no log-backed search '
                                        b'for this sport"}', ".json")
