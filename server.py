@@ -1228,6 +1228,7 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def do_GET(self):
+        self._clock = (time.perf_counter(), time.thread_time())      # every answer's own timing (_send, step AFL)
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/") and self._rate_limited(RATE_READ_PER_MIN):
             return
@@ -1419,6 +1420,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._static(parsed.path)
 
     def do_POST(self):
+        self._clock = (time.perf_counter(), time.thread_time())      # every answer's own timing (_send, step AFL)
         parsed = urlparse(self.path)
         # The billing webhook (/api/billing/webhook — Stripe; Paddle is
         # retired, audit E-19) is exempt from the rate limiter below: it is
@@ -4975,8 +4977,8 @@ class Handler(BaseHTTPRequestHandler):
         hit = _PLAYER_PAGES.get(key)
         # WHERE A SLOW PAGE SPENDS ITS TIME (step AFK, 25 November 2026), as the team page says it (2026-11-18):
         # Amon-Ra St. Brown's page answered in 4.4 s once and 0.2 s a minute later. A built answer names each
-        # part and its milliseconds (engine/playerpage.page `took`, then "all"); a kept one says "kept". Names
-        # and numbers only; the page ignores it.
+        # part and its milliseconds (engine/playerpage.page `took`, then "build"); a kept one says "kept". Names
+        # and numbers only; the page ignores it. (_send adds the answer's own "all" and "cpu", step AFL.)
         if hit and time.time() - hit[0] < PLAYER_PAGE_TTL:
             return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])
         took: list = []
@@ -4991,7 +4993,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(made or {}).encode()
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the player page could not be read"}', ".json")
-        took.append(("all", (time.perf_counter() - t0) * 1000.0))
+        took.append(("build", (time.perf_counter() - t0) * 1000.0))
         if len(_PLAYER_PAGES) >= PLAYER_PAGE_KEEP:
             try:                          # the oldest out; another thread may be writing beside this one
                 _PLAYER_PAGES.pop(next(iter(_PLAYER_PAGES)), None)
@@ -7383,6 +7385,15 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                              "max-age=31536000; includeSubDomains")
         for name, value in (headers or []):
             self.send_header(name, value)
+        # HOW LONG AN ANSWER TOOK, AND HOW MUCH OF THAT WAS ITS OWN WORK (step AFL, 25 November 2026). The build
+        # loop's settle and chores, the watchers and every reader's request share this one process, and one
+        # thread runs at a time, so a slow answer is slow work or a wait for its turn: `all` is its milliseconds
+        # since the request was read, `cpu` this thread's own processor time in them. Names and numbers only;
+        # a second Server-Timing line joins any the handler sent (the team page's parts, the player page's).
+        clock = getattr(self, "_clock", None)
+        if clock is not None and str(getattr(self, "path", "")).startswith("/api/"):
+            self.send_header("Server-Timing", f"all;dur={(time.perf_counter() - clock[0]) * 1000.0:.0f}, "
+                                              f"cpu;dur={(time.thread_time() - clock[1]) * 1000.0:.0f}")
         # When the payload came from a file on disk, say when that file was
         # last written. The site's freshness chip used to time its own
         # fetch, which is always a few seconds old — so a phone across town

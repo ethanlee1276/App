@@ -63,7 +63,7 @@ def test_the_server_says_where_a_pages_time_went():
     body = SRV[SRV.index("def _players_page(self, q):"):]
     body = body[:body.index("\n    def ", 10)]
     assert 'return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])' in body
-    assert "took=took)" in body and 'took.append(("all", (time.perf_counter() - t0) * 1000.0))' in body
+    assert "took=took)" in body and 'took.append(("build", (time.perf_counter() - t0) * 1000.0))' in body
     assert 'timing = ", ".join(f"{part};dur={ms:.0f}" for part, ms in took)' in body, "names and numbers only"
 
 

@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFL. Every answer says where its time went** (step 954; 25 November; nothing to run). Follow-up to AFK. The
+web server shares one process with the build loop's settling and chores and the watchers (the builds themselves
+already run as separate processes at a lower priority), and only one of the process's threads runs at a time. So a
+slow answer is either slow work or a wait for its turn, and from outside the two look the same. Every answer from
+the site's API now carries a timing line with both: how long it took, and how much of that was its own processor
+time. The player page's answer also names each part of its build (AFK). I'll read them off the next slow one.
+
 **AFK. A player's page stops waiting on what it doesn't show** (step 953; 25 November; nothing to run). You said:
 "Also data on the player page takes a long time to load". I opened Amon-Ra St. Brown's page on the live site three
 times in a row with the browser's processor slowed to a phone's (four times slower). His season's numbers showed at
