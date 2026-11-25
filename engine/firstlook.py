@@ -96,10 +96,10 @@ def last_graded(conn) -> dict | None:
     """The newest settled pick of the headline record, or None."""
     from engine import ledger as L
     try:
-        rows = L.settled_page(conn)["rows"]
+        row = L.newest_settled(conn)                     # the Record's first row alone (step AGZ)
     except sqlite3.Error:
         return None
-    return {k: rows[0].get(k) for k in LAST_FIELDS} if rows else None
+    return {k: row.get(k) for k in LAST_FIELDS} if row else None
 
 
 def free_pick(web: Path = WEB, today: _dt.date | None = None) -> dict | None:

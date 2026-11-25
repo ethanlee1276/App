@@ -8878,31 +8878,9 @@ def recent_settled(conn, limit: int = 30,
 SETTLED_PAGE_SIZE = 50
 
 
-def settled_page(conn, sport: str | None = None, kind: str | None = None,
-                 result: str | None = None, since: str | None = None,
-                 offset: int = 0) -> dict:
-    """A page of the HEADLINE record's settled bets, newest first.
-
-    Ethan's product audit, 2026-09-23, item 17: the Record as "a
-    financial terminal" — every bet, filterable, with the model's
-    number, the price, the close and the CLV on each row. The record
-    file ships the RECENT_LIMIT most recent; this is the rest of the
-    list, a page at a time, behind /api/record/bets.
-
-    THE SAME ROWS AS THE HEADLINE ABOVE IT: POOLED_BOOKS, staked,
-    settled, on or after RECORD_EPOCH by `date` (performance's own
-    floor), benched leagues out of the unscoped list (recent_settled's
-    rule). A narrower window is read on the CALENDAR day (`day_expr`),
-    the one the running P&L buckets on — the page's window is cut from
-    that curve, so the list and the chart agree about which days are in.
-
-    `kind` is "props" or "lines" (GAME_MARKETS); `result` is won,
-    lost or push. `total` counts every row the filters match, so the
-    page can say how many there are rather than how many it has.
-
-    A league with a book of its own (OWN_BOOK_SPORTS: UFC's fight picks)
-    pages that book on its own scope — the rows its headline counts.
-    """
+def _settled_where(sport: str | None = None, kind: str | None = None, result: str | None = None,
+                   since: str | None = None) -> tuple[str, list]:
+    """`settled_page`'s rows as a WHERE clause and its arguments (its docstring says which)."""
     books, bargs = books_sql(own_book(sport) or POOLED_BOOKS)
     where = ("WHERE status IN ('won','lost','push') AND stake_units > 0 "
              f"AND {books} AND date >= ?")
@@ -8928,6 +8906,46 @@ def settled_page(conn, sport: str | None = None, kind: str | None = None,
     if result in ("won", "lost", "push"):
         where += " AND status=?"
         args.append(result)
+    return where, args
+
+
+def newest_settled(conn, sport: str | None = None) -> dict | None:
+    """The row `settled_page` lists first, read alone: its stored fields, no count and no page (step AGZ, 25
+    November 2026). The sign-up screen shows the newest graded pick, and read it as the Record's first page (a count
+    of every settled bet, fifty rows each graded for its process): 564 ms of the server's time on the live site,
+    again each time the record changed."""
+    where, args = _settled_where(sport)
+    row = conn.execute("SELECT date, sport, player, market, side, line, odds, book, grade, status, pnl_units, "
+                       "hit_prob FROM bets " + where + " ORDER BY date DESC, id DESC LIMIT 1", args).fetchone()
+    return dict(row) if row else None
+
+
+def settled_page(conn, sport: str | None = None, kind: str | None = None,
+                 result: str | None = None, since: str | None = None,
+                 offset: int = 0) -> dict:
+    """A page of the HEADLINE record's settled bets, newest first.
+
+    Ethan's product audit, 2026-09-23, item 17: the Record as "a
+    financial terminal" — every bet, filterable, with the model's
+    number, the price, the close and the CLV on each row. The record
+    file ships the RECENT_LIMIT most recent; this is the rest of the
+    list, a page at a time, behind /api/record/bets.
+
+    THE SAME ROWS AS THE HEADLINE ABOVE IT: POOLED_BOOKS, staked,
+    settled, on or after RECORD_EPOCH by `date` (performance's own
+    floor), benched leagues out of the unscoped list (recent_settled's
+    rule). A narrower window is read on the CALENDAR day (`day_expr`),
+    the one the running P&L buckets on — the page's window is cut from
+    that curve, so the list and the chart agree about which days are in.
+
+    `kind` is "props" or "lines" (GAME_MARKETS); `result` is won,
+    lost or push. `total` counts every row the filters match, so the
+    page can say how many there are rather than how many it has.
+
+    A league with a book of its own (OWN_BOOK_SPORTS: UFC's fight picks)
+    pages that book on its own scope — the rows its headline counts.
+    """
+    where, args = _settled_where(sport, kind, result, since)
     total = conn.execute("SELECT COUNT(*) FROM bets " + where, args).fetchone()[0]
     offset = max(0, int(offset or 0))
     rows = conn.execute(

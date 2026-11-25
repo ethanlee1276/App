@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGZ. The sign-up screen's newest graded pick is read alone** (step 994; 25 November; nothing to run). After AGS
+went live the sign-up screen's rebuild read its boards in 8 ms (633 to 1,840 ms before), and its slowest part was
+the newest graded pick ("last", 564 ms): it read the Record's whole first page (a count of every settled bet, fifty
+rows each graded) to keep one row, again whenever the record changed. ledger.newest_settled reads that row alone,
+with the Record page's own WHERE (ledger._settled_where, which the page now builds from too), so the two never
+disagree about which pick is newest. On a 60,000-bet copy the read went from 114 ms to 45 ms.
+
 **AGY. A market card's Season tile is the season the page shows** (step 993; 25 November; nothing to run). Seen
 while checking AGX: a market card nobody priced tonight reads its tiles off its last ten games, and ten games are not
 a season, so once a season passed ten games its Season tile said "—", in every league (Jalen Brunson's points card
