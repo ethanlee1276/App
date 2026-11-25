@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AEW. A report says each fact whole** (step 939; 25 November). Nothing to run. Read off Ethan's Patriots at Bears
+report: the case for the Patriots named three of the Bears' four starters out (Montez Sweat was dropped without a
+word) while the short version and the injury list named all four; a case now names three and counts the rest ("and
+one more"). One meeting read "NE has won 1 of the last 1 meeting; against the spread NE is 1-0; 0 went over the
+total and 1 under", and now reads "NE won the last meeting; NE covered; it went under the total". The copied text of
+a player with no verdict word read "D'Andre Swift =  —"; the "=" now goes only with a word.
+
 **AEV. One expected score per report** (step 938; 25 November). Nothing to run. A report's short version rounded
 the score the lines expect to whole points, while the verdict and the market section used a decimal: one college
 report said Vanderbilt would score about 74 in the short version and about 73.5 two sections later, and an NBA one

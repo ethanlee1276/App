@@ -1168,18 +1168,36 @@ def sec_meetings(c: Ctx) -> dict | None:
     wins = {t: sum(1 for m in ms if m.get("winner") == t) for t in c.teams}
     lead = max(c.teams, key=lambda t: wins[t])
     other = c.opp[lead]
-    if wins[lead] == wins[other]:
+    if n == 1:
+        # ONE MEETING, SAID AS ONE (25 November 2026): "NE has won 1 of the
+        # last 1 meeting; against the spread NE is 1-0; 0 went over the total
+        # and 1 under".
+        m = ms[0]
+        head = (f"{m['winner']} won the last meeting" if m.get("winner") in c.teams
+                else "The last meeting had no winner")
+        if m.get("covered") in c.teams:
+            head += f"; {m['covered']} covered"
+        elif m.get("covered") == "push":
+            head += "; the spread was a push"
+        if m.get("ou") in ("over", "under"):
+            head += f"; it went {m['ou']} the total"
+        elif m.get("ou") == "push":
+            head += "; the total was a push"
+        ms_lined = []
+    elif wins[lead] == wins[other]:
         head = f"The last {_plural(n, 'meeting')} are split {wins[lead]}-{wins[other]}"
+        ms_lined = ms
     else:
         head = f"{lead} has won {wins[lead]} of the last {_plural(n, 'meeting')}"
-    lined = [m for m in ms if m.get("covered")]
+        ms_lined = ms
+    lined = [m for m in ms_lined if m.get("covered")]
     if lined:
         cov = {t: sum(1 for m in lined if m["covered"] == t) for t in c.teams}
         push = sum(1 for m in lined if m["covered"] == "push")
         best = max(c.teams, key=lambda t: cov[t])
         head += (f"; against the spread {best} is {cov[best]}-{cov[c.opp[best]]}"
                  + (f"-{push}" if push else ""))
-    totals = [m for m in ms if m.get("ou")]
+    totals = [m for m in ms_lined if m.get("ou")]
     if totals:
         ov = sum(1 for m in totals if m["ou"] == "over")
         un = sum(1 for m in totals if m["ou"] == "under")
@@ -4971,8 +4989,8 @@ def verdict_evidence(c: Ctx) -> dict:
                 if isinstance(x, dict) and x.get("player") and (_f(x.get("mpg")) or 0) >= VERDICT_ROTATION_MPG]
         if gone:
             out[c.opp[t]].append(f"{cap(team_np(c, t))} {team_be(c, t)} without " + _join(
-                f"{x['player']} ({_num(x['mpg'], 0)} minutes" + (f", {_num(x['ppg'])} points" if x.get("ppg") else "")
-                + " a game)" for x in gone[:3]))
+                [f"{x['player']} ({_num(x['mpg'], 0)} minutes" + (f", {_num(x['ppg'])} points" if x.get("ppg") else "")
+                 + " a game)" for x in gone[:VERDICT_NAMES_OUT]] + _more_out(len(gone))))
     # Who is out: a starter or featured player ruled out or doubtful counts
     # for the other side, a quarterback first.
     rows = [r for r in c.scan.get("injuries") or [] if isinstance(r, dict) and r.get("team") in out
@@ -4981,9 +4999,26 @@ def verdict_evidence(c: Ctx) -> dict:
         mine = sorted((r for r in rows if r.get("team") == t), key=lambda r: str(r.get("position") or "") != "QB")
         if mine:
             said = [f"{r.get('player')}" + (f" ({r['position']})" if r.get("position") else "")
-                    + f", {status_words(r.get('status'))}" for r in mine[:3]]
-            out[c.opp[t]].append(f"{cap(team_np(c, t))} {team_be(c, t)} without {_join(said)}")
+                    + f", {status_words(r.get('status'))}" for r in mine[:VERDICT_NAMES_OUT]]
+            out[c.opp[t]].append(f"{cap(team_np(c, t))} {team_be(c, t)} without {_join(said + _more_out(len(mine)))}")
     return out
+
+
+#: The players a case names as out; the rest are counted (25 November 2026: a
+#: case that named three of the Bears' four starters out read as all of them,
+#: beside a short version and an injury list that named the fourth).
+VERDICT_NAMES_OUT = 3
+
+
+def _more_out(n: int) -> list:
+    """``["one more"]`` and the like for the players past VERDICT_NAMES_OUT, or []."""
+    more = int(n) - VERDICT_NAMES_OUT
+    if more <= 0:
+        return []
+    return [f"{_MORE_WORDS.get(more, more)} more"]
+
+
+_MORE_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
 
 
 #: OUR TEAM RATINGS' OWN CHANCE, BESIDE THE CALL (Ethan, 2026-11-16, asked
@@ -5833,7 +5868,7 @@ def to_text(report: dict) -> str:
                                f"{r.get('name') or r.get('team')} {round(float(r['chance']) * 100)}%"))
             elif t == "verdicts":
                 for v in b["items"]:
-                    out.append(f"  • {v['title']} = {v['label']}"
+                    out.append(f"  • {v['title']}" + (f" = {v['label']}" if v.get("label") else "")
                                + (f" [{v['status']}]" if v.get("status") else "")
                                + (f" — {v['role']}" if v.get("role") else ""))
                     out += [f"      - {w}" for w in v.get("why") or []]
