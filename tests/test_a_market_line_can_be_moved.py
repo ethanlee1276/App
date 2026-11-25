@@ -117,6 +117,29 @@ def test_the_card_draws_it_under_its_chart_and_the_redraw_holds_off():
     assert ".line-adj" not in styles and ".la-" not in styles, "the slider's styles load with its page"
 
 
+def test_a_locked_board_says_its_lines_are_for_members():
+    """A free account's board has its lines taken out (`locked`, 1,147 NFL rows on 25 November), so every market on
+    a player page is drawn as history. "No line on tonight's board" was not true there: the line is the members'."""
+    hist = _fn("historyProfileHTML", APP)
+    assert '((state.data || {}).locked || {}).recommendations ? "tonight’s lines are for members"' in hist
+    assert '"no line on tonight’s board"} — the last ${logs.length} games, for the read' in hist
+    consts = [ln for ln in PP.splitlines()
+              if ln.startswith(("const LINE_ADJ_UNSET", "const LINE_ADJ_LOCKED", "const lineAdjUnset"))]
+    assert len(consts) == 3, consts
+    if not shutil.which("node"):
+        print("      (skipped: no node)")
+        return
+    prog = "\n".join(consts) + ("\nlet state = { data: { locked: { recommendations: 1147 } } };\nconst a = lineAdjUnset();"
+                                "\nstate = { data: {} };\nconsole.log(JSON.stringify([a, lineAdjUnset()]));")
+    path = os.path.join(tempfile.mkdtemp(), "t.js")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(prog)
+    out = subprocess.run(["node", path], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-800:]
+    assert json.loads(out.stdout) == ["Tonight’s lines are for members. Move the line to check these games against it",
+                                      "No book line tonight. Move the line to check these games against it"]
+
+
 def _board():
     vals = [1, 3, 0, 2, 4, 1, 2, 0, 5, 1, 2, 3]
     logs = [{"week": 12 - i, "opponent": "NO", "home": i % 2 == 0, "value": v} for i, v in enumerate(vals)]

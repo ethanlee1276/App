@@ -878,8 +878,11 @@ function lineAdjReadHTML(r, line, side) {
   return `<b>${word} ${line}</b> · ${all} of ${plural(vals.length, "game").replace(" ", " ")} (${
     Math.round(100 * all / vals.length)}%)${last(5)}${last(10)}`;
 }
-//: What a market with no book line says before the reader sets one.
+//: What a market with no book line says before the reader sets one. On a board whose lines are locked (a free
+//: account's copy, `locked`), a line may well exist: it is the members', and the card says so rather than "none".
 const LINE_ADJ_UNSET = "No book line tonight. Move the line to check these games against it";
+const LINE_ADJ_LOCKED = "Tonight’s lines are for members. Move the line to check these games against it";
+const lineAdjUnset = () => (((state.data || {}).locked || {}).recommendations ? LINE_ADJ_LOCKED : LINE_ADJ_UNSET);
 function lineAdjHTML(r) {
   if (lineAdjVals(r).length < LINE_ADJ_MIN_GAMES || !Number.isFinite(Number(r.line))) return "";
   const { lo, hi } = lineAdjRange(r), st = lineAdjState(r), side = st.side, line = st.line ?? Number(r.line);
@@ -889,7 +892,7 @@ function lineAdjHTML(r) {
   const price = !r.history && moved ? lineAdjPriceHTML((_lineAdjPrices.get(lineAdjPriceKey(r)) || {}).d, line, side) : "";
   return `<div class="line-adj" data-player="${escapeAttr(r.player || "")}" data-mkt="${escapeAttr(r.market_label || r.market || "")}"${
     r.history ? ' data-history="1"' : ""}>
-    <div class="la-top"><span class="la-read" aria-live="polite">${st.line == null ? LINE_ADJ_UNSET
+    <div class="la-top"><span class="la-read" aria-live="polite">${st.line == null ? lineAdjUnset()
       : lineAdjReadHTML(r, line, side)}</span>
       <span class="la-side" role="group" aria-label="Side">${sd("OVER", "Over")}${sd("UNDER", "Under")}</span></div>
     ${r.history ? "" : `<div class="la-price" aria-live="polite"${price ? "" : " hidden"}>${price}</div>`}
@@ -942,7 +945,7 @@ function lineAdjDraw(box, r, st) {
     td.classList.toggle("hit", hit);
     td.classList.toggle("miss", line != null && !hit);
   });
-  box.querySelector(".la-read").innerHTML = line == null ? LINE_ADJ_UNSET : lineAdjReadHTML(r, line, side);
+  box.querySelector(".la-read").innerHTML = line == null ? lineAdjUnset() : lineAdjReadHTML(r, line, side);
   const at = line ?? Number(r.line), range = box.querySelector(".la-range");
   if (Number(range.value) !== at) range.value = String(at);
   range.setAttribute("aria-valuetext", String(at));

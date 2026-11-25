@@ -15415,7 +15415,8 @@ function historyProfileHTML(r0, label, logs, chips, tail = "") {
         ${rows}
       </table>
       <div class="profile-pick"><div class="lbl">${escapeHtml(label)}
-        <small>no line on tonight’s board — the last ${logs.length} games, for the read</small></div></div>
+        <small>${((state.data || {}).locked || {}).recommendations ? "tonight’s lines are for members"
+          : "no line on tonight’s board"} — the last ${logs.length} games, for the read</small></div></div>
       ${tail}
     </article>`;
 }

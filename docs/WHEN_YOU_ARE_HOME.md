@@ -9919,6 +9919,11 @@ away still holds: this is the only slider on the site, and it filters nothing. I
 and your answer on 19 November, asked whether to raise that budget or trim, was "probably trim it". The first
 visit is 392,442 bytes of its 393,216.
 
+A free account's player page, on the same night: its board has the lines taken out (`locked`: 1,147 NFL rows), so
+every market on a player page is drawn as history, and the card said "no line on tonight's board" for players whose
+lines were only locked. On a locked board it now says "tonight's lines are for members", and the slider's first
+reading says the same ("Tonight's lines are for members. Move the line to check these games against it").
+
 **AEX. The NFL's carries benched** (step 940; 25 November; nothing to run). Under decision 19 ("do whatever you
 think. All I want is picks that win the most on there"), the rule you set for the quarterback completions ("bench
 and learn") and pass attempts ("bench them"): the NFL's rush-attempt Edge picks are 40-46 for -6.7 units, losing 11%
