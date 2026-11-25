@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFD. Every market card on a player page has the same row of tiles** (step 947; 25 November; nothing to run). A
+market with a line tonight shows L1, L3, L5, L10 and Season over its chart. A market with no line tonight (or a locked
+board's, for a free account) is drawn from the player's stored games and showed no tiles at all, so tapping from
+Receptions to Carries on the same page dropped the row. Both cards now draw the row the same way, each number to one
+decimal. On a history card L1 to L10 are the averages of the newest one, three, five and ten games (fewer where there
+are fewer, as the priced card's are). Its Season tile counts only this season's games, and only where the card's games
+reach back to the season's start (week 1, or the turn into last season); ten games aren't a season, so otherwise it
+says "—" rather than pass ten games off as one. A browser test opens a player page, taps from a priced market to a
+history one, and checks the two rows match in labels, size and place.
+
 **AFE. A college game counts once on the cards and in the college model** (step 946; 25 November; nothing to run).
 Read off the live college board this morning: 112 of its 186 college market logs counted at least one game twice.
 Scoop Smith's rushing chart (Miami of Ohio) showed his Buffalo game twice, 31 yards on 3 November filed against "BUFF"

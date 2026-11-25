@@ -28,7 +28,10 @@ def _fn(name):
 
 def test_the_card_says_each_tile_through_one_rounding():
     card = _fn("pricedProfileHTML")
-    assert '<div class="v">${tileNum(v)}</div>' in card
+    # One row helper for every market card (step AFD): the priced card's and the history card's.
+    row = next(ln for ln in APP.splitlines() if ln.startswith("  `<div class=\"form-tile\"><div class=\"k\">"))
+    assert '<div class="v">${tileNum(v)}</div>' in row
+    assert "const tiles = formTiles([" in card and "formTiles([" in _fn("historyProfileHTML")
     assert "${v == null ? \"—\" : v}" not in card, "a tile printed as the build handed it over"
     detail = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
     assert "${Number(v).toFixed(1)}</span>" in detail, "the pick page says the same averages to one place"

@@ -15269,13 +15269,25 @@ function _profileHead(r, right, door = "") {
    rounded their own ways: the NFL's to one place, basketball's and baseball's to two, hockey's not at all, so a hockey
    card read "L3 0.6666666666666666" beside the NFL's "L3 1.3". The pick page says the same averages to one place. */
 const tileNum = (v) => (v == null || !Number.isFinite(+v) ? "—" : Math.round(+v * 10) / 10);
+const formTiles = (t) => `<div class="form-tiles">${t.map(([k, v]) =>
+  `<div class="form-tile"><div class="k">${k}</div><div class="v">${tileNum(v)}</div></div>`).join("")}</div>`;
+const meanOf = (v) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : null);
+/* A history card's Season tile: this season's games among its logs, where they
+   reach the season's start (a week number going up, week 1, or a gap of 60
+   days), else nothing: ten games are not a season (step AFD). */
+function logSeason(logs) {
+  for (let i = 1; i < logs.length; i++) {
+    const a = logs[i - 1], b = logs[i];
+    if (a.date && b.date ? new Date(a.date) - new Date(b.date) > 5184e6 : +b.week > +a.week) return logs.slice(0, i);
+  }
+  return logs.length && !logs[0].date && +logs[logs.length - 1].week === 1 ? logs : null;
+}
 function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
   const f = r.form || {};
   // On the player's own page the card opens nothing (Ethan, 2026-11-17: the
   // pick page left the player's flow); everywhere else the pick is a door.
   const door = inPage ? "" : propAttrs(r);
-  const tiles = [["L1", f.last1], ["L3", f.last3], ["L5", f.last5], ["L10", f.last10], ["Season", f.season]]
-    .map(([k, v]) => `<div class="form-tile"><div class="k">${k}</div><div class="v">${tileNum(v)}</div></div>`).join("");
+  const tiles = formTiles([["L1", f.last1], ["L3", f.last3], ["L5", f.last5], ["L10", f.last10], ["Season", f.season]]);
   const vals = (r.logs || []).map((l) => l.value);
   // MLB/NBA logs are one GAME per row (with a real date); NFL logs are weeks.
   const mlb = state.sport !== "nfl";
@@ -15301,7 +15313,7 @@ function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
       ${_profileHead(r, `<span class="grade ${gradeClass(r.grade)}">${
         escapeHtml(r.grade)}</span>`, door)}
       ${chips}
-      <div class="form-tiles">${tiles}</div>
+      ${tiles}
       <div class="profile-spark" data-player="${escapeAttr(r.player || "")}" data-mkt="${escapeAttr(r.market_label || "")}">${gamelogBars(vals, {
         line: r.line, side: r.side, fit: true, stroke: teamPrimary(r.team), w: 320, h: 72,
         labels: (r.logs || []).map((l) =>
@@ -15429,6 +15441,8 @@ function historyProfileHTML(r0, label, logs, chips, tail = "") {
     <article class="profile" style="--profile-grad:${grad}">
       ${_profileHead(r0, "")}
       ${chips}
+      ${formTiles([["L1", meanOf(vals.slice(0, 1))], ["L3", meanOf(vals.slice(0, 3))], ["L5", meanOf(vals.slice(0, 5))],
+        ["L10", meanOf(vals.slice(0, 10))], ["Season", meanOf((logSeason(logs) || []).map((l) => l.value))]])}
       <div class="profile-spark" data-player="${escapeAttr(r0.player || "")}" data-mkt="${escapeAttr(label)}" data-history="1">${gamelogBars(vals, {
         fit: true, stroke: teamPrimaryIn(r0.sport, r0.team), w: 320, h: 72,
         labels: logs.map((l) => `${when(l)} ${l.home ? "vs" : "@"} ${l.opponent}`),
