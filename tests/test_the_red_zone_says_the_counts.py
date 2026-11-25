@@ -91,8 +91,9 @@ def test_a_players_touchdown_line_leaves_the_share_to_the_counts():
     board = _board()
     rep = R.build(board["games"][0], board, allowed=GR.ALLOWED, names=GR.NAMES)
     text = R.to_text(rep)
-    assert ("Jahmyr Gibbs (RB): 43% to score, at +333; GB allows the second-most touchdowns to running backs; "
-            "the touchdown matchup backs it") in text
+    # The rank and the number (step AHO).
+    assert ("Jahmyr Gibbs (RB): 43% to score, at +333; GB allows the second-most touchdowns to running backs "
+            "(1.7 a game); the touchdown matchup backs it") in text
     assert "of DET's red-zone chances" not in text
 
 

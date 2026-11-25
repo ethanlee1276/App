@@ -62,8 +62,9 @@ def test_the_read_says_the_split_and_last_seasons_rate():
     x = G.player_read("DJ Moore", "CHI", "LV", "WR", usage=usage[("CHI", G._key("DJ Moore"))],
                       ratings={}, room={}, scheme={}, split={}, tackling={}, line_out=[],
                       mates_out=[])
-    assert ("Usage is 55% this season, 45% last season — last season, 26% of the "
-            "targets over 17 games") in x["notes"], x["notes"]
+    # In plain words (step AHO): "Usage is 55% this season" read as a share of the work.
+    assert ("Last season: 26% of the targets over 17 games — our number weighs this season 55% and last "
+            "season 45%") in x["notes"], x["notes"]
 
 
 def test_the_build_hands_the_scan_both_seasons():

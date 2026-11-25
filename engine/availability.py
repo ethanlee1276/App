@@ -196,10 +196,19 @@ def note(r: dict, c=None) -> str:
         if g:
             where = f" ({_game_words(g, c)})"
         what = "no stat line" if m.get("kind") == "stat" else "did not play"
-        return (f"{r.get('player')} had {what} in {name}'s last game{where} and is on no injury report "
+        # "the Packers' last game", never "Packers's last game" (step AHO; Ethan's screenshot of GB @ LA): the
+        # report's own possessive where it has one (gamereport.team_owner), else the name's.
+        owner = f"{name}'" if str(name).endswith("s") else f"{name}'s"
+        if c is not None and hasattr(c, "poss") and team:
+            try:
+                from .gamereport import team_owner
+                owner = team_owner(c, team)
+            except Exception:                                   # noqa: BLE001 - the plain possessive stands
+                pass
+        return (f"{r.get('player')} had {what} in {owner} last game{where} and is on no injury report "
                 "— the player may be hurt or held out; check the lineup before you bet"
                 if what == "no stat line" else
-                f"{r.get('player')} did not play in {name}'s last game{where} and is on no injury report "
+                f"{r.get('player')} did not play in {owner} last game{where} and is on no injury report "
                 "— check the lineup before you bet")
     return ""
 

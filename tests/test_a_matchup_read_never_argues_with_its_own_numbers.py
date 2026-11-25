@@ -92,9 +92,10 @@ def test_the_report_says_it_the_same_way():
         allowed = {"CIN": _cin()}
     out = GR.funnel_lines(C, "CIN")
     assert out[0].startswith("Where CIN's defense is weakest, over 9 games: it gives up the 2nd-most receiving yards")
-    assert out[-1] == ("Our receiver and tight end numbers read the passing yards CIN allows overall (237 a game, "
-                       "the 15th-most of 32): over the last four seasons that number predicted their next games, "
-                       "and what a defense allowed to one position did not"), out[-1]
+    assert out[-1] == ("Our receiver and tight end reads count the passing yards CIN allows overall (237 a game, "
+                       "the 15th-most of 32) and show what it allows each position beside it: over 2022-2025 the "
+                       "overall number split their games at least as well as the position's own, and counting both "
+                       "split them less"), out[-1]
     js = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     assert 'const word = (x.spot && x.label) || SCAN_READ_WORD[x.read] || x.label || "";' in js
 

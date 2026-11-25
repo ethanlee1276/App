@@ -144,7 +144,7 @@ def test_the_report_carries_the_four_scripts_and_who_can_score():
                  # 2026-11-15: his share of the red-zone work is said as counts
                  # above these lines (rz_usage_lines), not as our estimate here.
                  "Jahmyr Gibbs (RB): 43% to score, at +333; GB allows the "
-                 "second-most touchdowns to running backs; the touchdown matchup backs it"):
+                 "second-most touchdowns to running backs (1.7 a game); the touchdown matchup backs it"):
         assert want in text, want
     # Which scripts a pick holds in (rule 6: "Prefer props that can hit under
     # multiple scripts").

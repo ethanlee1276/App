@@ -1141,7 +1141,7 @@ def _stand_in_caveat(leg: dict, sport: str) -> str:
 #: The touchdown model's footnotes about its own mechanics — true, and
 #: nothing a reader weighs a leg on (engine/touchdowns.td_probability).
 _FOOTNOTES = ("Running back:", "Team total:", "Quarterback:", "Depth receiver:", "Share of team TDs from",
-              "Scout: ", "Usage is ",
+              "Scout: ", "Usage is ", "Last season: ",
               # The projection's arithmetic (engine/projection), not a reason
               # a reader weighs (Ethan's screenshot, 2026-11-15).
               "Usage bridge:")
@@ -1196,8 +1196,9 @@ def why_lines(leg: dict, row: dict | None, read: dict | None, n: int = WHY_N) ->
     if scorer:
         said += [x for x in reasons if x.startswith(("Goal-line work", "Red-zone"))]
         if read:
-            said += [str(x) for x in (read.get("notes") or []) + (read.get("pro") or [])
-                     if "touchdowns to" in str(x)]
+            tds = [str(x) for x in (read.get("notes") or []) + (read.get("pro") or []) if "touchdowns to" in str(x)]
+            # What the defence gives up in touchdowns to his position, at any rank, with the number (step AHO).
+            said += tds or ([str(read["position_td"])] if read.get("position_td") else [])
             said += [str(x) for x in read.get("pro") or [] if "rain" in str(x).lower() or "snow" in str(x).lower()]
         said += [x for x in reasons if not x.startswith(("Goal-line work", "Red-zone", "Team implied"))]
         said += [x for x in reasons if x.startswith("Team implied")]

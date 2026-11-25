@@ -118,7 +118,9 @@ def test_a_receiver_read_counts_its_reasons():
     y = G.player_read("Christian Watson", "GB", "ATL", "WR", allowed=allowed, points=28.25,
                       line_words="−7 at home, total 49.5", **kw)
     assert y["read"] == "breakout", y
-    assert "ATL gives up the 3rd-most passing yards (251 a game)" in y["pro"]
+    # The pass defence overall, said so; what ATL gives up to receivers, first among the notes (step AHO).
+    assert "ATL gives up the 3rd-most passing yards overall (251 a game)" in y["pro"]
+    assert y["notes"][0] == "Against wide receivers, ATL allows 140 receiving yards (the 16th-most) a game — of 32 defenses"
     assert "The lines expect GB to score about 28 (−7 at home, total 49.5)" in y["pro"]
     assert "ATL's pass defense ranks 24th" in y["notes"]
     assert "anytime_td" in y["lean"], "a read points at the touchdown too"

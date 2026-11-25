@@ -9883,6 +9883,39 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHO. Every football read says what the defense gives up to the player's own position** (step 1007; 25
+November; nothing to run). Ethan, on the Packers at the Rams, a fade of Tucker Kraft that read "LA gives up the
+second-fewest passing yards (198 a game)": "you're not going into specifics about how many passing yards they give
+up to tight ends, and for receivers you're not going into specifics on how many passing yards they give up to
+receivers, and same for touchdown props ... how a real sports bettor would use it". The read only mentioned the
+tight-end numbers when they sat in the league's top or bottom quarter, so a middling tight-end defense went unsaid.
+
+- **What a card says now.** Every NFL and college football read, and every report card built from it (the matchup
+  cards, Breakout candidates and Fades), says first among its notes what the defense gives up a game to his
+  position, in every stat his bets are on, each with its rank, at any rank: "Against tight ends, LA allows 47
+  receiving yards (the 15th-fewest), 4.6 catches (the 15th-most) and 0.1 touchdowns (the second-fewest) a game — of
+  32 defenses, over 11 games". A back's says his catches, receiving yards and touchdowns; a passer's, his
+  touchdowns and the interceptions the defense forces. A stat already given as a reason is left out and the line
+  says "also". The reason itself now says which number it is: "LA gives up the second-fewest passing yards overall".
+- **Why the verdict still counts the overall number.** Before deciding whether the position's numbers should also
+  count, I measured it (new `python3 positionfit.py`; 2022-2025, 7,321 receiver and tight end games from week 4,
+  each against his own average in the games before, and the defense's rank in the games before). Against the
+  softest quarter of pass defenses overall, catchers gained 103% of their usual yards and against the stingiest
+  quarter 93%, in every season. By the position's own number the split was 103% / 94%. Counting the position's
+  number as well, as one vote with the overall number, split them 102% / 94%. That was weaker in 2024, and for
+  receivers that year it pointed the wrong way. Touchdowns allowed to receivers or tight ends split nothing. So the
+  vote stays the overall number, and the position's numbers are printed beside it in full. Step ACW's rule (a lean
+  against the position's number at the league's ends leans neither way) is now measured too. Pass defenses in the
+  top quarter overall but the bottom quarter to his position gave up 89% of a catcher's usual yards, over 57 games
+  and in every season, so a breakout there is no breakout. The other way round, 26 games, said nothing either way.
+- **Touchdowns.** A scorer's line says the number beside the rank: "GB allows the second-most touchdowns to running
+  backs (1.7 a game)". "The touchdown matchup backs it" is now said only for running backs, the only position where
+  touchdowns allowed predicted touchdowns. A touchdown parlay leg says his position's touchdowns allowed at any
+  rank. The report's line on which number the catchers' reads count now says what the measurement found.
+- **Two wording fixes from the same screenshot.** "In Packers's last game" now reads "in the Packers' last game".
+  The usage note "Usage is 55% this season, 45% last season", which read as a share of the targets, now reads "Last
+  season: 19% of the targets over 8 games — our number weighs this season 55% and last season 45%".
+
 **AHN. The settle pass's catch-up is spread thinner** (step 1006; 25 November; nothing to run). Step AHL's first
 pass on the live box: the settle pass took 355.8 s (809.5 s the pass before), its preparation 140.5 s (575.3 s). Of
 that, 137.9 s was the backfill trying its first 20 of 64 week-labelled rows that no route places, 6.9 s each; the

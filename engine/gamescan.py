@@ -1032,15 +1032,94 @@ def _allowed_line(allowed: dict | None, stat: str, opp: str, n_default: int = 32
         return 0, ""
     words = D_STAT_WORDS.get(stat, stat)
     verb = "forces" if stat in _FORCED else "gives up"
-    q = max(1, round(n * 0.25))
     pg = r.get("pg")
     per = f" ({pg:.1f} a game)" if isinstance(pg, (int, float)) and pg < 10 else (
         f" ({pg:.0f} a game)" if isinstance(pg, (int, float)) else "")
+    q = max(1, round(n * 0.25))
     if rank <= q:
         return 1, f"{opp} {verb} the {_ord(rank)}-most {words}{per}"
     if rank > n - q:
         return -1, f"{opp} {verb} the {_ord(n - rank + 1)}-fewest {words}{per}"
     return 0, ""
+
+
+#: WHAT A DEFENSE GIVES UP TO HIS OWN POSITION, ALL OF IT (step AHO, 25 November 2026). Ethan, the Packers at the
+#: Rams, a fade on Tucker Kraft that read "LA gives up the second-fewest passing yards (198 a game)": "you're not
+#: going into specifics about how many passing yards they give up to tight ends, and for receivers you're not going
+#: into specifics on how many passing yards they give up to receivers, and same for touchdown props ... how a real
+#: sports bettor would use it". Every football read says, first, what the defence gives up a game to his position
+#: in each stat his bets are on, at any rank: yards, catches, touchdowns (a passer's yards, touchdowns and the
+#: interceptions it forces). (stat, words).
+#:
+#: SHOWN, AND COUNTED ONLY WHERE MEASURED. Re-measured that day on 2022-2025 (every receiver and tight end game from
+#: week 4 with three games before it and 15+ yards a game, 7,321 games; what he gained against his own average, by
+#: the defence's rank in the games before): the defence's passing yards overall, top quarter against bottom quarter,
+#: split them 103% / 93% of their usual yards (every season); the position's own number 103% / 94%; counting the
+#: position's softest or stingiest third too, as one vote with it, 102% / 94% (weaker in 2024, and wrong-way for
+#: receivers that year). Touchdowns allowed
+#: to receivers or tight ends split nothing. So the vote stays the overall number (defensevs.MODEL_STAT), and the
+#: position's numbers are said in full beside it, never as a reason.
+POSITION_STATS = {
+    "wr": (("wr_rec_yds", "receiving yards"), ("wr_rec", "catches"), ("wr_td", "touchdowns")),
+    "te": (("te_rec_yds", "receiving yards"), ("te_rec", "catches"), ("te_td", "touchdowns")),
+    "rb": (("rb_rush_yds", "rushing yards"), ("rb_rec", "catches"), ("rb_rec_yds", "receiving yards"),
+           ("rb_td", "touchdowns")),
+    "qb": (("qb_pass_yds", "passing yards"), ("qb_pass_td", "passing touchdowns"), ("qb_pass_int", "interceptions")),
+}
+POSITION_PLURAL = {"wr": "wide receivers", "te": "tight ends", "rb": "running backs", "qb": "quarterbacks"}
+
+
+def _place(rank: int, n: int) -> str:
+    """"the most", "the 9th-most", "the 2nd-fewest", "the fewest": a rank of ``n`` (1 gives up the most)."""
+    if rank <= (n + 1) / 2:
+        return "the most" if rank == 1 else f"the {_ord(rank)}-most"
+    low = n - rank + 1
+    return "the fewest" if low == 1 else f"the {_ord(low)}-fewest"
+
+
+def _td_sentence(allowed: dict | None, stat: str, opp: str, plural: str, n_default: int = 32) -> str:
+    """"LA gives up the 2nd-fewest touchdowns to tight ends (0.1 a game)": any rank, "" without a rating."""
+    r = (allowed or {}).get(stat) or {}
+    rank, pg = r.get("rank"), r.get("pg")
+    if not rank or not isinstance(pg, (int, float)):
+        return ""
+    return f"{opp} gives up {_place(int(rank), int(r.get('of') or n_default))} touchdowns to {plural} ({pg:.1f} a game)"
+
+
+def position_line(group: str, allowed: dict | None, opp: str, n_default: int = 32, skip=()) -> str:
+    """"Against tight ends, LA allows 45 receiving yards (the 12th-fewest), 4.3 catches (the 9th-fewest) and 0.1
+    touchdowns (the 2nd-fewest) a game — of 32 defenses, over 11 games": what ``opp`` gives up a game to ``group``
+    in each of POSITION_STATS, at any rank. A stat in ``skip`` (said already as a counted reason) is left out and
+    the line says "also"; "" when the defence has no rating for any of them."""
+    stats = [x for x in POSITION_STATS.get(group, ()) if x[0] not in set(skip or ())]
+    allows, forces, games, n = [], [], None, n_default
+    for stat, words in stats:
+        r = (allowed or {}).get(stat) or {}
+        rank, pg = r.get("rank"), r.get("pg")
+        if not rank or not isinstance(pg, (int, float)):
+            continue
+        n = int(r.get("of") or n_default)
+        games = games or r.get("games")
+        num = f"{pg:.1f}" if pg < 10 else f"{pg:.0f}"
+        if group == "rb" and stat == "rb_rec_yds" and allows and allows[-1][0] == "rb_rec":
+            allows[-1] = ("rb_rec", allows[-1][1].replace(" catches (", f" catches for {num} yards (", 1)
+                          .replace(")", f"; {_place(int(rank), n)} in yards)", 1))
+            continue
+        (forces if stat in _FORCED else allows).append((stat, f"{num} {words} ({_place(int(rank), n)})"))
+    if not allows and not forces:
+        return ""
+
+    def join(xs):
+        xs = [t for _s, t in xs]
+        return xs[0] if len(xs) == 1 else f"{', '.join(xs[:-1])} and {xs[-1]}"
+    also = "also " if skip and any(st in set(skip) for st, _w in POSITION_STATS.get(group, ())) else ""
+    said = []
+    if allows:
+        said.append(f"{also}allows {join(allows)}")
+    if forces:
+        said.append(f"forces {join(forces)}")
+    over = f", over {games} games" if games else ""
+    return f"Against {POSITION_PLURAL.get(group, group)}, {opp} {' and '.join(said)} a game — of {n} defenses{over}"
 
 
 #: The words for engine/defensevs.STATS, as a sentence says them.
@@ -1544,6 +1623,10 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     lean: list = []
     volume = False
 
+    # The position stats said as counted reasons (step AHO): the position line leaves them out.
+    counted_pos: set = set()
+    own_stats = {st for st, _w in POSITION_STATS.get(group, ())}
+
     def dvp(market):
         """The model's own matchup line for this market, counted."""
         from . import defensevs as _D
@@ -1551,18 +1634,16 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         if not stat or not _D.transfer((pos or "").upper(), market):
             return
         sign, text = _allowed_line(allowed, stat, opp, n_teams)
+        # A catcher's number reads the pass defence overall (defensevs.MODEL_STAT): said so, beside what the
+        # defence gives up to his own position (step AHO).
+        if group in ("wr", "te") and stat == "qb_pass_yds" and text:
+            text = text.replace(" passing yards", " passing yards overall", 1)
+        if sign and stat in own_stats:
+            counted_pos.add(stat)
         if sign > 0:
             said(pro, text, RL.DEFENSE)
         elif sign < 0:
             said(con, text, RL.DEFENSE)
-
-    def own_position(stats):
-        """What the defence gives up to HIS position — shown, not counted:
-        in the NFL only the overall rating predicted (defensevs.MODEL_STAT)."""
-        for stat in stats:
-            sign, text = _allowed_line(allowed, stat, opp, n_teams)
-            if sign:
-                notes.append(text)
 
     def scoring():
         if points is None:
@@ -1590,8 +1671,9 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         then = (f"{ls.get('tgt_share', 0):.0%} of the targets" if group in ("wr", "te")
                 else f"{ls.get('carry_share', 0):.0%} of the carries" if group == "rb"
                 else f"{ls.get('attempts_pg', 0):g} attempts a game")
-        notes.append(f"Usage is {u['blend']:.0%} this season, {1 - u['blend']:.0%} last "
-                     f"season — last season, {then} over {ls.get('games', 0)} games")
+        # IN PLAIN WORDS (step AHO): "Usage is 55% this season, 45% last season" read as a share of the work.
+        notes.append(f"Last season: {then} over {ls.get('games', 0)} games — our number weighs this season "
+                     f"{u['blend']:.0%} and last season {1 - u['blend']:.0%}")
 
     if group in ("wr", "te"):
         lean = ["receptions", "rec_yds", "anytime_td"]
@@ -1608,7 +1690,6 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             volume = True
         if measured:
             dvp("rec_yds")
-            own_position((f"{group}_rec_yds", f"{group}_td"))
         unit(_rank(d, "def", "passing"), f"{opp}'s pass defense")
         scoring()
         for m in (room or {}).get("missing") or []:
@@ -1743,6 +1824,11 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     # numbers printed beside it.
     mixed, mixed_with, mixed_was = "", "", ""
     if measured and group in ("wr", "te") and key != "neutral":
+        # Re-measured in step AHO (2022-2025, receivers and tight ends against their own average): a defence in
+        # the top quarter by passing yards overall but the bottom quarter to his position gave up 89% of a
+        # catcher's usual yards (57 games; below his games against a middling position number in every season) —
+        # so a lean against the position's number at the league's ends leans neither way. Thirds split it less (94%,
+        # 93 games); the other way round (26 games) said nothing either way.
         own_sign, own_text = _allowed_line(allowed, f"{group}_rec_yds", opp, n_teams)
         if own_text and ((own_sign > 0 and key in READ_DOWN) or (own_sign < 0 and key in READ_UP)):
             mixed, mixed_with, mixed_was = own_text, (winning0[0] if winning0 else ""), key
@@ -1760,8 +1846,14 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         mstat = _D.model_stat((pos or "").upper(), head)
         if mstat:
             defense_line = rank_fact(allowed, mstat, opp, n_teams)[1]
-    # His share is said with what was noticed and not counted, first.
-    notes = role + notes
+    # His share is said with what was noticed and not counted, first; before it, what the defence gives up to his
+    # position in each stat his bets are on, less what a counted reason says already (step AHO).
+    vs_position = position_line(group, allowed, opp, n_teams, skip=counted_pos) if measured else ""
+    # His position's touchdowns allowed, as one sentence a touchdown leg can say (step AHO; engine/gameparlays).
+    position_td = ""
+    if measured and group in ("wr", "te", "rb"):
+        position_td = _td_sentence(allowed, f"{group}_td", opp, POSITION_PLURAL[group], n_teams)
+    notes = ([vs_position] if vs_position else []) + role + notes
     # A LEAN THAT RESTS ON THE WEATHER ALONE points only at the markets the
     # weather moves (WEATHER_LEAN): rain backs a back's carries, never his
     # rushing yards.
@@ -1796,6 +1888,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             **({"drivers": drivers} if drivers else {}), **({"spot": True} if spot else {}),
             **({"mixed": mixed, "mixed_with": mixed_with, "mixed_was": mixed_was} if mixed else {}),
             **({"defense_line": defense_line} if defense_line else {}),
+            **({"vs_position": vs_position} if vs_position else {}),
+            **({"position_td": position_td} if position_td else {}),
             "usage": {k: u.get(k) for k in ("tgt_share", "targets_pg", "carry_share",
                                             "carries_pg", "rec_yds_pg", "rush_yds_pg",
                                             "snap_pct", "games", "rec_pg", "share_of",

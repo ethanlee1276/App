@@ -1933,9 +1933,12 @@ def funnel_lines(c: Ctx, dfn: str) -> list:
     if catchers and py.get("rank") and py.get("of") and _f(py.get("pg")) is not None:
         rk, of = int(py["rank"]), int(py["of"])
         where = (f"the {_ord(rk)}-most of {of}" if rk <= (of + 1) / 2 else f"the {_ord(of - rk + 1)}-fewest of {of}")
-        out.append(f"Our receiver and tight end numbers read the passing yards {dfn} allows overall "
-                   f"({_num(_f(py['pg']), 0)} a game, {where}): over the last four seasons that number predicted "
-                   f"their next games, and what a defense allowed to one position did not")
+        # Re-measured in step AHO (engine/gamescan.POSITION_STATS): the overall number split catchers' games at
+        # least as well as the position's own, and counting both split them less.
+        out.append(f"Our receiver and tight end reads count the passing yards {dfn} allows overall "
+                   f"({_num(_f(py['pg']), 0)} a game, {where}) and show what it allows each position beside it: "
+                   f"over 2022-2025 the overall number split their games at least as well as the position's own, "
+                   f"and counting both split them less")
     return out
 
 
@@ -1949,7 +1952,7 @@ def _why(r: dict) -> list:
            and not (role and any(w in str(x) for w in ("of the carries", "of the targets", "of the catches")))]
     for n in r.get("notes") or []:
         s = str(n)
-        if s.startswith("Usage is ") or "passer rating on" in s:
+        if s.startswith(("Usage is ", "Last season: ")) or "passer rating on" in s:
             continue
         # The charting and tracking notes (engine/gamescan.charting_notes),
         # by their plain heads since 2026-11-15 and their old ones.
@@ -2014,7 +2017,10 @@ def sec_matchups(c: Ctx) -> dict | None:
                           "title": f"{r.get('player')} vs {against}", "role": _role_line(r),
                           "why": ([_sentence(cap(scorer))] if scorer else [])
                           + [_sentence(cap(w)) for w in first if w]
-                          + [_sentence(w) for w in why if w not in common][:4],
+                          + [_sentence(w) for w in why if w not in common][:4]
+                          # What the defence gives up to his own position, in every stat his bets are on (step
+                          # AHO): shown, never counted (engine/gamescan.POSITION_STATS).
+                          + ([_sentence(r["vs_position"])] if r.get("vs_position") else []),
                           "form": form_lines(c, r),
                           # His pick on the read's side (`read_pick`), and the
                           # pick itself, graded on a finished game's page.
@@ -2186,6 +2192,14 @@ TD_FUNNEL_RANK = 10
 TD_LIST = 4
 _TD_STAT = {"RB": "rb_td", "FB": "rb_td", "WR": "wr_td", "TE": "te_td"}
 _TD_WORD = {"RB": "running backs", "FB": "running backs", "WR": "receivers", "TE": "tight ends"}
+#: The positions whose touchdowns allowed back a scorer (step AHO, measured: engine/gamescan.POSITION_STATS).
+TD_FUNNEL_POS = ("RB", "FB")
+
+
+def _per_game(x: dict) -> str:
+    """" (1.7 a game)": a defensevs rating's number a game, "" without one (step AHO: the rank and the number)."""
+    pg = _f((x or {}).get("pg"))
+    return "" if pg is None else f" ({pg:.1f} a game)" if pg < 10 else f" ({pg:.0f} a game)"
 
 
 def td_chance_lines(c: Ctx, off: str) -> list:
@@ -2224,8 +2238,12 @@ def td_chance_pairs(c: Ctx, off: str) -> list:
         funnel = None
         if x.get("rank") and x.get("of"):
             rank, of = int(x["rank"]), int(x["of"])
-            funnel = rank <= TD_FUNNEL_RANK
-            bits.append(f"{dfn} allows {_place(rank, of, 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'the position')}")
+            # Only where it predicted (step AHO): touchdowns allowed to running backs did, held out (defensevs
+            # MODEL_STAT); to receivers and tight ends they split nothing in 2022-2025, so they are said, with
+            # the number, and never "back" a pick.
+            funnel = rank <= TD_FUNNEL_RANK and pos in TD_FUNNEL_POS
+            bits.append(f"{dfn} allows {_place(rank, of, 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'the position')}"
+                        + _per_game(x))
         usage = share is not None and share >= TD_USAGE_SHARE
         # THE TOUCHDOWN MATCHUP, SAID AS ONE (2026-11-15): his name wears
         # his whole matchup read's colour, which can differ from what this
@@ -3558,7 +3576,8 @@ def scorer_words(c: Ctx, r: dict, lead: bool = False) -> str:
     x = ((getattr(c, "allowed", None) or {}).get(dfn) or {}).get(_TD_STAT.get(pos, "")) or {}
     if dfn and x.get("rank") and x.get("of"):
         parts.append(f"{team_np(c, dfn)} {team_be(c, dfn, 'give', 'gives')} up "
-                     f"{_place(x['rank'], x['of'], 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'the position')}")
+                     f"{_place(x['rank'], x['of'], 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'the position')}"
+                     + _per_game(x))
     text = head + (": " + "; ".join(parts) if parts else "")
     return f"{team_owner(c, t)} likeliest scorer — {text}" if lead else text
 
