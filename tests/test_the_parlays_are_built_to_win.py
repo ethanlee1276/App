@@ -132,7 +132,7 @@ def test_a_prop_the_report_did_not_pick_fills_one_a_ticket_at_55():
             EG._rec("B Two", "WAS", "RB", "rush_yds", "Over", 40.5, 0.70, -150),
             EG._rec("C Three", "NYG", "TE", "rec_yds", "Over", 30.5, 0.68, -150),
             EG._rec("D Four", "WAS", "WR", "receptions", "Over", 3.5, 0.53, -150),   # no pick, under 55%
-            EG._rec("E Five", "NYG", "RB", "rush_att", "Over", 12.5, 0.62, -150),   # no pick, 55% or better
+            EG._rec("E Five", "NYG", "RB", "rush_yds", "Over", 52.5, 0.62, -150),   # no pick, 55% or better
             EG._rec("F Six", "WAS", "TE", "rec_yds", "Over", 20.5, 0.60, -150)]     # no pick, 55% or better
     b["recommendations"] = recs
     b["game_parlays"] = GP.build(b, "nfl")

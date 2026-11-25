@@ -26,6 +26,11 @@ sys.path.insert(0, str(ROOT))
 
 from engine import gameparlays as GP                # noqa: E402
 
+# THE FIXTURE'S GAMES PREDATE THE CARRIES BENCH (engine/stakeplan.MARKET_BENCH, 25 November 2026): its Cam
+# Skattebo carries over is a leg in its story, and the builder reads a bench by today's date.
+from engine import stakeplan as _SPL                                                  # noqa: E402
+_SPL.MARKET_BENCH = tuple(b for b in _SPL.MARKET_BENCH if (b["sport"], b["market"]) != ("nfl", "rush_att"))
+
 
 #: The matchup scan's numbers for the game (engine/gamescan): each defence's
 #: rank against the pass and the run, and red-zone trips both ways — what the

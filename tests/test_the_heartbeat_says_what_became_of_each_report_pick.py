@@ -58,7 +58,7 @@ def _board():
     b = EG.board()
     b["games"] = b["games"] + [SUNDAY]
     b["recommendations"] = (
-        [_rec("S Strong", "receptions", 0.66), _rec("F Fill", "rush_att", 0.55, team="DAL"),
+        [_rec("S Strong", "receptions", 0.66), _rec("F Fill", "rush_yds", 0.55, team="DAL"),
          _rec("L Low", "rec_yds", 0.45), _rec("O Line", "receptions", 0.62, line=2.5),
          # A row a leg source holds and will not use: no real book behind its price.
          _rec("R Refused", "rush_yds", 0.64, book="proxy")]
@@ -71,7 +71,7 @@ def _board():
     return b
 
 
-PICKS = [_pick("S Strong", "receptions"), _pick("F Fill", "rush_att"), _pick("L Low", "rec_yds"),
+PICKS = [_pick("S Strong", "receptions"), _pick("F Fill", "rush_yds"), _pick("L Low", "rec_yds"),
          _pick("K Tackler", "tackles_ast", 6.5), _pick("B Bench", "pass_cmp", 21.5),
          _pick("O Line", "receptions", 4.5), _pick("R Refused", "rush_yds"),
          _pick("M Matchup", "rush_yds", 48.5), _pick("T Dee", "anytime_td", 0.5), _pick("Q Nobody", "rec_yds", 40.5),

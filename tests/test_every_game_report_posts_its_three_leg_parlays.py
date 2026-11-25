@@ -42,6 +42,11 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from engine import gameparlays as GP, parlayledger  # noqa: E402
 
+# THE FIXTURE'S GAMES PREDATE THE CARRIES BENCH (engine/stakeplan.MARKET_BENCH, 25 November 2026): its Cam
+# Skattebo carries over is a leg in its story, and the builder reads a bench by today's date.
+from engine import stakeplan as _SPL                                                  # noqa: E402
+_SPL.MARKET_BENCH = tuple(b for b in _SPL.MARKET_BENCH if (b["sport"], b["market"]) != ("nfl", "rush_att"))
+
 EG = __import__("test_each_game_gets_its_parlays")                  # the shared fixture (a sibling test file)
 DAY = dt.date(2026, 11, 20)
 

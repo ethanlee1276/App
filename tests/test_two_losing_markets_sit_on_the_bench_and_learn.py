@@ -41,9 +41,13 @@ def _row(day, sport, market, status="won", odds=-110, category="main", stake=1.0
 
 def test_the_two_markets_are_named_from_the_day_he_said_so():
     named = {(b["sport"], b["market"]): b for b in SP.MARKET_BENCH}
-    # …and the NFL's pass attempts since 21 November (Ethan's answer to decision 16: "bench them").
-    assert set(named) == {("nfl", "pass_cmp"), ("nba", "pts"), ("nfl", "pass_att")}, named
-    assert {b["since"] for k, b in named.items() if k != ("nfl", "pass_att")} == {"2026-11-18"}
+    # …and the NFL's pass attempts since 21 November (Ethan's answer to decision 16: "bench them"), and its
+    # carries since 25 November (the same rule, under decision 19's "do whatever you think").
+    assert set(named) == {("nfl", "pass_cmp"), ("nba", "pts"), ("nfl", "pass_att"), ("nfl", "rush_att")}, named
+    assert {b["since"] for k, b in named.items() if k in (("nfl", "pass_cmp"), ("nba", "pts"))} == {"2026-11-18"}
+    assert named[("nfl", "rush_att")]["since"] == "2026-11-25" and named[("nfl", "rush_att")]["was"] == "40-46, -6.7 units"
+    assert SP.market_benched("nfl", "rush_att", {}, "2026-11-26") and SP.market_benched("nfl", "rush_att", {}, "2026-11-24") is None
+    assert SP.market_benched("cfb", "rush_att", {}, "2026-11-28") is None, "college's carries made money: not benched"
     assert named[("nfl", "pass_att")]["since"] == "2026-11-21" and named[("nfl", "pass_att")]["was"] == "21-26, -4.0 units"
     assert SP.market_benched("nfl", "pass_cmp", {}, "2026-11-18") and SP.market_benched("NBA", "PTS", {}, "2026-11-20")
     assert SP.market_benched("nfl", "pass_cmp", {}, "2026-11-17") is None, "not before the day"
