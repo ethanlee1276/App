@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHB. A player's market logs are kept as the game log is** (step 996; 25 November; nothing to run). A player
+not priced tonight asks for their market logs (/api/players/logs) with their page, for the market cards at its foot,
+and they were read again on every visit: 20 to 100 ms of the server's own time on the live site (Jalen Brunson 46
+and 100 ms, Connor McDavid 49 ms, Cameron Boozer 47 and 60 ms). Kept now as the game log is (AGV): five minutes, then
+up to the hour answered at once and read again behind while the player's games are the ones they were read from; a
+box score of the player's since, and they are read first.
+
 **AHA. A team's page is kept as a player's page is** (step 995; 25 November; nothing to run). Timed on the live
 site after AGV: a team's page (/api/team) was built on every visit. Asked twice in a row it still took the server
 0.46 to 0.49 s (Oilers, Knicks) and 1.0 s for the Yankees; asked the first time 0.9 to 3.8 s (the Oilers 2.3 s, 1.4 s

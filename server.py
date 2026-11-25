@@ -1395,6 +1395,28 @@ def _team_made(sport: str, name: str, opp: str = "", only: str = "", season=None
         return _team_answer(503, b'{"error":"team history unavailable"}', ".json")
 
 
+#: A player's market logs kept (step AHB): {(sport, name as asked): (read at, body, his games' stamp)}.
+_PLAYER_LOGS: dict = {}
+PLAYER_LOGS_KEEP = 400
+
+
+def _player_logs_made(sport: str, player: str) -> bytes:
+    """One player's multi-market logs, encoded (engine/statlogs.for_player): /api/players/logs' answer."""
+    from engine import statlogs
+    return json.dumps({"player": player, "stats": statlogs.for_player(sport, player)}).encode()
+
+
+def _player_logs_keep(key: tuple, sport: str, player: str, body: bytes) -> None:
+    """Logs kept with the stamp of the player's games (_player_games_stamp), the oldest out past PLAYER_LOGS_KEEP."""
+    stamp = _player_games_stamp(sport, player)
+    if len(_PLAYER_LOGS) >= PLAYER_LOGS_KEEP:
+        try:                          # the oldest out; another thread may be writing beside this one
+            _PLAYER_LOGS.pop(next(iter(_PLAYER_LOGS)), None)
+        except (StopIteration, RuntimeError):
+            pass
+    _PLAYER_LOGS[key] = (time.time(), body, stamp)
+
+
 def _player_page_whole(body: bytes) -> bool:
     """An answer with its league places (or none to have): one built while its table was being built (step AFU)
     is sent but never kept, so the next ask, the page's own a few seconds on, finds the table."""
@@ -5236,9 +5258,22 @@ class Handler(BaseHTTPRequestHandler):
         if sport not in statlogs.SPORT_MARKETS:
             return self._send(400, b'{"error":"no log-backed search for '
                                    b'this sport"}', ".json")
-        stats = statlogs.for_player(sport, player)
-        return self._send(200, json.dumps(
-            {"player": player, "stats": stats}).encode(), ".json")
+        # KEPT AS THE GAME LOG IS (step AHB, 25 November 2026; Ethan: "Ok keep going and work more on these issues as
+        # they are not fixed"). A player not priced tonight asks for these with the page, for its market cards, and
+        # they were read again on every visit (20 to 100 ms of the server's time on the live site). Five minutes kept;
+        # past that, up to the hour while the player's games are the ones they were read from, answered at once and
+        # read again behind; a box score of the player's since, and they are read before they answer.
+        key = (sport, player.lower())
+        hit = _PLAYER_LOGS.get(key)
+        if hit and time.time() - hit[0] < PLAYER_PAGE_TTL:
+            return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])
+        if hit and time.time() - hit[0] < PLAYER_PAGE_STALE_MAX and (
+                hit[2] is None or _player_games_stamp(sport, player) == hit[2]):
+            _behind(("logs", key), lambda: _player_logs_keep(key, sport, player, _player_logs_made(sport, player)))
+            return self._send(200, hit[1], ".json", headers=[("Server-Timing", "stale;dur=0")])
+        body = _player_logs_made(sport, player)
+        _player_logs_keep(key, sport, player, body)
+        return self._send(200, body, ".json")
 
     def _players_gamelog(self, q):
         """One player's season, a line a game (engine/gamelog): the day, the
