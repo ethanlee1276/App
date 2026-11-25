@@ -1198,13 +1198,42 @@ def _player_page_made(sport: str, player: str, team: str, season: str, took=None
     return json.dumps(made or {}).encode()
 
 
-def _player_page_keep(key: tuple, body: bytes) -> None:
+def _player_page_keep(key: tuple, body: bytes, stamp=None) -> None:
     if len(_PLAYER_PAGES) >= PLAYER_PAGE_KEEP:
         try:                          # the oldest out; another thread may be writing beside this one
             _PLAYER_PAGES.pop(next(iter(_PLAYER_PAGES)), None)
         except (StopIteration, RuntimeError):
             pass
-    _PLAYER_PAGES[key] = (time.time(), body)
+    _PLAYER_PAGES[key] = (time.time(), body, stamp)
+
+
+def _player_games_stamp(sport: str, body_or_name) -> tuple | None:
+    """(the stored name, its rows, their highest rowid) in player_game_logs for the player a page is about
+    (step AFQ): a new or corrected box score of theirs moves it (engine/charts._stamp_of). None for a page with
+    no stored player, or a file it cannot read."""
+    name = body_or_name
+    if isinstance(body_or_name, (bytes, bytearray)):
+        try:
+            name = (json.loads(body_or_name) or {}).get("player") or ""
+        except ValueError:
+            return None
+    if not name or sport == "ufc":
+        return None
+    try:
+        from engine import charts, db as _hdb
+        conn = _hdb.connect(str(_hdb.DEFAULT_DB))
+        try:
+            return (name, *charts._stamp_of(conn, sport, name))
+        finally:
+            conn.close()
+    except Exception:                                    # noqa: BLE001 — unreadable: told apart from a stamp
+        return None
+
+
+def _player_page_fresh(sport: str, player: str, team: str, season: str, key: tuple) -> None:
+    """A page built anew and kept, with the stamp of its player's games read before it."""
+    body = _player_page_made(sport, player, team, season)
+    _player_page_keep(key, body, _player_games_stamp(sport, body))
 
 
 def _firstlook_build() -> None:
@@ -5040,9 +5069,11 @@ class Handler(BaseHTTPRequestHandler):
         # and numbers only; the page ignores it. (_send adds the answer's own "all" and "cpu", step AFL.)
         if hit and time.time() - hit[0] < PLAYER_PAGE_TTL:
             return self._send(200, hit[1], ".json", headers=[("Server-Timing", "kept;dur=0")])
-        # Past its five minutes, not past the hour: sent now, rebuilt behind it (step AFM), and said so ("stale").
-        if hit and time.time() - hit[0] < PLAYER_PAGE_STALE_MAX:
-            _behind(("player", key), lambda: _player_page_keep(key, _player_page_made(sport, player, team, season)))
+        # Past its five minutes, not past the hour, and the player's games as they were: sent now, rebuilt behind it
+        # (step AFM), and said so ("stale"). A box score of theirs landed since (step AFQ): built before it answers.
+        if hit and time.time() - hit[0] < PLAYER_PAGE_STALE_MAX and (
+                len(hit) < 3 or hit[2] is None or _player_games_stamp(sport, hit[2][0]) == hit[2]):
+            _behind(("player", key), lambda: _player_page_fresh(sport, player, team, season, key))
             return self._send(200, hit[1], ".json", headers=[("Server-Timing", "stale;dur=0")])
         took: list = []
         t0 = time.perf_counter()
@@ -5051,7 +5082,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the player page could not be read"}', ".json")
         took.append(("build", (time.perf_counter() - t0) * 1000.0))
-        _player_page_keep(key, body)
+        _player_page_keep(key, body, _player_games_stamp(sport, body))
         timing = ", ".join(f"{part};dur={ms:.0f}" for part, ms in took)
         return self._send(200, body, ".json", headers=[("Server-Timing", timing)])
 

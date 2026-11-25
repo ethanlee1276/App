@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFQ. A kept page past its time still waits for a game that just landed** (step 959; 25 November; nothing to
+run). Follow-up to AFM. Since AFM, a player's page or chart the server built more than five minutes ago (charts:
+fifteen) answers at once and is rebuilt in the background, if it's under an hour old. On a game day that could show
+the first visitor after a game the page from before it, for that one load. Now the server also checks whether that
+player's games changed since the page was built (one quick count on the history file). If a box score of theirs has
+come in, the reader waits for the fresh page, as before AFM; if not, the kept one answers at once.
+
 **AFP. A college player's page finds them on the roster by name** (step 958; 25 November; nothing to run).
 Follow-up to AFK. The timing line showed every college football player's page spending about half a second on the
 roster: Jeremiah Smith's 506 ms of 557, Julian Sayin's 490 of 536. To find one player, the page read every row of

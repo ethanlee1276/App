@@ -244,14 +244,17 @@ def answer_json(db_path, kind: str, sport: str, player: str, season: int | None 
             if hit and now < hit[0]:
                 _KEPT.move_to_end(key)
                 return hit[1]
-            ev = _BUILDING.get(key)
-            # Past its fifteen minutes, not past the hour: answered now, rebuilt behind it (one build at a time).
-            if hit and now < hit[0] - ANSWER_TTL + ANSWER_STALE_MAX:
-                _KEPT.move_to_end(key)
-                if ev is None:
+        # Past its fifteen minutes, not past the hour, and his games as they were when it was built: answered now,
+        # rebuilt behind it, one build at a time (step AFM). A box score of his landed since (step AFQ): the reader
+        # waits for the fresh one, so a game just played is never answered with the chart from before it.
+        if hit and now < hit[0] - ANSWER_TTL + ANSWER_STALE_MAX and _same_games(hit, db_path, sport, player):
+            with _LOCK:
+                if key not in _BUILDING:
                     _BUILDING[key] = threading.Event()
                     threading.Thread(target=_behind, args=(key, args), daemon=True, name="chart-behind").start()
-                return hit[1]
+            return hit[1]
+        with _LOCK:
+            ev = _BUILDING.get(key)
             if ev is None:
                 ev = _BUILDING[key] = threading.Event()
                 mine = True
@@ -267,17 +270,41 @@ def answer_json(db_path, kind: str, sport: str, player: str, season: int | None 
 
 
 def _built(key: tuple, db_path, kind, sport, player, season, opp, fam) -> bytes:
-    """One answer built from the database, kept when it is a chart."""
+    """One answer built from the database, kept when it is a chart, with his games' stamp read before it."""
     from . import db as _db
     conn = _db.connect(str(db_path))
     try:
+        stamp = _stamp_of(conn, sport, player)
         out = answer(conn, kind, sport, player, season, opp=opp, fam=fam)
     finally:
         conn.close()
     body = json.dumps(out).encode()
     if out and not out.get("filling"):
-        _keep(key, body)
+        _keep(key, body, stamp)
     return body
+
+
+def _stamp_of(conn, sport: str, player: str) -> tuple:
+    """(rows, highest rowid) of his games in player_game_logs, off the (sport, player) index alone: a new or
+    corrected box score moves it, since engine/db.upsert_player_logs files a changed row under a new rowid."""
+    r = conn.execute("SELECT COUNT(*), MAX(rowid) FROM player_game_logs WHERE sport=? AND player=?",
+                     (sport, player)).fetchone()
+    return int(r[0] or 0), int(r[1] or 0)
+
+
+def _same_games(hit: tuple, db_path, sport: str, player: str) -> bool:
+    """True when the kept answer's player has the games it was built from (or it carries no stamp to tell)."""
+    if len(hit) < 3 or hit[2] is None:
+        return True
+    try:
+        from . import db as _db
+        conn = _db.connect(str(db_path))
+        try:
+            return _stamp_of(conn, sport, player) == hit[2]
+        finally:
+            conn.close()
+    except Exception:                                     # noqa: BLE001 — unreadable: a fresh build tells
+        return False
 
 
 _BEHIND_SAID = [False]
@@ -301,17 +328,17 @@ def _behind(key: tuple, args: tuple) -> None:
             ev.set()
 
 
-def _keep(key: tuple, body: bytes) -> None:
+def _keep(key: tuple, body: bytes, stamp=None) -> None:
     with _LOCK:
         old = _KEPT.pop(key, None)
         if old:
             _BYTES[0] -= len(old[1])
         if len(body) > ANSWER_CAP // 8:
             return                       # one answer never crowds out the rest
-        _KEPT[key] = (time.time() + ANSWER_TTL, body)
+        _KEPT[key] = (time.time() + ANSWER_TTL, body, stamp)
         _BYTES[0] += len(body)
         while _BYTES[0] > ANSWER_CAP and _KEPT:
-            _, (_, b) = _KEPT.popitem(last=False)
+            _, (_, b, *_) = _KEPT.popitem(last=False)
             _BYTES[0] -= len(b)
 
 

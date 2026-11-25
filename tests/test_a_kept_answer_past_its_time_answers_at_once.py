@@ -163,6 +163,71 @@ def test_a_player_page_past_its_time_answers_now_and_is_rebuilt_behind_it():
         server._PLAYER_PAGES.update(keep)
 
 
+def test_a_game_landed_since_means_the_reader_waits_for_the_fresh_one():
+    """STEP AFQ: past its time, a kept chart or page answers at once only while the player's games are as they were
+    built from; a box score of theirs landed since, and the reader waits for the fresh one."""
+    d = tempfile.mkdtemp()
+    path = Path(d) / "history.db"
+    conn = D.connect(path)
+    row = {"sport": "nfl", "season": 2026, "period": "011", "game_id": "DET-011", "player": "Amon-Ra St. Brown",
+           "team": "DET", "opponent": "NYG", "position": "WR", "home": 1, "market": "receptions", "value": 8.0}
+    D.upsert_player_logs(conn, [row])
+    conn.commit()
+    conn.close()
+    real, built = CH.answer, []
+
+    def fake(conn, kind, sport, player, season=None, opp="", fam=""):
+        built.append(player)
+        return {"player": player, "kind": kind, "games": [{"id": len(built)}]}
+    CH.forget()
+    CH.answer = fake
+    try:
+        first = CH.answer_json(path, "role", "nfl", "Amon-Ra St. Brown")
+        key = next(iter(CH._KEPT))
+        assert CH._KEPT[key][2] == (1, CH._KEPT[key][2][1]), "kept with his games' stamp"
+        with CH._LOCK:
+            CH._KEPT[key] = (time.time() - 1, *CH._KEPT[key][1:])
+        assert CH.answer_json(path, "role", "nfl", "Amon-Ra St. Brown") == first, "his games as they were: at once"
+        assert _until(lambda: not CH._BUILDING and len(built) == 2)
+        conn = D.connect(path)
+        D.upsert_player_logs(conn, [dict(row, period="012", game_id="DET-012", opponent="GB", value=11.0)])
+        conn.commit()
+        conn.close()
+        with CH._LOCK:
+            CH._KEPT[key] = (time.time() - 1, *CH._KEPT[key][1:])
+        fresh = json.loads(CH.answer_json(path, "role", "nfl", "Amon-Ra St. Brown"))
+        assert fresh["games"] == [{"id": 3}] and len(built) == 3, "a game landed since: built before it answers"
+    finally:
+        CH.answer = real
+        CH.forget()
+        shutil.rmtree(d, ignore_errors=True)
+    import server
+    src = (ROOT / "server.py").read_text(encoding="utf-8")
+    assert ("len(hit) < 3 or hit[2] is None or _player_games_stamp(sport, hit[2][0]) == hit[2]):") in src
+    assert "_player_page_keep(key, body, _player_games_stamp(sport, body))" in src
+    assert server._player_games_stamp("nfl", b"{}") is None and server._player_games_stamp("ufc", "Jon Jones") is None
+    # The page: kept with a stamp; the stamp moved, so the page is built before it answers.
+    real_made, real_stamp = server._player_page_made, server._player_games_stamp
+    made = []
+    server._player_page_made = lambda sport, player, team, season, took=None: (
+        made.append(1), json.dumps({"player": player, "n": len(made)}).encode())[1]
+    keep = dict(server._PLAYER_PAGES)
+    server._PLAYER_PAGES.clear()
+    sent = []
+    try:
+        q = {"sport": ["nfl"], "player": ["Amon-Ra St. Brown"], "team": ["DET"]}
+        k = ("nfl", "amon-ra st. brown", "DET", "")
+        server._PLAYER_PAGES[k] = (time.time() - server.PLAYER_PAGE_TTL - 1, b'{"player": "Amon-Ra St. Brown", "n": 0}',
+                                   ("Amon-Ra St. Brown", 1, 5))
+        server._player_games_stamp = lambda sport, x: ("Amon-Ra St. Brown", 2, 9)
+        _handler(sent)._players_page(q)
+        assert json.loads(sent[-1][1])["n"] == 1 and ("Server-Timing", "stale;dur=0") not in sent[-1][2], sent[-1]
+    finally:
+        server._player_page_made, server._player_games_stamp = real_made, real_stamp
+        server._PLAYER_PAGES.clear()
+        server._PLAYER_PAGES.update(keep)
+
+
 def test_the_first_look_past_its_minute_answers_now():
     import server
     real, built, gate = server._firstlook_build, [], threading.Event()
