@@ -9883,6 +9883,17 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHL. The settle pass stops asking the same unanswerable question every quarter hour** (step 1004; 25 November;
+nothing to run). Step AHH's timings answered on the first pass: of 575.3 s of preparation in an 809.5 s settle pass,
+573.3 s went to placing old journal rows on their game day. Those are NFL bets journalled under a week label
+("2026-W01") that no route can place (a player with no team on file, clubs that play on different days), and every
+pass, every quarter hour on the box's one core, asked the history about each of them again, each time reading the
+player's whole NFL career twice. Now a row that could not be placed is asked again only twelve hours after its last
+try, twenty such rows a pass, the never-tried and the longest-waiting first. A row whose date is already a day is
+placed at once, as before, and the --backfill-days command still tries every row. The pass's counts ride the
+heartbeat (game_days: filled, unresolved, retried, waiting). To read after the update: prep_parts.game_days, which
+should fall from about 573 s to a few seconds, and the settle pass's total with it.
+
 **AHK. A baseball hitter's page reads the season's starters once for everyone** (step 1003; 25 November;
 nothing to run). Each hitter's page read the season's every starting pitcher (about 4,900 rows) for its splits by
 the starter's hand, the same rows for every hitter: Juan Soto's "splits" part was 369 ms on the live site. They are

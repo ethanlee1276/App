@@ -56,7 +56,7 @@ def _world():
 
 def test_the_backfill_runs_before_the_window_is_built():
     """Order is the whole point: placed first, THEN asked which days are open."""
-    i_bf = SRC.index("ledger.backfill_game_days(lconn, hconn)")
+    i_bf = SRC.index("ledger.backfill_game_days(lconn, hconn, retry_after=ledger.GAME_DAY_RETRY_S)")
     i_days = SRC.index("days = _open_bet_days(lconn, today, SETTLE_LOOKBACK_DAYS)")
     assert i_bf < i_days, "the backfill must run before _open_bet_days"
 

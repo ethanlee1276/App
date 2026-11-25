@@ -4705,8 +4705,17 @@ def _close_was_copy(snap, b, who: str, dates, had) -> bool:
     return False
 
 
+#: A week-labelled NFL row the history could not place, tried again no sooner than this (step AHL, `retry_after`).
+GAME_DAY_RETRY_S = 12 * 3600
+#: And at most this many such rows tried in one settle pass, the never-tried and the longest-waiting first.
+GAME_DAY_TRIES_PER_PASS = 20
+GAME_DAY_TRIES_SQL = ("CREATE TABLE IF NOT EXISTS game_day_tries "
+                      "(bet_id INTEGER PRIMARY KEY, tried_at REAL, why TEXT)")
+
+
 @_audited("backfill_game_days")
-def backfill_game_days(conn, hist_conn=None, dry_run: bool = False) -> dict:
+def backfill_game_days(conn, hist_conn=None, dry_run: bool = False, retry_after: float | None = None,
+                       per_pass: int = GAME_DAY_TRIES_PER_PASS) -> dict:
     """Give rows journalled before `game_day` existed the day they were played.
 
     Only ever FILLS a NULL. It never overwrites a stamped row and never
@@ -4734,10 +4743,33 @@ def backfill_game_days(conn, hist_conn=None, dry_run: bool = False) -> dict:
     """
     from .db import connect as _hist
     close = hist_conn if hist_conn is not None else _hist()
-    out = {"filled": 0, "unresolved": 0, "by_route": {}, "by_reason": {}}
+    out = {"filled": 0, "unresolved": 0, "by_route": {}, "by_reason": {}, "retried": 0, "waiting": 0}
     rows = conn.execute(
         "SELECT id, sport, date, player, market, category FROM bets "
         "WHERE game_day IS NULL OR game_day = ''").fetchall()
+    # A WEEK THAT WOULD NOT PLACE A ROW IS NOT ASKED AGAIN EVERY PASS (step AHL, 25 November 2026; Ethan: "Ok keep
+    # going and work more on these issues as they are not fixed"). On the live box this function took 573.3 s of every
+    # settle pass's 575.3 s of preparation, a pass every quarter hour on the box's one core: the week-labelled NFL
+    # rows no route places were asked again each time, each with a read of every row of the player's NFL career,
+    # twice. With `retry_after` (the settle pass's), such a row is tried again only that many seconds after its last
+    # try, at most `per_pass` of them a pass, the never-tried and the longest-waiting first; a row whose date is a day
+    # is placed at once as before. Without it (the --backfill-days command), every row is tried, as before.
+    tried: dict = {}
+    if retry_after is not None:
+        try:
+            conn.execute(GAME_DAY_TRIES_SQL)
+            tried = {int(r[0]): float(r[1] or 0) for r in conn.execute("SELECT bet_id, tried_at FROM game_day_tries")}
+        except sqlite3.DatabaseError:
+            retry_after, tried = None, {}
+    now = _time.time()
+    due = None
+    if retry_after is not None:
+        weekly = [b for b in rows if b["sport"] == "nfl" and _NFL_WEEK_DATE.match(str(b["date"] or ""))
+                  and str(b["category"] or "") != "predmarket"]
+        ready = sorted((b for b in weekly if now - tried.get(int(b["id"]), 0.0) >= retry_after),
+                       key=lambda b: (tried.get(int(b["id"]), 0.0), int(b["id"])))
+        due = {int(b["id"]) for b in ready[:max(0, int(per_pass))]}
+        out["waiting"] = len(weekly) - len(due)
     for b in rows:
         day, route, why = "", "", "not an NFL week label and not a day"
         text = str(b["date"] or "")
@@ -4757,8 +4789,14 @@ def backfill_game_days(conn, hist_conn=None, dry_run: bool = False) -> dict:
         else:
             m = _NFL_WEEK_DATE.match(text)
             if m and b["sport"] == "nfl":
+                if due is not None and int(b["id"]) not in due:
+                    continue                                   # tried lately: counted as waiting above
                 season, period = int(m.group(1)), f"{int(m.group(2)):03d}"
                 day, route, why = _week_day_for(close, b, season, period)
+                out["retried"] += 1
+                if not day and due is not None and not dry_run:
+                    conn.execute("INSERT OR REPLACE INTO game_day_tries (bet_id, tried_at, why) VALUES (?,?,?)",
+                                 (int(b["id"]), now, why))
         if not day:
             out["unresolved"] += 1
             out["by_reason"][why] = out["by_reason"].get(why, 0) + 1
