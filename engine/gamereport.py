@@ -3316,10 +3316,14 @@ def market_sentence(c: Ctx) -> str:
     s = (", and ".join(parts) if first else cap(total))
     pts = implied_points(c)
     if pts:
+        # THE SAME FIGURES THE VERDICT AND THE MARKET SAY (25 November 2026).
+        # These were whole points, theirs a decimal: "about Vanderbilt 74"
+        # here and "about 73.5" two sections on, the same number read two
+        # ways in one report (and 72.5 read as 72, Python's rounding).
         hi = max(c.teams, key=lambda t: pts[t])
         lo = c.opp[hi]
-        s += (f", which works out to about {c.name(hi)} {_n(pts[hi])}, {c.name(lo)} {_n(pts[lo])}"
-              if _n(pts[hi]) != _n(pts[lo]) else f", about {_n(pts[hi])} {unit} each")
+        s += (f", which works out to about {c.name(hi)} {_num(pts[hi])}, {c.name(lo)} {_num(pts[lo])}"
+              if _num(pts[hi]) != _num(pts[lo]) else f", about {_num(pts[hi])} {unit} each")
     s = _sentence(s)
     if ml:
         fav = max(ml, key=ml.get)

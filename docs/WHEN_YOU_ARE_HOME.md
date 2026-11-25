@@ -9883,6 +9883,11 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AEV. One expected score per report** (step 938; 25 November). Nothing to run. A report's short version rounded
+the score the lines expect to whole points, while the verdict and the market section used a decimal: one college
+report said Vanderbilt would score about 74 in the short version and about 73.5 two sections later, and an NBA one
+said the Heat 102 and 101.5. Every section now says the same figure (101.5, 73.5, 26.8), in every sport.
+
 **AEU. Basketball's team ratings checked against the closing line** (step 937; 25 November). Nothing to run.
 Every game report shows our team ratings' own chance beside the price's, marked unproven. The NFL's, college
 football's and baseball's are checked against their closing lines every night; basketball's never were. The nightly

@@ -246,7 +246,7 @@ def test_the_nba_report_reads_rest_who_carries_each_team_and_the_defences():
     assert rep["title"] == "Heat at Celtics"
     text = R.to_text(rep)
     for want in ("The Celtics are 11.5-point favorites at home, and the total is 214.5, which works out to "
-                 "about Celtics 113, Heat 102. Take out the book's cut and the moneyline gives the Celtics an 85% "
+                 "about Celtics 113, Heat 101.5. Take out the book's cut and the moneyline gives the Celtics an 85% "
                  "chance to win.",
                  "The Heat is on the second night of a back-to-back.",
                  "The Heat is without Tyler Herro.",

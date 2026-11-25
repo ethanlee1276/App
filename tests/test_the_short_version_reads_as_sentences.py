@@ -86,8 +86,8 @@ def _ctx(away="GB", home="DET", names=None, sport="nfl", **g):
 def test_ethans_game_reads_as_sentences():
     got = _short(_chi_ne())
     assert got == [
-        "The Bears are 3-point favorites at home, and the total is 50.5, which works out to about Bears 27, "
-        "Patriots 24. Take out the book's cut and the moneyline gives the Bears a 60% chance to win.",
+        "The Bears are 3-point favorites at home, and the total is 50.5, which works out to about Bears 26.8, "
+        "Patriots 23.8. Take out the book's cut and the moneyline gives the Bears a 60% chance to win.",
         "Where the matchup tilts: the Patriots' big plays (10th in the league) meet a Bears defense that "
         "gives them up (30th), so the Patriots should find some chunk plays. The Bears' run game (9th) faces "
         "the Patriots' run defense (22nd), so there is room to run for the Bears. The Bears' pass protection "
@@ -190,13 +190,33 @@ def test_baseball_and_hockey_lead_with_the_moneyline():
     assert R.market_sentence(nhl) == "The Maple Leafs are −1.5 on the puck line, and the total is 6.5 goals."
 
 
+def test_the_expected_score_reads_the_same_in_every_section():
+    """25 November 2026: the short version said "about Vanderbilt 74" where the verdict and the market said
+    73.5 for the same score; one figure now, wherever a report says it."""
+    import re
+    for sport, names, g in (
+            ("cbb", {"VAN": "Vanderbilt", "OSU": "Ohio State"},
+             {"away": "VAN", "home": "OSU", "spread": -4.5, "total": 151.5, "home_ml": -190, "away_ml": 160}),
+            ("nfl", {"GB": "Packers", "DET": "Lions"},
+             {"away": "GB", "home": "DET", "spread": -3.0, "total": 50.5, "home_ml": -160, "away_ml": 140})):
+        c = R.Ctx(g, {"games": [g]}, names=names, sport=sport)
+        pts = R.implied_points(c)
+        said = {t: R._num(pts[t]) for t in c.teams}
+        short = R.market_sentence(c)
+        verdict = " ".join(next(b for b in R.sec_verdict(c)["blocks"] if b["type"] == "list")["items"])
+        for t in c.teams:
+            assert re.search(rf"{re.escape(c.name(t))} {re.escape(said[t])}\b", short), (sport, short)
+            assert re.search(rf"{re.escape(c.name(t))} {re.escape(said[t])}\b", verdict), (sport, verdict)
+    assert said == {"DET": "26.8", "GB": "23.8"}
+
+
 def test_a_pick_em_a_neutral_site_and_a_school():
     assert R.market_sentence(_ctx(spread=0.0, total=44.0)) == \
         "The books have this one as a pick'em, and the total is 44, about 22 points each."
     cfb = _ctx("MIA", "IND", {"MIA": "Miami", "IND": "Indiana"}, sport="cfb", spread=7.5, total=47.0,
                neutral_site=True)
     assert R.market_sentence(cfb) == ("Miami is a 7.5-point favorite at a neutral site, and the total is 47, "
-                                      "which works out to about Miami 27, Indiana 20.")
+                                      "which works out to about Miami 27.2, Indiana 19.8.")
 
 
 def test_the_total_is_placed_on_the_board_only_at_either_end():
