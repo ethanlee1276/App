@@ -133,7 +133,9 @@ def measured_price(sport: str | None, rows: list | None = None, now: float | Non
         if calls < MEASURED_MIN_CALLS:
             return None
         return max(1, -(-int(got.get("billed") or 0) // calls))
-    except Exception:                                        # noqa: BLE001
+    except Exception as exc:                                 # noqa: BLE001
+        # None is also a quiet week's answer (the table price either way), so a failure says so in the log.
+        print(f"  ⚠️  {budget_sport(sport) or sport} measured price not read ({type(exc).__name__}: {exc})")
         return None
 
 
