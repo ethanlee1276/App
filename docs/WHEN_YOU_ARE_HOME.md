@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFO. The league ranks survive a restart** (step 957; 25 November; nothing to run). Follow-up to AFK. The player
+page's new timing line found the slow first loads. Right after today's update restarted the server, Kerby Joseph's
+page took 3.7 s to answer, 3.5 s of it building the league's table of defenders' places (where each one ranks), and
+the next two defenders' pages took 62 ms each. Those tables lived only in the server's memory, so every restart
+(each update) emptied them, and until the warm-up ran (which on the box waits for the boards to rebuild first) the
+first visitor to each kind of player's page waited for one. Amon-Ra's 4.4 s and Gibbs's 2.8 s fit that pattern.
+Now each table is saved beside the history file when it's built and read back from there after a restart instead
+of being rebuilt. A table over six hours old still answers while a new one builds in the background, as before,
+and a table saved by older code isn't used.
+
 **AFN. A player's numbers come before its charts** (step 956; 25 November; nothing to run). Follow-up to AFK. A
 player's page opened cold asked the server for the player's own numbers and, at the same moment, for every chart on
 its market cards (a running back's: routes, carries, role and tonight's matchup). That's five answers at once from a

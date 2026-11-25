@@ -36,9 +36,11 @@ RATE_SHARE of the leader's volume behind it. Ties share a place.
 from __future__ import annotations
 
 import bisect
+import hashlib
 import json
 import os
 import re
+import sqlite3
 import sys
 import threading
 import time
@@ -413,16 +415,88 @@ def _league_once_a_week(conn, sport: str, season: int, markets) -> dict:
 def rank_table(conn, sport: str, season: int, kind: str, db_path=None) -> dict:
     """{headline key: {player: place}} for one season and one kind of player.
     Kept, and rebuilt in the background once RANK_TTL old while the old one
-    answers; built here only the first time (`warm` builds them at start)."""
+    answers; built here only the first time (`warm` builds them at start).
+    A table missing from memory is read from disk first (`_ranks_load`)."""
     key = (sport, int(season), kind)
     hit = _RANKS.get(key)
+    if not hit:
+        hit = _ranks_load(_ranks_file(conn, key, db_path))
+        if hit:
+            _RANKS[key] = hit
     if hit:
         if time.time() - hit[0] >= RANK_TTL:
             _refresh_later(key, db_path)
         return hit[1]
     table = _build_table(conn, sport, int(season), kind)
     _RANKS[key] = (time.time(), table)
+    _ranks_save(_ranks_file(conn, key, db_path), _RANKS[key][0], table)
     return table
+
+
+# --- the tables, kept on disk -------------------------------------------------------------
+#: THE LEAGUE PLACES SURVIVE A RESTART (step AFO, 25 November 2026; Ethan: "data on the player page takes a long
+#: time to load"). The tables lived only in the server's memory, so every restart (each deploy) emptied them, and
+#: the first reader of each kind's page waited for its build until `warm` ran, which on the box is after the boards
+#: are rebuilt: Kerby Joseph's page took 3.7 s, 3.5 s of it the defenders' table, and Jahmyr Gibbs's 2.8 s. Each
+#: table built is written beside the history file (cache/ranks/), with when it was built and the code that built
+#: it; a table missing from memory is read from there, and past RANK_TTL it answers while a new one is built, as a
+#: kept one does. A file the code since changed is not read.
+def _code_stamp(*files) -> str:
+    h = hashlib.sha1()
+    for f in files:
+        with open(f, "rb") as fh:
+            h.update(fh.read())
+    return h.hexdigest()[:12]
+
+
+_RANKS_CODE = _code_stamp(__file__, GL.__file__)
+_RANKS_SAVE_SAID = [False]
+
+
+def _ranks_file(conn, key: tuple, db_path=None) -> str:
+    """Where a table is kept: cache/ranks/ beside the history file the table is read from; "" for none."""
+    path = str(db_path or "")
+    if not path and conn is not None:
+        try:
+            row = conn.execute("PRAGMA database_list").fetchone()
+            path = str(row[2] or "") if row else ""
+        except sqlite3.Error:
+            path = ""
+    if not path:
+        return ""                                # a database in memory keeps nothing on disk
+    sport, season, kind = key
+    return os.path.join(os.path.dirname(os.path.abspath(path)), "cache", "ranks", f"{sport}_{int(season)}_{kind}.json")
+
+
+def _ranks_save(path: str, built: float, table: dict) -> None:
+    if not path:
+        return
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump({"built": built, "code": _RANKS_CODE, "table": table}, fh, separators=(",", ":"))
+        os.replace(tmp, path)
+    except OSError as exc:
+        # The table still answers from memory; only the next restart waits for it again, so say so once.
+        if not _RANKS_SAVE_SAID[0]:
+            _RANKS_SAVE_SAID[0] = True
+            print(f"⚠️  player page ranks not kept on disk ({type(exc).__name__}: {exc}): a restart builds them again",
+                  file=sys.stderr)
+
+
+def _ranks_load(path: str):
+    """``(built, table)`` kept on disk by this code, or None."""
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(doc, dict) or doc.get("code") != _RANKS_CODE or not isinstance(doc.get("table"), dict):
+        return None
+    return float(doc.get("built") or 0.0), doc["table"]
 
 
 def _refresh_later(key: tuple, db_path=None) -> threading.Thread | None:
@@ -443,6 +517,7 @@ def _rebuild_ranks(key: tuple, db_path=None) -> None:
         conn = _db.connect(str(db_path or _db.DEFAULT_DB))
         try:
             _RANKS[key] = (time.time(), _build_table(conn, *key))
+            _ranks_save(_ranks_file(conn, key, db_path or _db.DEFAULT_DB), *_RANKS[key])
         finally:
             conn.close()
     except Exception as exc:                              # noqa: BLE001 — the old table keeps answering
@@ -454,7 +529,7 @@ def _rebuild_ranks(key: tuple, db_path=None) -> None:
         _REFRESHING.discard(key)
 
 
-def forget_ranks(sport: str) -> int:
+def forget_ranks(sport: str, db_path=None) -> int:
     """Drop a league's kept rank tables, so the next ask (or `warm`, which
     builds only the ones missing) reads the rows as they now stand. For a
     fill that writes a column the tables were built without
@@ -465,6 +540,14 @@ def forget_ranks(sport: str) -> int:
     gone = [k for k in list(_RANKS) if k[0] == sport]
     for k in gone:
         _RANKS.pop(k, None)
+    # ...and the copies kept on disk (step AFO), or the next restart would read them back.
+    import glob
+    for f in glob.glob(os.path.join(os.path.dirname(os.path.abspath(str(db_path or _db.DEFAULT_DB))), "cache",
+                                    "ranks", f"{sport}_*.json")):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
     return len(gone)
 
 
@@ -487,8 +570,13 @@ def warm(db_path=None, delay: float = 60.0) -> threading.Thread:
                     key = (sport, int(row[0]), kind)
                     if key in _RANKS:
                         continue
+                    kept = _ranks_load(_ranks_file(conn, key, path))       # kept on disk (step AFO)
+                    if kept and time.time() - kept[0] < RANK_TTL:
+                        _RANKS[key] = kept
+                        continue
                     try:
                         _RANKS[key] = (time.time(), _build_table(conn, *key))
+                        _ranks_save(_ranks_file(conn, key, path), *_RANKS[key])
                     except Exception:                     # noqa: BLE001 — that table is built on first ask
                         continue
         finally:
