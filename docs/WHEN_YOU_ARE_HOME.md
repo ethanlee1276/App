@@ -9883,6 +9883,17 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHQ. College football's reads and reports say it too** (step 1009; 25 November; nothing to run). Step AHO's
+line needs the defense-vs-position ratings, and the college build never handed them to its reads or its reports, so
+no college card said what a defense gives up to tight ends. The ratings exist (engine/cfb/defense, the ones every
+college prop is priced against, kept until their rows change). The build now passes them to both. A college card
+says the same line ("Against quarterbacks, TENN allows 268 passing yards (the 20th-most) ... of 134 defenses"). It
+is never counted: no college read was measured counting it, so a college read's verdict is what it was. A college
+report's touchdown lines say the number, and "the touchdown matchup backs it" for running backs and receivers.
+Those are the two positions whose touchdowns allowed predicted touchdowns in every held-out season
+(defensevs.TRANSFER_CFB). The NFL's note on which number its catchers' reads count stays off college reports,
+whose catchers' numbers read their own position's.
+
 **AHP. Hockey's reads say the number beside the rank** (step 1008; 25 November; nothing to run). Following step
 AHO into the other leagues. A hockey read said "BOS gives up the sixth-most shots a game", with the rank and no
 count. Every hockey defense reason now says how many, a game: "BOS gives up the 2nd-most shots (34.2 a game)", "the

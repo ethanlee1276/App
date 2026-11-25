@@ -59,6 +59,16 @@ def _iso(d: datetime.date) -> str:
     return d.isoformat()
 
 
+def _cfb_allowed_now(conn, season: int, date) -> dict:
+    """What each college defence gives up to each position before ``date`` (engine/cfb/defense.ratings, kept until
+    its rows change): {} when it cannot be read — a report and a read stand without it (step AHO)."""
+    try:
+        from engine.cfb.defense import ratings as _defense_ratings
+        return _defense_ratings(conn, int(season), before=str(date)[:10]) or {}
+    except Exception:                                         # noqa: BLE001
+        return {}
+
+
 def ingest_results(conn, games: list[dict]) -> int:
     rows = cfbdata.game_rows(games)
     return upsert_games(conn, rows) if rows else 0
@@ -2706,10 +2716,13 @@ def main() -> None:
                     _cfb_use = _scan.cfb_usage(conn, _scan_season_of("cfb", args.date))
                 except Exception:                            # noqa: BLE001
                     _cfb_use = {}
+                # WHAT EACH DEFENCE GIVES UP TO EACH POSITION (engine/cfb/defense, kept until its rows change), said
+                # on every read and in the report (step AHO; Ethan: "you're not going into specifics").
+                _cfb_allowed = _cfb_allowed_now(conn, _scan_season_of("cfb", args.date), args.date)
                 _scanned = _scan.attach_cfb(
                     out, _scan_season_of("cfb", args.date),
                     lambda school: cfbdata.resolve_team(school, lookup),
-                    usage=_cfb_use, watch=watch, injuries=_cfb_inj)
+                    usage=_cfb_use, watch=watch, injuries=_cfb_inj, allowed=_cfb_allowed)
                 _cfb_leans = _scan.leans_from_reads(out.get("scan_reads") or {})
                 print(f"  Matchup scan: {_scanned} of {len(out.get('games') or [])} game(s), "
                       f"{len(_cfb_leans)} lean(s) for Most Likely.")
@@ -3164,7 +3177,8 @@ def main() -> None:
             "conference_game": bool(_g.get("conference_game")), "week": _g.get("week")}
             for _g in games if isinstance(_g, dict)}
         _gr_line = _greport.attach(out, season=_gr_season_of('cfb', args.date), sport='cfb',
-                                   meta=_gr_meta, out=args.out)
+                                   meta=_gr_meta, out=args.out,
+                                   allowed=_cfb_allowed_now(conn, _gr_season_of('cfb', args.date), args.date))
         print(f"  {_gr_line}")
     except Exception as _grexc:                               # noqa: BLE001
         print(f"  ⚠️  game reports skipped: {_grexc}")

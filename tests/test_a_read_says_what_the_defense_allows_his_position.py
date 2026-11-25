@@ -145,6 +145,31 @@ def test_a_missed_game_reads_the_packers_last_game():
     assert "in GB's last game" in A.note(r, None), "no report, the code's own possessive"
 
 
+def test_a_college_read_says_it_and_counts_nothing_new():
+    """College football's ratings (engine/cfb/defense) ride in as shown-only: on the card, never a vote."""
+    sys.path.insert(0, str(ROOT / "tests"))
+    import test_the_matchup_scan_reads_college_games as T
+    from engine import gamescan as G
+    from engine.sources import cfbd
+    out, rows, keys = T._board()
+    G.attach_cfb(out, 2026, keys.get, fetch=lambda year: cfbd.parse_advanced(rows))
+    plain = out["scan_reads"]["TENN@UGA"]["players"][0]
+    out, rows, keys = T._board()
+    tenn = {"qb_pass_yds": _row(268.0, 20, of=134, games=10), "qb_pass_td": _row(2.1, 30, of=134, games=10),
+            "qb_pass_int": _row(0.6, 90, of=134, games=10)}
+    G.attach_cfb(out, 2026, keys.get, fetch=lambda year: cfbd.parse_advanced(rows), allowed={"TENN": tenn})
+    seen = out["scan_reads"]["TENN@UGA"]["players"][0]
+    assert seen["notes"][0] == ("Against quarterbacks, TENN allows 268 passing yards (the 20th-most) and 2.1 "
+                                "passing touchdowns (the 30th-most), and forces 0.6 interceptions (the 45th-fewest) "
+                                "a game — of 134 defenses, over 10 games"), seen["notes"]
+    assert (seen["read"], seen["pro"], seen["con"]) == (plain["read"], plain["pro"], plain["con"]), "nothing new counts"
+    # College's touchdown backing reads its own measurement: backs and receivers.
+    assert GR.TD_FUNNEL_POS_BY["cfb"] == ("RB", "FB", "WR")
+    src = (ROOT / "cfb_build.py").read_text(encoding="utf-8")
+    assert "allowed=_cfb_allowed_now(conn, _gr_season_of('cfb', args.date), args.date)" in src
+    assert "injuries=_cfb_inj, allowed=_cfb_allowed)" in src
+
+
 def test_a_hockey_reason_says_the_number_beside_the_rank():
     """The same in hockey (step AHP): "BOS gives up the 2nd-most shots (34.2 a game)", never the rank alone."""
     from engine.nhl import scan as N

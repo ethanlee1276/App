@@ -1930,7 +1930,9 @@ def funnel_lines(c: Ctx, dfn: str) -> list:
     # yards went, not what predicts the next game, and a reader set it against the matchup verdicts.
     catchers = any(f"to {g}" in line for line in out for g in ("wide receivers", "tight ends"))
     py = r.get("qb_pass_yds") or {}
-    if catchers and py.get("rank") and py.get("of") and _f(py.get("pg")) is not None:
+    # The NFL's alone: college's catchers' numbers read their own position's (defensevs.MODEL_STAT_CFB).
+    nfl = getattr(c, "sport", "nfl") in ("nfl", None, "")
+    if nfl and catchers and py.get("rank") and py.get("of") and _f(py.get("pg")) is not None:
         rk, of = int(py["rank"]), int(py["of"])
         where = (f"the {_ord(rk)}-most of {of}" if rk <= (of + 1) / 2 else f"the {_ord(of - rk + 1)}-fewest of {of}")
         # Re-measured in step AHO (engine/gamescan.POSITION_STATS): the overall number split catchers' games at
@@ -2192,8 +2194,11 @@ TD_FUNNEL_RANK = 10
 TD_LIST = 4
 _TD_STAT = {"RB": "rb_td", "FB": "rb_td", "WR": "wr_td", "TE": "te_td"}
 _TD_WORD = {"RB": "running backs", "FB": "running backs", "WR": "receivers", "TE": "tight ends"}
-#: The positions whose touchdowns allowed back a scorer (step AHO, measured: engine/gamescan.POSITION_STATS).
+#: The positions whose touchdowns allowed back a scorer (step AHO, measured): in the NFL running backs only
+#: (engine/gamescan.POSITION_STATS); in college, backs and receivers, the two that predicted in every held-out
+#: season (defensevs.TRANSFER_CFB).
 TD_FUNNEL_POS = ("RB", "FB")
+TD_FUNNEL_POS_BY = {"cfb": ("RB", "FB", "WR")}
 
 
 def _per_game(x: dict) -> str:
@@ -2241,7 +2246,7 @@ def td_chance_pairs(c: Ctx, off: str) -> list:
             # Only where it predicted (step AHO): touchdowns allowed to running backs did, held out (defensevs
             # MODEL_STAT); to receivers and tight ends they split nothing in 2022-2025, so they are said, with
             # the number, and never "back" a pick.
-            funnel = rank <= TD_FUNNEL_RANK and pos in TD_FUNNEL_POS
+            funnel = rank <= TD_FUNNEL_RANK and pos in TD_FUNNEL_POS_BY.get(getattr(c, "sport", "nfl"), TD_FUNNEL_POS)
             bits.append(f"{dfn} allows {_place(rank, of, 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'the position')}"
                         + _per_game(x))
         usage = share is not None and share >= TD_USAGE_SHARE

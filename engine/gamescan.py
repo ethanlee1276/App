@@ -1599,7 +1599,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 line_words: str = "", charting: dict | None = None,
                 charting_def: dict | None = None, tracking: dict | None = None,
                 targets: list | None = None, league_iw: float | None = None,
-                contact: dict | None = None, weather=None) -> dict:
+                contact: dict | None = None, weather=None,
+                shown_allowed: dict | None = None) -> dict:
     """One player's read against this opponent: a label, the reasons for
     and against it (each a sentence a reader can check), what else the
     scan noticed, and the markets the read points at.
@@ -1863,11 +1864,14 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             defense_line = rank_fact(allowed, mstat, opp, n_teams)[1]
     # His share is said with what was noticed and not counted, first; before it, what the defence gives up to his
     # position in each stat his bets are on, less what a counted reason says already (step AHO).
-    vs_position = position_line(group, allowed, opp, n_teams, skip=counted_pos) if measured else ""
+    # College football's ratings come in as ``shown_allowed`` (step AHO): said on the card, never a vote, since no
+    # college read was measured counting them.
+    seen = allowed or shown_allowed
+    vs_position = position_line(group, seen, opp, n_teams, skip=counted_pos) if seen else ""
     # His position's touchdowns allowed, as one sentence a touchdown leg can say (step AHO; engine/gameparlays).
     position_td = ""
-    if measured and group in ("wr", "te", "rb"):
-        position_td = _td_sentence(allowed, f"{group}_td", opp, POSITION_PLURAL[group], n_teams)
+    if seen and group in ("wr", "te", "rb"):
+        position_td = _td_sentence(seen, f"{group}_td", opp, POSITION_PLURAL[group], n_teams)
     notes = ([vs_position] if vs_position else []) + role + notes
     # A LEAN THAT RESTS ON THE WEATHER ALONE points only at the markets the
     # weather moves (WEATHER_LEAN): rain backs a back's carries, never his
@@ -2029,7 +2033,7 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
               evidence: list | None = None, pulled: list | None = None,
               charting: dict | None = None, tracking: dict | None = None,
               contact: dict | None = None, recent: dict | None = None,
-              weather=None, reserve: dict | None = None) -> dict:
+              weather=None, reserve: dict | None = None, shown_allowed: dict | None = None) -> dict:
     """The whole scan for one game (see the block comment above).
 
     ``reserve`` is the roster's reserve lists (engine/sources/nflverse
@@ -2194,7 +2198,8 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             tracking=own_track,
             targets=top_targets(usage, team) if group == "qb" else None,
             league_iw=league_iw_rate(ch) if group == "qb" else None,
-            contact=(contact or {}).get(opp[team]), weather=weather)
+            contact=(contact or {}).get(opp[team]), weather=weather,
+            shown_allowed=(shown_allowed or {}).get(opp[team]))
         read["notes"] = list(read.get("notes") or []) + maybe_lines
         # HIS OWN LISTING, when it is short of out: the read assumes he plays.
         if own_status in ("QUESTIONABLE", "GTD"):
@@ -2942,11 +2947,13 @@ def cfb_usage(conn, season: int) -> dict:
 
 
 def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None = None,
-               watch: list | None = None, injuries: list | None = None) -> int:
+               watch: list | None = None, injuries: list | None = None, allowed: dict | None = None) -> int:
     """Hang a ``scan`` on every game of a college board; the reads ride
     in ``scan_reads`` like the NFL's. ``resolve`` maps CFBD's school name
     to the board's team key (cfbdata.resolve_team). Returns games scanned;
-    no key or no answer scans nothing and says so to the caller."""
+    no key or no answer scans nothing and says so to the caller.
+    ``allowed`` (engine/cfb/defense.ratings) is what each defence gives up
+    to each position: said on every read (step AHO), never counted."""
     if fetch is None:
         from .sources.cfbd import fetch_advanced as fetch
     # WHAT CFBD ANSWERED, ON THE BOARD (2026-11-24): on 24 November no college game carried a scan and nothing said
@@ -2988,7 +2995,7 @@ def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None =
                          props=gprops, opponent_adjusted=False, usage=usage or {},
                          injuries=[i for i in injuries or [] if getattr(i, "team", "") in (home, away)],
                          pulled=gd.get("pulled_players") or [], weather=gd.get("weather"),
-                         points=pts, line_words=words)
+                         points=pts, line_words=words, shown_allowed=allowed)
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         # THE SAME FURNITURE THE NFL SCAN CARRIES (Ethan, 2026-09-26: "we
