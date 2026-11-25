@@ -9883,6 +9883,17 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AEU. Basketball's team ratings checked against the closing line** (step 937; 25 November). Nothing to run.
+Every game report shows our team ratings' own chance beside the price's, marked unproven. The NFL's, college
+football's and baseball's are checked against their closing lines every night; basketball's never were. The nightly
+check now does college basketball and the NBA too: for every game with a stored price from before the tip, it
+rebuilds our ratings from only the games played before that day, the way the report read them, and measures how
+much of their disagreement with the closing line held up. The heartbeat shows each one's games, slope and error,
+and for the spread how often the ratings' side covered (`chores.settle.phases.last_learned.verdicts`, under "game
+lines", `measured`). Nothing changes on any board until a measurement holds: 400 games and a tight enough error,
+the bar every league meets. When one holds, the report's "Unproven" line says what was measured. Basketball totals
+are not measured, because nothing of ours projects one.
+
 **AET. College basketball's game reports read the college ratings** (step 936; 25 November). Nothing to run. A
 college game report's "Our team ratings alone" line, and the slip checker's read of a college ticket, used each
 team's plain average margin with last season's beside it: not adjusted for who a team played, so a mid-major that

@@ -5007,11 +5007,18 @@ RATINGS_FITTED_ON = {
 }
 
 
+#: The ratings engine/hoopscal measures against the close, where a league
+#: reads more than one kind: a measurement says nothing of the other kind.
+MEASURED_KIND = {"cbb": "adjusted"}
+
+
 def ratings_why(sport: str, kind: str | None = None) -> str:
     """Why our ratings' own chance is unproven in this league, in words.
     ``kind`` is which ratings the chance came from (`Ctx.ratings_kind`)."""
     if sport in VERDICT_RATINGS_WHY:
         return VERDICT_RATINGS_WHY[sport]
+    if sport in MEASURED_KIND and kind != MEASURED_KIND[sport]:
+        return RATINGS_FITTED_ON.get((sport, kind), "they haven't been measured against the price yet")
     try:
         from .gamecal import measured
         e = measured(sport, "moneyline")

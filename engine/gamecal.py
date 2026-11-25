@@ -154,6 +154,13 @@ def observations(conn, sport: str, market: str,
     if market not in ("total", "spread", "moneyline"):
         raise ValueError(
             f"market must be 'total', 'spread' or 'moneyline', got {market!r}")
+    # BASKETBALL ON ITS OWN RATINGS (engine/hoopscal, step AEU): the ones
+    # each game report reads, as they stood before each game, against the
+    # tape's last price before the tip. Nothing of ours projects a
+    # basketball total, so a total is refused by name (held, not fitted).
+    from . import hoopscal as _hoops
+    if sport in _hoops.LEAGUES:
+        return _hoops.observations(conn, sport, market)
     if sport not in SCORING_BASELINE:
         # A sport can register its own constants at import time — CFB's
         # ratings module installs a measured prior as a side effect of
@@ -435,12 +442,20 @@ def refresh(db="data/history.db", sport: str | None = None,
                     parts={k: round(v, 1) for k, v in
                            sorted(_PARTS.items(), key=lambda kv: -kv[1])})
     state = _read_state()
-    adopted, held = [], []
+    adopted, held, measured = [], [], []
     for f in fits:
         key = f"{f.sport}:{f.market}"
         if f.missing:
             held.append({"key": key, "why": f.missing})
             continue
+        # EVERY FIT'S NUMBERS, adopted or held (step AEU): a held fit said
+        # only why it was held, so a league's first measurement against
+        # its closes ("too few graded games") read as no measurement.
+        if f.slope == f.slope and f.se == f.se:
+            m = {"key": key, "n": int(f.n), "slope": round(f.slope, 4), "se": round(f.se, 4)}
+            if f.market != "moneyline":
+                m["hit_rate"] = round(f.hit_rate, 4)
+            measured.append(m)
         if f.slope != f.slope or f.se != f.se:
             held.append({"key": key, "why": "unusable fit"})
             continue
@@ -461,7 +476,7 @@ def refresh(db="data/history.db", sport: str | None = None,
     if adopted:
         _write_state(state)
         _cache.clear()
-    return {"adopted": adopted, "held": held}
+    return {"adopted": adopted, "held": held, "measured": measured}
 
 
 def _read_state() -> dict:

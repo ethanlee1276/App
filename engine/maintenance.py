@@ -1343,6 +1343,23 @@ _GAMECAL_HELD = (("no ", "no game-line model of its own here"),
                  ("slope ", "too loose to act on"))
 
 
+def verdict_gamecal_measured(gc: dict) -> dict:
+    """``{"measured": {key: [games, slope, its error] + [the model's side's
+    hit rate, a points market's]}}`` for every fit with numbers, adopted or
+    held, or ``{}`` (step AEU: basketball's first measurement against its
+    closes was held as "too few graded games" and showed no number)."""
+    out: dict = {}
+    for m in (gc or {}).get("measured") or []:
+        try:
+            row = [int(m["n"]), float(m["slope"]), float(m["se"])]
+            if m.get("hit_rate") is not None:
+                row.append(float(m["hit_rate"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        out[str(m.get("key"))] = row
+    return {"measured": out} if out else {}
+
+
 def verdict_gamecal_held(gc: dict) -> dict:
     """``{"held": {reason: [keys]}}`` for the game-line fits that did not
     adopt, or ``{}``. The heartbeat named the adopted ones only, so the
@@ -1587,6 +1604,7 @@ def settle_open(log=print, state_path: Path | None = None,
                 gc = gamecal.refresh(hconn)
                 verdicts["game lines"] = {"adopted": sorted(str(a.get("key")) for a in gc.get("adopted") or [])}
                 verdicts["game lines"].update(verdict_gamecal_held(gc))
+                verdicts["game lines"].update(verdict_gamecal_measured(gc))
                 for a in gc["adopted"]:
                     log(f"  game-line calibration: {a['key']} keeps "
                         f"{a['shrink']:.0%} of a disagreement with the close "

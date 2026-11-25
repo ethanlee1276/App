@@ -64,14 +64,16 @@ def is_division_one(team: str) -> bool:
 
 def adjusted(games, prior: dict | None = None, hca: float = HCA, cap: float = CAP,
              prior_games: float = PRIOR_GAMES, prior_decay: float = PRIOR_DECAY,
-             non_di: float = NON_DI) -> dict:
+             non_di: float = NON_DI, init: dict | None = None) -> dict:
     """``{team: rating}`` for every Division I team in ``games``.
 
     ``games`` are played games ``{home, away, home_score, away_score,
     neutral}``; ``prior`` is ``{team: last season's rating}``. Solved by
     passes over the teams (each one's rating the average of what each of its
     games says it is, with its prior as `prior_games` games more), the
-    Division I average held at zero."""
+    Division I average held at zero. ``init`` is where the passes start (a
+    fit of nearly the same games: the day before's, engine/hoopscal); the
+    answer is the same, reached in fewer passes."""
     rows = []
     teams: set = set()
     for g in games or []:
@@ -88,6 +90,9 @@ def adjusted(games, prior: dict | None = None, hca: float = HCA, cap: float = CA
     prior = prior or {}
     start = {t: prior_decay * float(prior.get(t, 0.0)) for t in teams}
     rating = dict(start)
+    for t, r in (init or {}).items():
+        if t in rating:
+            rating[t] = float(r)
     by_team: dict = {t: [] for t in teams}
     for h, a, m, edge in rows:
         if h in by_team:
