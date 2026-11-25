@@ -9883,6 +9883,12 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFA. Every league's form tiles to one decimal** (step 943; 25 November; nothing to run). The tiles over a market
+card's chart (L1, L3, L5, L10, Season) print the averages each build hands over, and each build rounded them its own
+way: the NFL's to one place, basketball's and baseball's to two, hockey's not at all, so a hockey card could read "L3
+0.6666666666666666" where an NFL card reads "L3 1.3". You asked for the NFL as the one to go off, and the pick page
+already says the same averages to one place, so every league's tiles now read like the NFL's: 0.7, 27.3, 23.3.
+
 **AEZ. Our basketball ratings, measured: no edge yet** (step 942; 25 November; nothing to run). The nightly check
 (step AEU) graded our team ratings against the closing line for the first time on Tuesday night, and the numbers are
 on the heartbeat: college basketball, 154 spreads and 151 moneylines; the NBA, 151 of each. Where our ratings

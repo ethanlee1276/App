@@ -15246,13 +15246,17 @@ function _profileHead(r, right, door = "") {
       </div>`;
 }
 
+/* A FORM TILE'S NUMBER, ONE DECIMAL IN EVERY LEAGUE (step AFA, 25 November 2026). The builds hand the tiles over
+   rounded their own ways: the NFL's to one place, basketball's and baseball's to two, hockey's not at all, so a hockey
+   card read "L3 0.6666666666666666" beside the NFL's "L3 1.3". The pick page says the same averages to one place. */
+const tileNum = (v) => (v == null || !Number.isFinite(+v) ? "—" : Math.round(+v * 10) / 10);
 function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
   const f = r.form || {};
   // On the player's own page the card opens nothing (Ethan, 2026-11-17: the
   // pick page left the player's flow); everywhere else the pick is a door.
   const door = inPage ? "" : propAttrs(r);
   const tiles = [["L1", f.last1], ["L3", f.last3], ["L5", f.last5], ["L10", f.last10], ["Season", f.season]]
-    .map(([k, v]) => `<div class="form-tile"><div class="k">${k}</div><div class="v">${v == null ? "—" : v}</div></div>`).join("");
+    .map(([k, v]) => `<div class="form-tile"><div class="k">${k}</div><div class="v">${tileNum(v)}</div></div>`).join("");
   const vals = (r.logs || []).map((l) => l.value);
   // MLB/NBA logs are one GAME per row (with a real date); NFL logs are weeks.
   const mlb = state.sport !== "nfl";
