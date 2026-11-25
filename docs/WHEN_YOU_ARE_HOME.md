@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHN. The settle pass's catch-up is spread thinner** (step 1006; 25 November; nothing to run). Step AHL's first
+pass on the live box: the settle pass took 355.8 s (809.5 s the pass before), its preparation 140.5 s (575.3 s). Of
+that, 137.9 s was the backfill trying its first 20 of 64 week-labelled rows that no route places, 6.9 s each; the
+other 44 wait their turn, and once all have had a try none is asked again for twelve hours. Twenty a pass made a
+two-minute peak for a few passes twice a day; five a pass make it about half a minute, the day's work the same. To
+read after the update: prep_parts.game_days a few passes on.
+
 **AHM. The box's own start sets what server.py's did** (step 1005; 25 November; nothing to run). The box runs
 launch.py, which builds its own server from server.py's Handler and never runs server.main(). Two of this
 afternoon's settings lived only in server.main(), so on the live site neither was ever set: the server's threads'

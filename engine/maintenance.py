@@ -1691,7 +1691,7 @@ def settle_open(log=print, state_path: Path | None = None,
         # cheap when there is nothing to do.
         t0 = _time.monotonic()
         try:
-            # A week that would not place a row is asked again twelve hours on, twenty rows a pass (step AHL: this
+            # A week that would not place a row is asked again twelve hours on, five rows a pass (steps AHL, AHN: this
             # was 573 s of every pass's prep on the box). Its counts ride the heartbeat with the prep's parts.
             bf = ledger.backfill_game_days(lconn, hconn, retry_after=ledger.GAME_DAY_RETRY_S)
             phases["game_days"] = {k: bf.get(k, 0) for k in ("filled", "unresolved", "retried", "waiting")}

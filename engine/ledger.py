@@ -4707,8 +4707,10 @@ def _close_was_copy(snap, b, who: str, dates, had) -> bool:
 
 #: A week-labelled NFL row the history could not place, tried again no sooner than this (step AHL, `retry_after`).
 GAME_DAY_RETRY_S = 12 * 3600
-#: And at most this many such rows tried in one settle pass, the never-tried and the longest-waiting first.
-GAME_DAY_TRIES_PER_PASS = 20
+#: And at most this many such rows tried in one settle pass, the never-tried and the longest-waiting first. Five, not
+#: the first day's twenty: the live box's first pass tried twenty of its 64 such rows at 6.9 s each (137.9 s of the
+#: pass), so twenty a pass made a two-minute peak twice a day where five make half a minute (step AHN).
+GAME_DAY_TRIES_PER_PASS = 5
 GAME_DAY_TRIES_SQL = ("CREATE TABLE IF NOT EXISTS game_day_tries "
                       "(bet_id INTEGER PRIMARY KEY, tried_at REAL, why TEXT)")
 

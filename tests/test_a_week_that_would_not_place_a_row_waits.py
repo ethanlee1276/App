@@ -89,7 +89,8 @@ def test_the_settle_pass_asks_so_and_says_its_counts():
     src = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
     assert "bf = ledger.backfill_game_days(lconn, hconn, retry_after=ledger.GAME_DAY_RETRY_S)" in src
     assert 'phases["game_days"] = {k: bf.get(k, 0) for k in ("filled", "unresolved", "retried", "waiting")}' in src
-    assert ledger.GAME_DAY_RETRY_S == 12 * 3600 and ledger.GAME_DAY_TRIES_PER_PASS == 20
+    # Five a pass (step AHN): the box's first pass tried twenty of its 64 at 6.9 s each.
+    assert ledger.GAME_DAY_RETRY_S == 12 * 3600 and ledger.GAME_DAY_TRIES_PER_PASS == 5
     launch = (ROOT / "launch.py").read_text(encoding="utf-8")
     assert "_led.backfill_game_days(conn, _db.connect(), dry_run=dry_run)" in launch, "the command, as before"
 
