@@ -329,32 +329,63 @@ def _log_rows(conn, seasons: list[int]) -> dict:
     # KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-09): 6.4 seconds of
     # the college build's slate at 08:35 on 9 November, every build, from two
     # seasons of logs that change when a night's box scores land.
-    from .. import logcache
+    from .. import gamelog, logcache
     from ..sources import oddsapi
     return logcache.memo(conn, "cfb_log_rows", "cfb", seasons,
                          lambda: _read_log_rows(conn, seasons),
-                         code=(__file__, oddsapi.__file__))
+                         code=(__file__, oddsapi.__file__, gamelog.__file__))
 
 
 def _read_log_rows(conn, seasons: list[int]) -> dict:
-    """`_log_rows`, read from the table."""
+    """`_log_rows`, read from the table.
+
+    EACH GAME ONCE (2026-11-25). A college game can be stored more than once
+    (the play file's rows, ESPN's box score's, a copy a day off, a copy under
+    another code for the opponent: "BUF" and "BUFF"), and every copy rode
+    here as a game: on the live board 112 of 186 college market logs held a
+    game twice, so a player's last five could be four games with one of them
+    counted twice. A player's rows at one school are merged as the player
+    page's game log merges them (engine/gamelog.games_once), and the form,
+    the mean and the proxy line read each game once."""
+    from ..gamelog import once
     from ..sources.oddsapi import normalize_name
-    q = ("SELECT season, period, player, team, opponent, position, home, "
+    q = ("SELECT season, period, game_id, player, team, opponent, position, home, "
          "market, value FROM player_game_logs WHERE sport='cfb' "
          "AND market IN (%s) AND season IN (%s) "
          "ORDER BY season DESC, period DESC"
          % (",".join("?" * len(_COLUMN)), ",".join("?" * len(seasons))))
     args = [*(_COLUMN[m] for m in MARKETS), *(int(s) for s in seasons)]
     out: dict = {}
+    raw: dict = {}
     newest = max(int(s) for s in seasons)
-    for r in conn.execute(q, args):
-        slot = out.setdefault(r["team"], {}).setdefault(
-            normalize_name(r["player"]), {"player": r["player"], "position": ""})
-        slot["position"] = slot["position"] or (r["position"] or "").strip().upper()
-        slot.setdefault(r["market"], []).append(
-            (str(r["period"] or ""), str(r["opponent"] or ""),
-             bool(r["home"]), float(r["value"]),
-             int(r["season"]) != newest))
+    names: dict = {}
+    for season, period, gid, player, team, opp, position, home, market, value in conn.execute(q, args):
+        norm = names.get(player)
+        if norm is None:
+            norm = names[player] = normalize_name(player)
+        slot = out.setdefault(team, {}).get(norm)
+        if slot is None:
+            slot = out[team][norm] = {"player": player, "position": ""}
+        if not slot["position"] and position:
+            slot["position"] = position.strip().upper()
+        games = raw.get((team, norm))
+        if games is None:
+            games = raw[(team, norm)] = {}
+        key = (str(period), str(gid))
+        g = games.get(key)
+        if g is None:
+            g = games[key] = {"season": season, "period": key[0], "game_id": key[1], "team": team,
+                              "opponent": opp, "home": home, "stats": {}}
+        if value is not None:
+            g["stats"][market] = float(value)
+    for (team, norm), games in raw.items():
+        slot = out[team][norm]
+        for g in once("cfb", games.values()):
+            prior = int(g["season"]) != newest
+            for market, value in g["stats"].items():
+                slot.setdefault(market, []).append(
+                    (str(g["period"] or ""), str(g["opponent"] or ""),
+                     bool(g["home"]), float(value), prior))
     return out
 
 

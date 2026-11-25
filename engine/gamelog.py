@@ -365,7 +365,14 @@ def _played(sport: str, s: dict) -> bool:
 ONE_A_WEEK = ("cfb",)
 
 
+#: `_group_markets`, worked out once a league: the college model's read
+#: merges every player's games through `collapse`, thousands a build.
+_GROUPS: dict = {}
+
+
 def _group_markets(sport: str) -> list:
+    if sport in _GROUPS:
+        return _GROUPS[sport]
     out = []
     for _, _, marks, cols in LAYOUTS.get(sport, ()):
         ms = set(marks)
@@ -376,6 +383,7 @@ def _group_markets(sport: str) -> list:
             elif c[3][0] == "rating":
                 ms.update(("pass_att", "pass_cmp", "pass_yds", "pass_td", "pass_int"))
         out.append(ms)
+    _GROUPS[sport] = out
     return out
 
 
@@ -416,11 +424,15 @@ def collapse(sport: str, games: list) -> list:
     merged game says how many rows it was made of (``copies``)."""
     if sport not in ONE_A_WEEK or len(games) < 2:
         return games
+    order = sorted(games, key=lambda g: str(g["period"]))
+    days = [_day(g["period"]) for g in order]
+    if not any(a and b and (b - a).days <= 1 for a, b in zip(days, days[1:])):
+        # No two games a day or less apart: nothing to merge, the games as given.
+        return [dict(g, copies=1) for g in order]
     groups = _group_markets(sport)
     grouped = set().union(*groups) if groups else set()
     out: list = []
-    for g in sorted(games, key=lambda g: str(g["period"])):
-        d = _day(g["period"])
+    for g, d in zip(order, days):
         head = out[-1] if out else None
         if head is not None and d and head["_day"] and (d - head["_day"]).days <= 1:
             if (head.get("team") and g.get("team") and head["team"] != g["team"]
@@ -436,7 +448,18 @@ def collapse(sport: str, games: list) -> list:
                     head[key] = g[key]
             mine, theirs = head["stats"], g["stats"]
             for ms in groups:
-                if sum(theirs.get(m) or 0 for m in ms) > sum(mine.get(m) or 0 for m in ms):
+                # A COPY WITH NO LINE IN A GROUP NEVER TAKES ONE AWAY (2026-11-25).
+                # The fuller line was the bigger sum, so a copy with no rushing
+                # line (a sum of nothing) beat a run of one carry for minus five
+                # yards and deleted it, and a copy's negative line was never
+                # taken where the other had none. A copy's line is taken where it
+                # is fuller, or where it is the only one and says anything.
+                tk = [m for m in ms if theirs.get(m) is not None]
+                if not tk:
+                    continue
+                t_sum = sum(theirs[m] for m in tk)
+                mk = [m for m in ms if mine.get(m) is not None]
+                if (t_sum > sum(mine[m] for m in mk)) if mk else (t_sum != 0):
                     for m in ms:
                         mine.pop(m, None)
                         if theirs.get(m) is not None:
@@ -450,6 +473,54 @@ def collapse(sport: str, games: list) -> list:
     for g in out:
         g.pop("_day", None)
     _sides(sport, out)
+    return out
+
+
+def games_once(sport: str, rows) -> list:
+    """One player's stored rows (mappings with season, period, game_id, team,
+    opponent, home, market and value, in any order) as games, each game once,
+    newest first: built the way `season_log` builds them and merged by
+    `collapse`, so a reader of the same rows says the same games.
+
+    THE CHART ABOVE THE GAME LOG READ EACH COPY AS A GAME (2026-11-25). The
+    player page's game log has merged a college game's copies since 16
+    November; the market cards' charts and tiles above it (engine/statlogs,
+    engine/cfb/props) read the rows as stored. On the live college board 112 of
+    186 market logs held a game twice: Miami (Ohio)'s 3 November game against
+    Buffalo as "BUF" one day and "BUFF" the next, Kent State's game at
+    Sacramento State on 30 and 31 October, a game at Ohio State twice on 19
+    September, and a receiver's line beside a copy of him on the other side
+    with nothing caught. Scoop Smith's rushing chart showed 31 yards twice;
+    his game log, once."""
+    games: dict = {}
+    for r in rows:
+        key = (str(r["period"]), str(r["game_id"]))
+        g = games.get(key)
+        if g is None:
+            g = games[key] = {"season": r["season"], "period": key[0], "game_id": key[1], "team": r["team"],
+                              "opponent": r["opponent"], "home": r["home"], "stats": {}}
+        if r["value"] is not None:
+            g["stats"][r["market"]] = float(r["value"])
+    return once(sport, games.values())
+
+
+def once(sport: str, games) -> list:
+    """Game dicts (season, period, game_id, team, opponent, home, stats), copies
+    of one game merged (`collapse`), newest first: `games_once` for a reader
+    that builds the dicts itself."""
+    return sorted(collapse(sport, list(games)), key=lambda g: (str(g["period"]), str(g["game_id"])), reverse=True)
+
+
+def group_markets_of(sport: str, markets) -> set:
+    """The markets a box-score group holding any of ``markets`` is judged on
+    (`collapse` takes a group's line whole, from the copy with the fuller
+    one): what a reader of those markets reads beside them to merge as the
+    game log merges."""
+    want = set(markets)
+    out = set(want)
+    for ms in _group_markets(sport):
+        if ms & want:
+            out |= ms
     return out
 
 

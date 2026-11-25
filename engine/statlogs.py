@@ -204,9 +204,9 @@ def for_board(recommendations, sport: str, db_path=None) -> dict:
         # "census + player stats + shelves + market scan" at 09:24 on 9
         # November, the same games on every build of the same slate.
         import hashlib
-        from . import logcache
+        from . import gamelog, logcache
         return logcache.memo(conn, "player_stats", sport, None,
-                             lambda: _query(conn, sport, markets, players), code=__file__,
+                             lambda: _query(conn, sport, markets, players), code=(__file__, gamelog.__file__),
                              extra={"players": hashlib.sha1("\n".join(players).encode()).hexdigest()})
     finally:
         conn.close()
@@ -1159,13 +1159,17 @@ def versus(sport: str, player: str, opponent: str, db_path=None) -> dict:
             return {"player": name, "opponent": "", "games": []}
         ids = [m for m, _ in markets]
         labels = dict(markets)
+        from .gamelog import ONE_A_WEEK, group_markets_of
+        read = ids + (sorted(group_markets_of(sport, ids) - set(ids)) if sport in ONE_A_WEEK else [])
         rows = conn.execute(
             "SELECT season, period, game_id, team, home, market, value "
             "FROM player_game_logs "
             "WHERE sport=? AND player=? AND opponent=? "
-            f"AND market IN ({','.join('?' * len(ids))}) "
+            f"AND market IN ({','.join('?' * len(read))}) "
             "ORDER BY season DESC, period DESC",
-            (sport, name, opp, *ids)).fetchall()
+            (sport, name, opp, *read)).fetchall()
+        if sport in ONE_A_WEEK:
+            return {"player": name, "opponent": opp, "games": _versus_once(sport, markets, opp, rows)}
         games: list[dict] = []
         seen: dict = {}
         for r in rows:
@@ -1194,6 +1198,27 @@ def versus(sport: str, player: str, opponent: str, db_path=None) -> dict:
         conn.close()
 
 
+
+def _versus_once(sport: str, markets, opp: str, rows) -> list:
+    """`versus`'s games for a league that plays once a week, each game once
+    (engine/gamelog.games_once): a college game filed under two days or two
+    ids was two meetings. Newest first, ``VS_GAMES`` of them, the stats in
+    SPORT_MARKETS order."""
+    from .gamelog import games_once
+    games = games_once(sport, [{"season": r["season"], "period": r["period"], "game_id": r["game_id"],
+                                "team": r["team"], "opponent": opp, "home": r["home"], "market": r["market"],
+                                "value": r["value"]} for r in rows])
+    out = []
+    for g in games:
+        stats = {label: g["stats"][m] for m, label in markets if g["stats"].get(m) is not None}
+        if not stats:
+            continue
+        out.append({"season": int(g["season"]), "home": bool(g["home"]), "team": g["team"],
+                    "stats": stats, "date": str(g["period"])})
+        if len(out) >= VS_GAMES:
+            break
+    return out
+
 def _query(conn, sport, markets, players) -> dict:
     """``player_stats`` for ``players``: each one's last ``N_GAMES`` in each
     market, newest first, players listed newest first.
@@ -1215,7 +1240,10 @@ def _query(conn, sport, markets, players) -> dict:
     breaking a tie the same way. A file without that index (one made
     before it existed) is read the old way."""
     import sqlite3
+    from .gamelog import ONE_A_WEEK
     ids = [m for m, _ in markets]
+    if sport in ONE_A_WEEK:
+        return _query_once(conn, sport, markets, players)
     q = ("SELECT season, period, game_id, opponent, home, value "
          "FROM player_game_logs INDEXED BY idx_logs_lookup "
          "WHERE sport=? AND market=? AND player=? "
@@ -1246,6 +1274,74 @@ def _query(conn, sport, markets, players) -> dict:
         if "no such index" not in str(exc):
             raise
         return _query_scan(conn, sport, markets, players)
+    out: dict[str, dict[str, list]] = {}
+    for player in sorted(grouped, key=lambda p: (newest[p], p), reverse=True):
+        keep = _kept(sport, markets, grouped[player])
+        if keep:
+            out[player] = keep
+    return out
+
+
+#: How many stored rows a game can be filed as, at most: the play file's,
+#: ESPN's box score's, a provisional copy and a copy a day off. A college
+#: market's read takes this many rows a game so its ten games are whole.
+COPIES = 4
+
+
+def _once_lists(sport: str, ids, rows) -> dict:
+    """``{market: [games…]}`` for one player from his stored rows, each game
+    once (engine/gamelog.games_once, the game log's own merge), newest first,
+    ``N_GAMES`` a market."""
+    from .gamelog import games_once
+    games = games_once(sport, rows)
+    per: dict[str, list] = {}
+    for m in ids:
+        lst = [{"opponent": g["opponent"], "home": bool(g["home"]), "value": g["stats"][m],
+                "date": str(g["period"])}
+               for g in games if g["stats"].get(m) is not None][:N_GAMES]
+        if lst:
+            per[m] = lst
+    return per
+
+
+def _query_once(conn, sport, markets, players) -> dict:
+    """`_query` for a league that plays once a week (engine/gamelog.ONE_A_WEEK):
+    each market's newest games read whole (``COPIES`` rows a game, and the
+    other markets of its box-score group, which the merge judges a copy's line
+    on), then each game once, as the player page's game log says them. Players
+    newest first, as `_query` orders them. A file without the (sport, market,
+    player) index is read with a plain WHERE."""
+    import sqlite3
+    from .gamelog import group_markets_of
+    ids = [m for m, _ in markets]
+    read = ids + sorted(group_markets_of(sport, ids) - set(ids))
+    sql = ("SELECT season, period, game_id, team, opponent, home, value FROM player_game_logs {} "
+           "WHERE sport=? AND market=? AND player=? "
+           "ORDER BY season DESC, period DESC, game_id DESC LIMIT ?")
+    q = sql.format("INDEXED BY idx_logs_lookup")
+    grouped: dict[str, dict[str, list]] = {}
+    newest: dict = {}
+    for player in players:
+        rows: list = []
+        for m in read:
+            try:
+                got = conn.execute(q, (sport, m, player, N_GAMES * COPIES)).fetchall()
+            except sqlite3.OperationalError as exc:
+                if "no such index" not in str(exc):
+                    raise
+                q = sql.format("")
+                got = conn.execute(q, (sport, m, player, N_GAMES * COPIES)).fetchall()
+            if not got:
+                continue
+            if m in ids:
+                top = (got[0][0], str(got[0][1]), str(got[0][2]))
+                if player not in newest or top > newest[player]:
+                    newest[player] = top
+            rows.extend({"season": r[0], "period": r[1], "game_id": r[2], "team": r[3], "opponent": r[4],
+                         "home": r[5], "market": m, "value": r[6]} for r in got)
+        per = _once_lists(sport, ids, rows) if player in newest else {}
+        if per:
+            grouped[player] = per
     out: dict[str, dict[str, list]] = {}
     for player in sorted(grouped, key=lambda p: (newest[p], p), reverse=True):
         keep = _kept(sport, markets, grouped[player])

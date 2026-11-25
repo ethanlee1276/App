@@ -9883,6 +9883,30 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFE. A college game counts once on the cards and in the college model** (step 946; 25 November; nothing to run).
+Read off the live college board this morning: 112 of its 186 college market logs counted at least one game twice.
+Scoop Smith's rushing chart (Miami of Ohio) showed his Buffalo game twice, 31 yards on 3 November filed against "BUFF"
+and 31 again on 4 November against "BUF". Wayne Harris's 122 yards at Sacramento State sat on 30 and 31 October, Terik
+Mulder's game at Ohio State twice on 19 September, and some players had a copy of themselves on the other team's side
+with nothing caught. The game log table on the player page has counted each game once since 16 November. The cards
+above it, the head-to-head view and the college prop model's recent form read every stored copy as a game, so a last
+five could be four games with one of them counted twice, on the card and in the numbers the model priced from. All
+three now read through the game log's own merge. On a scratch history built like those players' live rows, their
+charts now match their game log tables game for game; I'll check the live board after the next college build.
+
+While in the merge I fixed two edge cases in it. A copy with no rushing line could wipe out a real line whose total
+was negative (one carry for minus five yards), and a copy's negative line was never taken where the other copy had
+none. A copy with no line in a group now never takes one away.
+
+Not changed yet: the stored rows. The copies are still in the history file. Of the 138 doubled games in those 112
+logs, 73 sat under the same opponent (57 a day apart, 16 on the same day), 26 under Buffalo's two codes (BUF and
+BUFF), and 39 beside a copy of the player on the other side. The cleanup (engine/cfbdedupe) merges only copies under
+the same opponent, so it can't reach the other 65, and the 73 it could reach are there after its run on 14 November,
+so something has filed them again since. A few other college reads still count the copies: the defense ratings, the
+matchup scan and the touchdown model's usage. Next I'm finding what files them again and extending the cleanup to the
+kinds it misses, with a count first, as on 14 November. Separately, in the NFL: two different players named Byron
+Young share one game log, because logs are filed by name. That's after this.
+
 **AFC. A ticket's "one book" line says its prices are today's** (step 945; 25 November; nothing to run). Read off your
 Best Parlays screenshot: "Anthony Davis under 1.5 steals −246 FanDuel" over "One book has every leg: FanDuel (−260,
 −198)", and on the next card two legs at Hard Rock −250 over "Hard Rock (−325, −230)": two prices from one book for
