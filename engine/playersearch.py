@@ -28,6 +28,7 @@ never removes anyone, which is the entire point of the change.
 from __future__ import annotations
 
 import difflib
+import functools
 import re
 import unicodedata
 from array import array
@@ -42,8 +43,13 @@ from bisect import bisect_right
 SOURCES = ("nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc")
 
 
+@functools.lru_cache(maxsize=1 << 17)
 def norm(s: str) -> str:
     """A name reduced to what a person is actually typing at it.
+
+    REMEMBERED (step AGT, 25 November 2026): every roster rewrite and every name list rebuilt put the same tens of
+    thousands of names through this again (Ryan Williams's college page, 7.4 s finding him on a rewritten roster,
+    beside the search's own rebuild); the same name is the same answer.
 
     Ethan, 2026-08-23: "if you dont type the players name in exactly, they
     dont come up at all which makes it feel broken."

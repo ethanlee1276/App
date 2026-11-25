@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGT. A rewritten roster re-indexes its names from memory** (step 988; 25 November; nothing to run). Timing
+college pages after the 17:1x UTC update: Ryan Williams's took 7.8 s, 7.4 of it finding him on the roster. The
+college roster had just been rewritten with real changes, so the page re-indexed its 41,888 names while the search
+rebuilt its own list beside it, both putting every name through the same clean-up (accents, punctuation, initials,
+"Jr."), in the one process every page waits on. That clean-up's answers are now remembered, so a rebuilt index only
+works out the names it hasn't seen before: 110 ms to 4 ms here for the college list.
+
 **AGS. Tonight's pick count is written beside each board** (step 987; 25 November; nothing to run). AGQ's split
 showed where the sign-up screen's rebuild goes: 1.84 s counting tonight's picks, which read every league's whole
 private board (the NFL's runs to 18 MB) whenever one had changed, and they change every few minutes. Each board build

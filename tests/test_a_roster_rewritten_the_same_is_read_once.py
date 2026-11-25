@@ -128,6 +128,20 @@ def test_the_page_and_the_search_keep_what_they_built_through_a_rewrite():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def test_a_rewritten_roster_indexes_its_names_from_memory():
+    """Step AGT: Ryan Williams's college page spent 7.4 s finding him on a roster the build had rewritten, the page's
+    index of 41,888 names rebuilt beside the search's own. A name's folded forms are remembered, so a rebuilt index
+    folds only the names it has not seen."""
+    from engine import playersearch as PS
+    assert hasattr(PP.core_name, "cache_info") and hasattr(PS.norm, "cache_info")
+    PP.core_name.cache_clear()
+    PP.core_name("Nolan Smith Jr.")
+    PP.core_name("Nolan Smith Jr.")
+    assert PP.core_name.cache_info().hits == 1 and PP.core_name("Nolan Smith Jr.") == "nolan smith"
+    assert PP.core_name("D.J. Moore") == PP.core_name("DJ Moore") == "dj moore", "the same answers as before"
+    assert PS.norm("Kauê Fernandes") == "kaue fernandes" and PS.norm(None) == ""
+
+
 def test_every_reader_of_the_roster_files_reads_them_this_way():
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
     fn = srv[srv.index("def _live_roster(sport, team):"):srv.index("def _depth_chart(sport, team")]

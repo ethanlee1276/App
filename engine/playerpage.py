@@ -36,6 +36,7 @@ RATE_SHARE of the leader's volume behind it. Ties share a place.
 from __future__ import annotations
 
 import bisect
+import functools
 import hashlib
 import json
 import os
@@ -726,10 +727,12 @@ SUFFIXES = ("Jr.", "Jr", "Sr.", "Sr", "II", "III", "IV", "V")
 _SUFFIX_WORDS = frozenset(w.rstrip(".").lower() for w in SUFFIXES)
 
 
+@functools.lru_cache(maxsize=1 << 17)
 def core_name(name: str) -> str:
     """A name as two spellings of one person share it: accents, punctuation
     and case dropped (playersearch.norm), initials run together ("D.J." and
-    "DJ" are both "dj"), and a generational suffix dropped too."""
+    "DJ" are both "dj"), and a generational suffix dropped too. Remembered
+    (step AGT): a rewritten roster indexes the same names again."""
     from .playersearch import norm
     words, run = [], ""
     for w in norm(name).split():
