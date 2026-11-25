@@ -104,7 +104,7 @@ def test_the_parlays_one_book_line_speaks_for_a_ticket_with_an_under():
     got = GP.one_book([under, over], idx)
     # FanDuel pays 1.877 x 1.714 = 3.22; DraftKings 1.840 x 1.667 = 3.07.
     assert got == {"book": "FanDuel", "odds": [-114, -140], "books": 2,
-                   "words": "One book has every leg: FanDuel (-114, -140)"}, got
+                   "words": "One book has every leg now: FanDuel (-114, -140)"}, got
     # With the under's books unread the legs' own books (DraftKings, FanDuel) differed and nothing was said.
 
 

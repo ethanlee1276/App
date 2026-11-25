@@ -2311,8 +2311,12 @@ def one_book(legs: list, index: dict, carried: dict | None = None) -> dict | Non
     best = max(common, key=lambda k: (pays(k), k))
     odds = [p[best][1] for p in per]
     name = per[0][best][0]
+    # SAID AS NOW (25 November 2026). A posted ticket's legs show the prices they went up at, and this line the
+    # book's latest ones: Ethan's Best Parlays card read "Anthony Davis under 1.5 steals -246 FanDuel" over "One
+    # book has every leg: FanDuel (-260, -198)", two prices from one book for one leg and nothing saying which was
+    # which. The leg keeps its posted price (the Record's); this line says it is the book's price now.
     return {"book": name, "odds": odds, "books": len(common),
-            "words": f"One book has every leg: {name} ({', '.join(_odds_words(o) for o in odds)})"}
+            "words": f"One book has every leg now: {name} ({', '.join(_odds_words(o) for o in odds)})"}
 
 
 #: A PARLAY ONE BOOK PRICES WHOLE IS CHOSEN FIRST (Ethan, 21 November, "3. Yes"

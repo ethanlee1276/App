@@ -157,7 +157,7 @@ def test_a_posted_price_is_never_a_quote_today():
     assert posted["odds"] == -200
     still = GP.one_book([posted, _leg(b2, "Malik Nabers")], GP.quote_index(b2), GP.carried_picks(b2))
     assert still == {"book": "DraftKings", "odds": [-150, -150], "books": 2,
-                     "words": "One book has every leg: DraftKings (-150, -150)"}, still
+                     "words": "One book has every leg now: DraftKings (-150, -150)"}, still
 
 
 def test_two_legs_gone_and_a_prop_no_book_prices_on_that_side():
@@ -310,7 +310,7 @@ def test_the_card_and_the_page_mark_a_ticket_that_cannot_be_placed():
     c = GP.card(gone, 1, "two", "nfl")
     assert c["one_book"] == GONE and c["one_book_gone"] is True
     fine = GP.card(next(t for t in g["twos"] if not _has(t)), 2, "two", "nfl")
-    assert fine["one_book"].startswith("One book has every leg: ") and "one_book_gone" not in fine
+    assert fine["one_book"].startswith("One book has every leg now: ") and "one_book_gone" not in fine
     report = _js("report")
     assert '<p class="gr-parlay-book${t.one_book_gone ? " gone" : ""}">${escapeHtml(t.one_book)}</p>' in report
     assert "one_book_gone: !!(t.one_book || {}).gone," in report, "the page's own card carries it too"

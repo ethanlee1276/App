@@ -354,7 +354,7 @@ def test_the_one_book_is_the_one_that_has_every_leg_and_pays_most():
     got = GP.one_book([a, b], idx)
     # DraftKings pays 1.667 x 1.556 = 2.59; FanDuel 1.714 x 1.5 = 2.57.
     assert got == {"book": "DraftKings", "odds": [-150, -180], "books": 2,
-                   "words": "One book has every leg: DraftKings (-150, -180)"}, got
+                   "words": "One book has every leg now: DraftKings (-150, -180)"}, got
     # An under reads the under price.
     assert GP.book_prices(_leg("Cam Skattebo", "rush_att", "Under", 11.5), idx) == {"betmgm": ("BetMGM", 100)}
 
@@ -385,7 +385,7 @@ def test_a_legs_own_book_counts_and_no_one_book_needs_every_legs_quotes():
     # Their own books agree with a book that has the other leg: that book has every leg, whatever else is unknown.
     got = GP.one_book([nabers, x], idx)
     assert got == {"book": "FanDuel", "odds": [-140, -160], "books": 1,
-                   "words": "One book has every leg: FanDuel (-140, -160)"}, got
+                   "words": "One book has every leg now: FanDuel (-140, -160)"}, got
     assert GP.one_book([x, dict(y, book="FanDuel")], {})["book"] == "FanDuel", "with no quotes on file at all"
     # They differ, and one leg's other books are unknown: nothing is said, never "no one book".
     assert GP.one_book([nabers, y], idx) is None and GP.one_book([x, y], idx) is None
@@ -435,7 +435,7 @@ def test_the_cards_carry_the_class_and_the_book():
         g = GP.build(b, "nfl")["games"][0]
         c = GP.card(g["twos"][0], 1, "two", "nfl")
         assert (c["cls"], c["cls_label"]) == ("safe", "Safe") and c["cls_why"].startswith("Safe: every leg 64% or better")
-        assert c["one_book"] == "One book has every leg: DraftKings (-150, -150)", c.get("one_book")
+        assert c["one_book"] == "One book has every leg now: DraftKings (-150, -150)", c.get("one_book")
         pair = GP.card(g["scorers"][0], 1, "scorers", "nfl")
         assert "cls" not in pair and "one_book" not in pair
     report = _js("report")

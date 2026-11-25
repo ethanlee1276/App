@@ -9883,6 +9883,14 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFC. A ticket's "one book" line says its prices are today's** (step 945; 25 November; nothing to run). Read off your
+Best Parlays screenshot: "Anthony Davis under 1.5 steals −246 FanDuel" over "One book has every leg: FanDuel (−260,
+−198)", and on the next card two legs at Hard Rock −250 over "Hard Rock (−325, −230)": two prices from one book for
+one leg. Both were right. A posted ticket's legs keep the prices they went up at (the Record grades those, and a
+posted ticket never changes), while the one-book line is worked out from the latest pull. Nothing said which was
+which. That line now reads "One book has every leg now: FanDuel (−260, −198)", on Best Parlays and in the game
+reports alike.
+
 **AFB. "Open the game and its report" opens them** (step 944; 25 November; nothing to run). You, circling the button on a
 Best Parlays card: "Also this button isn't working". It never had: the page drew it on 21 November (step AAL) with
 nothing listening for a press, and Report Picks' "Open the report" button the same. The one test of it read its
