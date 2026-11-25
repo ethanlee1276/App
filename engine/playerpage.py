@@ -1017,6 +1017,13 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
             return out if row else {}
         season = int(season) if season and str(season).isdigit() and int(season) in seasons else seasons[0]
         out["season"] = season
+        # THE LEAGUE'S OWN NEWEST SEASON (step AFV): a page whose player's newest season is older (Cameron Boozer's
+        # college page shows 2025-26 in 2026-27) says where he ranked that season, not "this season".
+        # Read off the box scores (their key leads with sport and season), as his own seasons are; a schedule
+        # can carry next season's games before one is played.
+        newest = conn.execute("SELECT MAX(season) FROM player_game_logs WHERE sport=?", (sport,)).fetchone()
+        if newest and newest[0] is not None:
+            out["league_season"] = int(newest[0])
         by_id, by_pair = GL._results(conn, sport, season)
         mark("results")
         games = []

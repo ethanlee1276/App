@@ -9883,6 +9883,11 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFV. A past season's places say "that season"** (step 964; 25 November; nothing to run). Cameron Boozer's
+college page shows 2025-26, his newest college season, and its card read "2025–26 season · Where each ranks in the
+CBB this season" in the 2026-27 season. The page now carries the league's own newest season, read off the box
+scores as the player's seasons are, and a card for an older season says "Where each ranked in the CBB that season".
+
 **AFU. A player's page never waits on a league table** (step 963; 25 November; nothing to run). Follow-up to
 AFO. Timing the other leagues' player pages on the live site: most answered in 0.1 to 0.7 s, but Cameron Boozer's
 college basketball page took 29.3 s, 28.7 s of it building college basketball's league table for 2025-26, the

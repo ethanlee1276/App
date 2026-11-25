@@ -202,12 +202,15 @@ function plrPanelsHTML(open, sport) {
 }
 
 /* ---------------- Overview ---------------- */
+//: A season before the league's newest (engine/playerpage `league_season`, step AFV): its places are that season's.
+const plrPast = (d) => d.league_season != null && d.season != null && Number(d.season) < Number(d.league_season);
 function plrSeasonHTML(d, note = "") {
   const nums = (d.headline || []).filter((h) => h.value != null);
   if (!nums.length) return "";
   const ranked = nums.some((h) => h.rank);
   return `<section class="plr-card plr-strip"><h3>${escapeHtml(plrSeasonLabel(d.sport, d.season))} season${ranked
-      ? ` <span>Where each ranks in the ${escapeHtml(lgCode(d.sport))} this season</span>` : ""}</h3>${
+      ? ` <span>${plrPast(d) ? "Where each ranked" : "Where each ranks"} in the ${escapeHtml(lgCode(d.sport))} ${
+        plrPast(d) ? "that" : "this"} season</span>` : ""}</h3>${
       note ? `<p class="plr-quiet">${escapeHtml(note)}</p>` : ""}
     <div class="plr-nums">${nums.map((h) => `<div class="plr-num" title="${escapeAttr(h.title)}">
       <span class="plr-k">${escapeHtml(h.label)}</span><b>${escapeHtml(plrNum(h.value, h.label, h.per_game))}</b>${
