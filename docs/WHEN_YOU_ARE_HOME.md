@@ -9883,6 +9883,14 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFW. A receiver's tables lead with Receiving** (step 965; 25 November; nothing to run). Looking at Amon-Ra St.
+Brown's page as a member sees it: his Recent games opened on a Rushing group of zeros (carries, yards, average), with
+his catches off the right of a phone's screen. The game log's layout lists passing, rushing, receiving, and every
+table followed it, so his two carries all season put Rushing first in his game log, his Recent games, his career
+table and his splits; Travis Kelce's the same on the live site. ESPN's log for a receiver leads with Receiving.
+Each table now puts the player's own group first (what his page already calls his role: his position, else where
+his volume is), the rest in the usual order: a receiver's receiving, a back's rushing, a passer's passing.
+
 **AFV. A past season's places say "that season"** (step 964; 25 November; nothing to run). Cameron Boozer's
 college page shows 2025-26, his newest college season, and its card read "2025–26 season · Where each ranks in the
 CBB this season" in the 2026-27 season. The page now carries the league's own newest season, read off the box

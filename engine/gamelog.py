@@ -248,6 +248,14 @@ def _first(stats: dict, markets) -> float | None:
     return None
 
 
+def role_first(groups: list, key: str) -> list:
+    """His own group first, the rest in the layout's order (step AFW, 25 November 2026). The layout lists passing,
+    rushing, receiving, so Amon-Ra St. Brown's two carries all season put a column group of zeros at the head of his
+    game log, his Recent games and his career table, and his catches off the right of a phone's screen; Travis
+    Kelce's the same. ESPN's log for a receiver leads with Receiving. `key` is his role (engine/playerpage.role)."""
+    return sorted(groups, key=lambda g: g[0] != key) if key else list(groups)
+
+
 def shows(games, marks) -> bool:
     """Does a group belong on a player's page: a number other than zero in
     any of its marks, in any game. A receiver's carries of 0 every week are
@@ -662,6 +670,8 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None,
                                 if c[3][0] == "sum" and played and _first_key(summed, c[3][1:]) else None)
                 for k, _, cols in groups for c in cols}
     last = max(games.values(), key=lambda g: g["period"])
+    from .playerpage import role                     # his page's own rule for what he does (it imports this file)
+    groups = role_first(groups, role(sport, last["position"] or "", summed))
     return {"sport": sport, "player": player, "season": season, "seasons": seasons,
             "team": last["team"] or "", "position": last["position"] or "",
             "groups": [{"key": k, "title": t, "cols": [{"key": c[0], "label": c[1],

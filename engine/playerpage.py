@@ -1048,6 +1048,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         summed, gp = _sum(played), len(played)
         kind = role(sport, position, summed)
         out["role"] = kind
+        groups = GL.role_first(groups, kind)             # his own group first, as ESPN's (step AFW)
         per_game = sport in HOOPS
         mark("games")
 
@@ -1139,7 +1140,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         # Season by season.
         counts = lambda g: GL._played(sport, g["stats"]) and GL.has_line(sport, g["stats"])   # noqa: E731
         every = [g for gs in by_season.values() for g in gs.values() if counts(g)]
-        cgroups = _groups(sport, every)
+        cgroups = GL.role_first(_groups(sport, every), kind)
         career_rows = []
         for yr in sorted(by_season, reverse=True):
             mine = [g for g in by_season[yr].values() if counts(g)]
