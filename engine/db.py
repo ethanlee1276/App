@@ -19,6 +19,7 @@ instead of re-hitting the network.
 from __future__ import annotations
 
 import sqlite3
+import time
 from pathlib import Path
 
 DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "history.db"
@@ -861,6 +862,43 @@ def column_exists_or_raise(exc: sqlite3.OperationalError) -> None:
     re-raises, and the memo is never set."""
     if "duplicate column" not in str(exc).lower():
         raise exc
+
+
+#: Each table's stored names, folded, per database file, and when they were read (step AGR).
+_FOLDED_NAMES: dict = {}
+FOLDED_NAMES_TTL = 10 * 60
+
+
+def folded_names(conn, table: str, key: tuple, sql: str, args=(), fold=None) -> dict:
+    """``{fold(name): [stored names]}`` over the names `sql` lists (a name a row) from `table`, kept per database file
+    and `key` for ten minutes while `table` gains no row (its highest rowid stands; never for a database in memory,
+    which a test opens fresh).
+
+    A NAME A TABLE DOES NOT HOLD COST IT THE WHOLE TABLE (step AGR, 25 November 2026; Ethan: "Ok keep going and work
+    more on these issues as they are not fixed"). A chart asked for a spelling its table does not keep read every
+    stored name to fold each one, on every ask, and the empty answer was never kept: a college basketball shot chart
+    took 20.3 s on the live site (it read every shot for its shooter's id), a college role chart 6.9 s. Read once in
+    ten minutes, off the table's own name index, a miss is a dictionary lookup; a name first stored inside the ten
+    minutes is found once the table's new rows are (a row added moves its highest rowid, one seek to read)."""
+    path = ""
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str(row[2] or "") if row else ""
+        top = conn.execute(f"SELECT MAX(rowid) FROM {table}").fetchone()[0]
+    except sqlite3.Error:
+        path, top = "", None
+    k = (path, table) + tuple(key)
+    hit = _FOLDED_NAMES.get(k) if path else None
+    if hit and time.time() - hit[0] < FOLDED_NAMES_TTL and hit[1] == top:
+        return hit[2]
+    fold = fold or (lambda name: name)
+    out: dict = {}
+    for (name,) in conn.execute(sql, args):
+        if name:
+            out.setdefault(fold(name), []).append(name)
+    if path:
+        _FOLDED_NAMES[k] = (time.time(), top, out)
+    return out
 
 
 def pinned(conn, sql: str, index: str, args=()):

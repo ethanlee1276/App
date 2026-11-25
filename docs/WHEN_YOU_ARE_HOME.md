@@ -9883,6 +9883,18 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGR. A name a chart doesn't hold costs a lookup, not the whole table** (step 986; 25 November; nothing to
+run). Checked live after the update that carried AGJ to AGO: the role charts asked before the update answered off
+the disk in 50 to 59 ms (Gibbs, Kucherov, Soto; they were 11 to 34 s), and ones nobody had opened were built in 0.1
+to 1.2 s, the seasons read down from 10 to 33 s to 4 to 11 ms. That check turned up the next slow thing: a chart
+asked for a name its table doesn't keep exactly. It folded every stored name to look for another spelling, on every
+ask, and the empty answer was never kept: a college basketball shot chart took 20.3 s (it read every shot in the
+table for its shooter's id), a college role chart 6.9 s, an NBA one 1.2 s, for a name the table doesn't hold. That
+happens for any player whose name is spelled differently there, or who has no rows yet. Each chart table's names are
+now read once off the table's name index and kept, until ten minutes pass or the table gains a row; a miss is a
+lookup. And the role chart now finds its player by the player page's own rule (suffixes, other spellings, never a
+namesake a roster carries), so a chart under a page always means the player the page means.
+
 **AGQ. The sign-up screen's rebuild says which of its reads is slow** (step 985; 25 November; nothing to run).
 After the 16:31 UTC update the sign-up screen's members' side took 5.2 s to build and then 7.0 s the second time, most
 of it one part called "counts" (1.9 s, then 4.8 s). That part is three reads: the record's head file, last night's

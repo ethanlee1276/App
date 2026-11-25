@@ -471,8 +471,9 @@ def resolve(conn, sport: str, player: str) -> str:
     want = _fold(q)
     if not want:
         return ""
-    hits = [p for (p,) in conn.execute("SELECT DISTINCT player FROM carries WHERE sport=?", (sport,))
-            if _fold(p) == want]
+    from .db import folded_names                      # read once in ten minutes, not on every miss (step AGR)
+    hits = folded_names(conn, "carries", (sport,), "SELECT DISTINCT player FROM carries WHERE sport=?", (sport,),
+                        _fold).get(want, [])
     return hits[0] if len(hits) == 1 else ""
 
 

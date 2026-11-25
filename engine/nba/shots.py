@@ -615,9 +615,13 @@ def resolve(conn, player: str, league: str = "nba") -> tuple:
     want = _fold(q)
     if not want:
         return None, ""
+    # Every shooter's name off the name index, folded, kept ten minutes (step AGR): this read every shot of the
+    # table for its shooter's id on every miss, 20.3 s for a college name the table does not hold, never kept. The
+    # ids are then read for the folded matches alone.
+    from ..db import folded_names
     hits = {}
-    for pid, name in conn.execute(f"SELECT DISTINCT person_id, player FROM {table}"):
-        if _fold(name) == want:
+    for stored in folded_names(conn, table, (), f"SELECT DISTINCT player FROM {table}", (), _fold).get(want, []):
+        for pid, name in conn.execute(f"SELECT DISTINCT person_id, player FROM {table} WHERE player=?", (stored,)):
             hits[pid] = name
     return next(iter(hits.items())) if len(hits) == 1 else (None, "")
 

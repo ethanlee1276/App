@@ -121,8 +121,14 @@ def metric(sport: str, key: str) -> dict:
 
 
 def resolve(conn, sport: str, player: str) -> str:
-    """The stored spelling of a player's name in the logs, or ""."""
-    from .carries import _fold
+    """The stored spelling of a player's name in the logs, or "".
+
+    THE PAGE'S OWN RULE (step AGR, 25 November 2026). A name the logs do not hold exactly was folded against every
+    name the league has logged, read off every row of the league's index on every ask, and the empty answer never
+    kept: a college role chart 6.9 s on the live site for a name college does not hold. The player page answers the
+    same question off the search's kept list of names (playerpage.stored_name: a suffix spelled or not, "Ja'Marr" or
+    "JaMarr", a misspelling of the whole name, never a namesake a roster carries), so the chart under a page now
+    means the player the page means."""
     q = (player or "").strip()
     if not q:
         return ""
@@ -130,15 +136,8 @@ def resolve(conn, sport: str, player: str) -> str:
                        (sport, q)).fetchone()
     if row:
         return row[0]
-    want = _fold(q)
-    if not want:
-        return ""
-    # Spelled out with or without its apostrophe or hyphen: "Ja'Marr" is
-    # "jamarr" to anyone typing it.
-    tight = want.replace(" ", "")
-    hits = {p for (p,) in conn.execute("SELECT DISTINCT player FROM player_game_logs WHERE sport=?", (sport,))
-            if _fold(p).replace(" ", "") == tight}
-    return next(iter(hits)) if len(hits) == 1 else ""
+    from .playerpage import stored_name
+    return stored_name(conn, sport, q) or ""
 
 
 def _marks(xs) -> str:
