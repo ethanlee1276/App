@@ -9895,8 +9895,9 @@ priced market card read L1, L3, L5, L10 and Season, and Season was the average o
 season it came from. Basketball reads a player's last 20 games across two seasons, so this week most NBA cards' Season
 tile still held last April's games; the NFL's and college football's held the games carried in from last season early
 in the year; baseball's and hockey's averaged every game on the log. Season now means this season's games in every
-league, by each game's date (or, in football, by whether it was carried in from last season). The other tiles are
-unchanged: they're the last one, three, five and ten games, whatever season. And hockey's L3, L5 and L10 were blank for
+league, by each game's date (or, in football, by whether it was carried in from last season). In basketball it reads
+every game of this season, not only the 20 the model reads, so it stays the season's average past December. The other
+tiles are unchanged: they're the last one, three, five and ten games, whatever season. And hockey's L3, L5 and L10 were blank for
 a player with fewer games than the window, where every other league's average the games they have; they now average
 what they have too.
 

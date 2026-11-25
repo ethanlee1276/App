@@ -895,7 +895,8 @@ def shared_recommendations(props: list[dict],
                      "last5": _avg(vals, 5), "last10": _avg(vals, 10),
                      # This season's games only (step AFI): the twenty read
                      # run back into last season's spring for most players.
-                     "season": _avg(this_season(tune.key, vals, dates)), "career": _avg(vals),
+                     "season": (prop["season_mean"] if prop.get("season_mean") is not None
+                                else _avg(this_season(tune.key, vals, dates))), "career": _avg(vals),
                      "vs_opponent": None},
             "mate_card": prop.get("mate_card"),
             "chain": r.get("chain"),

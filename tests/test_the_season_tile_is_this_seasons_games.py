@@ -31,7 +31,27 @@ def test_basketball_reads_the_season_being_played():
     assert this_season("nba", vals, dates[:2], today="2026-11-25") == [1.0, 2.0], "a value with no date is no season's"
     assert this_season("nba", [], [], today="2026-11-25") == []
     src = (ROOT / "engine" / "nba" / "pipeline.py").read_text(encoding="utf-8")
-    assert '"season": _avg(this_season(tune.key, vals, dates)), "career": _avg(vals),' in src
+    assert "this_season(tune.key, vals, dates)" in src
+
+
+def test_basketballs_tile_reads_the_whole_season_not_the_twenty():
+    import nba_build as B
+    by_week = {}
+    for i in range(25):                      # this season: 25 games, more than the twenty the model reads
+        by_week[f"2026-{10 + i // 20:02d}-{1 + i % 20:02d}"] = {"pts": 20.0 + (i % 5), "reb": 5.0, "ast": 4.0,
+                                                               **({"stl": 1.0} if i < 10 else {})}
+    for i in range(5):                       # last season's spring
+        by_week[f"2026-04-{1 + i:02d}"] = {"pts": 40.0, "reb": 10.0, "ast": 10.0, "stl": 3.0}
+    got = B.season_means("nba", by_week, 2026)
+    assert got["pts"] == 22.0 and got["reb"] == 5.0 and got["pra"] == 31.0 and got["pts_reb"] == 27.0
+    assert got["stl"] == 1.0, "a count over the games whose box stored it, never a missing row as a zero"
+    assert B.season_means("nba", by_week, None) == {} and B.season_means("nba", {}, 2026) == {}
+    src = (ROOT / "nba_build.py").read_text(encoding="utf-8")
+    assert '"season_mean": (h.get("season_means") or {}).get(prop.market),' in src
+    assert 'p["season_means"] = season_means(sport, p["by_week"], max(seasons) if seasons else None)' in src
+    pipe = (ROOT / "engine" / "nba" / "pipeline.py").read_text(encoding="utf-8")
+    assert ('"season": (prop["season_mean"] if prop.get("season_mean") is not None\n'
+            '                                else _avg(this_season(tune.key, vals, dates))),') in pipe
 
 
 def test_football_leaves_the_carried_games_out():

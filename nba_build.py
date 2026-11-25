@@ -171,7 +171,45 @@ def player_history(conn, teams: set[str], sport: str = "nba",
             games = [p["by_week"][w] for w in weeks]
             for stat in COUNTS:
                 p[stat] = [games[i][stat] for i in range(carried(games, stat))]
+        p["season_means"] = season_means(sport, p["by_week"], max(seasons) if seasons else None)
     return hist
+
+
+def season_means(sport: str, by_week: dict, season: int | None) -> dict:
+    """``{market: mean}`` over every game of ``season`` in a player's history
+    (``by_week``: {ISO date: {market: value}}), before the twenty are cut.
+
+    THE SEASON TILE READS THE SEASON (step AFI, 2026-11-25). A card's Season tile
+    averaged the twenty games the model reads, which run into last season in
+    the autumn and stop being the season by December. Each market's mean is
+    taken over this season's games: a summed market (PRA, the two-stat combos)
+    from its parts, a count (steals, blocks, turnovers) over the games whose
+    box stored it, never a missing row read as a zero."""
+    from engine.hoops import COUNTS, SUMS
+    from engine.seasons import season_of
+    if season is None:
+        return {}
+    games = []
+    for day, g in by_week.items():
+        try:
+            if season_of(sport, str(day)[:10]) == season:
+                games.append(g)
+        except (ValueError, IndexError):
+            continue
+    if not games:
+        return {}
+    out: dict = {}
+    for stat in ("pts", "reb", "ast", "fg3m"):
+        vals = [float(g.get(stat, 0.0) or 0.0) for g in games]
+        out[stat] = round(sum(vals) / len(vals), 2)
+    for combo, parts in SUMS.items():
+        vals = [sum(float(g.get(x, 0.0) or 0.0) for x in parts) for g in games]
+        out[combo] = round(sum(vals) / len(vals), 2)
+    for stat in COUNTS:
+        vals = [float(g[stat]) for g in games if g.get(stat) is not None]
+        if vals:
+            out[stat] = round(sum(vals) / len(vals), 2)
+    return out
 
 
 def current_teams(league: str, fetch=None, team_ids: dict | None = None) -> tuple[dict, list]:
@@ -1807,6 +1845,9 @@ def main() -> None:
                 "consensus_books": _field[1] if _field else 0,
                 "book": book, "minutes": h["minutes"],
                 "values": h[prop.market], "is_starter": bool(h["starter"]),
+                # His season's mean for the Season tile (step AFI): every game
+                # of this season, not the twenty the model reads.
+                "season_mean": (h.get("season_means") or {}).get(prop.market),
                 # Who started each of those games, and his club's starting
                 # five's news tonight (engine/nba/starters): himself never
                 # counted in either.
