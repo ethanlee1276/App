@@ -134,6 +134,22 @@ def test_old_link_files_are_pruned_and_never_read():
     assert B.load("nba", cache_dir=tmp) == {}, "another league's links are not this one's"
 
 
+def test_a_read_of_the_bank_says_where_its_seconds_went():
+    """25 November 2026: "bet link files" was 13.7 of college basketball's publishing seconds, and nothing said
+    whether listing the folder or reading the files was it. A read keeps both, with the files and megabytes."""
+    tmp = Path(tempfile.mkdtemp())
+    _banked(tmp)
+    B.LAST.clear()
+    B._MEMO.clear()
+    B.load("nfl", cache_dir=tmp)
+    assert {"scan_s", "read_s", "files", "mb", "parsed"} <= set(B.LAST), B.LAST
+    assert B.LAST["files"] >= 1 and B.LAST["parsed"] == B.LAST["files"] and B.LAST["mb"] >= 0
+    B.load("nfl", cache_dir=tmp)
+    assert B.LAST["parsed"] == 0, "a file the process has read and that has not changed is not read again"
+    src = (ROOT / "engine" / "gate.py").read_text(encoding="utf-8")
+    assert 'took["bet link scan"]' in src and 'took["bet link read"]' in src
+
+
 def test_every_kind_of_pick_gets_its_own_slip():
     tmp = Path(tempfile.mkdtemp())
     _banked(tmp)

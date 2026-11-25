@@ -1105,6 +1105,11 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     _links = took.pop("bet links", 0.0)
     took["bet link files"] = min(_links, float(betlinks.LAST.get("load_s") or 0.0))
     took["bet link rows"] = _links - took["bet link files"]
+    # …and the files' own split, listing the folder against reading them (25 November 2026). Parts are
+    # seconds; how many files and how big stay in betlinks.LAST.
+    if betlinks.LAST.get("files") is not None:
+        took["bet link scan"] = float(betlinks.LAST.get("scan_s") or 0.0)
+        took["bet link read"] = float(betlinks.LAST.get("read_s") or 0.0)
     # WHAT HAPPENED TO EACH PICK (engine/gameresults, 2026-11-16): the
     # journal's verdicts for this board's finished games, so a finished
     # game's page can mark every pick, leg and read. Never costs a publish.

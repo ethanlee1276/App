@@ -233,6 +233,10 @@ def load(sport: str, cache_dir: Path | None = None, now: float | None = None) ->
     root = Path(cache_dir) if cache_dir else _cache_dir()
     cutoff = (now or time.time()) - KEEP_S
     files = []
+    # WHERE THE SECONDS GO, APART (25 November 2026): "bet link files" was 13.7 of college basketball's
+    # publishing seconds at 8:30 PM on 24 November, and nothing said whether listing the folder or reading the
+    # files was it. LAST carries the scan, the read, how many files and how many megabytes.
+    _t0 = time.monotonic()
     for pat in (f"{PREFIX}event_{sport}_*.json", f"{PREFIX}board_{sport}.json", f"{PREFIX}board_{sport}_*.json"):
         for f in root.glob(pat):
             try:
@@ -241,6 +245,9 @@ def load(sport: str, cache_dir: Path | None = None, now: float | None = None) ->
                 continue
             if st.st_mtime >= cutoff:
                 files.append((st.st_mtime, st.st_size, f))
+    LAST.update(scan_s=round(time.monotonic() - _t0, 2), files=len(files),
+                mb=round(sum(sz for _m, sz, _f in files) / 1e6, 1))
+    _t0, parsed = time.monotonic(), 0
     events: dict = {}
     with _LOCK:
         for mtime, size, f in sorted(files, key=lambda t: t[0]):
@@ -252,6 +259,7 @@ def load(sport: str, cache_dir: Path | None = None, now: float | None = None) ->
                     got = (json.loads(f.read_text()) or {}).get("events") or {}
                 except (OSError, ValueError):
                     continue
+                parsed += 1
                 _MEMO[str(f)] = (mtime, size, got)
             for eid, ev in got.items():
                 have = events.setdefault(eid, {"t": ev.get("t"), "home": ev.get("home"), "away": ev.get("away"),
@@ -260,6 +268,7 @@ def load(sport: str, cache_dir: Path | None = None, now: float | None = None) ->
                 have["page"].update(ev.get("page") or {})
         for k in [k for k in _MEMO if not Path(k).exists()]:
             _MEMO.pop(k, None)
+    LAST.update(read_s=round(time.monotonic() - _t0, 2), parsed=parsed)
     return events
 
 
