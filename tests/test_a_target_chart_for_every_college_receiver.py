@@ -214,7 +214,7 @@ def test_the_doors_serve_college():
         _conn(path).close()
         D.DEFAULT_DB = path
         h = object.__new__(server.Handler)
-        h._send = lambda code, body, ext=".json": sent.append((code, json.loads(body)))
+        h._send = lambda code, body, ext=".json", headers=None: sent.append((code, json.loads(body)))
         h._players_routes({"sport": ["cfb"], "player": ["Zachariah Branch"]})
         h._players_chart({"kind": ["routes"], "sport": ["cfb"], "player": ["Zachariah Branch"]})
         h._players_routes({"sport": ["nba"], "player": ["Zachariah Branch"]})

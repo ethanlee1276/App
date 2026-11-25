@@ -169,7 +169,7 @@ def test_the_door_answers_the_kicker_chart():
         D.connect(path).close()
         D.DEFAULT_DB = path
         h = object.__new__(server.Handler)
-        h._send = lambda code, body, ext=".json": sent.append((code, json.loads(body)))
+        h._send = lambda code, body, ext=".json", headers=None: sent.append((code, json.loads(body)))
         h._players_chart({"kind": ["kicks"], "sport": ["nfl"], "player": ["Justin Tucker"]})
         _conn(path).close()
         h._players_chart({"kind": ["kicks"], "sport": ["nfl"], "player": ["Justin Tucker"]})

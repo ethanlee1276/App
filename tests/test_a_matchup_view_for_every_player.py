@@ -388,7 +388,7 @@ def test_the_door_answers_the_matchup():
         D.connect(path).close()
         D.DEFAULT_DB = path
         h = object.__new__(server.Handler)
-        h._send = lambda code, body, ext=".json": sent.append((code, json.loads(body)))
+        h._send = lambda code, body, ext=".json", headers=None: sent.append((code, json.loads(body)))
         q = {"kind": ["matchup"], "sport": ["nfl"], "player": ["Zay Flowers"], "opp": ["DET"], "fam": ["routes"]}
         h._players_chart(q)
         conn = D.connect(path)
