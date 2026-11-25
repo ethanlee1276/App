@@ -35,6 +35,12 @@ def _half(x: float) -> float:
     return round(x * 2) / 2
 
 
+def _this_year() -> str:
+    """The season being played, a calendar year in baseball (engine/seasons)."""
+    import datetime as _dt
+    return str(_dt.date.today().year)
+
+
 def _avg(vals):
     return round(sum(vals) / len(vals), 2) if vals else None
 
@@ -502,7 +508,11 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "form": {
             "last1": _avg(vals[:1]), "last3": _avg(vals[:3]),
             "last5": _avg(vals[:5]), "last10": _avg(vals[:10]),
-            "season": _avg(vals), "career": prop.career_avg,
+            # This season's games only (step AFI): a log reaching back past
+            # opening day is in the windows, never in Season.
+            "season": _avg([g.value for g in prop.logs
+                            if str(getattr(g, "date", "") or "")[:4] == _this_year()]),
+            "career": prop.career_avg,
             "vs_opponent": prop.vs_pitcher_avg,
         },
     }

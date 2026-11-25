@@ -171,7 +171,9 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
             "last3": _avg(vals[:3]),
             "last5": _avg(vals[:5]),
             "last10": _avg(vals[:10]),
-            "season": _avg(vals),
+            # THIS SEASON'S GAMES (step AFI, 2026-11-25): a game carried in
+            # from last season (`prior`) is in the windows, never in Season.
+            "season": _avg([g.value for g in prop.logs if not getattr(g, "prior", False)]),
             "career": prop.career_avg,
             "vs_opponent": prop.vs_opponent_avg,
         },

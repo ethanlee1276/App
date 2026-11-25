@@ -213,6 +213,19 @@ def _rest_days(team_ctx: dict, date: str):
     return 1 if team_ctx.get("b2b") else None
 
 
+def _mean(xs):
+    return sum(xs) / len(xs) if xs else None
+
+
+def _in_season(day, today) -> bool:
+    """Is a game's day in the season ``today`` is in (engine/seasons)?"""
+    from engine.seasons import season_of
+    try:
+        return bool(day) and season_of("nhl", str(day)[:10]) == season_of("nhl", str(today)[:10])
+    except (ValueError, IndexError):
+        return False
+
+
 def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str,
                ctx: dict | None = None, teams: dict | None = None, league: dict | None = None) -> dict | None:
     """The shared-schema recommendation for one priced prop, or None.
@@ -419,10 +432,13 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         "logs": [{"week": i + 1, "date": g.get("date", ""), "opponent": g.get("opponent", ""),
                   "value": g.get("saves" if goalie else M._STAT.get(prop.market, prop.market), 0.0),
                   "home": g.get("home", 1)} for i, g in enumerate(games[:20])],
+        # The NFL's windows (step AFI): each the average of the games it has,
+        # and Season this season's games only, by their dates.
         "form": {"last1": vals[0] if vals else None,
-                 "last3": recent3, "last5": (sum(vals[:5]) / 5 if len(vals) >= 5 else None),
-                 "last10": (sum(vals[:10]) / 10 if len(vals) >= 10 else None),
-                 "season": (sum(vals) / len(vals) if vals else None), "career": None, "vs_opponent": None},
+                 "last3": _mean(vals[:3]), "last5": _mean(vals[:5]), "last10": _mean(vals[:10]),
+                 "season": _mean([float(g.get("saves" if goalie else M._STAT.get(prop.market, prop.market), 0.0))
+                                  for g in games if _in_season(g.get("date"), date)]),
+                 "career": None, "vs_opponent": None},
         "game_date": date,
         # SCALPY NHL 1.0 — the win-first grade, the prop's tier, the risk
         # flags that keep it out of A+, and the reason a prop is passed.

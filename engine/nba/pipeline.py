@@ -583,6 +583,26 @@ def _census(skips: list, misses: list) -> dict:
 # meaning (model probability minus the de-vigged fair), and the humility
 # clamp's note rides in the reasons.
 
+def this_season(league: str, vals, dates, today: str | None = None) -> list:
+    """The values of the season being played, by each game's date (``dates``
+    beside ``vals``, newest first). THE SEASON TILE IS THIS SEASON'S (step AFI,
+    2026-11-25): a card read twenty games across two seasons, so in late
+    November its "Season" tile held last April's games. A value with no date
+    is no season's."""
+    import datetime as _dt
+    from engine.seasons import season_of
+    cur = season_of(league, today or _dt.date.today().isoformat())
+    out = []
+    for i, v in enumerate(vals):
+        d = str(dates[i] if i < len(dates or []) else "")[:10]
+        try:
+            if d and season_of(league, d) == cur:
+                out.append(v)
+        except (ValueError, IndexError):
+            continue
+    return out
+
+
 def _avg(vals, n=None):
     xs = vals[:n] if n else vals
     return round(sum(xs) / len(xs), 2) if xs else None
@@ -873,7 +893,9 @@ def shared_recommendations(props: list[dict],
                      for i, v in enumerate(vals[:20])],
             "form": {"last1": _avg(vals, 1), "last3": _avg(vals, 3),
                      "last5": _avg(vals, 5), "last10": _avg(vals, 10),
-                     "season": _avg(vals), "career": _avg(vals),
+                     # This season's games only (step AFI): the twenty read
+                     # run back into last season's spring for most players.
+                     "season": _avg(this_season(tune.key, vals, dates)), "career": _avg(vals),
                      "vs_opponent": None},
             "mate_card": prop.get("mate_card"),
             "chain": r.get("chain"),

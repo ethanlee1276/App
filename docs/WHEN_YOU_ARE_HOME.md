@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFI. Every league's Season tile is this season's games** (step 951; 25 November; nothing to run). The tiles over a
+priced market card read L1, L3, L5, L10 and Season, and Season was the average of every game the build read, whichever
+season it came from. Basketball reads a player's last 20 games across two seasons, so this week most NBA cards' Season
+tile still held last April's games; the NFL's and college football's held the games carried in from last season early
+in the year; baseball's and hockey's averaged every game on the log. Season now means this season's games in every
+league, by each game's date (or, in football, by whether it was carried in from last season). The other tiles are
+unchanged: they're the last one, three, five and ten games, whatever season. And hockey's L3, L5 and L10 were blank for
+a player with fewer games than the window, where every other league's average the games they have; they now average
+what they have too.
+
 **AFH. Last season's weeks say their season on an NFL card** (step 950; 25 November; nothing to run). An NFL card
 names each game by its week, and its ten games can reach back across the summer. On the live board this morning, 191
 NFL market logs had a week number twice, this season's and last season's, with nothing saying which was which ("Wk 9"
