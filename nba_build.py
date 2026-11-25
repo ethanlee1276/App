@@ -721,7 +721,13 @@ def matchup_fit(defense: dict, opponent: str) -> float:
 #: HOW MANY COLLEGE GAMES A BUILD PRICES PLAYERS FOR — the month's plan's
 #: cap on one pull (`oddsplan.PULL_CAP["cbb"]`), so the history read, the
 #: props and the paid pull cover the same games. ``QB_CBB_PROP_GAMES`` moves it.
-CBB_PROP_GAMES = 5
+#: EIGHT SINCE STEP AER (25 November 2026; Ethan's decision A, "A, yes more"):
+#: five until then, when a game was priced at 13 credits. The feed bills about
+#: 9 (`oddsbudget.measured_price`), so eight games a pull are fully funded in
+#: every month of the plan (ten would be 91% funded in December); the build's
+#: game-night time came down from about 415 seconds (steps AEO to AEQ) to make
+#: room for the reads.
+CBB_PROP_GAMES = 8
 
 
 def college_board_games(games: list[dict], cap: int | None = None) -> list[dict]:

@@ -108,9 +108,48 @@ CREDITS_PER_EVENT = 8
 EVENT_CREDITS = {"nfl": 26, "mlb": 11, "nba": 20, "wnba": 13, "nhl": 12, "ufc": 1, "cbb": 13}
 
 
+#: A GAME PRICED AT WHAT THE FEED BILLS FOR IT (step AER, 25 November 2026). The odds feed bills a game-by-game call
+#: for the markets the books have posted, not the ones asked for: on the heartbeat's first `odds_bill` (24 November,
+#: 7:10 PM ET) college basketball's last 30 calls billed 271 credits where its 13 a game said 390, 8 for half of them
+#: and 3 for a game with no player prop posted. Priced at 13, its pulls were planned and metered at about half again
+#: what they cost, which is the room Ethan's decision A asked for ("A, yes more"). A league named here is priced at the
+#: average its last MEASURED_DAYS days of billed calls came to (rounded up, from MEASURED_MIN_CALLS of them), never
+#: above its table price; with fewer calls, at the table, as before.
+MEASURED_LEAGUES = frozenset({"cbb"})
+MEASURED_DAYS = 7
+MEASURED_MIN_CALLS = 20
+#: How long one read of the ledger answers for a league's measured price, in one process.
+MEASURED_EVERY_S = 600
+_MEASURED: dict = {}
+
+
+def measured_price(sport: str | None, rows: list | None = None, now: float | None = None) -> int | None:
+    """The average credits the API billed this league's game-by-game calls over the last MEASURED_DAYS days, rounded
+    up; None with fewer than MEASURED_MIN_CALLS of them. Never raises."""
+    try:
+        now = time.time() if now is None else float(now)
+        got = event_bills(rows, since=now - MEASURED_DAYS * 86400).get(budget_sport(sport)) or {}
+        calls = int(got.get("calls") or 0)
+        if calls < MEASURED_MIN_CALLS:
+            return None
+        return max(1, -(-int(got.get("billed") or 0) // calls))
+    except Exception:                                        # noqa: BLE001
+        return None
+
+
 def credits_per_event(sport: str | None = None) -> int:
-    """What ONE event-scoped call costs this league, in credits."""
-    return int(EVENT_CREDITS.get(budget_sport(sport), CREDITS_PER_EVENT))
+    """What ONE event-scoped call costs this league, in credits: its table price, or for a league priced at its bill
+    (MEASURED_LEAGUES) the measured one when it is lower (`measured_price`, read again every MEASURED_EVERY_S)."""
+    league = budget_sport(sport)
+    table = int(EVENT_CREDITS.get(league, CREDITS_PER_EVENT))
+    if league not in MEASURED_LEAGUES:
+        return table
+    now = time.time()
+    hit = _MEASURED.get(league)
+    if hit is None or now - hit[0] >= MEASURED_EVERY_S:
+        hit = (now, measured_price(league, now=now))
+        _MEASURED[league] = hit
+    return table if hit[1] is None else min(table, int(hit[1]))
 # Live pricing may plan to spend only this share of what's left this month;
 # the rest stays for harvests, probes, and just-in-case.
 LIVE_SHARE = 0.5

@@ -137,7 +137,7 @@ def test_the_board_buys_the_ranked_and_power_games_still_to_tip():
     # (Pin updated 2026-11-14: a school below Division I is bought last — no
     # book posts its players — so the small-conference game is third.)
     assert picked == ["UNC@DUKE", "IU@PUR", "B@A"], picked
-    assert nba_build.CBB_PROP_GAMES == 5
+    assert nba_build.CBB_PROP_GAMES == 8, "eight since step AER (five until 25 November 2026)"
 
 
 def test_two_real_teams_meeting_are_bought_before_a_ranked_schools_buy_game():

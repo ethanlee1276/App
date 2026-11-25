@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AER. Eight college basketball games a pull, priced at what the feed bills** (step 934; 25 November). Nothing to
+run. Decision A, done: college basketball now buys player prices for 8 games a pull (the ranked and power-conference
+games first), not 5. Each game is priced at what the feed has billed for one over the last week, rounded up (10 a
+game from that evening's 30 calls, not the 13 our table said); with fewer than 20 calls in the week it goes back to
+13, and it never prices above 13. At that price the month's plan funds 8 games a pull in full from December to
+March. The NFL keeps its full cadence first; its December extra pulls on busy news days go from about 1,800
+credits to about 660, and January's from about 5,500 to about 4,400. Ten games a pull would be 91% funded in
+December, short enough that a day's last pull could be the one refused, so it stays at 8 until the money shows
+room.
+
 **AEM, measured: the odds feed bills for the markets it returns** (24 November, 7:10 PM ET, the heartbeat's first
 `odds_bill` after the deploy; nothing to run). Over the last day's game-by-game calls:
 

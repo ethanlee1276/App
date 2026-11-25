@@ -228,8 +228,19 @@ def test_november_at_100k_funds_every_sport_and_most_of_the_headroom():
     With every league buying on its game nights only — tonight's games, not
     the week's — every target is met with room left: most of the NFL's half
     again, every other league at one fill."""
-    plan = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1)
-    assert all(lp.target == lp.need for lp in plan.leagues.values()), "every league's need is met"
+    # College basketball at the price the box measures for it (step AER: 271 credits over its last 30 calls,
+    # rounded up to 10 a game), eight games a pull.
+    import time as _time
+    from engine import oddsbudget as _ob
+    _ob._MEASURED["cbb"] = (_time.time(), 10)
+    try:
+        plan = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1)
+        gone = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1, over={"mlb"})
+    finally:
+        _ob._MEASURED.pop("cbb", None)
+    assert all(lp.target == lp.need for lg, lp in plan.leagues.items() if lg != "cbb"), \
+        "every league's need is met, the NFL's first"
+    assert plan.get("cbb").fill >= 0.98, plan.get("cbb").fill
     # Since 2026-11-11 basketball and hockey buy four prop pulls a game day
     # (their 7am window; Ethan: "that should be for all sports ... a lot of
     # people look early in the morning"), about 8,000 credits more a month,
@@ -240,17 +251,18 @@ def test_november_at_100k_funds_every_sport_and_most_of_the_headroom():
     # night and its lines lane, about 8,000 credits) is funded too, out of
     # what was the NFL's headroom: the NFL keeps its full cadence and some of
     # its half again, and every league after it is at one fill.
+    # Since 2026-11-25 (step AER, decision A: "A, yes more") college basketball's eight games a pull take what was
+    # the NFL's half again: the NFL keeps its full cadence, its extra pulls go to college basketball's games.
     nfl = plan.get("nfl")
-    assert 0 < nfl.extra < int(nfl.need * P.NFL_HEADROOM), nfl.extra
+    assert nfl.target == nfl.need and 0 <= nfl.extra < int(nfl.need * P.NFL_HEADROOM), nfl.extra
     for lg in ("nba", "nhl"):
         assert plan.get(lg).need == sum(P.day_need(lg, NOV1 + dt.timedelta(days=d)) for d in range(30)), \
             f"{lg}: four pulls a game day, all month"
-    for lg in ("cfb", "nba", "mlb", "nhl", "ufc", "cbb"):
+    for lg in ("cfb", "nba", "mlb", "nhl", "ufc"):
         assert plan.get(lg).fill >= 1.0, lg
     assert plan.get("wnba").need == 0 and plan.unplanned <= 2
-    gone = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1,
-                   over={"mlb"})
-    assert gone.get("nfl").extra > plan.get("nfl").extra, "baseball's share went to the leagues still playing"
+    assert gone.get("cbb").fill > plan.get("cbb").fill or gone.get("nfl").extra > plan.get("nfl").extra, \
+        "baseball's share went to the leagues still playing"
 
 
 def test_a_season_that_is_over_leaves_the_pool():

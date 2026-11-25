@@ -219,17 +219,17 @@ GAMES_BY_WEEKDAY = {
     "cfb": (0, 1, 1, 2, 3, 12, 0),
     "ufc": (0, 0, 0, 0, 0, 13, 0),
     # College basketball plays every night from November to March (20 to 50
-    # games a weeknight, 100+ on a Saturday); a pull prices five at most
-    # (`PULL_CAP`), the ranked and power-conference games first
-    # (`cbbteams.priority`), so every night is the cap.
-    "cbb": (5, 5, 5, 5, 5, 5, 5),
+    # games a weeknight, 100+ on a Saturday); a pull prices eight at most
+    # (`PULL_CAP`; five until step AER), the ranked and power-conference
+    # games first (`cbbteams.priority`), so every night is the cap.
+    "cbb": (8, 8, 8, 8, 8, 8, 8),
 }
 #: Average games a day outside the regular season (playoffs, bowls; one
 #: World Series game every day or two).
 POSTSEASON_GAMES = {"nba": 3, "nhl": 3, "mlb": 1, "wnba": 1.5, "cfb": 3,
                     # The conference tournaments and March Madness: a
-                    # pull still prices five at most.
-                    "cbb": 5}
+                    # pull still prices eight at most.
+                    "cbb": 8}
 
 #: Prop pulls a game day gets at the target cadence, with the days that
 #: differ. Basketball and hockey: 7am, noon, the pre-game run and 6pm ET
@@ -248,8 +248,13 @@ PULLS_ON = {("cfb", 3): 2, ("cfb", 4): 2, ("cfb", 5): 8, ("ufc", 5): 4}
 #: five games and the lines lane, about 8,000 credits — comes out of what the
 #: plan had left as the NFL's headroom (the extra pulls past its full
 #: cadence), never out of any league's target; six games a pull would have
-#: taken all of it.
-PULL_CAP = {"cfb": 12, "cbb": 5}
+#: taken all of it. EIGHT SINCE STEP AER (2026-11-25; Ethan's decision A, "A,
+#: yes more"): priced at what the feed bills a college game (about 9 credits,
+#: `oddsbudget.measured_price`) rather than the 13 the table said, eight games a
+#: pull are funded in full in every month of the plan, the NFL's December extra
+#: pulls down from about 1,800 credits to about 660; ten would be 91% funded in
+#: December, short enough that a day's last pull could be the one refused.
+PULL_CAP = {"cfb": 12, "cbb": 8}
 
 #: THE THREE-CREDIT LANES, at the pacer's own cadence for a three-credit
 #: pull: the fifteen-minute floor (`oddsbudget.MIN_REFRESH_GAP`) inside the
