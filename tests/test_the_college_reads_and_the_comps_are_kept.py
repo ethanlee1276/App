@@ -232,7 +232,8 @@ def test_the_board_keeps_its_comps_and_a_replay_builds_its_own():
         logcache.memo = spy
         try:
             C.decorate([dict(r) for r in recs], sb.conn, "cfb")
-            assert seen == [("comps_rec_yds", "cfb", None)], seen
+            # The market's index, and beneath it each season's own spots (step AEP).
+            assert seen == [("comps_rec_yds", "cfb", None), ("comps_season_rec_yds", "cfb", [2025])], seen
             seen.clear()
             C.decorate([dict(r) for r in recs], sb.conn, "cfb", before=(2025, "2025-09-20"))
             assert seen == [], "a replay's cutoff never reads a kept index"

@@ -9914,6 +9914,15 @@ three reads ran 11, 9 and 2.7 times faster. The box's real times show on the hea
 `logcache` read times and the board's stage times). Each of the three is read once more in full after the deploy,
 because its code changed.
 
+**AEP. The comps read this season's rows alone on a game night** (step 932; 24 November). Nothing to run. The
+comps (how players in the same form did at the same number, on every prop card) are read off each market's whole
+history, and each night's new box scores read every season again: college basketball's four comps markets took 9.0
+to 11.8 seconds each at 6:46 PM that evening, about 40 seconds of a 416-second build. Each season's part is now kept
+on its own, with each player's last ten games carried into the next season, so a night's rows re-read this season
+alone and the seasons before come from their kept copies. The comps come out the same, every one, in the same order
+(tested against the old whole-history read). On the test history this season's part read in 0.021 seconds where the
+whole history took 0.254. The first build after the deploy reads every season once to make the kept copies.
+
 **ACH, measured on Monday night** (24 November; nothing to run). The watcher's first full game, the Bengals at the
 Commanders (kickoff 01:15 UTC), each team's five inactives as each feed first showed them:
 

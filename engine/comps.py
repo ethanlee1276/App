@@ -106,6 +106,67 @@ def spot_index(conn, sport: str, market: str, window: int = WINDOW,
     return out
 
 
+# --- each season on its own (step AEP) --------------------------------------------------------------------------
+#: EACH SEASON'S SPOTS KEPT ON THEIR OWN (step AEP, 24 November 2026). A market's index is read off its whole history,
+#: and it was kept on every season at once, so each night's new rows read every season again: college basketball's
+#: four comps markets took 9.0 to 11.8 seconds each at 18:46 that evening, about 40 seconds of a 416-second
+#: game-night build. Now each season's spots are kept on their own with what each player carries out of the season
+#: (his last WINDOW values, and his games so far up to MIN_HISTORY), so a night's rows read this season's again and
+#: the seasons before are served from their copies; the index is the whole read's, spot for spot and in its order
+#: (tests/test_comps_read_this_season_alone.py). A sport with rows filed under no season is read whole, as before.
+
+
+def _season_spots(conn, sport: str, market: str, season: int, carry: dict,
+                  window: int = WINDOW, min_history: int = MIN_HISTORY) -> tuple[list, dict]:
+    """(one season's spots in the whole read's order within it: player, day, game; and what each player carries
+    out of it, ``{player: (his last ``window`` values, his games so far up to ``min_history``)}``). ``carry`` is
+    what each player carried into the season, the same shape."""
+    rows = conn.execute(
+        "SELECT player, period, game_id, value FROM player_game_logs "
+        "WHERE sport=? AND market=? AND season=? AND value IS NOT NULL "
+        "ORDER BY player, period, game_id", (sport, market, int(season)))
+    out: list[tuple] = []
+    state: dict = {}
+    for player, period, _game, value in rows:
+        st = state.get(player)
+        if st is None:
+            tail, n = carry.get(player) or ((), 0)
+            st = state[player] = [list(tail), int(n)]
+        tail, n = st
+        if n >= min_history:
+            recent = tail[-window:]
+            out.append(((season, str(period)), player, sum(recent) / len(recent), float(value)))
+        tail.append(float(value))
+        if len(tail) > window:
+            del tail[0]
+        st[1] = min(n + 1, min_history)
+    carried = dict(carry)
+    carried.update({p: (tuple(t), n) for p, (t, n) in state.items()})
+    return out, carried
+
+
+def season_spots(conn, sport: str, market: str) -> list[tuple]:
+    """`spot_index`'s spots for one market, each season read and kept on its own (`_season_spots`, engine/logcache),
+    in its order: player, then season, day and game."""
+    from . import logcache
+    seasons, nulls = logcache.stored_seasons(conn, sport)
+    if nulls:
+        return spot_index(conn, sport, market)
+    name = "comps_season_" + str(market).replace("-", "_")
+    carry: dict = {}
+    pieces = []
+    for i, season in enumerate(seasons):
+        spots, carry = logcache.memo(conn, name, sport, seasons[:i + 1],
+                                     (lambda s=season, c=carry: _season_spots(conn, sport, market, s, c)),
+                                     code=__file__)
+        pieces.append(spots)
+    by_player: dict = {}
+    for spots in pieces:
+        for spot in spots:
+            by_player.setdefault(spot[1], []).append(spot)
+    return [spot for player in sorted(by_player) for spot in by_player[player]]
+
+
 def comp_record(index: list[tuple], line: float, form: float,
                 band: float = FORM_BAND, before=None,
                 min_n: int = MIN_COMPS, player: str | None = None) -> dict | None:
@@ -276,11 +337,12 @@ def _form_of(rec: dict) -> float | None:
 
 def _kept_index(conn, sport: str, market: str) -> "_BandIndex":
     """One market's band index, kept until the sport's logs change
-    (engine/logcache): its whole history, so every season counts. A replay
+    (engine/logcache): its whole history, so every season counts, each season
+    kept on its own beneath it (`season_spots`, step AEP). A replay
     (``before``) builds its own, as it always did."""
     from . import logcache
     return logcache.memo(conn, "comps_" + str(market).replace("-", "_"), sport, None,
-                         lambda: _BandIndex(spot_index(conn, sport, market)), code=__file__)
+                         lambda: _BandIndex(season_spots(conn, sport, market)), code=__file__)
 
 
 def decorate(recommendations: list[dict], conn, sport: str,
