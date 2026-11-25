@@ -1440,10 +1440,20 @@ def settle_open(log=print, state_path: Path | None = None,
         t = _time.monotonic()
         phases[name] = round(phases.get(name, 0.0) + t - clock[0], 1)
         clock[0] = t
+    # WHERE PREP WENT (step AHH, 25 November 2026): 576.6 s of an 812.8 s pass on the live box, with nothing to say
+    # which of its steps took them. Each step's seconds ride the heartbeat beside the phases.
+    prep_parts = phases.setdefault("prep_parts", {})
+
+    def part(name: str, t0: float) -> None:
+        prep_parts[name] = round(prep_parts.get(name, 0.0) + _time.monotonic() - t0, 1)
     try:
         from . import db, ingest, ledger
+        t0 = _time.monotonic()
         lconn = ledger.connect()
+        part("ledger_connect", t0)
+        t0 = _time.monotonic()
         hconn = db.connect()
+        part("history_connect", t0)
         # The learning step: every fresh grade re-mines the journal for
         # loss patterns, so a slice that just crossed the evidence bar
         # starts vetoing picks on a build soon after — no human runs it.
@@ -1679,6 +1689,7 @@ def settle_open(log=print, state_path: Path | None = None,
         # never touches `date`, the settle key, so running it every cycle
         # cannot unsettle anything; it scans `game_day IS NULL` and is
         # cheap when there is nothing to do.
+        t0 = _time.monotonic()
         try:
             bf = ledger.backfill_game_days(lconn, hconn)
             if bf.get("filled"):
@@ -1686,7 +1697,10 @@ def settle_open(log=print, state_path: Path | None = None,
                     f"day ({bf.get('unresolved', 0)} still on a week label)")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  game-day backfill skipped: {exc}")
+        part("game_days", t0)
+        t0 = _time.monotonic()
         days = _open_bet_days(lconn, today, SETTLE_LOOKBACK_DAYS)
+        part("open_days", t0)
         lap("prep")
         if not days:
             # Nothing to do — still stamp the clock so we don't re-check
@@ -1722,6 +1736,7 @@ def settle_open(log=print, state_path: Path | None = None,
         # WNBA pick stored as 'nba' can never meet its results, and the
         # ingest below decides which sports to fetch from the bets' own
         # labels, so relabeling after it wastes a pass.
+        t0 = _time.monotonic()
         try:
             moved = ledger.relabel_cross_league(lconn, hconn)
             if moved:
@@ -1729,11 +1744,13 @@ def settle_open(log=print, state_path: Path | None = None,
                     f"that actually played them")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  league relabel skipped: {exc}")
+        part("relabel_hoops", t0)
         # And the football half of the same problem: NFL stale-line flags
         # journalled as baseball by a defaulted sport. Same placement and
         # the same reason as the relabel above — a bet under the wrong
         # league can never meet its results, and the ingest below picks
         # which sports to fetch from the bets' own labels.
+        t0 = _time.monotonic()
         try:
             refiled = ledger.repair_football_filed_as_baseball(lconn)
             if refiled:
@@ -1741,10 +1758,12 @@ def settle_open(log=print, state_path: Path | None = None,
                     f"baseball book")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  football re-file skipped: {exc}")
+        part("refile_football", t0)
         # Long-shot markets (home runs, anytime TDs) may NEVER sit in the
         # headline record — the journal gate refuses them at the door, and
         # this sweep re-files any stray that got in some other way, so the
         # main record can only ever describe picks the model stands behind.
+        t0 = _time.monotonic()
         try:
             strays = ledger.move_longshots_out_of_main(lconn)
             if strays:
@@ -1752,6 +1771,7 @@ def settle_open(log=print, state_path: Path | None = None,
                     f"headline record into their own bucket")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  long-shot re-file skipped: {exc}")
+        part("longshots", t0)
         lap("prep")
         res = ingest_for_open_bets(lconn, hconn, days, log)
         lap("ingest")

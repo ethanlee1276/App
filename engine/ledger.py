@@ -5159,14 +5159,21 @@ def relabel_cross_league(conn, hist_conn) -> int:
     place to another.
     """
     from .sources.oddsapi import normalize_name
-    pools = {lg: {normalize_name(r[0]) for r in hist_conn.execute(
-        "SELECT DISTINCT player FROM player_game_logs WHERE sport=?", (lg,))}
-        for lg in ("nba", "wnba")}
+    from .db import folded_names
+    open_rows = {here: conn.execute(
+        "SELECT id, player FROM bets WHERE sport=? AND status='open' "
+        "AND player IS NOT NULL", (here,)).fetchall() for here in ("nba", "wnba")}
+    if not any(open_rows.values()):
+        return 0
+    # EACH LEAGUE'S NAMES OFF ITS KEPT LIST (step AHH, 25 November 2026). This read every stored NBA and WNBA name
+    # off the logs on every settle pass; db.folded_names keeps the stored names on disk and grows the list by the rows
+    # added since (read whole again after a day, or when rows are taken out). The names as stored, normalized here,
+    # so the kept list is never one folded another way.
+    pools = {lg: {normalize_name(n) for n in folded_names(hist_conn, "player_game_logs", "sport=?", (lg,))}
+             for lg in ("nba", "wnba")}
     moved = 0
     for here, there in (("nba", "wnba"), ("wnba", "nba")):
-        for r in conn.execute(
-                "SELECT id, player FROM bets WHERE sport=? AND status='open' "
-                "AND player IS NOT NULL", (here,)).fetchall():
+        for r in open_rows[here]:
             want = normalize_name(r["player"] or "")
             if want and want in pools[there] and want not in pools[here]:
                 conn.execute("UPDATE bets SET sport=? WHERE id=?",

@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHH. The settle pass says where its "prep" went** (step 1000; 25 November; nothing to run). The heartbeat
+showed a settle pass of 812.8 s, 576.6 s of it in the phase called "prep", with nothing to say which of prep's steps
+took that long; the passes had grown from about 650 s a cycle to about 1,100 s, and every page shares the box's one
+core with them. Each of prep's steps now has its own seconds on the heartbeat (prep_parts: opening the two
+databases, placing old rows on their game day, the open days, the hoops relabel, the football re-file, the long-shot
+sweep). One step was plainly wasteful and is fixed already: the hoops relabel read every NBA and WNBA name ever
+stored, on every pass; it now reads nothing when no hoops bet is open, and otherwise reads the names off the lists
+kept on disk since step AGW (only the rows added since the last pass). To read after the update: prep_parts on the
+heartbeat, to see which step is the rest of the 576 s.
+
 **AHG. A page's big read is one step of the database, and the server's threads take short turns** (step 999;
 25 November; nothing to run). On the live site Connor McDavid's page waited 3.4 s on the read of his rows, and only
 128 ms of that was the page's own work. Python's database reader lets go of the interpreter for every row it reads

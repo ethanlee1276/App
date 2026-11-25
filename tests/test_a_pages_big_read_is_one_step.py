@@ -125,7 +125,25 @@ def test_beside_a_busy_thread_the_one_step_read_does_not_wait_row_by_row():
         t.join(5)
         sys.setswitchinterval(was)
     assert len(plain) == len(one) == 400
+    # Whether a busy thread stretches the row-by-row read depends on the machine and what else it runs (on the
+    # gate's, eight files at once, it once read in 1 ms beside it). Where it does, the one step must not be.
+    if slow < 0.05:
+        print(f"  (the busy thread did not stretch the row-by-row read here: {slow * 1000:.0f} ms)")
+        return
     assert fast * 4 < slow, f"one step {fast * 1000:.0f} ms against row by row {slow * 1000:.0f} ms"
+
+
+def test_the_one_step_read_is_one_statement_with_one_row():
+    conn = _history(n=50)
+    said = []
+    conn.set_trace_callback(said.append)
+    try:
+        got = D.rows_at_once(conn, SQL, ("nhl", "Connor McDavid"), n=9, real=(8,))
+    finally:
+        conn.set_trace_callback(None)
+    assert len(got) == 50 and len(said) == 1, said
+    assert said[0].startswith("WITH q(c0, c1, c2, c3, c4, c5, c6, c7, c8) AS (SELECT season") \
+        and "SELECT json_group_array(json_array(c0, c1, c2, c3, c4, c5, c6, c7, quote(c8))) FROM q" in said[0], said
 
 
 def test_the_player_page_reads_its_rows_so_and_the_server_takes_short_turns():
