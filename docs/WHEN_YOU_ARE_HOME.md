@@ -9883,6 +9883,15 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFT. A player's recent games are asked with his page** (step 962; 25 November; nothing to run). Follow-up to
+AFK. The Overview's Recent games card read the player's game log, which takes the server 12 to 18 ms, but the page
+asked for it only after its own numbers had arrived. Timed live on Amon-Ra St. Brown's page (three loads at phone
+speed, the same tool as AFK's): the page's numbers landed at 1.68, 1.96 and 1.40 s, the log was asked at 2.13,
+2.49 and 1.69 s, and the card drew at 2.58, 4.12 and 1.89 s (on the second load the log itself waited a second on
+the server). The page now asks for the log in the same breath as its numbers, and the card uses that answer when it
+is for the same player, season and club the page answered with; otherwise it asks as before. A season picked in
+Splits asks for no log, and a fighter has none. I'll time it again once it's live.
+
 **AFS. Three draws of a player's page share one search** (step 961; 25 November; nothing to run). Follow-up to
 AFK. Opening Jahmyr Gibbs's address on the live site, the players view drew three times as the site came up, and each
 draw asked the server for the same player search: three answers at once from the one-core server, landing 1.4, 2.1

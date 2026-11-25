@@ -47,8 +47,18 @@ let _plrNews = null;
 
 //: The requests in flight, so a page asked for while its address resolves (app.js renderPlayers) is asked once.
 const PLR_ASK = new Map();
+//: HIS RECENT GAMES, ASKED BESIDE HIS NUMBERS (step AFT): the game log took the server 12 to 18 ms, but was asked
+//: only once the page's own answer had landed, a round trip after it. Asked with the page's first ask now.
+const PLR_LOG = new Map();
+function plrLogSoon(sport, player, team) {
+  const key = `${sport}|${player}|${team || ""}`;
+  if (!PLR_LOG.has(key)) PLR_LOG.set(key, loadRoom("js/gamelog.js", "css/gamelog.css")
+    .then((ok) => (ok && typeof glFetch === "function" ? glFetch(sport, player, "", team) : null), () => null));
+  return PLR_LOG.get(key);
+}
 function plrFetch(sport, player, team, season) {
   const key = `${sport}|${player}|${team || ""}|${season || ""}`;
+  if (!season && sport !== "ufc") plrLogSoon(sport, player, team);
   if (PLR_CACHE.has(key)) return Promise.resolve(PLR_CACHE.get(key));
   if (!PLR_ASK.has(key)) PLR_ASK.set(key, plrAsk(key, sport, player, team, season).finally(() => PLR_ASK.delete(key)));
   return PLR_ASK.get(key);
@@ -288,9 +298,13 @@ function plrTonightTitle(page) {
   const opp = (((typeof _profRows !== "undefined" && _profRows.get(player)) || []).find((r) => r && r.opponent) || {}).opponent;
   return `Tonight’s markets${opp ? ` <span>vs ${escapeHtml(teamNameIn(sport, opp) || opp)}</span>` : ""}`;
 }
-async function plrRecentInto(slot, d) {
+async function plrRecentInto(slot, d, asked) {
   if (!slot || typeof glFetch !== "function") return;
-  const log = await glFetch(d.sport, d.player, d.season, d.team);
+  // The log asked beside the page (plrLogSoon) when it is the one this answer names: his stored name, this
+  // season, the club the page was asked with being the club it answered (a name two players share, step AFF).
+  const early = asked && await (PLR_LOG.get(`${d.sport}|${asked.player}|${asked.team || ""}`) || null);
+  const log = early && early.player === d.player && early.season === d.season
+    && (asked.team || "") === (d.team || "") ? early : await glFetch(d.sport, d.player, d.season, d.team);
   if (!slot.isConnected || !log || !(log.games || []).length) return;
   slot.innerHTML = `<section class="plr-card"><h3>Recent games</h3>${glTableHTML({ ...log, games: log.games.slice(0, 5), played: 0 })}
     <button class="btn plr-go" type="button" data-plr-go="log">Full game log</button></section>`;
@@ -618,7 +632,7 @@ function plrFill(page, d) {
   loadRoom("js/gamelog.js", "css/gamelog.css").then((ok) => {
     if (!ok || !page.isConnected) return;
     if (glRound(d.sport, d.season, (d.last || {}).week)) set(".plr-prev", plrPrevHTML(d));   // "Week 20" was drawn first
-    plrRecentInto(at(".plr-recent"), d);
+    plrRecentInto(at(".plr-recent"), d, page._ask);
     if (PLR_TAB[page._plr.key] === "log") plrLogInto(page);
   });
 }
@@ -768,6 +782,8 @@ function renderPlayerPage(host, player, sport) {
     cached && cached.bio)}${plrTabsHTML(open, sport)}${plrPanelsHTML(open, sport)}</section>`;
   const page = host.querySelector(".plr");
   page._plr = { key, player, sport, team, face: r0.headshot || "" };
+  // What the page was asked with (its club may change once it answers): its recent games were asked so too.
+  page._ask = { player, team };
   _plrLive = { key, page };
   plrTappedInto(page);
   plrMarkets(page, kept);
