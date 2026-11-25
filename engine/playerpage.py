@@ -1024,7 +1024,11 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         newest = conn.execute("SELECT MAX(season) FROM player_game_logs WHERE sport=?", (sport,)).fetchone()
         if newest and newest[0] is not None:
             out["league_season"] = int(newest[0])
-        by_id, by_pair = GL._results(conn, sport, season)
+        # His games', his clubs' and his opponents' only (step AGD): the league's every game was 80 to 350 ms of a
+        # college basketball page.
+        mine = by_season.get(season, {}).values()
+        by_id, by_pair = GL._results(conn, sport, season, clubs={g["team"] for g in mine} | {g["opponent"] for g in mine},
+                                     ids={g["game_id"] for g in mine})
         mark("results")
         games = []
         for g in by_season.get(season, {}).values():
@@ -1035,7 +1039,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
             # A row with no line waits for its box score a few days (GL.awaiting_line); past
             # that it is a game the player recorded nothing in, not one still to come.
             waiting = bare and GL.awaiting_line(sport, day)
-            g = dict(g, home=(res["home"] == g["team"]) if res else bool(g["home"]), res=res,
+            g = dict(g, home=GL.home_of(res, g["team"], g["opponent"], g["home"]), res=res,
                      date=day, played=not sat and not bare, dnp=sat, pending=waiting, no_line=bare and not waiting)
             if res and res["hs"] is not None and res["as"] is not None:
                 mine, theirs = (res["hs"], res["as"]) if g["home"] else (res["as"], res["hs"])

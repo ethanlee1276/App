@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGD. A player's page reads only the games it looks up, and a game filed under another code reads from his
+side** (step 972; 25 November; nothing to run). Watching Cameron Boozer's page answer while its places were built,
+80 to 350 ms of each of its answers was one read: every game of college basketball's season (about 6,000), to find
+his 30 or so and his club's record; his game log did the same. Both now read only his clubs' and his opponents'
+games (each club's whole season, so a record counts as before) and his own rows' games by id; a test holds that the
+page and the log say exactly what they said reading every game. Writing that test showed an older slip: a game a
+college files his school under another code for ("DUK" for "DUKE") read from the other side, a 90-60 win as a 60-90
+loss, because home or away was read off his club's code alone. It's read off whichever club's code matches, his or
+his opponent's, else his row's own word.
+
 **AGB + AGC. Checked live after AFT to AFY went out (14:48 UTC), and two follow-ups** (steps 970 and 971; 25
 November; nothing to run). Timed again on Amon-Ra St. Brown's page (three loads at phone speed, the same tool), right
 after the restart while the server rebuilt its tables: his Recent games now drew 0.03, 0.05 and 0.14 s after the

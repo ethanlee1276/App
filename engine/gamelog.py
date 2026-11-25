@@ -561,16 +561,42 @@ def has_line(sport: str, s: dict) -> bool:
     return any(_first(s, marks) is not None for _, _, marks, _ in LAYOUTS.get(sport, ()))
 
 
-def _results(conn, sport: str, season: int) -> tuple[dict, dict]:
-    """The season's games, by game id and by (period, the two clubs)."""
+def _results(conn, sport: str, season: int, clubs=None, ids=None) -> tuple[dict, dict]:
+    """The season's games, by game id and by (period, the two clubs).
+
+    ONLY THE GAMES A PAGE LOOKS UP (step AGD, 25 November 2026): college basketball's season is about 6,000 games,
+    and a player's page and game log read every one to find his 30 or so and his club's record, 80 to 350 ms of
+    each college page's answer on the live site. Given ``clubs`` (his clubs and every opponent) and ``ids`` (his
+    rows' game ids, so a game filed under another code for his school still answers), only their games are read:
+    each club's whole season, so a record counts as before."""
     by_id, by_pair = {}, {}
-    for r in conn.execute("SELECT period, game_id, home, away, home_score, away_score, date FROM games "
-                          "WHERE sport=? AND season=?", (sport, season)):
+    sql = "SELECT period, game_id, home, away, home_score, away_score, date FROM games WHERE sport=? AND season=?"
+    args: list = [sport, season]
+    cl = sorted({str(c) for c in (clubs or ()) if c})
+    if cl:
+        marks = ",".join("?" * len(cl))
+        known = sorted({str(i) for i in (ids or ()) if i})
+        sql += f" AND (home IN ({marks}) OR away IN ({marks})" + (
+            f" OR game_id IN ({','.join('?' * len(known))}))" if known else ")")
+        args += cl + cl + known
+    for r in conn.execute(sql, args):
         g = {"period": str(r[0]), "home": r[2], "away": r[3], "hs": r[4], "as": r[5], "date": r[6],
              "game_id": str(r[1]), "season": season}
         by_id[str(r[1])] = g
         by_pair[(str(r[0]), frozenset((r[2], r[3])))] = g
     return by_id, by_pair
+
+
+def home_of(res, team, opponent, row_home) -> bool:
+    """Was his club the home side of a game: by whichever of the game's clubs names his club or his opponent, else
+    (both filed under other codes) his row's own word (step AGD). Read off his club's code alone, a game a college
+    files his school under another code for ("DUK" for "DUKE") read as the other side's, a 90-60 win as a 60-90 loss."""
+    if res:
+        if res.get("home") == team or (opponent and res.get("away") == opponent):
+            return True
+        if res.get("away") == team or (opponent and res.get("home") == opponent):
+            return False
+    return bool(row_home)
 
 
 def seasons_of(conn, sport: str, player: str) -> list[int]:
@@ -602,7 +628,9 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None,
         rows = conn.execute(
             "SELECT period, game_id, team, opponent, position, home, market, value FROM player_game_logs "
             "WHERE sport=? AND player=? AND season=?", (sport, player, season)).fetchall()
-        by_id, by_pair = _results(conn, sport, season)
+        # His games' and his clubs' only (step AGD), not the league's every game.
+        by_id, by_pair = _results(conn, sport, season, clubs={r[2] for r in rows} | {r[3] for r in rows},
+                                  ids={r[1] for r in rows})
     finally:
         conn.close()
     if sport not in ONE_A_WEEK:
@@ -636,7 +664,7 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None,
         s = g["stats"]
         counted = False
         res = by_id.get(g["game_id"]) or by_pair.get((g["period"], frozenset((g["team"], g["opponent"]))))
-        home = (res["home"] == g["team"]) if res else bool(g["home"])
+        home = home_of(res, g["team"], g["opponent"], g["home"])
         line = {"opponent": g["opponent"], "home": home, "team": g["team"]}
         if sport in WEEKLY and not _ISO.match(g["period"]):
             try:
