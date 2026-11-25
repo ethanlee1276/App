@@ -188,6 +188,45 @@ def test_gamecal_fits_basketball_and_refuses_a_total_by_name():
         assert M.verdict_gamecal_measured({}) == {}
 
 
+def test_a_held_measurement_is_kept_and_said_as_far_as_it_goes():
+    """Step AEZ, 25 November 2026: the first night's numbers (151 college and 151 NBA games against their closes)
+    were on the heartbeat while every report still said the ratings "haven't been measured against the price
+    yet". A held fit's numbers are kept beside the adopted ones, priced off by nothing, and said."""
+    from engine import gamereport as R
+    with _Box() as b:
+        b.tape("2026-11-12", "KU", "DUKE", spread=-2.0, ml=(-130, 110))
+        b.tape("2026-11-12", "UNC", "espn:9", spread=-25.0, ml=(-5000, 2000))
+        b.tape("2026-11-13", "DUKE", "UNC", spread=-4.0, ml=(-170, 150))
+        state = GC.STATE_PATH
+        try:
+            GC.STATE_PATH = str(b.dir / "gamecal.json")
+            GC._cache.clear()
+            out = GC.refresh(b.conn, sport="cbb")
+            assert not out["adopted"]
+            got = GC.measured_so_far("cbb", "spread")
+            assert got["n"] == 3 and "hit_rate" in got and GC.measured_so_far("cbb", "total") is None
+            assert GC.measured("cbb", "spread") is None, "a held fit prices nothing"
+            kept = json.loads(Path(GC.STATE_PATH).read_text(encoding="utf-8"))
+            kept[GC.MEASURED_KEY]["fits"]["nba:moneyline"] = {"n": 151, "slope": -0.2079, "se": 0.39}
+            Path(GC.STATE_PATH).write_text(json.dumps(kept), encoding="utf-8")
+            GC.refresh(b.conn, sport="cbb")
+            assert GC.measured_so_far("nba", "moneyline")["n"] == 151, "a one-league refresh keeps the others"
+            GC._cache.clear()
+            assert R.ratings_why("nba") == ("over 151 graded games so far, too few to settle it, their disagreements "
+                                            "with the closing line haven't shown they carry anything")
+        finally:
+            GC.STATE_PATH = state
+            GC._cache.clear()
+    assert R.held_why("cbb", "adjusted", {"n": 151, "slope": 0.0756, "se": 0.4436}, 400) == (
+        "over 151 graded games so far, too few to settle it, their disagreements with the closing line haven't "
+        "shown they carry anything"), "8% inside an error of 44% is not a fraction that held up"
+    assert R.held_why("nba", None, {"n": 420, "slope": 0.35, "se": 0.1}, 400) == (
+        "about 35% of a disagreement with the closing line has held up over 420 graded games so far, not yet "
+        "tight enough to settle it")
+    assert R.held_why("cbb", "adjusted", None, 400).startswith("they were fitted on four seasons")
+    assert R.held_why("nhl", None, None, 400) == "they haven't been measured against the price yet"
+
+
 def test_a_report_reads_a_measurement_only_for_the_ratings_it_measured():
     from engine import gamereport as R
     keep = GC.measured

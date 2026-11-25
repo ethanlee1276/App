@@ -473,7 +473,15 @@ def refresh(db="data/history.db", sport: str | None = None,
                       "sport": f.sport, "market": f.market,
                       "fit_at": time.time()}
         adopted.append({"key": key, **state[key]})
-    if adopted:
+    if measured:
+        # THE HELD NUMBERS, KEPT (step AEZ): a game report says what a fit that
+        # has not earned adoption has shown so far (gamereport.ratings_why) rather
+        # than that nothing was measured. Merged, so a one-league refresh keeps
+        # the other leagues' numbers. Nothing prices off them (`measured`).
+        kept = dict(((state.get(MEASURED_KEY) or {}).get("fits")) or {})
+        kept.update({m["key"]: {k: v for k, v in m.items() if k != "key"} for m in measured})
+        state[MEASURED_KEY] = {"at": time.time(), "fits": kept}
+    if adopted or measured:
         _write_state(state)
         _cache.clear()
     return {"adopted": adopted, "held": held, "measured": measured}
@@ -517,6 +525,22 @@ def measured(sport: str, market: str) -> dict | None:
             entry = None
     _cache[key] = entry
     return entry
+
+
+#: Where the state keeps every fit's latest numbers, adopted or held (`refresh`, `measured_so_far`).
+MEASURED_KEY = "_measured"
+
+
+def measured_so_far(sport: str, market: str) -> dict | None:
+    """The latest fit's numbers for one sport+market, adopted or held
+    (``{"n", "slope", "se"}``, a spread's or a total's ``hit_rate`` too), or
+    None where none was made. Never raises. For words only: a held fit prices
+    nothing (`measured`)."""
+    try:
+        got = ((_read_state().get(MEASURED_KEY) or {}).get("fits") or {}).get(f"{sport}:{market}")
+        return dict(got) if isinstance(got, dict) and int(got.get("n") or 0) > 0 else None
+    except (TypeError, ValueError, AttributeError):
+        return None
 
 
 def shrink_for(sport: str, market: str) -> float | None:

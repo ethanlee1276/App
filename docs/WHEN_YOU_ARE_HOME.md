@@ -9883,6 +9883,18 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AEZ. Our basketball ratings, measured: no edge yet** (step 942; 25 November; nothing to run). The nightly check
+(step AEU) graded our team ratings against the closing line for the first time on Tuesday night, and the numbers are
+on the heartbeat: college basketball, 154 spreads and 151 moneylines; the NBA, 151 of each. Where our ratings
+disagreed with the close, none of the disagreement held up: college spreads -0.10 ± 0.24 of it, the side our ratings
+liked covering 46.1%; NBA spreads -0.40 ± 0.30, 50.3%; the moneylines 0.08 ± 0.44 (college) and -0.21 ± 0.39 (NBA).
+That is too few games to settle it (the bar is 400), and so far it says the same as before: no basketball spread or
+moneyline pick gets posted off our ratings. The game reports said those ratings "haven't been measured against the
+price yet", which stopped being true that night. The line under the ratings' chance now says what has been
+measured: "Unproven: over 151 graded games so far, too few to settle it, their disagreements with the closing line
+haven't shown they carry anything." A fraction is named only where it clears twice its own error. The numbers are kept
+beside the adopted fits (gamecal's state, under `_measured`), refreshed each night, and nothing prices off them.
+
 **AEY. A line you can move** (step 941; 25 November; nothing to run). Ethan, circling a player page's market chips
 and writing "Adjust the line": "Also we should be able too adjust the lines and numbers with a slide or something so
 users can see different lines if that makes sense". Every market card on a player page now has a slider under its

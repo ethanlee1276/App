@@ -5060,14 +5060,32 @@ def ratings_why(sport: str, kind: str | None = None) -> str:
     if sport in MEASURED_KIND and kind != MEASURED_KIND[sport]:
         return RATINGS_FITTED_ON.get((sport, kind), "they haven't been measured against the price yet")
     try:
-        from .gamecal import measured
+        from .gamecal import MIN_N, measured, measured_so_far
         e = measured(sport, "moneyline")
+        if e is None:
+            return held_why(sport, kind, measured_so_far(sport, "moneyline"), MIN_N)
         shrink, n = float(e["shrink"]), int(e["n"])
     except Exception:                                        # noqa: BLE001
         return RATINGS_FITTED_ON.get((sport, kind), "they haven't been measured against the price yet")
     if shrink <= 0.02:
         return f"over {n:,} graded games, their disagreements with the closing line carried nothing"
     return f"{shrink:.0%} of a disagreement with the closing line has held up, over {n:,} graded games"
+
+
+def held_why(sport: str, kind: str | None, so_far: dict | None, min_n: int) -> str:
+    """A measurement against the closing line that has not earned adoption (step AEZ, 25 November 2026), said as
+    far as it goes. College basketball's and the NBA's ratings were first graded against their closes that night
+    (engine/hoopscal): 151 games each, where the report still said they "haven't been measured". A measured
+    fraction is named only where it clears twice its own error; else it has not shown it carries anything."""
+    if not so_far:
+        return RATINGS_FITTED_ON.get((sport, kind), "they haven't been measured against the price yet")
+    n, slope, se = int(so_far["n"]), float(so_far["slope"]), float(so_far["se"])
+    settle = "too few to settle it" if n < min_n else "not yet tight enough to settle it"
+    if slope - 2.0 * se > 0:
+        return (f"about {slope:.0%} of a disagreement with the closing line has held up over {n:,} graded games "
+                f"so far, {settle}")
+    return (f"over {n:,} graded games so far, {settle}, their disagreements with the closing line haven't shown "
+            "they carry anything")
 
 
 def ratings_chance(c: Ctx) -> float | None:
