@@ -661,9 +661,11 @@ def _build_table(conn, sport: str, season: int, kind: str) -> dict:
 # --- the roster's facts --------------------------------------------------------------------
 def _roster_doc(sport: str, data_dir=None) -> dict:
     """The league's published roster, parsed once per content (engine/rosterfile, step AGM): the half-hourly rewrite
-    of the same rosters keeps the parse, and with it the index by name built from it (_roster_names)."""
+    of the same rosters keeps the parse, and with it the index by name built from it (_roster_names). A rewrite of
+    changed rosters is read behind the page, and the index built again there (step AHF)."""
     from . import rosterfile
-    return rosterfile.doc(os.path.join(str(data_dir or ROSTER_DIR), f"rosters_{sport}.json")) or {}
+    return rosterfile.doc(os.path.join(str(data_dir or ROSTER_DIR), f"rosters_{sport}.json"), behind=True,
+                          then=lambda: _roster_names(sport, data_dir)) or {}
 
 
 #: THE ROSTER BY NAME (step AFP, 25 November 2026; Ethan: "data on the player page takes a long time to load"). A
@@ -987,9 +989,10 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
             mark("name")
             seasons = GL.seasons_of(conn, sport, player)
             if seasons:
-                rows = conn.execute(
-                    "SELECT season, period, game_id, team, opponent, position, home, market, value "
-                    "FROM player_game_logs WHERE sport=? AND player=?", (sport, player)).fetchall()
+                # In one step of the database, so a busy thread beside the page cannot stretch it (step AHG).
+                rows = _db.rows_at_once(
+                    conn, "SELECT season, period, game_id, team, opponent, position, home, market, value "
+                    "FROM player_game_logs WHERE sport=? AND player=?", (sport, player), n=9, real=(8,))
             mark("rows")
         by_season: dict = {}
         for yr, period, gid, club, opp, pos, home, market, val in rows:

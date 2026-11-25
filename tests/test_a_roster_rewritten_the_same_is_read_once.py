@@ -40,6 +40,15 @@ SMITH = {"player": "Jeremiah Smith", "position": "WR", "number": "4", "headshot"
 DAY = {"player": "Ryan Day", "position": "QB", "number": "1"}
 
 
+def _until(check, secs=5.0):
+    end = time.time() + secs
+    while time.time() < end:
+        if check():
+            return True
+        time.sleep(0.02)
+    return check()
+
+
 def _counting():
     real, n = json.loads, [0]
 
@@ -114,7 +123,9 @@ def test_the_page_and_the_search_keep_what_they_built_through_a_rewrite():
         assert PP._roster_names("cfb", data_dir=d) is index, "the page's index by name stands"
         assert SL._read_roster(str(path)) is listed, "the search's list stands, and its names with it"
         _write(path, [SMITH], stamp="2026-11-25T11:00:00")
-        assert PP._roster_names("cfb", data_dir=d) is not index and SL._read_roster(str(path)) is not listed
+        # The page's ask answers with the rosters in hand and the file is read behind it (step AHF).
+        assert SL._read_roster(str(path)) is not listed
+        assert _until(lambda: PP._roster_names("cfb", data_dir=d) is not index), "the next page has the new rosters"
         assert PP.roster_row("cfb", "Ryan Day", "OSU", data_dir=d) == {}, "a man off the roster is gone from it"
         try:
             SL._read_roster(str(d / "rosters_nba.json"))
@@ -145,11 +156,11 @@ def test_a_rewritten_roster_indexes_its_names_from_memory():
 def test_every_reader_of_the_roster_files_reads_them_this_way():
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
     fn = srv[srv.index("def _live_roster(sport, team):"):srv.index("def _depth_chart(sport, team")]
-    assert 'rosterfile.doc(ROOT / "web" / "data" / f"rosters_{sport}.json")' in fn and "json.load(" not in fn
+    assert 'rosterfile.doc(ROOT / "web" / "data" / f"rosters_{sport}.json", behind=True)' in fn and "json.load(" not in fn
     for f, needle in (("engine/playerpage.py", 'rosterfile.doc(os.path.join(str(data_dir or ROSTER_DIR), '
-                                               'f"rosters_{sport}.json"))'),
+                                               'f"rosters_{sport}.json"), behind=True,'),
                       ("engine/rosters.py", 'rosterfile.doc(Path(data_dir) / f"rosters_{league}.json")'),
-                      ("engine/routes.py", 'rosterfile.doc(Path(web) / "data" / f"rosters_{sport}.json")'),
+                      ("engine/routes.py", 'rosterfile.doc(Path(web) / "data" / f"rosters_{sport}.json", behind=True)'),
                       ("engine/askbot.py", 'rosterfile.doc(_web(data_dir) / f"rosters_{s}.json")'),
                       ("engine/statlogs.py", "doc = rosterfile.doc(path)")):
         assert needle in (ROOT / f).read_text(encoding="utf-8"), f

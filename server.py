@@ -1000,8 +1000,9 @@ def _live_roster(sport, team):
     rosters_<sport>.json — the live feed where the league has one), or
     None. The Roster tab draws it; the depth chart orders it."""
     # Parsed once per content (engine/rosterfile, step AGM): the college file is 9.2 MB, and this read it every ask.
+    # A rewrite of changed rosters is read behind the page (step AHF).
     from engine import rosterfile
-    blob = rosterfile.doc(ROOT / "web" / "data" / f"rosters_{sport}.json")
+    blob = rosterfile.doc(ROOT / "web" / "data" / f"rosters_{sport}.json", behind=True)
     if blob is None:
         return None
     clubs = blob.get("teams") or {}
@@ -7943,7 +7944,15 @@ def _clear_unsealed_flag() -> None:
         pass
 
 
+#: HOW LONG A BUSY THREAD KEEPS THE INTERPRETER WHILE ANOTHER WAITS (step AHG, 25 November 2026). Python's own is
+#: 5 ms, and a page's database read takes the interpreter back after every row it steps through: beside one busy
+#: thread (a rank table built behind a page) 800 rows that read in 1.7 ms alone took 3.2 to 6.1 s at 5 ms, 0.22 to
+#: 0.33 s at 0.5 ms. Two busy threads did as much work at 0.5 ms as at 5 ms.
+SWITCH_INTERVAL_S = 0.0005
+
+
 def main() -> None:
+    sys.setswitchinterval(SWITCH_INTERVAL_S)
     args = sys.argv[1:]
     live = "--live" in args
     # `--bind 127.0.0.1` for a public deployment: the app sits behind a

@@ -66,6 +66,10 @@ def test_a_lookup_is_a_read_and_a_new_file_is_indexed_again():
     _write(d, teams)
     st = os.stat(path)
     os.utime(path, (st.st_atime, st.st_mtime + 5))                    # a new version of the file
+    # Read and indexed again behind the page that first asks after it (step AHF), for the pages after it.
+    end = time.time() + 5
+    while not PP.roster_row("cfb", "Bryson Rodgers", "OSU", data_dir=d) and time.time() < end:
+        time.sleep(0.02)
     assert PP.roster_row("cfb", "Bryson Rodgers", "OSU", data_dir=d)["position"] == "WR", "indexed again"
     src = (ROOT / "engine" / "playerpage.py").read_text(encoding="utf-8")
     body = src[src.index("def roster_row("):src.index("\ndef ", src.index("def roster_row(") + 10)]

@@ -14,6 +14,14 @@ the new `generated_at` written onto it. Only rosters that changed are parsed aga
 
 `doc(path)` is the parsed file, or None for none on disk (or one that will not read, with nothing parsed before).
 Readers treat it as read-only: it is shared.
+
+A PAGE'S ASK READS A REWRITE BEHIND ITSELF (step AHF, 25 November 2026; Ethan: "Ok keep going and work more on these
+issues as they are not fixed"). A rewrite whose rosters did change was still parsed by the first page to ask after
+it: on the live site Jeremiah Smith's college page waited 3.1 s on the college file (772 ms of its own work, the rest
+waiting on the other threads), and Ryan Williams's 7.4 s before step AGT. A page's ask (`behind=True`) answers with
+the parse in hand and the file is read again behind it, one read per file at a time; the next page has the new
+rosters, and `then` runs behind the read, for what a reader builds from it. A file with no parse in hand is read
+before the answer, as before, and so is every other reader's ask.
 """
 from __future__ import annotations
 
@@ -34,8 +42,9 @@ def _digest(raw: bytes) -> bytes:
     return hashlib.sha1(_STAMP.sub(b"", raw)).digest()
 
 
-def doc(path) -> dict | None:
-    """The roster file at `path`, parsed; None when there is none (see the module's docstring)."""
+def doc(path, behind: bool = False, then=None) -> dict | None:
+    """The roster file at `path`, parsed; None when there is none. With `behind`, a rewrite of a file parsed before
+    answers with that parse and is read behind it (see the module's docstring)."""
     path = str(path)
     try:
         st = os.stat(path)
@@ -44,6 +53,9 @@ def doc(path) -> dict | None:
     seen = (st.st_mtime_ns, st.st_size)
     hit = _DOCS.get(path)
     if hit and hit[0] == seen:
+        return hit[2]
+    if hit and behind:
+        _behind(path, then)
         return hit[2]
     with _LOCK:
         lock = _LOCKS.setdefault(path, threading.Lock())
@@ -71,6 +83,38 @@ def doc(path) -> dict | None:
             parsed = {}
         _DOCS[path] = (seen, digest, parsed)
         return parsed
+
+
+#: The files being read behind a page now, one read each (`_behind`).
+_BEHIND: set = set()
+_BEHIND_SAID = [False]
+
+
+def _behind(path: str, then) -> None:
+    """`path` read again in a thread of its own, unless one is reading it now; then `then`."""
+    with _LOCK:
+        if path in _BEHIND:
+            return
+        _BEHIND.add(path)
+    threading.Thread(target=_read_behind, args=(path, then), daemon=True, name="roster-behind").start()
+
+
+def _read_behind(path: str, then) -> None:
+    """`_behind`'s read. A failure leaves the parse in hand answering, which reads like a rewrite of the same
+    rosters, so the first one in a process says so in the service's log; the next page's ask tries again."""
+    try:
+        doc(path)
+        if then is not None:
+            then()
+    except Exception as exc:                              # noqa: BLE001 — the parse in hand keeps answering
+        if not _BEHIND_SAID[0]:
+            _BEHIND_SAID[0] = True
+            import sys
+            print(f"⚠️  a roster file not read again behind the page ({os.path.basename(path)}: {type(exc).__name__}: "
+                  f"{exc}); the rosters in hand answer until the next try", file=sys.stderr)
+    finally:
+        with _LOCK:
+            _BEHIND.discard(path)
 
 
 def forget() -> None:

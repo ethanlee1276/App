@@ -9883,6 +9883,24 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHG. A page's big read is one step of the database, and the server's threads take short turns** (step 999;
+25 November; nothing to run). On the live site Connor McDavid's page waited 3.4 s on the read of his rows, and only
+128 ms of that was the page's own work. Python's database reader lets go of the interpreter for every row it reads
+and takes it back after, and while another of the server's threads is busy (a league's table built behind a page),
+each taking back waits out that thread's turn. Measured here: 800 rows that read in 1.7 ms alone took 3.2 to 6.1 s
+beside one busy thread. A player page's rows and a team's depth chart now come back from the database as one piece
+of text, in one step: 18 to 29 ms beside the same busy thread, every digit kept. The server's threads now take turns
+of 0.5 ms instead of Python's 5 ms, which helps every other read: the same 800 rows read the old way took 0.22 to
+0.33 s beside the busy thread, and two busy threads got as much done either way. To read after the update: the next
+hockey or baseball page's rows part.
+
+**AHF. A changed roster is read behind the page** (step 998; 25 November; nothing to run). Step AGM kept a roster
+file's parse through a rewrite of the same rosters, but a rewrite whose rosters did change was still parsed by the
+first page that asked after it: on the live site Jeremiah Smith's college page spent 3.1 s of its 3.2 on the 9.2 MB
+college file. A player's page, its link and a team's roster tab now answer with the rosters already in hand and read
+the file again behind themselves, one read per file at a time; the next page has the new rosters. To read after the
+update: a college player's roster part right after the half-hourly roster rewrite.
+
 **AHC. The player search says where its time went** (step 997; 25 November; nothing to run). A player's page
 opened from its address asks the league search first, and on the live site a college search ("jeremiah smith") took
 2.9 s once, 0.26 s of it work and the rest waiting, then 16 ms asked again; its answer said nothing of which read

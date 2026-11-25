@@ -164,6 +164,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # nothing either way and the list in hand answers meanwhile, so the first failure in a process prints its
         # own line in the service's log ("a chart's name list not read again behind the one in hand").
         "_folded_read_behind",
+        # A ROSTER FILE READ AGAIN BEHIND THE PAGE (engine/rosterfile._read_behind, step AHF): it returns nothing either
+        # way and the rosters in hand answer meanwhile, so the first failure in a process prints its own line in the
+        # service's log ("a roster file not read again behind the page").
+        "_read_behind",
         # THE EXPORT'S SAMPLER (engine/stacksample.Sampler._run, 2026-11-08),
         # caught by this sweep the day it was written: it returns None either
         # way, and a failure sets ``error``, which the settle pass puts on its

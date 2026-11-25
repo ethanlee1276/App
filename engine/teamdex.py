@@ -1284,19 +1284,21 @@ def usage_depth(conn, sport: str, roster: list[dict], window: int = USAGE_WINDOW
     # whose shared name key is the roster's, as the whole-sport read did.
     want = {_norm_key(p.get("player") or "") for p in roster} - {""}
     rows = []
+    from .db import rows_at_once
     for start in sorted({s for p in roster for s in _name_prefixes(p.get("player") or "")}):
-        rows += [r for r in conn.execute(
-            "SELECT player, period, value FROM player_game_logs WHERE sport=? AND market=? "
+        # Each name's rows in one step of the database, so a busy thread beside the page cannot stretch them (step AHG).
+        rows += [r for r in rows_at_once(
+            conn, "SELECT player, period, value FROM player_game_logs WHERE sport=? AND market=? "
             "AND player>=? AND player<? AND season>=?",
-            (sport, market, start, start + "￿", int(top[0]) - 1)).fetchall()
-            if _norm_key(r["player"]) in want]
-    rows.sort(key=lambda r: str(r["period"]), reverse=True)
+            (sport, market, start, start + "￿", int(top[0]) - 1), n=3, real=(2,))
+            if _norm_key(r[0]) in want]
+    rows.sort(key=lambda r: str(r[1]), reverse=True)
     per: dict = {}
     for r in rows:
-        k = _norm_key(r["player"])
+        k = _norm_key(r[0])
         got = per.setdefault(k, [])
         if len(got) < window:
-            got.append(float(r["value"] or 0.0))
+            got.append(float(r[2] or 0.0))
     order = HOCKEY_POSITION_ORDER if sport == "nhl" else {"Starters": 0, "Bench": 1}
     groups: dict = {}
     for p in roster:

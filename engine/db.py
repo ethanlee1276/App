@@ -1052,6 +1052,42 @@ def _folded_read_behind(k: tuple, fold) -> None:
             _FOLDED_BEHIND.discard(k)
 
 
+#: ONE STEP FOR A PAGE'S BIG READ (step AHG, 25 November 2026; Ethan: "Ok keep going and work more on these issues as
+#: they are not fixed"). Python's sqlite3 lets go of the interpreter for each row it steps through and takes it back
+#: after it, and while another of the server's threads is busy (a league's rank table built behind a page, a list of
+#: names folded) each taking back waits out that thread's turn. On the live site Connor McDavid's page waited 3.4 s
+#: on the read of his rows, 128 ms of it its own work; here 800 rows that read in 1.7 ms alone took 3.2 to 6.1 s
+#: beside one busy thread. Read as one JSON text the rows are one step, 18 to 29 ms beside the same thread. A REAL
+#: column comes out through quote(), which writes every digit (JSON's own writing keeps fifteen: 21.483333333333334
+#: came back 21.4833333333333).
+_AT_ONCE = [True]
+
+
+def rows_at_once(conn, sql: str, args=(), n: int = 1, real=()) -> list:
+    """`sql`'s rows as tuples of its `n` columns, read in one step of the database (see above); the columns at the
+    indexes in `real` are REAL or NULL. Read the plain way where this one cannot run: a SQLite without JSON, or a
+    value that will not read back as its column says (a text in a REAL column), and `sql`'s own error raises there.
+    The rows come in the order the read gives them, which no caller may count on."""
+    if _AT_ONCE[0]:
+        cols = [f"c{i}" for i in range(n)]
+        parts = ", ".join(f"quote({c})" if i in real else c for i, c in enumerate(cols))
+        try:
+            blob = conn.execute(f"WITH q({', '.join(cols)}) AS ({sql}) "
+                                f"SELECT json_group_array(json_array({parts})) FROM q", args).fetchone()[0]
+            import json
+            out = json.loads(blob) if blob else []
+            for r in out:
+                for i in real:
+                    r[i] = None if r[i] == "NULL" else float(r[i])
+            return [tuple(r) for r in out]
+        except sqlite3.OperationalError as exc:
+            if "no such function" in str(exc):
+                _AT_ONCE[0] = False                       # no JSON in this SQLite: the plain read from now on
+        except (ValueError, TypeError, IndexError):
+            pass
+    return [tuple(r) for r in conn.execute(sql, args).fetchall()]
+
+
 def pinned(conn, sql: str, index: str, args=()):
     """`sql` run with its ``{hint}`` as ``INDEXED BY index``; run without it on a file that has no such index.
     Returns the cursor.
