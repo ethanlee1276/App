@@ -74,6 +74,25 @@ def test_a_file_without_the_index_reads_as_before_and_says_the_same():
     assert with_index == without and without[1]["v"]["tgt_sh"] == round(4 / 18, 4)
 
 
+def test_a_built_role_chart_says_its_parts():
+    """Step AGI: Kucherov's role chart took 22.6 s on the live site and Soto's 32.8 s, and nothing said where. A chart
+    built for an ask says its parts (charts.answer_json `took`, server's Server-Timing); a kept one has none."""
+    conn = _history()
+    path = conn.execute("PRAGMA database_list").fetchone()[2]
+    conn.close()
+    from engine import charts as CH
+    CH.forget()
+    took = []
+    body = CH.answer_json(path, "role", "nfl", "Jahmyr Gibbs", took=took)
+    parts = [p for p, _ in took]
+    assert b'"games"' in body and parts[:5] == ["stamp", "resolve", "seasons", "logged", "shares"], parts
+    assert "scores" in parts and parts[-2:] == ["face", "roster"] and all(ms >= 0 for _, ms in took), parts
+    again = []
+    assert CH.answer_json(path, "role", "nfl", "Jahmyr Gibbs", took=again) == body and again == [], "kept: no parts"
+    srv = (ROOT / "server.py").read_text(encoding="utf-8")
+    assert 'headers=[("Server-Timing", timing)] if timing else None' in srv
+
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0

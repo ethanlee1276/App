@@ -172,12 +172,26 @@ def known(kind: str, sport: str) -> bool:
 
 
 def answer(conn, kind: str, sport: str, player: str, season: int | None = None,
-           opp: str = "", fam: str = "") -> dict:
-    """The chart a page draws, as every chart's endpoint answers it."""
+           opp: str = "", fam: str = "", took=None) -> dict:
+    """The chart a page draws, as every chart's endpoint answers it. ``took``, a list, gets its parts' milliseconds
+    (step AGI): the role chart's own, else the build's whole, then the face and the roster's facts."""
     from . import photos, statlogs
+    t0 = [time.perf_counter()]
+
+    def mark(part):
+        if took is not None:
+            now = time.perf_counter()
+            took.append((part, (now - t0[0]) * 1000.0))
+            t0[0] = now
     _leagues, build, stored = KINDS[kind]
-    out = (build(conn, sport, player, season, opp, fam) if kind in TOLD_OPP
-           else build(conn, sport, player, season)) or {}
+    if kind == "role":
+        from . import role as _rolechart
+        out = _rolechart.chart(conn, sport, player, season, took=took) or {}
+        t0[0] = time.perf_counter()
+    else:
+        out = (build(conn, sport, player, season, opp, fam) if kind in TOLD_OPP
+               else build(conn, sport, player, season)) or {}
+        mark("build")
     if out:
         out["kind"] = kind
         # The site's own photo first; a chart that knows his face from its
@@ -186,6 +200,7 @@ def answer(conn, kind: str, sport: str, player: str, season: int | None = None,
         # His league's action photo for his card, where it publishes one
         # (engine/photos: MLB's and the NHL's, off the id in his headshot).
         out["action"] = out.get("action") or photos.action_url(sport, out["face"])
+        mark("face")
         # His position and number for the chart's head, off his club's
         # published roster where the chart's own record names neither.
         if not out.get("position") or not out.get("jersey"):
@@ -194,6 +209,7 @@ def answer(conn, kind: str, sport: str, player: str, season: int | None = None,
                 out["position"] = meta["position"]
             if meta.get("number") and not out.get("jersey"):
                 out["jersey"] = meta["number"]
+            mark("roster")
     elif not stored(conn, sport):
         out = {"filling": True}
     return out
@@ -215,7 +231,7 @@ _BUILDING: dict = {}
 
 
 def answer_json(db_path, kind: str, sport: str, player: str, season: int | None = None,
-                opp: str = "", fam: str = "") -> bytes:
+                opp: str = "", fam: str = "", took=None) -> bytes:
     """`answer`, encoded — the one built in the last fifteen minutes when
     there is one, and one build however many ask for it at once.
 
@@ -261,7 +277,7 @@ def answer_json(db_path, kind: str, sport: str, player: str, season: int | None 
                 break
         ev.wait(60)
     try:
-        return _built(key, *args)
+        return _built(key, *args, took=took)
     finally:
         if mine:
             with _LOCK:
@@ -269,13 +285,18 @@ def answer_json(db_path, kind: str, sport: str, player: str, season: int | None 
             ev.set()
 
 
-def _built(key: tuple, db_path, kind, sport, player, season, opp, fam) -> bytes:
+def _built(key: tuple, db_path, kind, sport, player, season, opp, fam, took=None) -> bytes:
     """One answer built from the database, kept when it is a chart, with his games' stamp read before it."""
     from . import db as _db
+    t0 = time.perf_counter()
     conn = _db.connect(str(db_path))
     try:
         stamp = _stamp_of(conn, sport, player)
-        out = answer(conn, kind, sport, player, season, opp=opp, fam=fam)
+        if took is not None:
+            took.append(("stamp", (time.perf_counter() - t0) * 1000.0))
+        # The parts asked for only when timed (a stand-in `answer`, as tests have, takes no `took`).
+        out = answer(conn, kind, sport, player, season, opp=opp, fam=fam,
+                     **({"took": took} if took is not None else {}))
     finally:
         conn.close()
     body = json.dumps(out).encode()

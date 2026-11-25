@@ -9883,6 +9883,14 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGI. Every role chart says where its time goes** (step 977; 25 November; nothing to run). Timing other
+leagues' charts cold on the live site: Nikita Kucherov's role chart took 22.6 s (2.5 s of the server's own work),
+Juan Soto's 32.8 s (5.1 s), Jeremiah Smith's 13.4 s (the college shares AGG fixes); the NBA's and college
+basketball's took under a second, and the other charts 0.6 to 4 s. The hockey and baseball reads go by indexes that
+are there, so the time is somewhere I can't see from here. A chart built for an ask now says its parts on the live
+site (finding the player, his seasons, his games, the shares, the play-by-play's numbers, the scores, the face and
+the roster), as the player page does, so the next look says which part to fix.
+
 **AGG + AGH. What still made player pages slow: a 26-second role chart, and a rebuild every reader waited
 behind** (steps 975 and 976; 25 November; nothing to run). You said: "keep going and work more on these issues as
 they are not fixed". I traced every request Amon-Ra St. Brown's page makes on the live site and timed each one the

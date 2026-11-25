@@ -426,15 +426,27 @@ def _split(games: list, keys: list, test) -> dict | None:
     return {"n": len(xs), "avg": {k: _mean([g["v"].get(k) for g in xs]) for k in keys}}
 
 
-def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
+def chart(conn, sport: str, player: str, season: int | None = None, took=None) -> dict:
     """Everything the role chart draws for one player-season:
     ``{player, sport, seasons, season, season_label, team, position, lead,
     metrics: [{key, name, short, unit}], games: [{id, period, week?, date,
     team, opp, home, start, v: {key: value}}], season_line, splits}``,
-    games newest first; ``season_line.n`` is his games."""
+    games newest first; ``season_line.n`` is his games.
+
+    ``took``, a list, gets each part's milliseconds as ``(part, ms)``, in order (step AGI, 25 November 2026: Nikita
+    Kucherov's role chart took 22.6 s on the live site and Juan Soto's 32.8 s, and nothing said where)."""
+    import time as _t
+    t0 = [_t.perf_counter()]
+
+    def mark(part):
+        if took is not None:
+            now = _t.perf_counter()
+            took.append((part, (now - t0[0]) * 1000.0))
+            t0[0] = now
     if sport not in LOGGED:
         return {}
     name = resolve(conn, sport, player)
+    mark("resolve")
     if not name:
         return {}
     markets = sorted({m for _k, ms in LOGGED[sport] for m in ms})
@@ -442,20 +454,25 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
         f"SELECT DISTINCT season FROM player_game_logs WHERE sport=? AND player=? "
         f"AND market IN ({_marks(markets)}) AND season IS NOT NULL ORDER BY season DESC",
         (sport, name, *markets))]
+    mark("seasons")
     if not seasons:
         return {}
     pick = int(season) if season and int(season) in seasons else seasons[0]
     games = [g for g in _logged(conn, sport, name, pick) if g["v"]]
+    mark("logged")
     if not games:
         return {}
     if sport in SHARES:
         _shares(conn, sport, pick, games)
+        mark("shares")
     if sport == "nfl":
         _nfl_games(conn, pick, games)
         _nfl_red_zone(conn, name, pick, games)
+        mark("nfl")
     extra = {"mlb": _mlb, "nba": _nba, "nhl": _nhl}.get(sport)
     if extra:
         extra(conn, name, pick, games)
+        mark("plays")
     keys = [k for k in ORDER[sport] if any(g["v"].get(k) is not None for g in games)]
     avg = {k: _mean([g["v"].get(k) for g in games]) for k in keys}
     lead = _lead(sport, games, avg)
@@ -481,6 +498,7 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
     # read while a doubleheader's games still say which leg they were.
     from .carries import scoreboard
     scoreboard(conn, sport, pick, games, player=name)
+    mark("scores")
     newest = games[::-1]
     position = "" if sport in ("nba", "wnba", "cbb") else newest[0]["pos"]
     for g in games:

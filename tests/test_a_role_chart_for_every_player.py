@@ -250,7 +250,7 @@ def test_the_door_serves_every_league():
         D.connect(path).close()
         D.DEFAULT_DB = path
         h = object.__new__(server.Handler)
-        h._send = lambda code, body, ext=".json": sent.append((code, json.loads(body)))
+        h._send = lambda code, body, ext=".json", headers=None: sent.append((code, json.loads(body)))
         h._players_chart({"kind": ["role"], "sport": ["nfl"], "player": ["Ja'Marr Chase"]})
         c = D.connect(path)
         for r in _nfl().execute("SELECT * FROM player_game_logs"):

@@ -5441,13 +5441,16 @@ class Handler(BaseHTTPRequestHandler):
         if not charts.known(kind, sport):
             return self._send(400, b'{"error":"no such chart for that league"}', ".json")
         body = b"{}"
+        took: list = []
         if player and os.path.exists(str(_hdb.DEFAULT_DB)):
             # Kept fifteen minutes and built once however many ask
             # (charts.answer_json, 2026-10-14: "the hit tracker won't load
             # or takes forever too load").
             body = charts.answer_json(_hdb.DEFAULT_DB, kind, sport, player,
-                                      int(season) if season.isdigit() else None, opp=opp, fam=fam)
-        return self._send(200, body, ".json")
+                                      int(season) if season.isdigit() else None, opp=opp, fam=fam, took=took)
+        # A chart built for this ask says its parts (step AGI), as a player's page does (step AFK).
+        timing = ", ".join(f"{part};dur={ms:.0f}" for part, ms in took)
+        return self._send(200, body, ".json", headers=[("Server-Timing", timing)] if timing else None)
 
     def _players_fantasy(self, q):
         """The full fantasy dossier — engine/ffprofile.py's page, served.

@@ -215,7 +215,7 @@ def test_the_endpoint_answers_through_the_kept_answers():
         F._conn(path).close()
         D.DEFAULT_DB = path
         h = object.__new__(server.Handler)
-        h._send = lambda code, body, ext=".json": sent.append((code, body))
+        h._send = lambda code, body, ext=".json", headers=None: sent.append((code, body))
         for _ in range(2):
             h._players_chart({"kind": ["spray"], "sport": ["mlb"], "player": ["Aaron Judge"]})
     finally:

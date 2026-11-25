@@ -220,7 +220,7 @@ def test_the_door_answers_the_fight_history():
         D.connect(path).close()
         D.DEFAULT_DB = path
         h = object.__new__(server.Handler)
-        h._send = lambda code, body, ext=".json": sent.append((code, json.loads(body)))
+        h._send = lambda code, body, ext=".json", headers=None: sent.append((code, json.loads(body)))
         h._players_chart({"kind": ["fights"], "sport": ["ufc"], "player": ["Arman Tsarukyan"]})
         _conn(path).close()
         h._players_chart({"kind": ["fights"], "sport": ["ufc"], "player": ["Arman Tsarukyan"]})
