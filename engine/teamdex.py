@@ -147,6 +147,12 @@ def _finals(conn, sport: str, where: str = "", args=()) -> list[dict]:
     return once(sport, out)
 
 
+#: The league's teams, kept per database file and sport (`teams`): (when, the games' highest rowid, the list).
+_TEAMS: dict = {}
+#: How long a kept list of teams stands while no game has been added (`teams`).
+TEAMS_TTL = 600.0
+
+
 def teams(conn, sport: str) -> list[str]:
     """Every team with a final in this sport, sorted.
 
@@ -154,10 +160,25 @@ def teams(conn, sport: str) -> list[str]:
     itself: the team page asks this on every visit, and `_finals` builds the
     sport's every game as a dict, sorts them and folds the duplicates — tens
     of thousands of college games — to read two names off each (2026-11-18,
-    a college team page answering in 16 to 40 seconds)."""
+    a college team page answering in 16 to 40 seconds).
+
+    ONE STEP, AND KEPT TEN MINUTES (step AHI, 25 November 2026). Still the sport's every game, row by row, on every
+    team page built: 191 to 557 ms of the live site's NHL, NBA and MLB pages ("teams"). The rows come in one step
+    (db.rows_at_once), and the list is kept ten minutes per database file while no game is added."""
+    path = ""
     try:
-        rows = conn.execute("SELECT home, away, home_score, away_score FROM games WHERE sport=?",
-                            (sport,)).fetchall()
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str(row[2] or "") if row else ""
+        top = conn.execute("SELECT MAX(rowid) FROM games").fetchone()[0] if path else None
+    except Exception:                                         # noqa: BLE001
+        path, top = "", None
+    key = (path, sport)
+    hit = _TEAMS.get(key) if path else None
+    if hit and hit[1] == top and _time.time() - hit[0] < TEAMS_TTL:
+        return list(hit[2])
+    try:
+        from .db import rows_at_once
+        rows = rows_at_once(conn, "SELECT home, away, home_score, away_score FROM games WHERE sport=?", (sport,), n=4)
     except Exception:                                         # noqa: BLE001
         return []
     seen = set()
@@ -166,7 +187,10 @@ def teams(conn, sport: str) -> list[str]:
             continue
         seen.add(home)
         seen.add(away)
-    return sorted(x for x in seen if x)
+    out = sorted(x for x in seen if x)
+    if path:
+        _TEAMS[key] = (_time.time(), top, out)
+    return list(out)
 
 
 # --------------------------------------------------------------- naming
@@ -380,8 +404,33 @@ def _finish(acc: dict) -> dict:
     return acc
 
 
+#: Each season's league table, kept per database file (`season_table`): (when, the season's games stamp, the table).
+_SEASON_TABLES: dict = {}
+#: How long a kept season table stands while its games stamp holds (`season_table`).
+SEASON_TABLE_TTL = 600.0
+
+
 def season_table(conn, sport: str, season: int) -> dict:
-    """``{team: record}`` for one season — the basis of every rank."""
+    """``{team: record}`` for one season — the basis of every rank.
+
+    KEPT, THE SAME FOR EVERY CLUB (step AHI, 25 November 2026). A team page's profile built this for each season the
+    team played, each from every final of that season (a hockey team's, eleven seasons of the league's), and every
+    club's page built the same tables again. Kept ten minutes per database file while the season's games say the
+    same: how many there are, how many have a score, their scores' sum and the highest rowid, so a final landing (a
+    score written onto its game's row) builds it again. Readers treat it as read-only: it is shared."""
+    path = ""
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str(row[2] or "") if row else ""
+        stamp = tuple(conn.execute(
+            "SELECT COUNT(*), COUNT(home_score), TOTAL(home_score) + TOTAL(away_score), MAX(rowid) FROM games "
+            "WHERE sport=? AND season=?", (sport, season)).fetchone()) if path else None
+    except Exception:                                         # noqa: BLE001
+        path, stamp = "", None
+    key = (path, sport, season)
+    hit = _SEASON_TABLES.get(key) if path else None
+    if hit and hit[1] == stamp and _time.time() - hit[0] < SEASON_TABLE_TTL:
+        return hit[2]
     out: dict = {}
     for g in _finals(conn, sport, "season=?", (season,)):
         h, a = _num(g["home_score"]), _num(g["away_score"])
@@ -390,7 +439,10 @@ def season_table(conn, sport: str, season: int) -> dict:
             if not team:
                 continue
             _add(out.setdefault(team, _blank()), mine, theirs, at_home, g)
-    return {t: _finish(v) for t, v in out.items()}
+    table = {t: _finish(v) for t, v in out.items()}
+    if path:
+        _SEASON_TABLES[key] = (_time.time(), stamp, table)
+    return table
 
 
 def _ranked(table: dict, key: str, ascending: bool) -> dict:
@@ -420,9 +472,9 @@ def profile(conn, sport: str, team: str) -> dict:
     looking at from the number.
     """
     rows = []
-    for season in sorted({g["season"] for g in
-                          _finals(conn, sport, "(home=? OR away=?)",
-                                  (team, team))}, reverse=True):
+    # The team's finals read once for both uses below (step AHI): each read walks the sport's every game.
+    finals = _finals(conn, sport, "(home=? OR away=?)", (team, team))
+    for season in sorted({g["season"] for g in finals}, reverse=True):
         table = season_table(conn, sport, season)
         if team not in table:
             continue
@@ -441,7 +493,7 @@ def profile(conn, sport: str, team: str) -> dict:
                      "defense_rank": dfn.get(team),
                      "teams_ranked": len(field)})
     career = _blank()
-    for g in _finals(conn, sport, "(home=? OR away=?)", (team, team)):
+    for g in finals:
         h, a = _num(g["home_score"]), _num(g["away_score"])
         at_home = g["home"] == team
         _add(career, h if at_home else a, a if at_home else h, at_home, g)
@@ -715,11 +767,52 @@ def _keyed(conn, sport: str, team: str, season: int, games: list, head: str, tai
     return None
 
 
+#: Database files known to hold the logs' team index (db.TEAM_INDEX), and when each was last found without it.
+_TEAM_INDEXED: dict = {}
+#: How long a file found without the team index is believed (the night's chores build it, step AES).
+TEAM_INDEX_RECHECK_S = 600.0
+
+
+def _team_indexed(conn) -> bool:
+    """Whether this connection's file holds the logs' team index (db.TEAM_INDEX): kept for good once found, rechecked
+    every ten minutes while it is not."""
+    from .db import TEAM_INDEX
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str(row[2] or "") if row else ""
+        hit = _TEAM_INDEXED.get(path) if path else None
+        if hit is True or (hit is not None and _time.time() - hit < TEAM_INDEX_RECHECK_S):
+            return hit is True
+        found = conn.execute("SELECT 1 FROM sqlite_master WHERE type='index' AND name=?", (TEAM_INDEX,)).fetchone()
+    except Exception:                                         # noqa: BLE001
+        return False
+    if path:
+        _TEAM_INDEXED[path] = True if found else _time.time()
+    return bool(found)
+
+
 def _latest_season(conn, sport: str, team: str) -> int | None:
+    """The newest season the team has rows of its own in.
+
+    ONE LOOKUP ON THE TEAM INDEX WHERE THE FILE HAS IT (step AHI, 25 November 2026). Asked through the team's game
+    keys or days, a baseball row filed under its player and day, the first day's rows of every club were read to find
+    one of the team's: on the live site the Red Sox page's took 1.0 s and the Yankees' 2.6. The logs' team index
+    (db.TEAM_INDEX, built by the night's chores) answers it in one lookup, the same question the season scan below
+    asks (any row of the team's that season)."""
     by_season: dict = {}
     for g in _team_games(conn, sport, team):
         by_season.setdefault(g[0], []).append(g)
+    indexed = bool(by_season) and _team_indexed(conn)
     for season in sorted(by_season, reverse=True):
+        if indexed:
+            from .db import TEAM_INDEX
+            t0 = _time.perf_counter()
+            hit = conn.execute(f"SELECT 1 FROM player_game_logs INDEXED BY {TEAM_INDEX} "
+                               "WHERE sport=? AND team=? AND season=? LIMIT 1", (sport, team, season)).fetchone()
+            _note("indexed", t0, f"{season} {'found' if hit else 'none'}")
+            if hit:
+                return season
+            continue
         if _keyed(conn, sport, team, season, by_season[season], "SELECT 1", " LIMIT 1"):
             return season
     t0 = _time.perf_counter()

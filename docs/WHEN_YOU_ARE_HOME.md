@@ -9883,6 +9883,17 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHI. A team page reads its league's list of teams once** (step 1001; 25 November; nothing to run). Every team
+page built read the sport's every game, row by row, to list the league's teams: 191 to 557 ms of the live site's
+hockey, basketball and baseball team pages (the "teams" part of their timing). The games now come back in one step,
+and the list is kept ten minutes while no game is added. The page's season-by-season profile also read the team's
+finals twice, each read walking the sport's every game; it reads them once. And it built each season's league table
+(the ranks beside each season) from every final of that season, for every club's page again; each season's table is
+kept now, the same for every club, until a final lands or ten minutes pass. And a baseball page found its club's
+newest season by reading every club's rows of the season's first day (the Red Sox page 1.0 s, the Yankees' 2.6 s);
+where the box holds the team index the night's chores built (step AES), that is one lookup now. To read after the
+update: the "teams", "profile" and "squad" parts of the next team page built.
+
 **AHH. The settle pass says where its "prep" went** (step 1000; 25 November; nothing to run). The heartbeat
 showed a settle pass of 812.8 s, 576.6 s of it in the phase called "prep", with nothing to say which of prep's steps
 took that long; the passes had grown from about 650 s a cycle to about 1,100 s, and every page shares the box's one
