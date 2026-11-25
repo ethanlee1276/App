@@ -27,6 +27,7 @@ is deliberately not:
 Run directly: `python3 tests/test_cfb_props.py`
 """
 
+import datetime
 import os
 import random
 import sys
@@ -83,7 +84,9 @@ def _conn(games=10, roster=ROSTER, seed=3):
             for m in markets:
                 rows.append({
                     "sport": "cfb", "season": SEASON,
-                    "period": f"{SEASON}-09-{g + 1:02d}",
+                    # A week apart, as college games are: one day apart they
+                    # would be copies of one game (engine/gamelog.ONE_A_WEEK).
+                    "period": (datetime.date(SEASON, 8, 30) + datetime.timedelta(days=7 * g)).isoformat(),
                     "game_id": f"{team}-{g}", "player": name, "team": team,
                     "opponent": "XXX", "position": pos, "home": g % 2,
                     "market": m,
