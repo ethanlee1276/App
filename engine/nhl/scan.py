@@ -52,16 +52,24 @@ KEY_SKATERS = 9
 
 
 
-def gsax_words(gsax) -> str:
+def gsax_words(gsax, games=None) -> str:
     """A goalie's goals saved above expected without its sign (Ethan,
     2026-11-15: "the wording in these reports are confusing"): +4.2 is
-    "has stopped 4.2 more goals than expected lately", −3.4 is "has let
-    in 3.4 more goals than expected lately"."""
+    "has stopped 4.2 more goals than expected over the last 18 games",
+    −3.4 is "has let in 3.4 more goals than expected …". The games it
+    covers (engine/nhl/xg.board_summaries: his newest model.XG_WINDOW, 40,
+    or all he has) are said when known (step AHR: "lately" said no
+    number); "lately" without them."""
     x = round(float(gsax), 1)
+    try:
+        n = int(games or 0)
+    except (TypeError, ValueError):
+        n = 0
+    when = f"over the last {n} games" if n > 1 else "in the last game" if n == 1 else "lately"
     if x == 0:
-        return "has stopped about as many goals as expected lately"
-    return (f"has stopped {x:.1f} more goals than expected lately" if x > 0
-            else f"has let in {abs(x):.1f} more goals than expected lately")
+        return f"has stopped about as many goals as expected {when}"
+    return (f"has stopped {x:.1f} more goals than expected {when}" if x > 0
+            else f"has let in {abs(x):.1f} more goals than expected {when}")
 
 def _label(pro: list, con: list, breakout: bool, fam: dict | None = None,
            featured: bool = False) -> tuple[str, str]:
@@ -98,7 +106,7 @@ def tape(home: str, away: str, teams: dict, ctx: dict) -> dict:
             "sog_against": prof.get("sog_against"),
             "xgf_ev": round(prof["xgf_ev"], 2) if prof.get("xgf_ev") is not None else None,
             "xga_ev": round(prof["xga_ev"], 2) if prof.get("xga_ev") is not None else None,
-            "starter_gsax": c.get("gsax"),
+            "starter_gsax": c.get("gsax"), "starter_gsax_games": c.get("gsax_games"),
             "ranks": {k: rk[k].get(t) for k in rk if rk[k] or not k.startswith("x")},
             "starter": c.get("starter"), "starter_sv": c.get("sv"), "starter_share": c.get("starter_share"),
             "starter_sure": bool(c.get("starter_sure")), "starter_source": c.get("starter_source") or "",
@@ -146,9 +154,9 @@ def read_skater(name: str, p: dict, team: str, opp: str, teams: dict, ctx: dict,
     gsax = them.get("gsax")
     if them.get("starter") and them.get("starter_sure") and gsax is not None:
         if gsax <= -GSAX_EDGE:
-            said(pro, f"Faces {them['starter']}, who {gsax_words(gsax)}", RL.GOALIE)
+            said(pro, f"Faces {them['starter']}, who {gsax_words(gsax, them.get('gsax_games'))}", RL.GOALIE)
         elif gsax >= GSAX_EDGE:
-            said(con, f"Faces {them['starter']}, who {gsax_words(gsax)}", RL.GOALIE)
+            said(con, f"Faces {them['starter']}, who {gsax_words(gsax, them.get('gsax_games'))}", RL.GOALIE)
     elif them.get("starter") and them.get("starter_sure") and sv is not None:
         if sv <= lsv - SV_EDGE:
             said(pro, f"Faces {them['starter']}, .{round(sv * 1000):03d} save rate — below the league", RL.GOALIE)
@@ -239,7 +247,8 @@ def read_goalie(name: str, team: str, opp: str, teams: dict, ctx: dict, headshot
         said(con, "Starter not settled — the back-to-back or a split crease", RL.ROLE)
     notes.append(f"Started {me.get('starter_share', 0):.0%} of {team}'s last {M.STARTER_WINDOW}")
     if me.get("gsax") is not None:
-        notes.append(gsax_words(me["gsax"])[:1].upper() + gsax_words(me["gsax"])[1:])
+        w = gsax_words(me["gsax"], me.get("gsax_games"))
+        notes.append(w[:1].upper() + w[1:])
     key, label = _label(pro, con, False, fam, featured=bool(me.get("starter_sure")))
     return RL.mark_spot({"player": name, "team": team, "opp": opp, "pos": "G", "read": key, "label": label,
                          "pro": pro, "con": con, "notes": notes, "lean": list(GOALIE_LEANS), "headshot": headshot,

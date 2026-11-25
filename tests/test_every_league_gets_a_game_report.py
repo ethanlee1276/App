@@ -226,9 +226,10 @@ def test_the_nhl_report_reads_the_tape_the_goalies_and_the_injuries():
                  "Bruins: the second night of a back-to-back",
                  "BOS has played 6 games this season, so last season still carries 40% of its numbers",
                  "Jeremy Swayman for BOS — probable, not confirmed; .904 save rate; has let in 3.4 more goals "
-                 "than expected lately; started 70% of Bruins' recent games",
+                 "than expected lately; started 70% of the Bruins' last 10 games",
                  "Anthony Stolarz for TOR — confirmed",
-                 "TOR shoots the second-most, and BOS allows the sixth-most shots — a busy night for BOS's goalie",
+                 "TOR takes the second-most shots (33.2 a game), and BOS allows the sixth-most (31.5 a game) — a busy night "
+                 "for BOS's goalie",
                  "Charlie McAvoy (BOS) — out, shoulder",
                  "Every sportsbook pulled its props on Brad Marchand before puck drop, so we treat them as out",
                  "Starting goalies are confirmed after the morning skate; not yet for BOS"):

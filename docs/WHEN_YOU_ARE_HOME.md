@@ -9883,6 +9883,33 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHR. The rest of the game reports say the numbers behind their ranks** (step 1010; 25 November; nothing to
+run). Ethan, after step AHO: "keep going and fix the rest of the game reports too". I read every section of the NFL,
+hockey and basketball reports for the same shortcut, a rank or a word with no number behind it, and fixed what I
+found (the examples are the tests' fixtures, not tonight's games):
+
+- **The short version.** "Who could have a big day" or "a hard day", for a receiver or tight end whose reason is the
+  pass defense overall, now adds his own position's number: "Christian Watson, the Packers' wide receiver — the
+  Lions give up the most passing yards (320 a game), and 151 receiving yards a game to wide receivers (the
+  ninth-most)". The same Tucker Kraft line now names what the Rams give up to tight ends.
+- **In the trenches.** "GB's pass protection ranks 22nd against DET's pass rush (5th)" now says how often each
+  side's pressure lands, from the same unit table the rankings section prints: "GB's pass protection ranks 22nd
+  (pressure on N% of dropbacks) against DET's pass rush (5th, pressure on N%)".
+- **Hockey goalies.** "Has let in 3.4 more goals than expected lately" now says the games it covers: "over the
+  last N games", his newest 40 in the shot model (engine/nhl/model.XG_WINDOW) or all he has. "Started 70% of
+  Bruins' recent games" now reads "started 70% of the Bruins' last 10 games". The busy-night line has the shots:
+  "TOR takes the second-most shots (33.2 a game), and BOS allows the sixth-most (31.5 a game)".
+- **Basketball injuries.** "Tyler Herro (MIA) — out, ankle" now says what goes missing: "— 34 minutes and 22.7
+  points a game over the last 3" (in the test's fixture; his newest ten games at most, three at least).
+- **Left as they are.** Baseball's "bullpen ranks 6th" has no number beside it, but the season is over; it is on
+  the list for spring. Basketball's defense lines already carry their numbers.
+
+**Kept answers survive a restart, verified live** (steps AHJ and AHM). I asked 12 player and team pages after the
+afternoon's update, then the 23:07 UTC update restarted the box. Every one answered from disk ("stale", rebuilt
+behind) in 26 to 169 ms. Asked just before the restart, the same pages were built, and single parts of those
+builds took up to 577 ms (a hockey player's rows) and 927 ms (the Mariners' team profile). The first college page's
+roster read now takes 4 ms (1,060 ms before step AHM).
+
 **AHQ. College football's reads and reports say it too** (step 1009; 25 November; nothing to run). Step AHO's
 line needs the defense-vs-position ratings, and the college build never handed them to its reads or its reports, so
 no college card said what a defense gives up to tight ends. The ratings exist (engine/cfb/defense, the ones every

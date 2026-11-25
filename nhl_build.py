@@ -723,7 +723,8 @@ def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, 
                          "last10": set(sorted(team_days.get(team, ()), reverse=True)[:10])}
             gk = ((xs or {}).get("goalies") or {})
             if starter and starter in gk:
-                ctx[team].update(gsax=gk[starter]["gsax"], gskill=M.goalie_skill(gk[starter]),
+                ctx[team].update(gsax=gk[starter]["gsax"], gsax_games=gk[starter].get("games"),
+                                 gskill=M.goalie_skill(gk[starter]),
                                  team_gskill=M.goalie_skill(X.team_goalie_pool(gk, players, team)))
     for g in games:
         lam = M.team_lambdas(teams, g["home"], g["away"],

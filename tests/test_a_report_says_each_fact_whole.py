@@ -70,7 +70,7 @@ def test_a_player_with_no_verdict_word_is_copied_without_the_sign():
 def test_a_goalie_is_said_one_way_and_a_tough_card_leads_with_its_case():
     from engine import leaguereport as L
     src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
-    assert "goals more than expected\" if x >= 0" not in src and "{gsax_words(ga[best])}" in src
+    assert "goals more than expected\" if x >= 0" not in src and "{gsax_words(ga[best], gs[best].get('starter_gsax_games'))}" in src
     tough = L._verdict({"player": "Javier Assad", "read": "tough", "pro": ["Strikes out 27% of the batters faced"],
                         "con": ["PHI rarely strikes out (21.0%)", "Expected ERA 4.80"]}, both=True)
     assert tough["why"] == ["PHI rarely strikes out (21.0%).", "Expected ERA 4.80.",

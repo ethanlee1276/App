@@ -2083,8 +2083,13 @@ def sec_trenches(c: Ctx) -> dict | None:
         if po is not None and pd is not None:
             gap = int(pd) - int(po)
             who = off if gap >= c.gap_bar else dfn if -gap >= c.gap_bar else None
-            lines.append((f"{off}'s pass protection ranks {_ord(po)} against {dfn}'s pass rush "
-                          f"({_ord(pd)})" + (f" — edge {who}" if who else " — close to even"), None))
+            # The rates beside the ranks (step AHR): how often each side's pressure lands.
+            vo, vd = _f(c.unit(off, "off", "pressure").get("value")), _f(c.unit(dfn, "def", "pressure").get("value"))
+            rates = vo is not None and vd is not None and 0 <= vo <= 1 and 0 <= vd <= 1
+            head = ((f"{off}'s pass protection ranks {_ord(po)} (pressure on {_pct(vo)} of dropbacks) against "
+                     f"{dfn}'s pass rush ({_ord(pd)}, pressure on {_pct(vd)})") if rates else
+                    f"{off}'s pass protection ranks {_ord(po)} against {dfn}'s pass rush ({_ord(pd)})")
+            lines.append((head + (f" — edge {who}" if who else " — close to even"), None))
         rushers = [x for x in rush.get(dfn) or [] if isinstance(x, dict) and x.get("name")]
         if rushers:
             lines.append((f"{dfn}'s pass rush is led by " + _join(
@@ -3483,7 +3488,29 @@ def _best_reason(c: Ctx, r: dict, tone: str) -> str:
             return 0
         return (1 if any(w in low for w in ("most", "fewest", "allow", "give", "concede", "faces", "against"))
                 else 3 if low.startswith("the lines expect") else 2)
-    return _clause(named(c, short_reason(sorted(pool, key=rank)[0])), _known_names(c))
+    best = short_reason(sorted(pool, key=rank)[0])
+    return _clause(named(c, best + _own_yards_clause(c, r, best)), _known_names(c))
+
+
+#: A catcher's own position's receiving yards allowed (engine/defensevs): (stat, words) by position.
+_OWN_YARDS = {"WR": ("wr_rec_yds", "wide receivers"), "TE": ("te_rec_yds", "tight ends")}
+
+
+def _own_yards_clause(c: Ctx, r: dict, reason: str) -> str:
+    """", and 47 receiving yards a game to tight ends (the 15th-fewest)": what the defence gives up to a receiver's
+    or tight end's own position, beside a reason that reads its pass defence overall (step AHO; Ethan, on "the Rams
+    give up the second-fewest passing yards" under Tucker Kraft: "you're not going into specifics about how many
+    passing yards they give up to tight ends"). "" for any other reason, player or league without the number."""
+    pos = str((r or {}).get("pos") or "").upper()
+    stat, words = _OWN_YARDS.get(pos, ("", ""))
+    if not stat or "passing yards" not in reason or OWN_POSITION_WORDS.get(pos, "~") in reason:
+        return ""
+    dfn = (getattr(c, "opp", None) or {}).get(str(r.get("team") or ""), "")
+    x = ((getattr(c, "allowed", None) or {}).get(dfn) or {}).get(stat) or {}
+    pg = _f(x.get("pg"))
+    if pg is None or not x.get("rank") or not x.get("of"):
+        return ""
+    return f", and {pg:.0f} receiving yards a game to {words} ({_place(x['rank'], x['of'], 'most', 'fewest')})"
 
 
 def short_reason(text: str) -> str:
@@ -5007,8 +5034,10 @@ def verdict_evidence(c: Ctx) -> dict:
             # saved 4.2 goals more than expected" where every other section
             # said "has stopped 4.2 more goals than expected lately".
             from .nhl.scan import gsax_words
-            out[best].append(f"In net: {gs[best]['starter']} ({best}) {gsax_words(ga[best])}; "
-                             f"{gs[other]['starter']} ({other}) {gsax_words(ga[other])}")
+            out[best].append(f"In net: {gs[best]['starter']} ({best}) "
+                             f"{gsax_words(ga[best], gs[best].get('starter_gsax_games'))}; "
+                             f"{gs[other]['starter']} ({other}) "
+                             f"{gsax_words(ga[other], gs[other].get('starter_gsax_games'))}")
     for t in c.teams:
         gone = [x for x in ((c.meta.get("absences") or {}).get(t) or {}).get("out") or []
                 if isinstance(x, dict) and x.get("player") and (_f(x.get("mpg")) or 0) >= VERDICT_ROTATION_MPG]

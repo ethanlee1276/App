@@ -518,8 +518,13 @@ def nhl_tape(c: Ctx) -> dict | None:
         if r_for and r_against and r_for <= 8 and r_against >= n - 7:
             # Graded on a finished game: its shots on goal against its own a game.
             base = _f(mine.get("sog_for"))
-            items.append((f"{t} shoots the {_ord(int(r_for))}-most, and {c.opp[t]} allows the "
-                          f"{_ord(n - int(r_against) + 1)}-most shots — a busy night for {c.opp[t]}'s goalie",
+            # The counts beside the ranks (step AHR): the tape's own numbers.
+            took, let = base, _f(them.get("sog_against"))
+            items.append(((f"{t} takes the {_ord(int(r_for))}-most shots ({_num(took)} a game), and {c.opp[t]} "
+                           f"allows the {_ord(n - int(r_against) + 1)}-most ({_num(let)} a game) — a busy night "
+                           f"for {c.opp[t]}'s goalie") if took is not None and let is not None else
+                          (f"{t} shoots the {_ord(int(r_for))}-most, and {c.opp[t]} allows the "
+                           f"{_ord(n - int(r_against) + 1)}-most shots — a busy night for {c.opp[t]}'s goalie"),
                           {"kind": "team", "team": t, "opp": c.opp[t], "stat": "sog", "favors": "more",
                            **({"base": round(base, 2)} if base is not None else {})}))
     blocks.append(_claimed_list(items))
@@ -538,9 +543,11 @@ def nhl_goalies(c: Ctx) -> dict | None:
             bits.append(f".{round(float(s['starter_sv']) * 1000):03d} save rate")
         if _f(s.get("starter_gsax")) is not None:
             from .nhl.scan import gsax_words
-            bits.append(gsax_words(s["starter_gsax"]))
+            bits.append(gsax_words(s["starter_gsax"], s.get("starter_gsax_games")))
         if _f(s.get("starter_share")) is not None:
-            bits.append(f"started {_pct(s['starter_share'])} of {c.poss(t)} recent games")
+            from .nhl.model import STARTER_WINDOW
+            from .gamereport import team_owner
+            bits.append(f"started {_pct(s['starter_share'])} of {team_owner(c, t)} last {STARTER_WINDOW} games")
         items.append(f"{s['starter']} for {t} — {'; '.join(bits)}")
     blocks = [_list(items)]
     goalies = _reads(c, pos={"G"})
@@ -961,16 +968,33 @@ def nba_word(c: Ctx, i: dict) -> str:
     return status
 
 
+def _recent_line(x: dict) -> dict:
+    """{"min", "pts", "games"}: a player's minutes and points a game over the newest ten (the history's own order),
+    {} with fewer than three games."""
+    mins = [float(v) for v in (x.get("minutes") or [])[:10] if v is not None]
+    if len(mins) < 3:
+        return {}
+    pts = [float(v) for v in (x.get("pts") or [])[:10] if v is not None]
+    return {"min": round(sum(mins) / len(mins), 1), "games": len(mins),
+            **({"pts": round(sum(pts) / len(pts), 1)} if pts else {})}
+
+
 def nba_injuries(c: Ctx) -> dict | None:
     inj = [i for i in c.meta.get("injuries") or [] if isinstance(i, dict) and i.get("player")
            and i.get("team") in c.teams]
     if not inj:
         return None
+
+    def puts_up(i):
+        if _f(i.get("min")) is None or not i.get("games"):
+            return ""
+        what = f"{_num(i['min'])} minutes" + (f" and {_num(i['pts'])} points" if _f(i.get("pts")) is not None else "")
+        return f" — {what} a game over the last {i['games']}"
     items = [(f"{i['player']} ({i['team']}) — {nba_word(c, i)}"
               # Which way his newest blurb leans, the league's word already said (step ABY).
               + (f"; {newest_word(c, i['team'], i['player'], designations=False)}"
                  if newest_word(c, i["team"], i["player"], designations=False) else "")
-              + (f", {str(i['injury']).lower()}" if i.get("injury") else ""),
+              + (f", {str(i['injury']).lower()}" if i.get("injury") else "") + puts_up(i),
               injury_claim(i["player"], i["team"], i.get("status"))) for i in inj]
     return _section("injuries", "Injuries", [_claimed_list(items)])
 
@@ -1074,6 +1098,9 @@ def nba_meta(games: list, hist: dict, listed: dict, dvp: dict | None = None, dvp
             carry[t] = rows[:CARRY_N]
         inj = [{"player": (i or {}).get("player") or p, "team": (hist.get(p) or {}).get("team"),
                 "status": (i or {}).get("status") or "", "injury": (i or {}).get("injury") or "",
+                # WHAT HE PUTS UP (step AHR): his minutes and points over his last ten, so a reader weighs who is
+                # missing by what goes missing.
+                **_recent_line(hist.get(p) or {}),
                 # ESPN's blurb: the league's own word under its "Day-To-Day" (nba_word, step ABU).
                 **({"comment": str(i["comment"])[:400]} if (i or {}).get("comment") else {})}
                for p, i in (listed or {}).items() if (hist.get(p) or {}).get("team") in (a, h)]

@@ -4,6 +4,12 @@
     {
       "date": "2026-11-25",
       "kind": "ship",
+      "title": "Game reports give the numbers behind the ranks",
+      "body": "More game report lines now give the number behind each rank: a receiver's or tight end's own position yards in the short version, pressure rates in the trenches, the games a hockey goalie's form covers, shots a game on hockey's busy-night line, and what an injured basketball player puts up."
+    },
+    {
+      "date": "2026-11-25",
+      "kind": "ship",
       "title": "College football reads show what a defense allows each position",
       "body": "College football matchup reads and game reports now show what each defense gives up a game to the player's position, with ranks out of the FBS, the same way NFL reads do. Touchdown lines show the number beside the rank."
     },
