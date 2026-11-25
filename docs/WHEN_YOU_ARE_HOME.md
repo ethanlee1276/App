@@ -9896,9 +9896,10 @@ better. C, like u said not a problem."
 
 So a call is billed for the markets the books have posted, not the ones we ask for: a college basketball game costs
 about 9 credits, not the 13 our table charges, and a game with no player props posted costs 3 (its three game
-markets). Pricing more college basketball games costs about a third less than step AEM's numbers: 10 games a pull
-would be about 2,000 credits a month more than now, not 6,000. Before raising it I'll check tonight's builds, which
-need the room (step AEO).
+markets). Pricing more college basketball games costs about a third less than step AEM's numbers: at 9 credits a
+game, 10 games a pull would need about 11,700 credits a month, about 2,000 more than the plan holds for college
+basketball now (9,800), where our table made it 15,800. Before raising it I'll check tonight's builds, which need
+the room (step AEO).
 
 **AEN. College football's Saturday prices more games for the same credits** (step 930; 24 November). Nothing to
 run. Decision A, done the way that costs nothing: a pull buys player prices for at most 12 games, the ranked and
