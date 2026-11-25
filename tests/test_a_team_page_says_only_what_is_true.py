@@ -137,8 +137,9 @@ def test_each_kind_of_number_has_its_leader():
         ("Most", "pts", "Patrick Ngongba II", 45.0), ("Most", "reb", "Dame Sarr", 33.0),
         ("Most", "ast", "Cayden Boozer", 27.0)], lead
     # The tile's words are the title and the market's: "Most points", never "Players pts".
+    # (teamLeadersHTML lives in js/more.js, the only file that draws it: step AFN.)
     assert "${escapeHtml(L.title)} ${escapeHtml(/_yds$/.test(L.market || \"\") ? \"yards\"" in (
-        ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+        ROOT / "web" / "js" / "more.js").read_text(encoding="utf-8")
     names = {sec["key"]: [t for t, _m in sec.get("leaders") or ()] for shape in T.STAT_SECTIONS.values() for sec in shape}
     assert names["scoring"] == ["Most"] * 3 and names["skaters"] == ["Most"] * 3 and names["goalies"] == ["Most"]
     assert names["batting"] == ["Most"] * 2 and names["pitching"] == ["Most"]
