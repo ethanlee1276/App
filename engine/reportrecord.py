@@ -36,6 +36,7 @@ from __future__ import annotations
 import datetime as _dt
 import gzip
 import json
+import os
 from pathlib import Path
 
 INDEX = "index.json"
@@ -305,14 +306,45 @@ def last_slate(where, sport: str, path=None) -> dict:
         return {}
 
 
+#: A LEAGUE'S RECORD, KEPT UNTIL ITS ARCHIVE MOVES (step AGH, 25 November 2026). The sign-up screen's first look
+#: read every league's (engine/firstlook.reports) on each rebuild, and "How our reports did" on every ask: each a
+#: walk over every archived report's file. A report is saved by renaming it into its day's folder
+#: (engine/reportarchive), which moves that folder's time, so the folders' times and the index's say when the
+#: answer changed. Kept answers are read-only: every reader of them builds its own.
+_KEPT: dict = {}
+
+
+def _archive_stamp(base: Path):
+    """The archive's day folders and the index, each with when it last changed; None for no archive."""
+    try:
+        with os.scandir(base) as it:
+            seen = [(e.name, e.stat(follow_symlinks=False).st_mtime_ns) for e in it]
+    except OSError:
+        return None
+    return tuple(sorted(seen))
+
+
 def record(where, sport: str, today: str | None = None) -> dict:
     """The league's record on its reports: totals over every graded game and
     over the last RECENT_DAYS, and the newest CARD_ROWS games."""
-    every = rows(where, sport, write=False)
     try:
         day = _dt.date.fromisoformat(str(today or "")[:10])
     except ValueError:
         day = _dt.date.today()
+    base = _dir(where, sport)
+    stamp = _archive_stamp(base)
+    key = (str(base), sport, day.isoformat())
+    hit = _KEPT.get(key)
+    if stamp is not None and hit and hit[0] == stamp:
+        return hit[1]
+    out = _record(where, sport, day)
+    if stamp is not None:
+        _KEPT[key] = (stamp, out)
+    return out
+
+
+def _record(where, sport: str, day: _dt.date) -> dict:
+    every = rows(where, sport, write=False)
     since = (day - _dt.timedelta(days=RECENT_DAYS)).isoformat()
     recent = [r for r in every if str(r.get("date") or "") >= since]
     out = {"sport": sport, "totals": totals(every), "recent": totals(recent), "recent_days": RECENT_DAYS,

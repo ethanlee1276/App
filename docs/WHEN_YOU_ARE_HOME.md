@@ -9883,6 +9883,28 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGG + AGH. What still made player pages slow: a 26-second role chart, and a rebuild every reader waited
+behind** (steps 975 and 976; 25 November; nothing to run). You said: "keep going and work more on these issues as
+they are not fixed". I traced every request Amon-Ra St. Brown's page makes on the live site and timed each one the
+server answers. Two things came out.
+
+- The role chart (the "Role" switch on every player's charts) for Jahmyr Gibbs took 26.4 s, 1.4 s of it the
+  server's own work and the rest the disk. It reads his share of his team's targets and carries week by week, and
+  the database read his team's totals off the week's index: every player's targets and carries league-wide in each
+  of his weeks, row by row, his team's kept at the end. It now reads them off the team's index, which the box built
+  this morning (AES), so it reads his team's games alone. College football's role charts read the same way, with
+  about 65 games a week league-wide where his team plays one.
+- Amon-Ra's route and carry charts took 1.3 s each with 25 to 34 ms of their own work: they waited behind the
+  sign-up screen's first look (2.9 s, 1.8 s of the server's own time), which every signed-out visitor's first page
+  asks for and which was rebuilt about once a minute, in the one process that answers every page. It counted
+  tonight's picks by reading every league's whole board and read every league's report archive. A board's count is
+  now read again only once its file changes, a league's report record is kept until a report is added to its
+  archive (the free "How our reports did" reads the same), the first look is rebuilt at most every five minutes, and
+  its answer says the last build's parts and their milliseconds.
+
+The server also restarts with every update I push, and the first pages after a restart rebuild what it keeps in
+memory; I pushed four times today. From here on I batch updates so it restarts less.
+
 **AGB to AGE, checked live** (25 November, after the 15:19 UTC update; nothing to run). The update changed the
 two engine files whose every change used to throw away the saved league tables, and every page answered with its
 places at once (Cameron Boozer's 10th, 11th, 152nd and 68th, where this morning's update left his empty for 42 s):

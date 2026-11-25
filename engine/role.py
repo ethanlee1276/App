@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import re
+import sqlite3
 
 #: key -> (name, short name, unit): "pct" a share (0-1), "n" a count,
 #: "min" minutes, "spot" a place in the batting order (1 leads off).
@@ -190,10 +191,22 @@ def _shares(conn, sport: str, season: int, games: list) -> None:
     if not teams or not periods:
         return
     markets = [m for _sh, _k, m in want]
-    tot = {(p, t, m): v for p, t, m, v in conn.execute(
-        f"SELECT period, team, market, SUM(value) FROM player_game_logs WHERE sport=? AND season=? "
-        f"AND market IN ({_marks(markets)}) AND period IN ({_marks(periods)}) AND team IN ({_marks(teams)}) "
-        "GROUP BY period, team, market", (sport, season, *markets, *periods, *teams))}
+    # HIS TEAM'S GAMES, NOT THE LEAGUE'S WEEK (step AGG, 25 November 2026; Ethan: "data on the player page takes a
+    # long time to load"). Left to itself the planner read this off the week's index (sport, market, period): every
+    # player's targets and carries league-wide in each of his weeks, then his team's kept, each row a seek of its
+    # own; Jahmyr Gibbs's role chart took 26.4 s on the live site, 1.4 s of it the server's own work and the rest
+    # the disk. The team's index (engine/db.TEAM_INDEX, built on the box once) reads his team's games alone; a
+    # file without it reads as before.
+    from .db import TEAM_INDEX
+    sql = (f"SELECT period, team, market, SUM(value) FROM player_game_logs INDEXED BY {TEAM_INDEX} "
+           f"WHERE sport=? AND season=? AND market IN ({_marks(markets)}) AND period IN ({_marks(periods)}) "
+           f"AND team IN ({_marks(teams)}) GROUP BY period, team, market")
+    args = (sport, season, *markets, *periods, *teams)
+    try:
+        found = conn.execute(sql, args).fetchall()
+    except sqlite3.OperationalError:
+        found = conn.execute(sql.replace(f" INDEXED BY {TEAM_INDEX}", ""), args).fetchall()
+    tot = {(p, t, m): v for p, t, m, v in found}
     for g in games:
         for sh, key, market in want:
             mine, all_ = g["v"].get(key), tot.get((g["period"], g["team"], market))

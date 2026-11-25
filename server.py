@@ -1142,10 +1142,13 @@ _UNSUB_IN_LOG = re.compile(r"(/unsubscribe/|/unsubscribe/?\?t=)[^\s\"&]+")
 
 #: The strategy lab's answer, kept until the journal changes (Handler._record_lab).
 _LAB_CACHE: dict = {}
-#: The first screen's members' side (engine/firstlook), kept a minute: every
-#: stranger's first page asks for it, and it reads every league's board.
+#: The first screen's members' side (engine/firstlook), kept five minutes: every
+#: stranger's first page asks for it, and it reads every league's board. A minute
+#: until step AGH (25 November 2026): each rebuild was 1.8 s of this process's own
+#: time, and a member's charts waited behind it. Its counts move with the boards'
+#: builds, every few minutes; its record, nightly.
 _FIRSTLOOK: dict = {}
-FIRSTLOOK_TTL_S = 60
+FIRSTLOOK_TTL_S = 300
 #: Player pages (Handler._players_page), five minutes a player, the oldest
 #: dropped once PLAYER_PAGE_KEEP are kept.
 _PLAYER_PAGES: dict = {}
@@ -1157,7 +1160,7 @@ PLAYER_PAGE_KEEP = 400
 #: to these ages the kept answer is sent and one build in the background replaces it; older, the reader waits for
 #: a fresh one, so a page never shows what is hours old.
 PLAYER_PAGE_STALE_MAX = 3600
-FIRSTLOOK_STALE_MAX_S = 600
+FIRSTLOOK_STALE_MAX_S = 1800
 _BEHIND: set = set()
 _BEHIND_LOCK = threading.Lock()
 _BEHIND_SAID = [False]
@@ -1246,7 +1249,10 @@ def _player_page_fresh(sport: str, player: str, team: str, season: str, key: tup
 
 def _firstlook_build() -> None:
     from engine import firstlook
-    _FIRSTLOOK.update(at=time.time(), body=json.dumps(firstlook.build(WEB), separators=(",", ":")).encode())
+    took: list = []
+    body = json.dumps(firstlook.build(WEB, took=took), separators=(",", ":")).encode()
+    # The last build's parts, said on every answer (Handler._firstlook), as a player page says its own (step AFK).
+    _FIRSTLOOK.update(at=time.time(), body=body, took=took)
 
 class Handler(BaseHTTPRequestHandler):
     #: Seconds a socket may sit idle mid-request before the thread gives up
@@ -6848,7 +6854,9 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                 return self._send(503, b'{"error":"unavailable"}', ".json")
         elif age > FIRSTLOOK_TTL_S:
             _behind("firstlook", _firstlook_build)          # sent now, rebuilt behind it (step AFM)
-        return self._send(200, _FIRSTLOOK["body"], ".json")
+        parts = ", ".join(f"{part};dur={ms:.0f}" for part, ms in (_FIRSTLOOK.get("took") or ()))
+        return self._send(200, _FIRSTLOOK["body"], ".json",
+                          headers=[("Server-Timing", parts)] if parts else None)
 
     def _record_lab(self):
         """Every settled pick of the headline record, compact — the strategy

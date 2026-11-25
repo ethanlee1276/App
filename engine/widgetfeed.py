@@ -55,6 +55,31 @@ def _load(path: Path) -> dict:
         return {}
 
 
+#: TONIGHT'S COUNTS, A BOARD READ ONCE A CHANGE (step AGH, 25 November 2026; Ethan: "data on the player page takes a
+#: long time to load"). The sign-up screen's first look (engine/firstlook) counts tonight's picks league by league
+#: off each league's whole board, and was rebuilt about once a minute: 1.8 s of the server's own time each, in the
+#: one process that answers every page, so the routes and carries charts on Amon-Ra St. Brown's page waited 1.3 s
+#: behind one. A board is read again only when its file changed (each league's build, every few minutes).
+_COUNTS: dict = {}
+
+
+def _board_count(path: Path) -> tuple:
+    """(picks recommended, the board's date) of one board file, read again only once the file has changed."""
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return 0, ""
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _COUNTS.get(str(path))
+    if hit and hit[0] == stamp:
+        return hit[1]
+    from engine import pushalerts as PA
+    board = PA._load(path)
+    got = (PA._picks(board), str(board.get("date") or ""))
+    _COUNTS[str(path)] = (stamp, got)
+    return got
+
+
 def build(web: Path = WEB, today: _dt.date | None = None) -> dict:
     from engine import digest, gate, pushalerts as PA
     web = Path(web)
@@ -69,8 +94,7 @@ def build(web: Path = WEB, today: _dt.date | None = None) -> dict:
     night = digest.last_night(web)
     tonight = []
     for sport, file, label in PA.LEAGUES:
-        board = PA._load(gate.board_source(web / "data" / file))
-        n, date = PA._picks(board), str(board.get("date") or "")
+        n, date = _board_count(gate.board_source(web / "data" / file))
         if n and date and not (len(date) == 10 and date < today.isoformat()):
             tonight.append({"league": label, "sport": sport, "picks": n, "url": f"/?sport={sport}#recommended"})
     return {"record": record,

@@ -183,11 +183,22 @@ def reports(web: Path = WEB, where=None) -> dict | None:
     return out or None
 
 
-def build(web: Path = WEB, today: _dt.date | None = None, conn=None) -> dict:
+def build(web: Path = WEB, today: _dt.date | None = None, conn=None, took=None) -> dict:
+    """The first screen's members' side. ``took``, a list, gets each part's milliseconds as ``(part, ms)``, in order
+    (step AGH: the build was 1.8 s of the server's own time, and nothing said which part's)."""
+    t0 = [time.perf_counter()]
+
+    def mark(part):
+        if took is not None:
+            now = time.perf_counter()
+            took.append((part, (now - t0[0]) * 1000.0))
+            t0[0] = now
     from engine import widgetfeed
     out = widgetfeed.build(web, today)
     out.pop("url", None)
+    mark("counts")
     out["free_pick"] = free_pick(web, today)
+    mark("free")
     own = conn is None
     if own:
         from engine import ledger as L
@@ -200,8 +211,11 @@ def build(web: Path = WEB, today: _dt.date | None = None, conn=None) -> dict:
     finally:
         if own and conn is not None:
             conn.close()
+    mark("last")
     out["proof"] = proof()
+    mark("proof")
     out["reports"] = reports(web)
+    mark("reports")
     return out
 
 

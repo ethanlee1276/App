@@ -135,13 +135,14 @@ def test_the_feed_is_the_widgets_own_numbers_plus_that_row():
     assert "widgetfeed.build(web, today)" in src, "the counts are the widget's — a count, never a pick"
 
 
-def test_the_endpoint_is_public_and_kept_a_minute():
+def test_the_endpoint_is_public_and_kept_five_minutes():
     assert 'if parsed.path in ("/api/firstlook", "/api/firstlook/"):' in SERVER
     fn = SERVER[SERVER.index("    def _firstlook(self"):SERVER.index("    def _record_lab(self")]
     assert "_account" not in fn and "_entitled" not in fn, "nothing in it is anyone's"
-    assert "elif age > FIRSTLOOK_TTL_S:" in fn and "FIRSTLOOK_TTL_S = 60" in SERVER
-    # Past its minute it is sent at once and rebuilt behind it (step AFM, 25 November 2026); past ten, rebuilt first.
-    assert '_behind("firstlook", _firstlook_build)' in fn and "FIRSTLOOK_STALE_MAX_S = 600" in SERVER
+    # Five minutes since step AGH (25 November 2026): each rebuild was 1.8 s of the server's own time.
+    assert "elif age > FIRSTLOOK_TTL_S:" in fn and "FIRSTLOOK_TTL_S = 300" in SERVER
+    # Past its time it is sent at once and rebuilt behind it (step AFM, 25 November 2026); past 30 minutes, first.
+    assert '_behind("firstlook", _firstlook_build)' in fn and "FIRSTLOOK_STALE_MAX_S = 1800" in SERVER
 
 
 # --- the wall in the page ----------------------------------------------------------
