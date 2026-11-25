@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFJ. A college game report counts each game once** (step 952; 25 November; nothing to run). Follow-up to AFE.
+A game report quotes a player's form: his last games, his season's totals and how often he cleared a number ("6+
+catches in 5 of 8"). It reads the stored games by day, so the copies AFE found (a game on two days, or Buffalo as BUF
+one day and BUFF the next) still counted twice there. On a scratch history built like Scoop Smith's, the report read
+6 games and 23 catches where he had 4 games and 14. It now merges them the way the game log, the cards and the college
+model do. The NFL's reports read as before.
+
 **AFI. Every league's Season tile is this season's games** (step 951; 25 November; nothing to run). The tiles over a
 priced market card read L1, L3, L5, L10 and Season, and Season was the average of every game the build read, whichever
 season it came from. Basketball reads a player's last 20 games across two seasons, so this week most NBA cards' Season

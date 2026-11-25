@@ -96,7 +96,7 @@ def player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=N
 
 #: The files the kept player form is computed by: this one, and the NFL red
 #: zone's name key (engine/fantasy._short_key).
-_FORM_CODE = (__file__, str(Path(__file__).with_name("fantasy.py")))
+_FORM_CODE = (__file__, str(Path(__file__).with_name("fantasy.py")), str(Path(__file__).with_name("gamelog.py")))
 
 
 def _players_key(players: dict) -> str:
@@ -161,6 +161,7 @@ def _player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=
             # Two men of one name the same week: the board's team's.
             pick = next((c for c in cands if c["team"] == mine), cands[0])
             rows.append(pick)
+        rows = _one_game_once(sport, rows)
         cur = [g for g in rows if g["season"] == season]
         prior = [g for g in rows if g["season"] == season - 1]
         if sport == "nfl":
@@ -179,6 +180,33 @@ def _player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=
         rec["teams"] = sorted({g["team"] for g in cur if g.get("team")})
         out[name] = rec
     _red_zone(conn, season, players, out, sport, strict=strict)
+    return out
+
+
+def _one_game_once(sport: str, rows: list) -> list:
+    """One player's form rows (newest first), a game stored more than once read
+    as one where the league plays once a week (engine/gamelog.ONE_A_WEEK).
+
+    THE REPORT COUNTED A COLLEGE GAME TWICE (step AFJ, 2026-11-25). Its rows are
+    keyed by day, and a college game can be stored on two days or under two
+    codes for the opponent (step AFE: "BUF" one day, "BUFF" the next), so a
+    report's "6+ catches in 5 of 8", its season totals and its last games could
+    hold a game twice where the player page's game log, the cards and the
+    college model now hold it once. Merged by the same rule (gamelog.once):
+    each box-score group from the copy with the fuller line."""
+    from .gamelog import ONE_A_WEEK, once
+    if sport not in ONE_A_WEEK or len(rows) < 2:
+        return rows
+    games = [{"season": g["season"], "period": g.get("day") or str(g.get("week") or ""), "game_id": str(i),
+              "team": g.get("team"), "opponent": g.get("opp"), "home": 1 if g.get("where") == "home" else 0,
+              "stats": dict(g.get("s") or {}), "_row": g} for i, g in enumerate(rows)]
+    out = []
+    for m in once(sport, games):
+        g = dict(m["_row"], s=m["stats"], team=m["team"], opp=m["opponent"],
+                 where="home" if m["home"] else "away")
+        if "day" in g:
+            g["day"] = m["period"]
+        out.append(g)
     return out
 
 
