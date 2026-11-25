@@ -6,8 +6,9 @@ and the empty answer was never kept, so every visit read it all again: on the li
 chart took 20.3 s (it read every shot of the table for its shooter's id), a college role chart 6.9 s and an NBA one
 1.2 s. Now:
 
-  * each chart table's names are read once, off its name index, and kept folded (engine/db.folded_names) until ten
-    minutes pass or the table gains a row; a basketball shot chart reads ids for the folded matches alone;
+  * each chart table's names are read once, off its name index, and kept folded (engine/db.folded_names); a
+    basketball shot chart reads ids for the folded matches alone (since step AGW the list grows by the table's new
+    rows and is kept on disk across restarts: tests/test_a_chart_name_list_grows_and_survives_a_restart.py);
   * the role chart finds its player by the player page's own rule (playerpage.stored_name, off the search's kept
     list of names), so a chart under a page means the player the page means.
 
@@ -56,15 +57,15 @@ def test_the_names_are_kept_per_file_until_the_table_gains_a_row():
     D._FOLDED_NAMES.clear()
     _shot(conn, "nba_shots", "g1", 1, 203999, "Nikola Jokić")
     seen = _Seen(conn)
-    first = D.folded_names(seen, "nba_shots", (), "SELECT DISTINCT player FROM nba_shots", (), str.lower)
-    again = D.folded_names(seen, "nba_shots", (), "SELECT DISTINCT player FROM nba_shots", (), str.lower)
+    first = D.folded_names(seen, "nba_shots", "", (), str.lower)
+    again = D.folded_names(seen, "nba_shots", "", (), str.lower)
     assert again is first and first == {"nikola jokić": ["Nikola Jokić"]}
     assert sum("SELECT DISTINCT player" in s for s in seen.sql) == 1, "read once"
     _shot(conn, "nba_shots", "g1", 2, 1629029, "Luka Dončić")
-    third = D.folded_names(seen, "nba_shots", (), "SELECT DISTINCT player FROM nba_shots", (), str.lower)
+    third = D.folded_names(seen, "nba_shots", "", (), str.lower)
     assert "luka dončić" in third and sum("SELECT DISTINCT player" in s for s in seen.sql) == 2, "a row since: read"
     mem = D.connect(":memory:")
-    D.folded_names(mem, "nba_shots", (), "SELECT DISTINCT player FROM nba_shots", (), str.lower)
+    D.folded_names(mem, "nba_shots", "", (), str.lower)
     assert all(k[0] for k in D._FOLDED_NAMES), "a database in memory is never kept"
     D._FOLDED_NAMES.clear()
 

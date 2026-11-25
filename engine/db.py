@@ -19,6 +19,7 @@ instead of re-hitting the network.
 from __future__ import annotations
 
 import sqlite3
+import threading
 import time
 from pathlib import Path
 
@@ -864,22 +865,39 @@ def column_exists_or_raise(exc: sqlite3.OperationalError) -> None:
         raise exc
 
 
-#: Each table's stored names, folded, per database file, and when they were read (step AGR).
+#: Each table's stored names, folded, per database file and filter: ``(when the list was last read whole, the table's
+#: highest rowid it has read to, {folded name: [stored names]})`` (steps AGR and AGW).
 _FOLDED_NAMES: dict = {}
-FOLDED_NAMES_TTL = 10 * 60
+_FOLDED_LOCK = threading.Lock()
+_FOLDED_READS: dict = {}
+_FOLDED_BEHIND: set = set()
+#: A list read whole is read whole again after a day, behind the one in hand (step AGW). In between, rows only join
+#: it: each ask reads the names of the rows past the highest rowid it has read to, so a row deleted, or a name
+#: written over in place, leaves its name in the list until then. No chart table writes a name over in place, and a
+#: name left over finds no rows, so its chart is empty, as for a name never stored.
+FOLDED_NAMES_FULL_S = 24 * 60 * 60
+#: Each list is kept on disk between runs, beside its database: <its folder>/cache/names/<list>.json.gz.
+FOLDED_DIR = ("cache", "names")
 
 
-def folded_names(conn, table: str, key: tuple, sql: str, args=(), fold=None) -> dict:
-    """``{fold(name): [stored names]}`` over the names `sql` lists (a name a row) from `table`, kept per database file
-    and `key` for ten minutes while `table` gains no row (its highest rowid stands; never for a database in memory,
-    which a test opens fresh).
+def folded_names(conn, table: str, where: str = "", args=(), fold=None) -> dict:
+    """``{fold(name): [stored names]}`` over the distinct `player` of `table`'s rows (those `where` keeps, with
+    `args`), kept per database file and filter, and on disk beside it; never for a database in memory, which a test
+    opens fresh. Readers treat it as read-only: it is shared.
 
     A NAME A TABLE DOES NOT HOLD COST IT THE WHOLE TABLE (step AGR, 25 November 2026; Ethan: "Ok keep going and work
     more on these issues as they are not fixed"). A chart asked for a spelling its table does not keep read every
-    stored name to fold each one, on every ask, and the empty answer was never kept: a college basketball shot chart
-    took 20.3 s on the live site (it read every shot for its shooter's id), a college role chart 6.9 s. Read once in
-    ten minutes, off the table's own name index, a miss is a dictionary lookup; a name first stored inside the ten
-    minutes is found once the table's new rows are (a row added moves its highest rowid, one seek to read)."""
+    stored name to fold each one, on every ask: a college basketball shot chart took 20.3 s on the live site. AGR kept
+    the names ten minutes, read off the table's own name index.
+
+    AND THE WHOLE INDEX EVERY TEN MINUTES (step AGW): on the live site, just after an update, the same college shot
+    chart took 8.7 s (1.2 s of it work, the rest the disk), an NBA one 2.7 s, and either again ten minutes on. The list
+    now grows by the rows the table gained since it was read (their names alone, off the rowid: a table only adds a
+    row past its highest), is kept across restarts on disk (as stored, and folded as it is read, so a fold changed by
+    an update applies to it), and is read whole again only after a day, behind the one in hand, or when the table's
+    highest rowid falls (rows deleted, the file vacuumed or replaced)."""
+    fold = fold or (lambda name: name)
+    args = tuple(args)
     path = ""
     try:
         row = conn.execute("PRAGMA database_list").fetchone()
@@ -887,18 +905,141 @@ def folded_names(conn, table: str, key: tuple, sql: str, args=(), fold=None) -> 
         top = conn.execute(f"SELECT MAX(rowid) FROM {table}").fetchone()[0]
     except sqlite3.Error:
         path, top = "", None
-    k = (path, table) + tuple(key)
-    hit = _FOLDED_NAMES.get(k) if path else None
-    if hit and time.time() - hit[0] < FOLDED_NAMES_TTL and hit[1] == top:
-        return hit[2]
-    fold = fold or (lambda name: name)
+    if not path:
+        return _folded_read(conn, table, where, args, fold)
+    k = (path, table, where, args)
+    hit = _folded_hit(k, fold)
+    if hit is None or top is None or hit[1] is None or top < hit[1]:
+        with _FOLDED_LOCK:
+            lock = _FOLDED_READS.setdefault(k, threading.Lock())
+        with lock:                                         # one whole read at a time per list
+            again = _folded_hit(k, fold)
+            if again is not None and again is not hit:
+                hit = again                                # read whole while this ask waited
+            else:
+                out = _folded_read(conn, table, where, args, fold)
+                _folded_keep(k, (time.time(), top, out), save=True)
+                return out
+    at, read_to, out = hit
+    if top > read_to:
+        added = 0
+        for name in _folded_read(conn, table, where, args, None, since=read_to):
+            spelled = out.get(fold(name), ())
+            if name not in spelled:
+                if not added:
+                    out = dict(out)                        # a new list: a reader holding the old one keeps it whole
+                out[fold(name)] = list(spelled) + [name]
+                added += 1
+        _folded_keep(k, (at, top, out), save=bool(added))
+    if time.time() - at > FOLDED_NAMES_FULL_S:
+        _folded_behind(k, fold)
+    return out
+
+
+def _folded_read(conn, table: str, where: str, args: tuple, fold, since=None):
+    """The folded list read whole off the table's name index; with `since`, the stored names of the rows past that
+    rowid alone, as a list (NOT INDEXED: the filter's index would read the whole league's rows to keep the new)."""
+    if since is not None:
+        sql = f"SELECT DISTINCT player FROM {table} NOT INDEXED WHERE rowid > ?" + (f" AND ({where})" if where else "")
+        return [name for (name,) in conn.execute(sql, (since,) + args) if name]
     out: dict = {}
-    for (name,) in conn.execute(sql, args):
+    for (name,) in conn.execute(f"SELECT DISTINCT player FROM {table}" + (f" WHERE {where}" if where else ""), args):
         if name:
             out.setdefault(fold(name), []).append(name)
-    if path:
-        _FOLDED_NAMES[k] = (time.time(), top, out)
     return out
+
+
+def _folded_file(k: tuple) -> Path:
+    path, table, where, args = k
+    import hashlib
+    import json
+    name = hashlib.sha1(json.dumps([table, where, list(args)]).encode()).hexdigest()[:24]
+    return Path(path).parent.joinpath(*FOLDED_DIR, name + ".json.gz")
+
+
+def _folded_hit(k: tuple, fold):
+    """The list in memory; else the one kept on disk, folded now (a restart since it was read)."""
+    with _FOLDED_LOCK:
+        hit = _FOLDED_NAMES.get(k)
+    if hit is not None:
+        return hit
+    import gzip
+    import json
+    try:
+        with gzip.open(_folded_file(k), "rt", encoding="utf-8") as fh:
+            kept = json.load(fh)
+        if [kept.get("table"), kept.get("where"), kept.get("args")] != [k[1], k[2], list(k[3])]:
+            return None
+        at, top, names = float(kept["at"]), kept["top"], kept["names"]
+        if not isinstance(top, int) or not isinstance(names, list):
+            return None
+    except (OSError, ValueError, KeyError, TypeError, EOFError):
+        return None
+    out: dict = {}
+    for name in names:
+        if isinstance(name, str) and name:
+            out.setdefault(fold(name), []).append(name)
+    hit = (at, top, out)
+    with _FOLDED_LOCK:
+        return _FOLDED_NAMES.setdefault(k, hit)
+
+
+_FOLDED_SAID = [False]
+
+
+def _folded_keep(k: tuple, hit: tuple, save: bool) -> None:
+    """Kept in memory and, with `save`, on disk (as stored: a temporary file, then put in place). A failure to save
+    says so once in the service's log, and the list stands in memory."""
+    with _FOLDED_LOCK:
+        _FOLDED_NAMES[k] = hit
+    if not save:
+        return
+    import gzip
+    import json
+    import os
+    at, top, out = hit
+    dest = _folded_file(k)
+    tmp = dest.with_name(dest.name + f".{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with gzip.open(tmp, "wt", encoding="utf-8") as fh:
+            json.dump({"table": k[1], "where": k[2], "args": list(k[3]), "at": at, "top": top,
+                       "names": sorted({n for names in out.values() for n in names})}, fh)
+        os.replace(tmp, dest)
+    except (OSError, TypeError, ValueError) as exc:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        if not _FOLDED_SAID[0]:
+            _FOLDED_SAID[0] = True
+            import sys
+            print(f"⚠️  a chart's name list not kept on disk ({k[1]}: {type(exc).__name__}: {exc}); it is read whole "
+                  "again after the next restart", file=sys.stderr)
+
+
+def _folded_behind(k: tuple, fold) -> None:
+    """The list read whole again on its own connection while the one in hand answers (once a day)."""
+    with _FOLDED_LOCK:
+        if k in _FOLDED_BEHIND:
+            return
+        _FOLDED_BEHIND.add(k)
+
+    def run():
+        try:
+            conn = connect(k[0])
+            try:
+                top = conn.execute(f"SELECT MAX(rowid) FROM {k[1]}").fetchone()[0]
+                out = _folded_read(conn, k[1], k[2], k[3], fold)
+            finally:
+                conn.close()
+            _folded_keep(k, (time.time(), top, out), save=True)
+        except Exception:                                 # noqa: BLE001 — the list in hand keeps answering
+            pass
+        finally:
+            with _FOLDED_LOCK:
+                _FOLDED_BEHIND.discard(k)
+    threading.Thread(target=run, daemon=True, name="names-behind").start()
 
 
 def pinned(conn, sql: str, index: str, args=()):

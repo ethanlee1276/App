@@ -1072,6 +1072,37 @@ def resolve_player(conn, sport: str, q: str) -> str:
         "LIMIT 1", (sport, q)).fetchone()
     if row:
         return row["player"]
+    # A TYPED NAME IS SPELLED ONCE WHILE THE LEAGUE'S LIST STANDS (step AGW, 25 November 2026). The spelling pass
+    # below runs over every name the league has logged: on the live site 0.23 to 0.31 s of a college chart's answer
+    # for a name college does not hold (Cooper Flagg's role chart, asked twice, 279 and 305 ms), every ask, since an
+    # empty chart is never kept. Its answer depends on the list alone (and the logs the list is rebuilt from), so it
+    # is kept beside the list it was found on, and a new list starts afresh.
+    from . import logcache
+    path = logcache.db_file(conn)
+    ix = _name_index(conn, sport) if path else None
+    if ix is not None:
+        with _SPELLED_LOCK:
+            kept = _SPELLED.get((sport, path))
+            if kept is not None and kept[0] is ix and q in kept[1]:
+                return kept[1][q]
+    found = _spelled(conn, sport, q)
+    if ix is not None:
+        with _SPELLED_LOCK:
+            kept = _SPELLED.get((sport, path))
+            if kept is None or kept[0] is not ix or len(kept[1]) >= SPELLED_KEEP:
+                kept = _SPELLED[(sport, path)] = (ix, {})
+            kept[1][q] = found
+    return found
+
+
+#: Each league's typed names already put through the spelling pass, with the name list they were found on (step AGW).
+_SPELLED: dict = {}
+_SPELLED_LOCK = threading.Lock()
+SPELLED_KEEP = 4096
+
+
+def _spelled(conn, sport: str, q: str) -> str:
+    """resolve_player past its exact hit: the ranked search's best tier, as its docstring says."""
     ranked = _ranked_names(conn, sport, q, 12)
     if not ranked:
         return ""

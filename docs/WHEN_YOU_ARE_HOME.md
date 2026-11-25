@@ -9883,6 +9883,27 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGX. A player not priced tonight: the page draws before the market cards** (step 992; 25 November; nothing to
+run). Timed at phone speed (a 4G line, a phone's processor) on the live site after AGV: Jalen Brunson's page had its
+numbers at 0.99 s and drew its header at 1.56 s; Connor McDavid's 0.78 and 1.22; Cameron Boozer's 0.97 and 1.38. A
+player nobody priced tonight waited for their logs, and for the market cards drawn from them (the foot of the
+page), before the page drew at all. The page now draws first, and the cards join it when the logs land. On this
+checkout with the live site's answers behind it: Boozer's header at 0.67 s (1.07 before), his season card at 1.09 s
+(1.58); McDavid's season card at 1.23 s (1.42). No script errors, and each page's market section has its title and
+card. kickClock, which nothing ever called, left app.js to keep the first visit inside its 384 KB. Seen while
+checking: a card not priced tonight reads "Season —" in every league, since its logs carry ten games (step AGY).
+
+**AGW. A chart's list of names grows by new rows and is kept across a restart** (step 991; 25 November;
+nothing to run). After AGR went live (18:19 UTC), a college basketball shot chart for a name its table does not
+hold took 8.7 s on its first ask (1.2 s of it work, the rest waiting on the disk) and an NBA one 2.7 s: the first ask
+after a restart read the table's whole name index, and so did the first ask of every ten minutes after it. The list
+now grows by the names of the rows added since it was read (off the rowid), is kept on disk beside the database
+(data/cache/names) so a restart reads none of the table, and is read whole again only once a day, behind the one in
+hand, or when the table's highest row goes. A role chart for such a name also paid the league's spelling search on
+every ask (Cooper Flagg's college one, asked twice: 279 and 305 ms); a name the search has looked up is now kept
+beside the league's list of names, and a new list starts afresh. To look at after the update: a shot chart for a
+name its table lacks, asked once the server has restarted.
+
 **AGV. A player's game log is kept as his page is** (step 990; 25 November; nothing to run). Every player page
 asks for the player's game log alongside its numbers, and the log was read again from the database on every
 visit: 0.1 to 0.7 s of the server's own work on the live site (Juan Soto's 162-game season, 0.67 s). It is now kept

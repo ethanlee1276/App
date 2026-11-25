@@ -172,8 +172,8 @@ def resolve(conn, player: str) -> str:
     if row:
         return row[0]
     want = _fold(q).replace(" ", "")
-    from .db import folded_names                      # read once in ten minutes, not on every miss (step AGR)
-    hits = folded_names(conn, "kicks", ("nfl",), "SELECT DISTINCT player FROM kicks WHERE sport='nfl'", (),
+    from .db import folded_names                      # kept, grown by new rows, on disk (steps AGR, AGW)
+    hits = folded_names(conn, "kicks", "sport=?", ("nfl",),
                         lambda n: _fold(n).replace(" ", "")).get(want, []) if want else []
     return hits[0] if len(hits) == 1 else ""
 

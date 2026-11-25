@@ -2063,10 +2063,6 @@ function kickInstant(g) {
   return k.includes("T") ? Date.parse(k) : etInstant(g.date, k);
 }
 /* The clock alone, in the reader's zone where the game's day lets it be said. */
-function kickClock(dateStr, kick) {
-  const t = kick && !String(kick).includes("T") ? etInstant(dateStr, kick) : NaN;
-  return Number.isFinite(t) ? tzTime(t) : formatKickoff(kick);
-}
 function whenLabel(dateStr, kick) {
   // AN INSTANT IS SAID WHOLE IN THE READER'S ZONE (2026-11-19): its day with its clock. The slate's own
   // date (the game's day in the East) stood beside the reader's clock, so tip-off at 8 PM Eastern read
@@ -14394,21 +14390,24 @@ async function renderPlayers() {
         }
         // HIS PAGE IS ASKED NOW (step AFK), beside his logs, not after them: renderPlayerPage finds it asked.
         loadRoom("js/playerpage.js", "css/playerpage.css").then((ok) => ok && plrFetch(m.sport, m.player, m.team || ""));
-        if (!playerStats(m.player)) {
-          const st = await leagueLogs(m.player, m.sport);
-          if (seq !== _playersSeq) return;
-          if (st && Object.keys(st).length) _searchStats[m.player] = st;
-        }
         // A head-only row: profileHTML draws the history card from it plus
         // the stats above. No market_label, so it can never masquerade as a
         // priced market. It DOES carry the league — every colour, logo and
         // injury lookup on the card is keyed by an abbreviation that means
         // nothing without one.
-        _profRows = new Map([[m.player, [{ player: m.player, team: m.team,
-                                           position: m.position, opponent: "",
-                                           headshot: m.headshot,
-                                           sport: m.sport }]]]);
-        host.innerHTML = profileHTML(m.player, { deep: true, inPage: true });
+        _profRows = new Map([[m.player, [{ player: m.player, team: m.team, position: m.position,
+          opponent: "", headshot: m.headshot, sport: m.sport }]]]);
+        host.replaceChildren();
+        if (!playerStats(m.player)) {
+          // HIS PAGE FIRST, HIS MARKET CARDS WHEN HIS LOGS LAND (step AGX): the page waited for his logs and their
+          // cards (the foot of his page) before drawing its head: timed at phone speed, Jalen Brunson's numbers
+          // in at 0.99 s and his header drawn at 1.56. The second draw hands the cards to the page drawn.
+          renderPlayerPage(host, m.player, m.sport);
+          const st = await leagueLogs(m.player, m.sport);
+          if (seq !== _playersSeq) return;
+          if (st && Object.keys(st).length) _searchStats[m.player] = st;
+        }
+        host.insertAdjacentHTML("beforeend", profileHTML(m.player, { deep: true, inPage: true }));
         renderPlayerPage(host, m.player, m.sport);
         return;
       }

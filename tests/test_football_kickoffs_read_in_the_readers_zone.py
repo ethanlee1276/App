@@ -41,7 +41,8 @@ def _node(js, tz="America/Los_Angeles", helpers=True):
     node = shutil.which("node")
     if not node:
         return None
-    names = ("tzOpts", "tzTime", "formatGameDate", "formatKickoff", "etInstant", "kickInstant", "kickClock",
+    # kickClock left app.js on 25 November 2026 (step AGX): nothing ever called it, and the boot path needed the room.
+    names = ("tzOpts", "tzTime", "formatGameDate", "formatKickoff", "etInstant", "kickInstant",
              "whenLabel", "firstKickOf")
     src = "\n".join(_fn(n) for n in names) if helpers else ""
     prog = f"""
@@ -83,16 +84,12 @@ def test_the_game_card_the_board_and_a_players_next_game_say_the_readers_clock()
       const games = [{ date: "2026-11-22", kickoff: "13:00" }, { date: "2026-11-19", kickoff: "20:15" },
                      { kickoff: "2026-11-21T17:00Z" }];
       return { card: whenLabel("2026-11-23", "20:15"), first: firstKickOf(games),
-               firstUndated: firstKickOf([{ kickoff: "16:25" }, { kickoff: "13:00" }]), none: firstKickOf([]),
-               clock: kickClock("2026-11-22", "16:25"), clockNoDay: kickClock("", "16:25"),
-               mlb: kickClock("2026-09-23", "2026-09-23T23:10:00Z") };""")
+               firstUndated: firstKickOf([{ kickoff: "16:25" }, { kickoff: "13:00" }]), none: firstKickOf([]) };""")
     if got is None:
         print("  SKIP node not installed"); return
     assert got["card"] == "Mon, Nov 23 · 5:15 PM", "Monday night's 8:15 PM Eastern, read in Los Angeles"
     assert got["first"] == "5:15 PM", "Thursday's game is the first start, not the smallest clock text"
     assert got["firstUndated"] == "1:00 PM ET" and got["none"] == "", "with no day the old reading stands"
-    assert got["clock"] == "1:25 PM" and got["clockNoDay"] == "4:25 PM ET"
-    assert got["mlb"] == "4:10 PM", "an ISO start is read as it always was"
 
 
 def test_the_inactives_note_and_the_slip_grader_read_it_too():
@@ -115,7 +112,7 @@ def test_the_inactives_note_and_the_slip_grader_read_it_too():
 
 
 def test_every_place_that_printed_et_on_a_dated_kickoff_now_asks_the_instant():
-    assert "kickClock" in APP and "${escapeHtml(whenLabel(up.date, up.kickoff) || up.date || \"\")}" in APP, \
+    assert "${escapeHtml(whenLabel(up.date, up.kickoff) || up.date || \"\")}" in APP, \
         "a player's upcoming game"
     assert " ET` : \"\"}" not in APP, "no dated kickoff glues on its own ET"
     assert "if (!first) first = firstKickOf((state.data || {}).games);" in APP, "the deck's quiet card"

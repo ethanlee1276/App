@@ -412,9 +412,8 @@ def resolve(conn, player: str, sport: str = "nfl") -> str:
     if row:
         return row[0]
     want = _fold(q)
-    from .db import folded_names                      # read once in ten minutes, not on every miss (step AGR)
-    hits = folded_names(conn, "passes", (sport,), "SELECT DISTINCT player FROM passes WHERE sport=?", (sport,),
-                        _fold).get(want, []) if want else []
+    from .db import folded_names                      # kept, grown by new rows, on disk (steps AGR, AGW)
+    hits = folded_names(conn, "passes", "sport=?", (sport,), _fold).get(want, []) if want else []
     return hits[0] if len(hits) == 1 else ""
 
 
