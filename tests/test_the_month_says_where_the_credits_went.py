@@ -165,11 +165,23 @@ def test_the_table_is_each_league_at_its_headroom_and_the_harvest():
     assert P.table_day(sun, over=("mlb",)) == round(want)
     assert P.table_day(sun, over=("mlb",)) > 2 * P.table_day(dt.date(2026, 11, 10), over=("mlb",)), \
         "an NFL Sunday is the dearest day of the week"
-    month = sum(P.table_day(NOV1 + dt.timedelta(days=i), over=("mlb",)) for i in range(30))
+    # College basketball at the price the box measures for it (step AER: 271 credits over 30 calls, 10 a game).
+    import time as _time
+    from engine import oddsbudget as _ob
+    _ob._MEASURED["cbb"] = (_time.time(), 10)
+    try:
+        month = sum(P.table_day(NOV1 + dt.timedelta(days=i), over=("mlb",)) for i in range(30))
+        targets = sum(P.day_need(lg, NOV1 + dt.timedelta(days=i)) for i in range(30)
+                      for lg in P.PRIORITY if lg != "mlb")
+    finally:
+        _ob._MEASURED.pop("cbb", None)
     # Every league at its headroom: about the whole 100k, and since college
-    # basketball joined (2026-11-13) a little past it — the plan cuts the
-    # headroom, never a target, when the pool cannot hold all of it.
-    assert 85_000 <= month <= 120_000, f"the table spends about the whole 100k: {month}"
+    # basketball joined (2026-11-13) a little past it, further since its eight
+    # games a pull (step AER, 2026-11-25) — the plan cuts the headroom, never a
+    # target, when the pool cannot hold all of it: the targets alone fit it.
+    assert 85_000 <= month <= 125_000, f"the table spends about the whole 100k: {month}"
+    pool = 100_000 - _ob.RESERVE - P.HARVEST_DAY * 30 - int(100_000 * P.BUFFER_SHARE)
+    assert targets <= pool, (targets, pool)
 
 
 # --- where it went ------------------------------------------------------------------
