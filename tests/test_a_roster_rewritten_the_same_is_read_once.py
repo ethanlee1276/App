@@ -166,6 +166,9 @@ def test_every_reader_of_the_roster_files_reads_them_this_way():
         assert needle in (ROOT / f).read_text(encoding="utf-8"), f
     import inspect
     assert "_roster_names(sport)" in inspect.getsource(PP.warm), "parsed behind a restart, before the first page"
+    # Five seconds in, before the rank tables' minute (step AHK): a college page a minute after an update parsed it.
+    warm = inspect.getsource(PP.warm)
+    assert PP.ROSTER_WARM_S == 5.0 and warm.index("_roster_names(sport)") < warm.index("time.sleep(max(0.0, delay - first))")
 
 
 if __name__ == "__main__":

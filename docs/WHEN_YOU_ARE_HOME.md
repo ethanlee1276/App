@@ -9888,7 +9888,9 @@ nothing to run). Each hitter's page read the season's every starting pitcher (ab
 the starter's hand, the same rows for every hitter: Juan Soto's "splits" part was 369 ms on the live site. They are
 read in one step now and kept ten minutes while no starter is added. A college page's season results (about 900
 games for the player's clubs and their opponents, 87 to 157 ms of a college basketball page) come back in one step
-too. To read after the update: a hitter's "splits" part and a college page's "results" part.
+too. And the rosters are parsed five seconds after a restart, not a minute: the first college football page a minute
+after this afternoon's update still parsed the 9.2 MB college file itself (711 ms). To read after the update: a
+hitter's "splits" part and a college page's "results" and "roster" parts.
 
 **AHJ. Kept answers survive a restart** (step 1002; 25 November; nothing to run). A player's page, game log and
 market logs and a team's page are kept once built (steps AFM, AGV, AHB, AHA), but only in the server's memory, and

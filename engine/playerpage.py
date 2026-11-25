@@ -571,19 +571,26 @@ def forget_ranks(sport: str, db_path=None) -> int:
     return len(gone)
 
 
+#: How soon after the start the rosters are parsed (`warm`): a second or so of work, before the rank tables' wait.
+ROSTER_WARM_S = 5.0
+
+
 def warm(db_path=None, delay: float = 60.0) -> threading.Thread:
     """Every league's rank tables for its newest season, built in the
     background (after ``delay`` seconds, so the server's own start comes
     first), so no player's page waits on one. Returns the thread."""
     def run():
-        time.sleep(delay)
+        first = min(delay, ROSTER_WARM_S)
+        time.sleep(first)
         # Each league's roster, parsed and indexed by name, so the first page after a restart does not wait for it
-        # (step AGM: the college file is 9.2 MB, 1.3 s of the first college page).
+        # (step AGM: the college file is 9.2 MB, 1.3 s of the first college page). Five seconds in, not a minute
+        # (step AHK): on the live site the first college page a minute after an update still parsed it (711 ms).
         for sport in KINDS:
             try:
                 _roster_names(sport)
             except Exception:                             # noqa: BLE001 — that page reads it on first ask
                 pass
+        time.sleep(max(0.0, delay - first))
         path = str(db_path or _db.DEFAULT_DB)
         if not os.path.exists(path):
             return
