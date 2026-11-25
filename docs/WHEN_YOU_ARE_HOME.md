@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGB to AGE, checked live** (25 November, after the 15:19 UTC update; nothing to run). The update changed the
+two engine files whose every change used to throw away the saved league tables, and every page answered with its
+places at once (Cameron Boozer's 10th, 11th, 152nd and 68th, where this morning's update left his empty for 42 s):
+AGE works. On Amon-Ra St. Brown's page (three loads at phone speed) the game log was asked in the same moment as the
+page's numbers (1.60 and 1.60 s, 1.63 and 1.63 s, 2.73 and 2.73 s), and Recent games drew 0.05 to 0.21 s after the
+season card. College basketball pages read their results in 4 to 7 ms this season and 40 ms for Darryn Peterson's
+2025-26 (72 ms before AGD); Darius Acuff Jr.'s took 164 ms with the server still busy after the restart, to look at
+again. Left as it is: an address opened cold asks the player search first (0.4 to 0.6 s, once 1.7 s while the server
+was busy), and the page's own ask waits for its answer, because the search is what names his club.
+
 **AGF. This Wednesday's chemistry verdicts, and a line that fits** (step 974; 25 November; nothing to run). The
 Wednesday measurement (ACL) ran at 00:41 to 00:49 Eastern. Off the heartbeat: A fails (7,695 cases, three seasons
 worse), B passes at 0.2 (338 cases, one season worse; B is the new starter's lean that already ships), and R, a
