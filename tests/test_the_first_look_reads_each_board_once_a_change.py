@@ -81,7 +81,8 @@ def test_a_leagues_record_is_kept_until_its_archive_moves():
 def test_the_first_look_says_its_parts_and_is_rebuilt_every_five_minutes():
     took = []
     out = firstlook.build(Path(tempfile.mkdtemp()), took=took)
-    assert [p for p, _ in took] == ["counts", "free", "last", "proof", "reports"], took
+    # "counts" said in its own parts since step AGQ: the record's head, last night, each board's count.
+    assert [p for p, _ in took] == ["record", "night", "boards", "free", "last", "proof", "reports"], took
     assert all(ms >= 0 for _, ms in took) and "record" in out
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
     assert "FIRSTLOOK_TTL_S = 300" in srv and "_FIRSTLOOK.update(at=time.time(), body=body, took=took)" in srv

@@ -9883,6 +9883,12 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGQ. The sign-up screen's rebuild says which of its reads is slow** (step 985; 25 November; nothing to run).
+After the 16:31 UTC update the sign-up screen's members' side took 5.2 s to build and then 7.0 s the second time, most
+of it one part called "counts" (1.9 s, then 4.8 s). That part is three reads: the record's head file, last night's
+results (off the live feed), and each league's board for tonight's pick count. It now says each separately, so the
+next look says which to fix. (Its "last graded pick" part, 1.2 to 1.5 s, is what AGP keeps.)
+
 **AGP. The Record's bet list is read once per change to the record** (step 984; 25 November; nothing to run).
 The Record's list of settled bets counted and sorted every settled bet on every visit: 577 ms on the live site, 400
 of it the server's own work, which every other page waits behind. The sign-up screen's "newest graded pick" read the

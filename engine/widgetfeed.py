@@ -80,11 +80,23 @@ def _board_count(path: Path) -> tuple:
     return got
 
 
-def build(web: Path = WEB, today: _dt.date | None = None) -> dict:
+def build(web: Path = WEB, today: _dt.date | None = None, took=None) -> dict:
+    """The widget's members' side. ``took``, a list, gets its parts' milliseconds as ``(part, ms)`` (step AGQ: the
+    first look's "counts", which is this, took 1.9 s and then 4.8 s of a rebuild on the live site, and nothing said
+    which of its reads)."""
     from engine import digest, gate, pushalerts as PA
+    import time as _t
+    t0 = [_t.perf_counter()]
+
+    def mark(part):
+        if took is not None:
+            now = _t.perf_counter()
+            took.append((part, (now - t0[0]) * 1000.0))
+            t0[0] = now
     web = Path(web)
     today = today or _dt.date.today()
     rec = _load(web / "data" / "record_head.json") or _load(web / "data" / "record.json")
+    mark("record")
     # The picks we stake since 2026-10-31 (engine/stakeplan), as the site leads.
     ov = (rec.get("staked") or {}).get("overall") or rec.get("overall") or {}
     record = None
@@ -92,11 +104,13 @@ def build(web: Path = WEB, today: _dt.date | None = None) -> dict:
         record = {"w": int(ov.get("wins") or 0), "l": int(ov.get("losses") or 0), "p": int(ov.get("pushes") or 0),
                   "units": round(float(ov.get("net_units") or 0), 1), "roi": round(float(ov.get("roi") or 0) * 100, 1)}
     night = digest.last_night(web)
+    mark("night")
     tonight = []
     for sport, file, label in PA.LEAGUES:
         n, date = _board_count(gate.board_source(web / "data" / file))
         if n and date and not (len(date) == 10 and date < today.isoformat()):
             tonight.append({"league": label, "sport": sport, "picks": n, "url": f"/?sport={sport}#recommended"})
+    mark("boards")
     return {"record": record,
             "last_night": ({"date": night["date"], "w": night["w"], "l": night["l"], "p": night["p"],
                             "units": night["net_u"]} if night and (night["w"] or night["l"]) else None),

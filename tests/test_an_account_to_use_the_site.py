@@ -132,7 +132,8 @@ def test_the_feed_is_the_widgets_own_numbers_plus_that_row():
     assert out["free_pick"] is None, "no file, no pick"
     assert out["reports"] is None, "nothing graded, nothing said"
     src = (ROOT / "engine" / "firstlook.py").read_text()
-    assert "widgetfeed.build(web, today)" in src, "the counts are the widget's — a count, never a pick"
+    # The widget's own build, with its parts timed since step AGQ.
+    assert "widgetfeed.build(web, today, " in src, "the counts are the widget's — a count, never a pick"
 
 
 def test_the_endpoint_is_public_and_kept_five_minutes():

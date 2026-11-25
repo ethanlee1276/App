@@ -198,9 +198,10 @@ def build(web: Path = WEB, today: _dt.date | None = None, conn=None, took=None) 
             took.append((part, (now - t0[0]) * 1000.0))
             t0[0] = now
     from engine import widgetfeed
-    out = widgetfeed.build(web, today)
+    # Its own parts, in place of the one "counts" (step AGQ): the record's head, last night, each board's count.
+    out = widgetfeed.build(web, today, **({"took": took} if took is not None else {}))
     out.pop("url", None)
-    mark("counts")
+    t0[0] = time.perf_counter()
     out["free_pick"] = free_pick(web, today)
     mark("free")
     # The newest graded pick, read again only once the journal changed (step AGP, 25 November 2026): the record
