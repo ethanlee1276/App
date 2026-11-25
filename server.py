@@ -1261,6 +1261,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._hoops_whatif(parse_qs(parsed.query))
         if parsed.path in ("/api/lines/books", "/api/lines/books/"):
             return self._lines_books(parse_qs(parsed.query))
+        if parsed.path in ("/api/lines/ladder", "/api/lines/ladder/"):
+            return self._lines_ladder(parse_qs(parsed.query))
         if parsed.path in ("/api/ideas", "/api/ideas/"):
             return self._ideas(parse_qs(parsed.query))
         if parsed.path in ("/api/mybets/replay", "/api/mybets/replay/"):
@@ -5141,6 +5143,44 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the lines could not be read"}', ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _lines_ladder(self, q):
+        """What the books show at every number of one player's market, both
+        sides (sliplive.ladder_prices): the player page's line slider, read
+        once when a reader first moves it (step AEY). Behind the membership,
+        like the books list: these are the books' prices, the line-shopping
+        half of what a member pays for. Read off the same private board and
+        price index the parlay checker reads (askbot.board_at, prices_at)."""
+        from engine import askbot as AB
+        from engine import gate as GATE_
+        from engine import sliplive as SL
+        arg = lambda k: (q.get(k) or [""])[0]              # noqa: E731
+        sport, player, market = arg("sport").lower()[:5], arg("player")[:60].strip(), arg("market")[:40].strip()
+        try:
+            lo, hi = float(arg("lo")), float(arg("hi"))
+        except ValueError:
+            lo = hi = None
+        if sport not in AB.BOARD_FILES or not player or not market or lo is None or hi is None:
+            return self._send(400, b'{"error":"sport, player, market, lo and hi"}', ".json")
+        A = _acct()
+        aconn = A.connect()
+        try:
+            who = self._account(aconn)
+            if not self._entitled(aconn, who):
+                locked = {"error": "The books' prices come with a membership.", "signed_in": bool(who),
+                          "locked": True}
+                return self._send(401 if not who else 402, json.dumps(locked).encode(), ".json")
+        finally:
+            aconn.close()
+        try:
+            path = GATE_.full_board_file(AB.BOARD_FILES[sport])
+            board = AB.board_at(path) if path else None
+            out = SL.ladder_prices(AB.prices_at(path) if path else {}, board, player, market, lo, hi)
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the prices could not be read"}', ".json")
+        if out is None:
+            out = {"player": player, "market": market, "lines": [], "none": True}
         return self._send(200, json.dumps(out).encode(), ".json")
 
     def _ideas(self, q):

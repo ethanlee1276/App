@@ -704,6 +704,7 @@ function plrMarkets(page, kept) {
   const tonight = page.querySelector(".plr-tonight");
   if (!tonight) return;
   tonight.replaceChildren(kept);
+  lineAdjFill(tonight);
   if (tonight.firstElementChild) tonight.insertAdjacentHTML("afterbegin", `<h3 class="plr-h">${plrTonightTitle(page)}</h3>`);
 }
 /* THE PICK A TAP OPENED THIS PAGE ON (app.js openPick; Ethan, 2026-11-17: a pick on the Edge and Most
@@ -805,4 +806,228 @@ document.addEventListener("change", (e) => {
   PLR_PICK[page._plr.key] = { ...(PLR_PICK[page._plr.key] || {}), [log ? "log" : "splits"]: sel.value };
   if (log) plrLogInto(page, sel.value);
   else plrSplitsFor(page, sel.value);
+});
+
+/* THE LINE, MOVED (step AEY; Ethan, 2026-11-25, circling a player page's market chips and writing "Adjust the
+   line": "we should be able too adjust the lines and numbers with a slide or something so users can see different
+   lines"). A slider under each market card's chart moves the line his games are read against: the dashed rule,
+   each bar's cashed-or-missed colour and the count under the chart, the game table's hits, and a strip of his hit
+   rate at that line (every game shown, the last 5 and the last 10). Over or under can be switched; the book's line
+   is one tap back. Off the book's number, a line says what the books pay at the new one (`lineAdjPrice`).
+
+   ONE LINE A STEP, THROUGH THE BOOK'S OWN HALF: a 20.5 moves to 19.5 and 21.5, a whole-number line through whole
+   numbers, from a step under his lowest game (never under the book's lowest, 0.5) to a step over his highest, so
+   every line a game could split is on it.
+
+   HERE, NOT IN app.js: app.js draws each card at the book's line, as it always has, and marks its chart with the
+   player and the market; this page puts the slider under every marked chart when it places the cards
+   (`plrMarkets`), and app.js asks again after a chip switch. A first visit downloads none of it.
+
+   KEPT PER PLAYER AND MARKET (`_lineAdj`), so the page's redraw draws the line where the reader left it, and the
+   redraw holds off for a moment while a thumb is on it (app.js renderPlayers reads `_lineAdjBusy`).
+
+   A MARKET WITH NO BOOK LINE TONIGHT (a history chip) gets the same slider and draws no line until the reader sets
+   one: a line nobody posted is never drawn as if a book had. The pick block stays the book's line, with our chance
+   at that line alone. */
+const _lineAdj = new Map();
+//: Games a card needs before its line can be moved.
+const LINE_ADJ_MIN_GAMES = 3;
+const lineAdjKey = (r) => `${r.player}|${r.market_label || r.market}`;
+const lineAdjHit = (v, line, side) => (side === "UNDER" ? Number(v) < line : Number(v) > line);
+function lineAdjBook(r) {
+  return String(r.side || "OVER").toUpperCase() === "UNDER" ? "UNDER" : "OVER";
+}
+function lineAdjVals(r) {
+  return (r.logs || []).map((l) => Number(l.value)).filter(Number.isFinite);
+}
+function lineAdjRange(r) {
+  const line0 = Number(r.line), vals = lineAdjVals(r);
+  const frac = Math.abs(line0 % 1) > 1e-9 ? 0.5 : 0;
+  const lo = Math.max(frac, Math.floor(Math.min(line0, ...vals)) - 1 + frac);
+  const hi = Math.max(lo, Math.ceil(Math.max(line0, ...vals)) + frac);
+  return { lo, hi, frac };
+}
+function lineAdjState(r) {
+  const a = _lineAdj.get(lineAdjKey(r));
+  if (!a && r.history) return { line: null, side: "OVER" };
+  return { line: a ? a.line : Number(r.line), side: a ? a.side : lineAdjBook(r) };
+}
+//: His bars at a line, or at none: the chart the card first drew (app.js pricedProfileHTML for a priced card,
+//: historyProfileHTML for a history chip), its labels and its colour, with the reader's line.
+function lineAdjBars(r, line, side) {
+  const logs = r.logs || [], mlb = state.sport !== "nfl";
+  const nfl = logs.length && logs[0].week != null && !logs[0].date;
+  const when = (l) => (r.history
+    ? (nfl ? nflWeekWord(l.week, r.sport) : (l.date ? formatGameDate(l.date) : `G ${l.week}`))
+    : (mlb ? (l.date ? formatGameDate(l.date) : "G " + l.week) : nflWeekWord(l.week, r.sport || state.sport)));
+  return gamelogBars(logs.map((l) => l.value), {
+    ...(line == null ? {} : { line, side }), fit: true, w: 320, h: 72,
+    stroke: r.history ? teamPrimaryIn(r.sport, r.team) : teamPrimary(r.team),
+    labels: logs.map((l) => `${when(l)} ${l.home ? "vs" : "@"} ${l.opponent}`),
+  });
+}
+function lineAdjReadHTML(r, line, side) {
+  const vals = lineAdjVals(r), word = side === "UNDER" ? "Under" : "Over";
+  const hits = (xs) => xs.filter((v) => lineAdjHit(v, line, side)).length;
+  const all = hits(vals);
+  // Each part kept whole on a phone: a line breaks between them, never inside "last 10: 8/10".
+  const last = (n) => (vals.length > n ? ` · last ${n}: ${hits(vals.slice(0, n))}/${n}` : "");
+  return `<b>${word} ${line}</b> · ${all} of ${plural(vals.length, "game").replace(" ", " ")} (${
+    Math.round(100 * all / vals.length)}%)${last(5)}${last(10)}`;
+}
+//: What a market with no book line says before the reader sets one.
+const LINE_ADJ_UNSET = "No book line tonight. Move the line to check these games against it";
+function lineAdjHTML(r) {
+  if (lineAdjVals(r).length < LINE_ADJ_MIN_GAMES || !Number.isFinite(Number(r.line))) return "";
+  const { lo, hi } = lineAdjRange(r), st = lineAdjState(r), side = st.side, line = st.line ?? Number(r.line);
+  const moved = r.history ? st.line != null : Math.abs(line - Number(r.line)) > 1e-9 || side !== lineAdjBook(r);
+  const sd = (s, w) => `<button type="button" class="la-sd${side === s ? " on" : ""}" data-side="${s}"
+    aria-pressed="${side === s}">${w}</button>`;
+  const price = !r.history && moved ? lineAdjPriceHTML((_lineAdjPrices.get(lineAdjPriceKey(r)) || {}).d, line, side) : "";
+  return `<div class="line-adj" data-player="${escapeAttr(r.player || "")}" data-mkt="${escapeAttr(r.market_label || r.market || "")}"${
+    r.history ? ' data-history="1"' : ""}>
+    <div class="la-top"><span class="la-read" aria-live="polite">${st.line == null ? LINE_ADJ_UNSET
+      : lineAdjReadHTML(r, line, side)}</span>
+      <span class="la-side" role="group" aria-label="Side">${sd("OVER", "Over")}${sd("UNDER", "Under")}</span></div>
+    ${r.history ? "" : `<div class="la-price" aria-live="polite"${price ? "" : " hidden"}>${price}</div>`}
+    <div class="la-row">
+      <button type="button" class="la-step" data-d="-1" aria-label="Lower the line">&minus;</button>
+      <input type="range" class="la-range" min="${lo}" max="${hi}" step="1" value="${line}"
+        aria-label="Line for ${escapeAttr(r.market_label || "")}" aria-valuetext="${line}">
+      <button type="button" class="la-step" data-d="1" aria-label="Raise the line">+</button>
+    </div>
+    <button type="button" class="la-reset"${moved ? "" : " hidden"}>${r.history ? "Clear the line"
+      : `Back to the book’s ${escapeHtml(String(r.side || "").toLowerCase())} ${r.line}`}</button>
+  </div>`;
+}
+//: The card's row: tonight's priced market, or a history chip read as the slider reads it.
+function lineAdjRowOf(player, mkt, history) {
+  const rows = (typeof _profRows !== "undefined" && _profRows.get(player)) || [];
+  if (history) return lineAdjHistoryRow(rows[0] || { player }, mkt, (playerStats(player) || {})[mkt] || []);
+  return rows.find((r) => (r.market_label || r.market) === mkt && r.line != null) || null;
+}
+//: A market with no book line tonight: the player's games, and the line nearest the average (the average's whole
+//: number and a half, so no game sits on it) for the thumb to start from.
+function lineAdjHistoryRow(r0, label, logs) {
+  const vals = (logs || []).map((l) => Number(l.value)).filter(Number.isFinite);
+  if (vals.length < LINE_ADJ_MIN_GAMES) return null;
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  return { player: (r0 || {}).player, team: (r0 || {}).team, sport: (r0 || {}).sport, market_label: label,
+           line: Math.floor(mean) + 0.5, side: "OVER", logs, history: true };
+}
+//: A slider under every marked chart in `root` that has none, at the line the reader left it.
+function lineAdjFill(root) {
+  (root || document).querySelectorAll(".profile-spark[data-player]").forEach((spark) => {
+    const after = spark.nextElementSibling;
+    if (after && after.classList.contains("line-adj")) return;
+    const r = lineAdjRowOf(spark.dataset.player, spark.dataset.mkt, !!spark.dataset.history);
+    const html = r ? lineAdjHTML(r) : "";
+    if (!html) return;
+    spark.insertAdjacentHTML("afterend", html);
+    // The card came back drawn at the book's line; the reader's comes back with it.
+    if (_lineAdj.has(lineAdjKey(r))) lineAdjDraw(spark.nextElementSibling, r, lineAdjState(r));
+  });
+}
+//: Every reading on the card at (line, side); a null line draws none (a cleared history chip).
+function lineAdjDraw(box, r, st) {
+  const card = box.closest(".profile"), line = st.line, side = st.side;
+  const book = r.history ? line == null : line === Number(r.line) && side === lineAdjBook(r);
+  const spark = card && card.querySelector(".profile-spark");
+  if (spark) spark.innerHTML = lineAdjBars(r, line, side);
+  if (card) card.querySelectorAll(".log-table td.num").forEach((td) => {
+    const hit = line != null && lineAdjHit(td.textContent, line, side);
+    td.classList.toggle("hit", hit);
+    td.classList.toggle("miss", line != null && !hit);
+  });
+  box.querySelector(".la-read").innerHTML = line == null ? LINE_ADJ_UNSET : lineAdjReadHTML(r, line, side);
+  const at = line ?? Number(r.line), range = box.querySelector(".la-range");
+  if (Number(range.value) !== at) range.value = String(at);
+  range.setAttribute("aria-valuetext", String(at));
+  box.querySelectorAll(".la-sd").forEach((b) => {
+    const on = b.dataset.side === side;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
+  box.querySelector(".la-reset").hidden = book;
+  if (!r.history) lineAdjPrice(box, r, at, side, book);
+}
+function lineAdjSet(box, patch) {
+  const r = lineAdjRowOf(box.dataset.player, box.dataset.mkt, !!box.dataset.history);
+  if (!r || !box.closest(".profile")) return;
+  const cur = lineAdjState(r), { lo, hi } = lineAdjRange(r), from = cur.line ?? Number(r.line);
+  const next = patch.reset ? { line: r.history ? null : Number(r.line), side: lineAdjBook(r) }
+    : { line: Math.min(hi, Math.max(lo, patch.line ?? from)), side: patch.side || cur.side };
+  const book = patch.reset || (!r.history && next.line === Number(r.line) && next.side === lineAdjBook(r));
+  if (book) _lineAdj.delete(lineAdjKey(r)); else _lineAdj.set(lineAdjKey(r), next);
+  window._lineAdjBusy = Date.now();
+  lineAdjDraw(box, r, next);
+}
+/* THE BOOKS' PRICES AT THE LINE. The first time a reader moves a priced card's line, the page asks once for what
+   the books show at every number of the slider (/api/lines/ladder, engine/sliplive.ladder_prices, the parlay
+   checker's own reading) and says it under the reading in the parlay checker's words: the best book and its price
+   first, how many books, the chance with the margin out. A number no book prices says so. Nothing of ours at
+   another number: the pick's own chance is on the card, and a line away from it is read as the books price it.
+   Behind the membership, like the books list; a page with no API (the static demo) shows nothing. Kept a minute,
+   as the books list is. */
+const _lineAdjPrices = new Map();
+const LINE_ADJ_PRICES_MS = 60000;
+const lineAdjPriceKey = (r) => `${r.sport || state.sport}|${r.player}|${r.market}`;
+function lineAdjPriceHTML(d, line, side) {
+  if (!d) return "";
+  if (d.locked) return "Every book’s price at every line comes with a membership — <a href=\"#paywall\">see the plans</a>.";
+  if (!Array.isArray(d.lines)) return "";
+  if (d.none) return "No book is pricing this right now.";
+  const word = side === "UNDER" ? "under" : "over";
+  const at = d.lines.find((x) => Math.abs(Number(x.line) - line) < 0.01);
+  const p = at && at[word];
+  if (!p || !(p.books || []).length) return `No book has a price at exactly ${word} ${line}.`;
+  const books = p.books.slice(0, 3).map((b, k) =>
+    `${k ? "" : "<b>"}${escapeHtml(b.book || "Best price")} ${american(b.odds)}${k ? "" : "</b>"}`);
+  const bits = [`Now ${books.join(" · ")}`];
+  if (p.n > 3) bits.push(`${p.n} books`);
+  if (p.fair != null) bits.push(`${Math.round(100 * p.fair)}% with the margin out`);
+  return bits.join(" · ");
+}
+function lineAdjPrice(box, r, line, side, book) {
+  const el = box.querySelector(".la-price");
+  if (!el) return;
+  const key = lineAdjPriceKey(r), hit = _lineAdjPrices.get(key);
+  if (book || (hit && hit.pending)) {
+    if (book) { el.innerHTML = ""; el.hidden = true; }
+    return;
+  }
+  if (hit && Date.now() - hit.at < LINE_ADJ_PRICES_MS) {
+    el.innerHTML = lineAdjPriceHTML(hit.d, line, side);
+    el.hidden = !el.innerHTML;
+    return;
+  }
+  _lineAdjPrices.set(key, { pending: true, at: Date.now(), d: hit && hit.d });
+  const { lo, hi } = lineAdjRange(r), sport = r.sport || state.sport;
+  const q = `/api/lines/ladder?sport=${encodeURIComponent(sport)}&player=${encodeURIComponent(r.player)}&market=${
+    encodeURIComponent(r.market || "")}&lo=${lo}&hi=${hi}`;
+  fetch(q).then((res) => (res.status === 401 || res.status === 402 ? { locked: true } : res.ok ? res.json() : null))
+    .catch(() => null)
+    .then((d) => {
+      _lineAdjPrices.set(key, { at: Date.now(), d });
+      // Said where the reader has the line now, on whichever card shows it now: a redraw may have replaced the box.
+      const st = lineAdjState(r), atBook = st.line === Number(r.line) && st.side === lineAdjBook(r);
+      document.querySelectorAll(".line-adj:not([data-history])").forEach((b) => {
+        const el2 = b.querySelector(".la-price");
+        if (!el2 || b.dataset.player !== r.player || b.dataset.mkt !== (r.market_label || r.market || "")) return;
+        el2.innerHTML = atBook ? "" : lineAdjPriceHTML(d, st.line, st.side);
+        el2.hidden = !el2.innerHTML;
+      });
+    });
+}
+document.addEventListener("input", (e) => {
+  const range = e.target.closest && e.target.closest(".la-range");
+  if (range) lineAdjSet(range.closest(".line-adj"), { line: Number(range.value) });
+});
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest(".la-step, .la-sd, .la-reset");
+  const box = b && b.closest(".line-adj");
+  if (!box) return;
+  if (b.classList.contains("la-reset")) return lineAdjSet(box, { reset: true });
+  if (b.classList.contains("la-sd")) return lineAdjSet(box, { side: b.dataset.side });
+  lineAdjSet(box, { line: Number(box.querySelector(".la-range").value) + Number(b.dataset.d) });
 });

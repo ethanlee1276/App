@@ -61,7 +61,11 @@ def test_it_is_gone_for_every_sport_because_there_is_only_one_board():
     i = HTML.index('id="view-recommended"')
     board = HTML[i:HTML.index('id="view-bankroll"', i)]
     assert "<input" not in board, "the board section grew an input again"
-    assert "type=\"range\"" not in HTML and "type=\"range\"" not in APP, \
+    # One slider on the site, and it filters nothing: the player card's line, moved to read his games and the
+    # books' prices at another number (step AEY; Ethan, 25 November 2026: "we should be able too adjust the
+    # lines and numbers with a slide or something so users can see different lines").
+    assert "type=\"range\"" not in HTML, "a slider is back in the page's markup"
+    assert APP.count("type=\"range\"") == 1 and '<input type="range" class="la-range"' in APP, \
         "a slider is back somewhere on the site"
     # Every league in the switcher, named, so a new one cannot be added
     # with a board of its own without this list moving.

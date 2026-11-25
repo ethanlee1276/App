@@ -9892,12 +9892,20 @@ over his highest; Over and Under switch the side. The chart's line, the green an
 chart, the game table's green numbers and the reading above the slider ("Over 3.5 · 2 of 12 games (17%) · last 5:
 1/5 · last 10: 2/10") all move with it, and "Back to the book's under 2.5" puts it back. The line you set is kept
 for that player and market while the page is open, and a refresh that lands within four seconds of a move leaves
-the card alone, so it never jumps back under a thumb. What the slider does not move: the pick itself (the book's line, its
-price, our chance, the stake). Our chance and the books' prices at other lines are not on the page, since the board
-we serve leaves the alternate lines out (audit M-3), so the slider reads his games and nothing else. A market with
-no book line tonight (the history chips) gets the same slider but draws no line until you set one, because a line
-nobody posted is never drawn as if a book had; "Clear the line" takes it away again. Next (step 2): our chance and
-the best book price at the line you pick, fetched when you move it, for members only, the way the books list is.
+the card alone, so it never jumps back under a thumb. Once the line is off the book's number, a line under the
+reading says what the books pay there, in the parlay checker's words: "Now FanDuel −250 · BetMGM −270 · Caesars
+−275 · 4 books · 70% with the margin out", or "No book has a price at exactly over 3.5." The board we serve leaves
+the alternate lines out (audit M-3), so the page asks for them once per card when you first move it
+(`/api/lines/ladder`, engine/sliplive.ladder_prices: the parlay checker's own price reading off the private board),
+members only, like the books list, and keeps them a minute. What the slider does not move: the pick itself (the
+book's line, its price, our chance, the stake). It says no chance of ours at another number: the pick's chance is on
+the card, and a line away from it is read as the books price it. A market with no book line tonight (the history
+chips) gets the same slider but draws no line until you set one, because a line nobody posted is never drawn as if a
+book had; "Clear the line" takes it away again. The rule from 14 September that took the board's filter sliders
+away still holds: this is the only slider on the site, and it filters nothing. It loads with the player's page
+(js/playerpage.js), not with the first visit: built into app.js it put the first visit 2,207 bytes over its budget,
+and your answer on 19 November, asked whether to raise that budget or trim, was "probably trim it". The first
+visit is 392,442 bytes of its 393,216.
 
 **AEX. The NFL's carries benched** (step 940; 25 November; nothing to run). Under decision 19 ("do whatever you
 think. All I want is picks that win the most on there"), the rule you set for the quarterback completions ("bench

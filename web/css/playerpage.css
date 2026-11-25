@@ -207,3 +207,28 @@ html:not([data-theme="light"]) body.plr-on #view-players .gl-table .gl-fix {
   .plr-pts, .plr-side:last-child .plr-pts { margin: 0; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { .plr-mark { opacity: .08; } }
+
+/* THE LINE, MOVED (js/playerpage.js lineAdj; Ethan, 2026-11-25: "adjust the lines and numbers with a slide"). The
+   thumb is the dashed rule's colour, so the line the chart draws and the line in the hand read as one thing; the
+   steps and the side switch are a thumb's size. */
+.line-adj { display: grid; gap: 6px; padding: 2px 18px 12px; }
+.la-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.la-read { color: var(--text-dim); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; min-width: 0; }
+.la-read b { color: var(--text); font-weight: 800; }
+.la-side { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--fill-tone); }
+.la-sd { border: 0; background: transparent; color: var(--text-dim); font: inherit; font-size: var(--fs-2xs);
+  font-weight: 700; min-height: 32px; padding: 0 12px; border-radius: 999px; cursor: pointer; }
+.la-sd.on { background: var(--grad-chip); color: var(--text); }
+.la-price { font-size: var(--fs-2xs); color: var(--text-dim); line-height: 1.45; }
+.la-price b { color: var(--text); }
+.la-price[hidden] { display: none; }
+.la-row { display: flex; align-items: center; gap: 10px; }
+.la-step { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 0;
+  background: var(--fill-tone); color: var(--text); font: inherit; font-size: var(--fs-lg); font-weight: 800;
+  line-height: 1; cursor: pointer; }
+.la-step:hover { background: var(--panel-2); }
+.la-range { flex: 1 1 auto; min-width: 0; height: 40px; margin: 0; accent-color: var(--warn); cursor: pointer;
+  touch-action: pan-y; }
+.la-reset { justify-self: start; border: 0; background: none; padding: 4px 0; color: var(--brand-2); font: inherit;
+  font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; }
+.la-reset[hidden] { display: none; }

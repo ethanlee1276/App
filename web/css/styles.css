@@ -1558,28 +1558,6 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .profile-spark .glbars-fit { display: block; height: clamp(72px, 11vw, 112px); }
 .glbars-cap { color: var(--text-mute); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
 
-/* THE LINE, MOVED (app.js lineAdj; Ethan, 2026-11-25: "adjust the lines and numbers with a slide"). The thumb is
-   the dashed rule's colour, so the line the chart draws and the line in the hand read as one thing; the steps and
-   the side switch are a thumb's size. */
-.line-adj { display: grid; gap: 6px; padding: 2px 18px 12px; }
-.la-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.la-read { color: var(--text-dim); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; min-width: 0; }
-.la-read b { color: var(--text); font-weight: 800; }
-.la-side { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--fill-tone); }
-.la-sd { border: 0; background: transparent; color: var(--text-dim); font: inherit; font-size: var(--fs-2xs);
-  font-weight: 700; min-height: 32px; padding: 0 12px; border-radius: 999px; cursor: pointer; }
-.la-sd.on { background: var(--grad-chip); color: var(--text); }
-.la-row { display: flex; align-items: center; gap: 10px; }
-.la-step { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 0;
-  background: var(--fill-tone); color: var(--text); font: inherit; font-size: var(--fs-lg); font-weight: 800;
-  line-height: 1; cursor: pointer; }
-.la-step:hover { background: var(--panel-2); }
-.la-range { flex: 1 1 auto; min-width: 0; height: 40px; margin: 0; accent-color: var(--warn); cursor: pointer;
-  touch-action: pan-y; }
-.la-reset { justify-self: start; border: 0; background: none; padding: 4px 0; color: var(--brand-2); font: inherit;
-  font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; }
-.la-reset[hidden] { display: none; }
-
 /* CHARTS ARE PICTURES. Ethan, 2026-08-17: holding a finger on a chart
    (the record curve especially) started iOS text selection of the page
    around it. Nothing in an svg chart is selectable text and the callout

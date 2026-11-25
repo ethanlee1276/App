@@ -67,6 +67,8 @@ NHL_BOX_FILE = "live_nhl_box.json"
 FAST_FRESH_S = 15 * 60
 #: Books listed per leg, best price first.
 MAX_BOOKS = 8
+#: The most numbers one read of a player's ladder prices (`ladder_prices`): a slider's range is a few dozen.
+LADDER_MAX = 80
 
 #: A leg's number in the box score, by our market key: the stats summed.
 #: Football reads `nflpreseason.BOX_MARKETS` (carries are rushing
@@ -260,6 +262,39 @@ def leg_prices(leg: dict, index: dict | None, board: dict | None = None) -> dict
     if main is not None and market not in SCORER_MARKETS and abs(main - line) >= 0.01:
         out["main_line"] = main
     return out
+
+
+def ladder_prices(index: dict | None, board: dict | None, player: str, market: str, lo, hi) -> dict | None:
+    """What the books show at every number from ``lo`` to ``hi``, a whole number apart, both sides, for one
+    player's market: the player page's line slider (step AEY, 25 November 2026). Ethan, circling a player
+    page's market chips: "we should be able too adjust the lines and numbers with a slide or something so
+    users can see different lines".
+
+    Each number is `leg_prices`' reading, the parlay checker's own: the bettable books best first, how many,
+    the market's chance with the margin out where a book hangs both sides, and the other side's best. A
+    number no book hangs is left out, so the page says so. No chance of ours at another number: the pick's
+    own chance is on the card, and a number away from it is read here as the books price it, nothing more.
+    None when we hold no price for the player's market, or the range is not one."""
+    if market in GAME_MARKETS:
+        return None
+    lo, hi = _num(lo), _num(hi)
+    if lo is None or hi is None or lo < 0 or hi < lo or hi - lo + 1 > LADDER_MAX:
+        return None
+    e = (index or {}).get((_key(player), market))
+    if not e:
+        return None
+    lines = []
+    for i in range(int(round(hi - lo)) + 1):
+        line = round(lo + i, 2)
+        at = {"line": line}
+        for side in ("over", "under"):
+            got = leg_prices({"player": player, "market": market, "side": side, "line": line}, index, board)
+            if got and got.get("books"):
+                at[side] = {k: got[k] for k in ("books", "n", "fair", "best", "book") if k in got}
+        if len(at) > 1:
+            lines.append(at)
+    return {"player": player, "market": market, "line": e.get("line"), "side": e.get("side"),
+            "as_of": _board_stamp(board, game=False), "lines": lines}
 
 
 def _decimal(odds) -> float:
