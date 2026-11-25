@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGN. The role chart reads the player's own rows, not the league's** (step 982; 25 November; nothing to run).
+This is what made Kucherov's role chart take 22.6 s and Soto's 32.8 s. The chart asks the database for the
+player's seasons, then for one season's games in order, over a few kinds of numbers at once. Our database file has
+no statistics for SQLite to plan with, and for that shape of question it chose to walk the table in its own stored
+order: every row the league has, to find one player's seasons, and every row of the league's season, to find one
+player's games. The more seasons and players a league has stored, the longer it took, which is why baseball was
+the worst. Both reads now go straight to the player's own rows by the indexes made for that (the same fix other
+parts of the site already use). On 2.6 million hockey rows here the whole chart went from 217 ms to 1 ms, with the
+same chart. The other player-page reads I checked already take the player's own rows.
+
 **AGM. A roster rewritten the same is read once** (step 981; 25 November; nothing to run). Timing college pages on
 the live site: Jeremiah Smith's page took 1.4 s, 1.3 s of it finding him on the college roster, and the next
 college pages took no time there. The roster step rewrites every league's roster file every half hour with a new

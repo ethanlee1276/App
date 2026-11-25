@@ -145,14 +145,29 @@ def _marks(xs) -> str:
     return ",".join("?" * len(xs))
 
 
+def _pinned(conn, sql: str, index: str, args) -> list:
+    """`sql`'s rows read by `index` (its ``{hint}`` is ``INDEXED BY`` that index, as engine/statlogs pins its own).
+
+    ONE PLAYER'S ROWS, NOT THE LEAGUE'S (step AGN, 25 November 2026; Ethan: "Ok keep going and work more on these
+    issues as they are not fixed"). Asked for his seasons, or one season's games in order, over a list of markets,
+    and with no statistics on the file to plan by, SQLite read them off the table's own key (sport, season, period,
+    ...), the order those reads ask for: his seasons off every row the league has, his season's games off every row
+    of the league's season. Nikita Kucherov's role chart took 22.6 s on the live site and Juan Soto's 32.8 s. Off
+    his own rows: on 2.6 million hockey rows here, 208 ms and 17 ms became 1 ms and under 1. A file without the index
+    reads as before."""
+    try:
+        return conn.execute(sql.format(hint=f" INDEXED BY {index}"), args).fetchall()
+    except sqlite3.OperationalError:
+        return conn.execute(sql.format(hint=""), args).fetchall()
+
+
 def _logged(conn, sport: str, name: str, season: int) -> list:
     """His games from the box scores, oldest first, one per game."""
     spec = LOGGED[sport]
     markets = sorted({m for _k, ms in spec for m in ms} | ({STARTED[sport]} if sport in STARTED else set()))
-    rows = conn.execute(
-        f"SELECT period, game_id, team, opponent, position, home, market, value FROM player_game_logs "
-        f"WHERE sport=? AND player=? AND season=? AND market IN ({_marks(markets)}) ORDER BY period, game_id",
-        (sport, name, season, *markets)).fetchall()
+    rows = _pinned(conn, "SELECT period, game_id, team, opponent, position, home, market, value FROM player_game_logs"
+                         "{hint} WHERE sport=? AND player=? AND season=? AND market IN (" + _marks(markets) + ") "
+                         "ORDER BY period, game_id", "idx_logs_player", (sport, name, season, *markets))
     games: dict = {}
     for period, gid, team, opp, pos, home, market, value in rows:
         leg = 1
@@ -450,10 +465,10 @@ def chart(conn, sport: str, player: str, season: int | None = None, took=None) -
     if not name:
         return {}
     markets = sorted({m for _k, ms in LOGGED[sport] for m in ms})
-    seasons = [int(s) for (s,) in conn.execute(
-        f"SELECT DISTINCT season FROM player_game_logs WHERE sport=? AND player=? "
-        f"AND market IN ({_marks(markets)}) AND season IS NOT NULL ORDER BY season DESC",
-        (sport, name, *markets))]
+    seasons = [int(s) for (s,) in _pinned(
+        conn, "SELECT DISTINCT season FROM player_game_logs{hint} WHERE sport=? AND player=? "
+              "AND market IN (" + _marks(markets) + ") AND season IS NOT NULL ORDER BY season DESC",
+        "idx_logs_lookup", (sport, name, *markets))]
     mark("seasons")
     if not seasons:
         return {}
