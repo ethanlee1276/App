@@ -42,8 +42,8 @@ def test_the_page_holds_its_cards_charts_until_its_numbers_land():
     assert "if (_ccHeld.length) setTimeout(chartsAfterPage, 4000);" in mount
     assert "el.isConnected && !el.dataset.on && m.mount(el)" in mount
     after = _fn(APP, "function chartsAfterPage() {")
-    assert "_ccHeld = [];" in after and "mountCharts({ querySelectorAll: () => held }, true);" in after, \
-        "released past the hold, so the four seconds' fallback draws them too"
+    assert "mountCharts({ querySelectorAll: () => _ccHeld.splice(0) }, true);" in after, \
+        "every held slot, released past the hold, so the four seconds' fallback draws them too"
     fill = PAGE[PAGE.index("  const fill = (d) => {"):]
     fill = fill[:fill.index("  };\n") + 5]
     assert fill.index("window._plrFilledRoute = state.playerSlug;") < fill.index("plrFill(page, d);") < fill.index(
@@ -57,8 +57,7 @@ def test_two_draws_share_one_ask_for_the_players_logs():
     if not shutil.which("node"):
         print("      (skipped: no node)")
         return
-    fn = APP[APP.index("const _logsAsk = new Map();"):]
-    fn = fn[:fn.index("\n}\n") + 3]
+    fn = _fn(APP, "function oneAsk(key, make) {") + _fn(APP, "async function leagueLogs(player, sport) {")
     prog = ("let calls = 0; const state = { sport: 'nfl' };\n"
             "const fetch = async (u) => { calls++; await new Promise((r) => setTimeout(r, 20));"
             " return { ok: true, json: async () => ({ stats: { Receptions: [{ week: 12, value: 7 }] } }) }; };\n"
@@ -73,6 +72,33 @@ def test_two_draws_share_one_ask_for_the_players_logs():
     assert out.returncode == 0, out.stderr[-800:]
     assert json.loads(out.stdout) == {"calls": 2, "same": True, "again": 7}, \
         "one ask for two draws at once; a later draw asks afresh"
+
+
+def test_three_draws_share_one_ask_for_the_players_search():
+    """STEP AFS: Jahmyr Gibbs's address drew the players view three times as it came up, and each draw asked the
+    server for the same search (three answers at once, landing 1.4, 2.1 and 2.2 s in); the page's own request
+    waited for the last. A search asked while the same one is out shares it."""
+    import shutil
+    import subprocess
+    import tempfile
+    if not shutil.which("node"):
+        print("      (skipped: no node)")
+        return
+    prog = ("let calls = 0; const LEAGUE_RETRY_MS = 30000; const _leagueCache = new Map();"
+            " const searchLeague = () => 'nfl';\n"
+            "const fetch = async (u) => { calls++; await new Promise((r) => setTimeout(r, 20));"
+            " return { ok: true, json: async () => ({ players: [{ player: 'Jahmyr Gibbs', team: 'DET' }] }) }; };\n"
+            + _fn(APP, "function oneAsk(key, make) {") + _fn(APP, "async function leagueSearch(q) {") +
+            "(async () => { const got = await Promise.all([leagueSearch('jahmyr gibbs'), leagueSearch('jahmyr gibbs'),"
+            " leagueSearch('jahmyr gibbs')]); const again = await leagueSearch('jahmyr gibbs');"
+            " console.log(JSON.stringify({ calls, n: got.map((g) => g.length), again: again[0].player })); })();\n")
+    path = os.path.join(tempfile.mkdtemp(), "t.js")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(prog)
+    out = subprocess.run(["node", path], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-800:]
+    assert json.loads(out.stdout) == {"calls": 1, "n": [1, 1, 1], "again": "Jahmyr Gibbs"}, \
+        "one ask for three draws, and the answer kept for the next"
 
 
 def _run(answer_after):

@@ -97,12 +97,13 @@ def test_the_record_is_asked_once():
     if not shutil.which("node"):
         print("      (skipped: no node)")
         return
-    decl = "let _recordCache = null, _recordAsk = null;\n"
+    decl = "let _recordCache = null;\n"
     assert decl in APP
     prog = ("let calls = 0;\n"
             "const boardFetch = (u) => { calls++; return new Promise((r) => setTimeout(() => r({ ok: true, "
             "json: async () => ({ n: 1 }) }), 20)); };\n"
-            "const adoptPooledRecord = (d) => d;\n" + decl + _fn(APP, "async function loadRecordOnce() {")
+            "const adoptPooledRecord = (d) => d;\n" + decl + _fn(APP, "function oneAsk(key, make) {")
+            + _fn(APP, "async function loadRecordOnce() {")
             + "\n(async () => { const got = await Promise.all([loadRecordOnce(), loadRecordOnce(), loadRecordOnce()]);"
               " const again = await loadRecordOnce();"
               " console.log(JSON.stringify({ calls, same: got.every((g) => g === got[0]) && again === got[0],"

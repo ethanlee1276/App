@@ -5214,25 +5214,23 @@ function renderEmptySlate() {
    edge audit showed the model's opinion ALONE doesn't beat the close.
    Every row says where its number comes from.
    ============================================================ */
-let _recordCache = null, _recordAsk = null;
+let _recordCache = null;
 async function loadRecordOnce() {
   if (_recordCache !== null) return _recordCache;
   // ONE REQUEST FOR EVERY CALLER (step AFK): three of Home's blocks asked at once and the file came down twice.
-  if (_recordAsk) return _recordAsk;
   /* THE SLIM COPY FIRST (the speed pass, 2026-10-09). record_head.json is
      the record without the sections only the Record page reads — that
      page fetches the whole file itself — and it was over half the bytes
      Home downloaded for its first screen. A box that has not exported
      since this shipped has no slim copy yet; the whole record answers. */
-  _recordAsk = (async () => {
+  return oneAsk("record", async () => {
     try {
       let res = await boardFetch("data/record_head.json", { cache: "no-cache" });
       if (!res.ok) res = await boardFetch("data/record.json", { cache: "no-cache" });
       _recordCache = res.ok ? adoptPooledRecord(await res.json()) : {};
     } catch (e) { _recordCache = {}; }
     return _recordCache;
-  })();
-  try { return await _recordAsk; } finally { _recordAsk = null; }
+  });
 }
 
 /* ONE RECORD. Ethan, 2026-09-22: "we want both records and all that
@@ -14708,17 +14706,27 @@ const LEAGUE_RETRY_MS = 30000;
    search opened from the UFC tab and the search's own UFC chip all asked the NFL: "No NFL players match “Islam
    Makhachev”". Set by the UFC tab, the chip, a UFC pick and a #player/ufc/ address; any other page clears it. */
 function searchLeague() { return state.searchLeague || state.sport; }
+/* ONE ASK FOR EVERY DRAW (steps AFN and AFS, 2026-11-25). A player's address drew the players view three
+   times as the page came up (the boot, the board, the account), and each draw asked the server for the same
+   search, the same logs: three answers at once from a one-core server, landing 1.4, 2.1 and 2.2 s in, where
+   only the last draw goes on. A second ask while the first is out shares it. */
+function oneAsk(key, make) {
+  const a = oneAsk.m || (oneAsk.m = new Map());
+  return a.get(key) || a.set(key, make().finally(() => a.delete(key))).get(key);
+}
 async function leagueSearch(q) {
   const lg = searchLeague(), key = `${lg}|${q}`;
   const hit = _leagueCache.get(key);
   if (hit && (hit.ok || Date.now() - hit.at < LEAGUE_RETRY_MS)) return hit.players;
-  let players = [], ok = false;
-  try {
-    const r = await fetch(`/api/players/search?q=${encodeURIComponent(q)}&sport=${encodeURIComponent(lg)}&scope=sport`);
-    if (r.ok) { players = (await r.json()).players || []; ok = true; }
-  } catch (e) {}
-  _leagueCache.set(key, { players, ok, at: Date.now() });
-  return players;
+  return oneAsk(`s|${key}`, async () => {
+    let players = [], ok = false;
+    try {
+      const r = await fetch(`/api/players/search?q=${encodeURIComponent(q)}&sport=${encodeURIComponent(lg)}&scope=sport`);
+      if (r.ok) { players = (await r.json()).players || []; ok = true; }
+    } catch (e) {}
+    _leagueCache.set(key, { players, ok, at: Date.now() });
+    return players;
+  });
 }
 
 /* A LEAGUE SEARCH WAITS FOR A PAUSE. Ethan, 2026-11-16: "players are not
@@ -14743,15 +14751,10 @@ async function leagueSearchAfterPause(q, seq, host) {
 /* A hit's logs come from the hit's OWN league. Reading state.sport here
    asked the NFL endpoint for a WNBA guard and got an empty card back —
    the exact shape of "search found him but the page has nothing". */
-const _logsAsk = new Map();
 async function leagueLogs(player, sport) {
-  const lg = sport || state.sport, key = `${lg}|${player}`;
-  // ONE ASK FOR TWO DRAWS (step AFN): a page drawn again before the first draw's logs came back (the board
-  // landing) asked the server for the same player's logs a second time.
-  if (!_logsAsk.has(key)) _logsAsk.set(key, fetch(`/api/players/logs?sport=${encodeURIComponent(lg)}&player=${encodeURIComponent(player)}`)
-    .then((r) => (r.ok ? r.json() : {})).then((d) => (d && d.stats) || {}, () => ({}))
-    .finally(() => _logsAsk.delete(key)));
-  return _logsAsk.get(key);
+  const lg = sport || state.sport;
+  return oneAsk(`l|${lg}|${player}`, () => fetch(`/api/players/logs?sport=${encodeURIComponent(lg)}&player=${encodeURIComponent(player)}`)
+    .then((r) => (r.ok ? r.json() : {})).then((d) => (d && d.stats) || {}, () => ({})));
 }
 
 /* ---------------- A search that forgives ----------------
@@ -15050,9 +15053,7 @@ function mountCharts(root, all) {
   if (now.length) ccLoad().then((m) => m && m.mount && now.forEach((el) => el.isConnected && !el.dataset.on && m.mount(el)));
 }
 function chartsAfterPage() {
-  const held = _ccHeld;
-  _ccHeld = [];
-  if (held.length) mountCharts({ querySelectorAll: () => held }, true);
+  mountCharts({ querySelectorAll: () => _ccHeld.splice(0) }, true);
 }
 /* A PAGE REDRAWN AROUND A CHART KEEPS IT. The pick page and the player
    page redraw every minute with the board; a chart drawn again each time

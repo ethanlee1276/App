@@ -9883,6 +9883,12 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AFS. Three draws of a player's page share one search** (step 961; 25 November; nothing to run). Follow-up to
+AFK. Opening Jahmyr Gibbs's address on the live site, the players view drew three times as the site came up, and each
+draw asked the server for the same player search: three answers at once from the one-core server, landing 1.4, 2.1
+and 2.2 s in. Only the last draw goes on, so the page asked for Gibbs's own numbers at 2.2 s when it could have at
+1.4 s. A search, a player's games or the record file asked while the same one is already out now shares it.
+
 **AFR. Why college's bold picks aren't a kind on paper yet** (step 960; 25 November; nothing to run). Checking
 step AEE on the morning's learn pass (03:17 Eastern): the NFL's picks bolder than the books are a kind on paper, as
 meant (they said 71.9% and hit 51.0% over 245 settled picks). College's are no kind at all, though the bold book's
