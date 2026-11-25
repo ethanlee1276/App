@@ -14461,6 +14461,10 @@ async function renderPlayers() {
   const own = routed && (players.find((p) => searchNorm(p) === searchNorm(state.search))
     || (players.length === 1 && players[0]));
   if (own) {
+    // THE READER IS MOVING THIS PLAYER'S LINE (`lineAdj`): the card stays as it is for a moment, so a minute's
+    // redraw never pulls the slider out from under a thumb. Its rows are this tick's either way.
+    if (Date.now() - _lineAdjBusy < LINE_ADJ_HOLD_MS
+        && [...host.querySelectorAll(".line-adj")].some((b) => b.dataset.player === own)) return;
     /* PRICED TONIGHT: the page's markets are the player's cards at full
        depth — the books, the line's moves, the script, the checks, the sim
        lab — every one of the pick page's sections, on the player's own page. */
@@ -15248,18 +15252,18 @@ function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
   const door = inPage ? "" : propAttrs(r);
   const tiles = [["L1", f.last1], ["L3", f.last3], ["L5", f.last5], ["L10", f.last10], ["Season", f.season]]
     .map(([k, v]) => `<div class="form-tile"><div class="k">${k}</div><div class="v">${v == null ? "—" : v}</div></div>`).join("");
-  const vals = (r.logs || []).map((l) => l.value);
   // MLB/NBA logs are one GAME per row (with a real date); NFL logs are weeks.
   const mlb = state.sport !== "nfl";
-  // A game is a hit when the PICK cashed: under the line for an under.
-  const under = String(r.side || "").toUpperCase() === "UNDER";
+  // A game is a hit when the PICK cashed: under the line for an under. The
+  // line and side are the reader's where the slider moved them (`lineAdj`).
+  const at = lineAdjState(r);
   const rows = (r.logs || []).map((l) => {
-    const hit = under ? l.value < r.line : l.value > r.line;
+    const hit = lineAdjHit(l.value, at.line, at.side);
     // "Wk" is football vocabulary — an MLB log without a stored date is
     // still a GAME index, not a week.
     const when = mlb ? (l.date ? formatGameDate(l.date) : `G ${l.week}`) : nflWeekWord(l.week, r.sport || state.sport);
     return `<tr><td>${escapeHtml(when)}</td><td>${l.home ? "vs" : "@"} ${escapeHtml(l.opponent)}</td>
-      <td class="num ${hit ? "hit" : "miss"}">${l.value}</td></tr>`;
+      <td class="num ${hit ? "hit" : "miss"}" data-v="${escapeAttr(String(l.value))}">${l.value}</td></tr>`;
   }).join("");
   const grad = `linear-gradient(135deg, ${teamPrimary(r.team)}, transparent)`;
   /* ONE OUTERMOST ELEMENT, always. The market chips re-render this card
@@ -15274,11 +15278,8 @@ function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
         escapeHtml(r.grade)}</span>`, door)}
       ${chips}
       <div class="form-tiles">${tiles}</div>
-      <div class="profile-spark">${gamelogBars(vals, {
-        line: r.line, side: r.side, fit: true, stroke: teamPrimary(r.team), w: 320, h: 72,
-        labels: (r.logs || []).map((l) =>
-          `${mlb ? (l.date ? formatGameDate(l.date) : "G " + l.week) : nflWeekWord(l.week, r.sport || state.sport)} ${l.home ? "vs" : "@"} ${l.opponent}`),
-      })}</div>
+      <div class="profile-spark">${profileBarsHTML(r, at.line, at.side)}</div>
+      ${lineAdjHTML(r)}
       <table class="log-table">
         <tr><th>${mlb ? "Game" : "Week"}</th><th>Opponent</th><th style="text-align:right">${escapeHtml(r.market_label)}</th></tr>
         ${rows}
@@ -15331,6 +15332,148 @@ function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
     ? `<div class="profile-deep">${art}${propDepthHTML(r)}</div>`
     : art;
 }
+
+/* THE LINE, MOVED (Ethan, 2026-11-25, circling a player page's market chips and writing "Adjust the line": "we
+   should be able too adjust the lines and numbers with a slide or something so users can see different lines").
+   A slider under the chart moves the line his games are read against: the dashed rule, each bar's cashed-or-missed
+   colour and the count under the chart, the game table's hits, and a strip of his hit rate at that line (every
+   game shown, the last 5 and the last 10). Over or under can be switched; the book's line is one tap back.
+
+   ONE LINE A STEP, THROUGH THE BOOK'S OWN HALF: a 20.5 moves to 19.5 and 21.5, a whole-number line through whole
+   numbers, from a step under his lowest game (never under the book's lowest, 0.5) to a step over his highest, so
+   every line a game could split is on it.
+
+   KEPT PER PLAYER AND MARKET (`_lineAdj`), so the board's minute redraw draws the line where the reader left it,
+   and a redraw holds off for a moment while a thumb is on it (`renderPlayers`).
+
+   HISTORY ONLY. What each line would have done in the games on the card. The pick block below stays the book's
+   line, with our chance and its price at that line alone. */
+const _lineAdj = new Map();
+let _lineAdjBusy = 0;
+const LINE_ADJ_HOLD_MS = 4000;
+//: Games a card needs before its line can be moved.
+const LINE_ADJ_MIN_GAMES = 3;
+const lineAdjKey = (r) => `${r.player}|${r.market_label || r.market}`;
+const lineAdjHit = (v, line, side) => (side === "UNDER" ? Number(v) < line : Number(v) > line);
+function lineAdjVals(r) {
+  return (r.logs || []).map((l) => Number(l.value)).filter(Number.isFinite);
+}
+function lineAdjRange(r) {
+  const line0 = Number(r.line), vals = lineAdjVals(r);
+  const frac = Math.abs(line0 % 1) > 1e-9 ? 0.5 : 0;
+  const lo = Math.max(frac, Math.floor(Math.min(line0, ...vals)) - 1 + frac);
+  const hi = Math.max(lo, Math.ceil(Math.max(line0, ...vals)) + frac);
+  return { lo, hi, frac };
+}
+function lineAdjState(r) {
+  const a = _lineAdj.get(lineAdjKey(r));
+  // A market with no book line tonight draws none until the reader sets one: a line nobody posted is never
+  // drawn as if a book had (test_newlook, "the history chart invented a threshold").
+  if (!a && r.history) return { line: null, side: "OVER" };
+  return { line: a ? a.line : Number(r.line), side: (a ? a.side : String(r.side || "OVER")).toUpperCase() === "UNDER"
+    ? "UNDER" : "OVER" };
+}
+function profileBarsHTML(r, line, side) {
+  const mlb = state.sport !== "nfl";
+  return gamelogBars((r.logs || []).map((l) => l.value), {
+    ...(line == null ? {} : { line, side }), fit: true, stroke: teamPrimary(r.team), w: 320, h: 72,
+    labels: (r.logs || []).map((l) =>
+      `${mlb ? (l.date ? formatGameDate(l.date) : "G " + l.week) : nflWeekWord(l.week, r.sport || state.sport)} ${l.home ? "vs" : "@"} ${l.opponent}`),
+  });
+}
+function lineAdjReadHTML(r, line, side) {
+  const vals = lineAdjVals(r), word = side === "UNDER" ? "Under" : "Over";
+  const hits = (xs) => xs.filter((v) => lineAdjHit(v, line, side)).length;
+  const all = hits(vals);
+  // Each part kept whole on a phone: a line breaks between them, never inside "last 10: 8/10".
+  const last = (n) => (vals.length > n ? ` · last\u00a0${n}:\u00a0${hits(vals.slice(0, n))}/${n}` : "");
+  return `<b>${word} ${line}</b> · ${all}\u00a0of\u00a0${plural(vals.length, "game").replace(" ", "\u00a0")}\u00a0(${
+    Math.round(100 * all / vals.length)}%)${last(5)}${last(10)}`;
+}
+//: What a market with no book line says before the reader sets one.
+const LINE_ADJ_UNSET = "No book line tonight. Move the line to check these games against it";
+function lineAdjHTML(r) {
+  if (lineAdjVals(r).length < LINE_ADJ_MIN_GAMES || !Number.isFinite(Number(r.line))) return "";
+  const { lo, hi } = lineAdjRange(r), st = lineAdjState(r), side = st.side, line = st.line ?? Number(r.line);
+  const moved = r.history ? st.line != null
+    : Math.abs(line - Number(r.line)) > 1e-9 || side !== String(r.side || "OVER").toUpperCase();
+  const sd = (s, w) => `<button type="button" class="la-sd${side === s ? " on" : ""}" data-side="${s}"
+    aria-pressed="${side === s}">${w}</button>`;
+  return `<div class="line-adj" data-player="${escapeAttr(r.player || "")}" data-mkt="${escapeAttr(r.market_label || r.market || "")}"${
+    r.history ? ' data-history="1"' : ""}>
+    <div class="la-top"><span class="la-read" aria-live="polite">${st.line == null ? LINE_ADJ_UNSET
+      : lineAdjReadHTML(r, line, side)}</span>
+      <span class="la-side" role="group" aria-label="Side">${sd("OVER", "Over")}${sd("UNDER", "Under")}</span></div>
+    <div class="la-row">
+      <button type="button" class="la-step" data-d="-1" aria-label="Lower the line">&minus;</button>
+      <input type="range" class="la-range" min="${lo}" max="${hi}" step="1" value="${line}"
+        aria-label="Line for ${escapeAttr(r.market_label || "")}" aria-valuetext="${line}">
+      <button type="button" class="la-step" data-d="1" aria-label="Raise the line">+</button>
+    </div>
+    <button type="button" class="la-reset"${moved ? "" : " hidden"}>${r.history ? "Clear the line"
+      : `Back to the book’s ${escapeHtml(String(r.side || "").toLowerCase())} ${r.line}`}</button>
+  </div>`;
+}
+function lineAdjRow(box) {
+  const rows = _profRows.get(box.dataset.player) || [];
+  if (box.dataset.history) {
+    const r0 = rows[0] || { player: box.dataset.player };
+    return lineAdjHistoryRow(r0, box.dataset.mkt, (playerStats(box.dataset.player) || {})[box.dataset.mkt] || []);
+  }
+  return rows.find((r) => (r.market_label || r.market) === box.dataset.mkt && r.line != null) || null;
+}
+//: A market with no book line tonight, as the slider reads it: the player's games, and the line nearest the average (the
+//: average's whole number and a half, so no game sits on it) to start from.
+function lineAdjHistoryRow(r0, label, logs) {
+  const vals = (logs || []).map((l) => Number(l.value)).filter(Number.isFinite);
+  if (vals.length < LINE_ADJ_MIN_GAMES) return null;
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  return { player: (r0 || {}).player, team: (r0 || {}).team, sport: (r0 || {}).sport, market_label: label,
+           line: Math.floor(mean) + 0.5, side: "OVER", logs, history: true };
+}
+function lineAdjSet(box, patch) {
+  const r = lineAdjRow(box), card = box.closest(".profile");
+  if (!r || !card) return;
+  const cur = lineAdjState(r), { lo, hi } = lineAdjRange(r);
+  const from = cur.line ?? Number(r.line);
+  const next = { line: patch.reset ? Number(r.line) : Math.min(hi, Math.max(lo, patch.line ?? from)),
+                 side: patch.reset ? String(r.side || "OVER").toUpperCase() : (patch.side || cur.side) };
+  const book = patch.reset
+    || (!r.history && next.line === Number(r.line) && next.side === String(r.side || "OVER").toUpperCase());
+  if (book) _lineAdj.delete(lineAdjKey(r)); else _lineAdj.set(lineAdjKey(r), next);
+  _lineAdjBusy = Date.now();
+  // A cleared history card draws no line again.
+  const line = book && r.history ? null : next.line;
+  const spark = card.querySelector(".profile-spark");
+  if (spark) spark.innerHTML = profileBarsHTML(r, line, next.side);
+  card.querySelectorAll(".log-table td.num[data-v]").forEach((td) => {
+    const hit = line != null && lineAdjHit(td.dataset.v, line, next.side);
+    td.classList.toggle("hit", hit);
+    td.classList.toggle("miss", line != null && !hit);
+  });
+  box.querySelector(".la-read").innerHTML = line == null ? LINE_ADJ_UNSET : lineAdjReadHTML(r, line, next.side);
+  const range = box.querySelector(".la-range");
+  if (Number(range.value) !== next.line) range.value = String(next.line);
+  range.setAttribute("aria-valuetext", String(next.line));
+  box.querySelectorAll(".la-sd").forEach((b) => {
+    const on = b.dataset.side === next.side;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
+  box.querySelector(".la-reset").hidden = book;
+}
+document.addEventListener("input", (e) => {
+  const range = e.target.closest && e.target.closest(".la-range");
+  if (range) lineAdjSet(range.closest(".line-adj"), { line: Number(range.value) });
+});
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest(".la-step, .la-sd, .la-reset");
+  const box = b && b.closest(".line-adj");
+  if (!box) return;
+  if (b.classList.contains("la-reset")) return lineAdjSet(box, { reset: true });
+  if (b.classList.contains("la-sd")) return lineAdjSet(box, { side: b.dataset.side });
+  lineAdjSet(box, { line: Number(box.querySelector(".la-range").value) + Number(b.dataset.d) });
+});
 
 /* THE PICK PAGE'S ACTIONS, ON THE PLAYER'S PAGE. The card there opens
    nothing, so what the pick page offered the bet comes to the card: the books
@@ -15393,18 +15536,26 @@ function historyProfileHTML(r0, label, logs, chips, tail = "") {
   const nfl = logs.length && logs[0].week != null && !logs[0].date;
   const when = (l) => (nfl ? nflWeekWord(l.week, r0.sport)
     : (l.date ? formatGameDate(l.date) : `G ${l.week}`));
-  const rows = logs.map((l) => `<tr><td>${escapeHtml(when(l))}</td>
+  // NO BOOK LINE TONIGHT, AND STILL A LINE TO MOVE (`lineAdj`): it starts at the line nearest his average.
+  const hr = lineAdjHistoryRow(r0, label, logs), st = hr ? lineAdjState(hr) : null;
+  const at = st && st.line != null ? st : null;
+  const readers = at ? { line: at.line, side: at.side } : {};   // the reader's line, never one invented
+  const rows = logs.map((l) => {
+    const cls = at ? ` ${lineAdjHit(l.value, at.line, at.side) ? "hit" : "miss"}` : "";
+    return `<tr><td>${escapeHtml(when(l))}</td>
       <td>${l.home ? "vs" : "@"} ${escapeHtml(l.opponent)}</td>
-      <td class="num">${l.value}</td></tr>`).join("");
+      <td class="num${cls}" data-v="${escapeAttr(String(l.value))}">${l.value}</td></tr>`;
+  }).join("");
   const grad = `linear-gradient(135deg, ${teamPrimaryIn(r0.sport, r0.team)}, transparent)`;
   return `
     <article class="profile" style="--profile-grad:${grad}">
       ${_profileHead(r0, "")}
       ${chips}
       <div class="profile-spark">${gamelogBars(vals, {
-        fit: true, stroke: teamPrimaryIn(r0.sport, r0.team), w: 320, h: 72,
+        fit: true, stroke: teamPrimaryIn(r0.sport, r0.team), w: 320, h: 72, ...readers,
         labels: logs.map((l) => `${when(l)} ${l.home ? "vs" : "@"} ${l.opponent}`),
       })}</div>
+      ${hr ? lineAdjHTML(hr) : ""}
       <table class="log-table">
         <tr><th>${nfl ? "Week" : "Game"}</th><th>Opponent</th><th style="text-align:right">${escapeHtml(label)}</th></tr>
         ${rows}

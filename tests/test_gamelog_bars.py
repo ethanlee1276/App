@@ -106,8 +106,13 @@ def test_the_player_card_paints_its_own_side():
     fixed then in the compact chart and never in this card."""
     i = APP.index("function pricedProfileHTML(")
     fn = APP[i:APP.index("\n}\n", i)]
-    assert "const hit = under ? l.value < r.line : l.value > r.line;" in fn
-    assert "line: r.line, side: r.side, fit: true" in fn
+    # The line and side the reader moved it to (step AEY), the pick's own until then.
+    assert "const at = lineAdjState(r);" in fn and "const hit = lineAdjHit(l.value, at.line, at.side);" in fn
+    assert "profileBarsHTML(r, at.line, at.side)" in fn
+    hit = APP[APP.index("const lineAdjHit = "):]
+    assert hit.startswith('const lineAdjHit = (v, line, side) => (side === "UNDER" ? Number(v) < line : Number(v) > line);')
+    state = APP[APP.index("function lineAdjState("):]
+    assert 'String(r.side || "OVER")).toUpperCase() === "UNDER"' in state[:state.index("\n}")]
 
 
 def test_a_fitted_chart_keeps_its_height_and_its_count_is_text():

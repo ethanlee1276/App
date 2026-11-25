@@ -324,8 +324,12 @@ def test_props_players_and_record_carry_their_charts_and_chips():
     hist = APP[APP.index("function historyProfileHTML("):]
     hist = hist[:hist.index("\n}")]
     assert "no line on tonight" in hist
-    assert "line:" not in hist.split("gamelogBars")[1].split("})")[0], \
-        "the history chart invented a threshold"
+    # The only line a history chart draws is the one a reader set with the slider (step AEY, 25 November 2026):
+    # none until then, never one invented.
+    assert "line:" not in hist.split("gamelogBars")[1].split("})")[0], "the history chart invented a threshold"
+    assert "const readers = at ? { line: at.line, side: at.side } : {};" in hist and "...readers," in hist
+    state = APP[APP.index("function lineAdjState("):]
+    assert "if (!a && r.history) return { line: null, side: \"OVER\" };" in state[:state.index("\n}")]
     # Record: one scoreboard, switchable splits with words, capped list.
     ra = APP[APP.index("function recAnalytics("):]
     ra = ra[:ra.index("\nfunction recEraSection")]

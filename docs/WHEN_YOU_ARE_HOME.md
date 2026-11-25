@@ -9883,6 +9883,22 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AEY. A line you can move** (step 941; 25 November; nothing to run). Ethan, circling a player page's market chips
+and writing "Adjust the line": "Also we should be able too adjust the lines and numbers with a slide or something so
+users can see different lines if that makes sense". Every market card on a player page now has a slider under its
+chart. Drag it, or tap − and +, and the line moves a whole number at a time through the book's own half (a 0.5 line
+moves through 1.5, 2.5 and on; a whole line through whole numbers), from one step under his lowest game to one step
+over his highest; Over and Under switch the side. The chart's line, the green and red bars, the count under the
+chart, the game table's green numbers and the reading above the slider ("Over 3.5 · 2 of 12 games (17%) · last 5:
+1/5 · last 10: 2/10") all move with it, and "Back to the book's under 2.5" puts it back. The line you set is kept
+for that player and market while the page is open, and a refresh that lands within four seconds of a move leaves
+the card alone, so it never jumps back under a thumb. What the slider does not move: the pick itself (the book's line, its
+price, our chance, the stake). Our chance and the books' prices at other lines are not on the page, since the board
+we serve leaves the alternate lines out (audit M-3), so the slider reads his games and nothing else. A market with
+no book line tonight (the history chips) gets the same slider but draws no line until you set one, because a line
+nobody posted is never drawn as if a book had; "Clear the line" takes it away again. Next (step 2): our chance and
+the best book price at the line you pick, fetched when you move it, for members only, the way the books list is.
+
 **AEX. The NFL's carries benched** (step 940; 25 November; nothing to run). Under decision 19 ("do whatever you
 think. All I want is picks that win the most on there"), the rule you set for the quarterback completions ("bench
 and learn") and pass attempts ("bench them"): the NFL's rush-attempt Edge picks are 40-46 for -6.7 units, losing 11%
