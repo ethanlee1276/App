@@ -1091,6 +1091,20 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                         for sp, v in headline_specs(sport, role(sport, position, was) or kind, was, len(past))]}
                     break
 
+        # EACH MARKET'S SEASON, FOR ITS CARD (step AGY, 25 November 2026; Ethan: "We want every single sports
+        # player pages to match each other"). A market card nobody priced tonight reads its tiles off its last ten
+        # games (engine/statlogs.N_GAMES), so its Season tile said "—" in every league once a season passed ten
+        # games, beside a priced card's number. The page has the season's games, each once, as its game log says
+        # them: each market's average over the games played that carry it (js/playerpage.js plrSeasonTiles).
+        from .statlogs import SPORT_MARKETS
+        means = {}
+        for mid, label in SPORT_MARKETS.get(sport, ()):
+            vals = [g["stats"][mid] for g in played if g["stats"].get(mid) is not None]
+            if vals:
+                means[label] = round(sum(vals) / len(vals), 2)
+        if means:
+            out["markets"] = means
+
         # The newest game.
         if games:
             g = games[0]

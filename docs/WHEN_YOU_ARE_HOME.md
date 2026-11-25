@@ -9883,6 +9883,17 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AGY. A market card's Season tile is the season the page shows** (step 993; 25 November; nothing to run). Seen
+while checking AGX: a market card nobody priced tonight reads its tiles off its last ten games, and ten games are not
+a season, so once a season passed ten games its Season tile said "—", in every league (Jalen Brunson's points card
+and Connor McDavid's shots card on the live site), beside a priced card's number. The player page's own answer now
+carries each market's average over the season's games played that carry it, the games its game log shows (Brunson's
+points: 26.5 a game, as his game log says), and the page fills an empty Season tile from it when its numbers land,
+when the cards are handed to it, and when a market chip draws a card again. A page on a past season (a player who
+has not played this one) fills nothing. Checked on this checkout with the live site's answers and the new field
+stood in: Brunson's points card read "Season 26.5" and his rebounds 3.1 after the chip; McDavid's shots 3.4. Pages
+kept from before the update fill in as they are rebuilt (five minutes to the hour).
+
 **AGX. A player not priced tonight: the page draws before the market cards** (step 992; 25 November; nothing to
 run). Timed at phone speed (a 4G line, a phone's processor) on the live site after AGV: Jalen Brunson's page had its
 numbers at 0.99 s and drew its header at 1.56 s; Connor McDavid's 0.78 and 1.22; Cameron Boozer's 0.97 and 1.38. A

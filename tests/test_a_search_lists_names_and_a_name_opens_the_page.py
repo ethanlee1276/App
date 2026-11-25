@@ -56,7 +56,8 @@ def test_a_search_and_the_page_before_it_list_names_not_cards():
     assert "${searchListHTML(misses.map((m) => ({ ...m, sport: state.sport })))}" in body
     # And a card only where the address names the player.
     assert body.count("profileHTML(") == 2 and body.count("{ deep: true, inPage: true }") == 2
-    assert body.count("renderPlayerPage(") == 4, "priced tonight, from the league, known only to a roster, a fighter"
+    # From the league: drawn before the logs land, then handed its cards (step AGX).
+    assert body.count("renderPlayerPage(") == 5, "priced tonight, from the league (twice), only a roster's, a fighter"
     assert "Tonight’s players" in body and "everyone with a prop on tonight’s" in body, "the page before a search says what it lists"
     assert "data-lookup" not in body and "roster-hit" not in body, "the old Profile and Roster buttons"
 

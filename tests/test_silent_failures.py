@@ -160,6 +160,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # A COLLEGE GAME AT ITS BILL (engine/oddsbudget.measured_price, step AER): None on a failure, as on a week of
         # fewer than twenty calls, so the table price stands either way (the safe side); a failure prints its line.
         "measured_price",
+        # A CHART'S NAME LIST READ AGAIN BEHIND THE ONE IN HAND (engine/db._folded_read_behind, step AGW): it returns
+        # nothing either way and the list in hand answers meanwhile, so the first failure in a process prints its
+        # own line in the service's log ("a chart's name list not read again behind the one in hand").
+        "_folded_read_behind",
         # THE EXPORT'S SAMPLER (engine/stacksample.Sampler._run, 2026-11-08),
         # caught by this sweep the day it was written: it returns None either
         # way, and a failure sets ``error``, which the settle pass puts on its

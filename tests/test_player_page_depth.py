@@ -133,7 +133,9 @@ def test_the_players_page_draws_its_card_deep_and_as_the_pages_own():
     body = APP[i:APP.index("\n/* The UFC hero", i)]
     assert body.count("profileHTML(") == 2, "a card only for the page's own player"
     assert "host.innerHTML = profileHTML(own, { deep: true, inPage: true });" in body, "priced tonight"
-    assert "host.innerHTML = profileHTML(m.player, { deep: true, inPage: true });" in body, "from the league's logs"
+    # From the league's logs: the page drawn first, the cards handed to it when the logs land (step AGX).
+    assert 'host.insertAdjacentHTML("beforeend", profileHTML(m.player, { deep: true, inPage: true }));' in body, \
+        "from the league's logs"
     assert "shown.map(profileHTML).join" not in APP
 
 

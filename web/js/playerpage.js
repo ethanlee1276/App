@@ -618,6 +618,8 @@ document.addEventListener("click", (e) => {
 function plrFill(page, d) {
   if (page._plr.sport === "ufc") return plrFillUfc(page, d);
   page._plr.noStats = (d && d.no_stats) || "";
+  page._plr.markets = d && d.markets && !plrPast(d) ? d.markets : null;
+  plrSeasonTiles(page);
   const host = page.querySelector(".plr-hero");
   if (host && d && d.bio) host.outerHTML = plrHeroHTML(d.player, d.sport, d.team, d.position,
     d.bio.headshot || page._plr.face, d.bio);
@@ -757,10 +759,30 @@ function plrPin() {
    fresh ones, since a price can move between two redraws. A first visit draws
    from the visit's copy where there is one. */
 let _plrLive = null;
+/* EACH MARKET CARD'S SEASON (step AGY, 25 November 2026; Ethan: "We want every single sports player pages to
+   match each other"). A card nobody priced tonight reads its form tiles off its last ten games (app.js
+   historyProfileHTML), and ten games are not a season: its Season tile said "—" in every league, beside a priced
+   card's number. The page's own answer carries each market's average over the season's games played (engine/
+   playerpage `markets`, the games its game log shows), and a tile that has no season of its own takes it, whenever
+   the card is drawn: here, when the page's numbers land, and when a market chip draws a card again. */
+function plrSeasonTiles(page) {
+  const m = page && page._plr && page._plr.markets;
+  if (!m) return;
+  page.querySelectorAll(".plr-tonight .profile-spark[data-history]").forEach((spark) => {
+    const v = m[spark.dataset.mkt], card = spark.closest(".profile");
+    const tile = card && card.querySelector(".form-tiles .form-tile:last-child .v");
+    if (v != null && tile && tile.textContent === "—" && typeof tileNum === "function") tile.textContent = tileNum(v);
+  });
+}
 function plrMarkets(page, kept) {
   const tonight = page.querySelector(".plr-tonight");
   if (!tonight) return;
   tonight.replaceChildren(kept);
+  plrSeasonTiles(page);
+  if (!tonight._seasonWatch && typeof MutationObserver === "function") {
+    tonight._seasonWatch = new MutationObserver(() => plrSeasonTiles(page));
+    tonight._seasonWatch.observe(tonight, { childList: true, subtree: true });
+  }
   lineAdjFill(tonight);
   if (tonight.firstElementChild) tonight.insertAdjacentHTML("afterbegin", `<h3 class="plr-h">${plrTonightTitle(page)}</h3>`);
 }

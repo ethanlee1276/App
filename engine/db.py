@@ -1024,22 +1024,32 @@ def _folded_behind(k: tuple, fold) -> None:
         if k in _FOLDED_BEHIND:
             return
         _FOLDED_BEHIND.add(k)
+    threading.Thread(target=_folded_read_behind, args=(k, fold), daemon=True, name="names-behind").start()
 
-    def run():
+
+_BEHIND_SAID = [False]
+
+
+def _folded_read_behind(k: tuple, fold) -> None:
+    """`_folded_behind`'s read. A failure leaves the list in hand answering, which reads like a day with no new
+    name, so the first one in a process says so in the service's log; the next ask past the day tries again."""
+    try:
+        conn = connect(k[0])
         try:
-            conn = connect(k[0])
-            try:
-                top = conn.execute(f"SELECT MAX(rowid) FROM {k[1]}").fetchone()[0]
-                out = _folded_read(conn, k[1], k[2], k[3], fold)
-            finally:
-                conn.close()
-            _folded_keep(k, (time.time(), top, out), save=True)
-        except Exception:                                 # noqa: BLE001 — the list in hand keeps answering
-            pass
+            top = conn.execute(f"SELECT MAX(rowid) FROM {k[1]}").fetchone()[0]
+            out = _folded_read(conn, k[1], k[2], k[3], fold)
         finally:
-            with _FOLDED_LOCK:
-                _FOLDED_BEHIND.discard(k)
-    threading.Thread(target=run, daemon=True, name="names-behind").start()
+            conn.close()
+        _folded_keep(k, (time.time(), top, out), save=True)
+    except Exception as exc:                              # noqa: BLE001 — the list in hand keeps answering
+        if not _BEHIND_SAID[0]:
+            _BEHIND_SAID[0] = True
+            import sys
+            print(f"⚠️  a chart's name list not read again behind the one in hand ({k[1]}: {type(exc).__name__}: "
+                  f"{exc}); the one in hand answers until the next try", file=sys.stderr)
+    finally:
+        with _FOLDED_LOCK:
+            _FOLDED_BEHIND.discard(k)
 
 
 def pinned(conn, sql: str, index: str, args=()):
