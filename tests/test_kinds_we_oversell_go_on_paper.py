@@ -278,6 +278,23 @@ def test_the_pass_counts_each_leagues_bold_picks_matched_and_missed():
     assert P.bold_census(sqlite3.connect(":memory:")) == {"error": "OperationalError"}, "an unread journal says so"
 
 
+def test_every_bold_kind_tested_is_on_the_heartbeat_held_or_not():
+    """STEP AHU (26 November 2026): college's bold picks matched 899 of 902 and went on paper as no kind, and the
+    heartbeat named only the kinds held. Each league's bold kind as tested is on it now: what it said, what it hit,
+    its count, its p, and whether it went on paper."""
+    out = P.refresh(_bold_journal(), _tmp(), today=TODAY)
+    makers = P.verdict(out)["makers"]
+    nfl = next(m for m in makers if m["sport"] == "nfl")
+    assert (nfl["maker"], nfl["said"], nfl["hit"], nfl["n"], nfl["held"]) == ("bold", 0.76, 0.5, 60, True), nfl
+    assert 0 <= nfl["p"] < 0.05, nfl
+    honest = _kind(60, 0.70, 42, day="2026-11-08", sport="cfb", market="rush_yds", edge=0.12)
+    conn = _journal(honest + [dict(r, category="bold") for r in honest])
+    m = P.verdict(P.refresh(conn, _tmp(), today=TODAY))["makers"]
+    assert m == [{"sport": "cfb", "market": "*", "band": "all", "maker": "bold", "said": 0.7, "hit": 0.7, "n": 60,
+                  "p": 1.0, "held": False}], m
+    assert "makers" not in P.verdict({"holds": []}), "a state saved before the step says nothing of it"
+
+
 def test_bold_picks_held_on_paper_come_back_on_their_own_record():
     path = _tmp()
     conn = _bold_journal()

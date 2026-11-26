@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHU. College's bold picks are matched; whether they hold up is now on the heartbeat** (step 1013; 26 November;
+nothing to run). Step AFR asked why the NFL's "bolder than the books" picks were a kind on paper (said 72%, hit 51%
+over 246) and college's were no kind at all. The learn pass after 03:00 Eastern counted each league's bold book:
+college 902 settled picks, 899 matched to a board pick and read as bold, 2 differing only on the day; the NFL 238,
+237 and 1. So the day was never the trouble, and college's bold picks are tested as a kind. That kind is not on
+paper, so over the last 90 days it either held up (hit near what it said) or did not clear Benjamini-Hochberg among
+the 124 kinds tested. The heartbeat named only the kinds held, so which one could not be read. The pass now puts
+each league's bold kind as tested on the heartbeat, held or not (`paper holds.makers`: said, hit, count, p, held),
+and the next learn pass, after 03:00 Eastern on 27 November, says it.
+
 **AHT. The first game of NFL week 12 kept its record, and posted no parlays** (step 1012; 26 November; nothing to
 run). A check-in read at 05:31 UTC, off the boards themselves (the heartbeat had just restarted with the 05:31
 update and listed no boards yet):

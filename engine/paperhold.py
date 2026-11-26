@@ -337,7 +337,14 @@ def refresh(conn, path=None, today: _dt.date | None = None) -> dict:
     out = {"measured_on": today.isoformat(), "records": len(rows), "tested": found["tested"],
            "holds": sorted(holds.values(), key=lambda h: h["key"]),
            "released": sorted(released.values(), key=lambda h: h["key"]),
-           "bold": bold_census(conn)}
+           "bold": bold_census(conn),
+           # EACH MAKER'S TEST, HELD OR NOT (step AHU, 26 November 2026). The census showed college's bold picks
+           # matched (899 of 902) and still no kind on paper, and the heartbeat named only the kinds held: whether
+           # they measured honest or fell under Benjamini-Hochberg could not be read. Every maker kind tested,
+           # with what it said, what it hit, its count, its p and whether it went on paper.
+           "makers": [{**{k: t.get(k) for k in ("sport", "market", "band", "maker", "said", "hit", "n", "p")},
+                       "held": any(_key(h) == _key(t) for h in found["held"])}
+                      for t in found["kinds"] if t.get("maker")]}
     save(out, path)
     return out
 
@@ -470,4 +477,6 @@ def verdict(out: dict) -> dict:
             "on_paper": dict(sorted(on.items())), "back": dict(sorted(back.items())),
             "kinds": sorted(kinds, key=lambda k: (str(k.get("sport")), str(k.get("market")), str(k.get("band")))),
             # Each league's bold picks: in the book, read as bold, and missed on the day alone (bold_census).
-            **({"bold": out["bold"]} if (out or {}).get("bold") else {})}
+            **({"bold": out["bold"]} if (out or {}).get("bold") else {}),
+            # …and each league's bold kind as tested, held or not (step AHU).
+            **({"makers": out["makers"]} if (out or {}).get("makers") else {})}
