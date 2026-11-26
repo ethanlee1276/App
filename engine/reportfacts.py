@@ -109,6 +109,20 @@ def final(g: dict) -> tuple | None:
     return None if a is None or h is None else (a, h)
 
 
+#: Clubs said with "the" (gamereport._the): every league's nickname but a school's, a place's or a bare code.
+_SCHOOLS = ("cfb", "cbb")
+_PLACES = {"Utah"}
+
+
+def club(name, code, sport) -> str:
+    """"the Celtics" for a club's nickname (step AHY: "right — Celtics won"); a school, a place or a bare code as
+    it stands."""
+    n = str(name or code or "")
+    if not n or n == code or str(sport or "nfl") in _SCHOOLS or n in _PLACES:
+        return n
+    return f"the {n}"
+
+
 def names_of(report: dict, g: dict) -> dict:
     """{club: its name as the report says it}, from its call."""
     out = {x: x for x in ((g or {}).get("home"), (g or {}).get("away"), (report or {}).get("home"),
@@ -252,7 +266,7 @@ def ratings_check(report: dict, g: dict) -> dict | None:
     if not isinstance(r, dict) or r.get("even") or not r.get("team") or not won:
         return None
     right = r["team"] == won
-    name = r.get("name") or r["team"]
+    name = club(r.get("name"), r["team"], (report or {}).get("sport"))
     chance = _f(r.get("chance"))
     return {"status": "right" if right else "wrong", "team": r["team"], "same": bool(r.get("same")),
             "words": f"{'right' if right else 'wrong'} — they had {name}"
@@ -281,7 +295,8 @@ def sim_check(report: dict, g: dict) -> dict | None:
     right = s["team"] == won
     chance = _f(s.get("chance"))
     out = {"status": "right" if right else "wrong", "team": s["team"],
-           "words": f"{'right' if right else 'wrong'} — it had {nm.get(s['team'], s['team'])} winning"
+           "words": f"{'right' if right else 'wrong'} — it had "
+                    f"{club(nm.get(s['team']), s['team'], (report or {}).get('sport'))} winning"
                     + (f" {_pct(chance)} of its games" if chance is not None else "")}
     hist = s.get("hist") or []
     if len(hist) == 6 and all(_f(x) is not None for x in hist):

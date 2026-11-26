@@ -9915,6 +9915,12 @@ league's report the way a member meets it, line by line, and fixed what read wro
   baseball says a lineup "strikes out less than most teams (20.5%; the league is 22%)" (it said "rarely" at 20.5%),
   "Zack Wheeler's pitch mix" (it was "Phillies' starter's"), and the pitch-rate reasons drop the "Elite CSW%" and
   "K upside capped" shorthand.
+- **And a few more.** A questionable quarterback's section names the quarterback ("If Goff sits, Hendon Hooker
+  starts"; "49% if Goff plays, 45% if Goff sits"); a returning starter's line reads "in 25 starts for them,
+  Cousins threw for ..."; the change log says "Every book took down its props on Amon-Ra St. Brown (DET WR)", and
+  "Zay Flowers's props are back up" reads "The books have props on Zay Flowers again"; a forecast says "a 60%
+  chance of rain" once (it added ", rain"); a basketball report says only its own game's key matchup; and a
+  finished game's grades say "right — the Celtics won 121-104" (it was "Celtics won").
 
 **AHX. The backs step up too: a backup's carries are lifted, and the next back up is read** (step 1016; 26
 November; nothing to run). You: "do the same for running backs too". What a back had:

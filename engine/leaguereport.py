@@ -192,6 +192,13 @@ def _tape(c: Ctx) -> dict:
     return c.g.get("mlb_tape") or c.g.get("nhl_tape") or c.g.get("nba_tape") or {}
 
 
+def _ours(c: Ctx, e: dict) -> bool:
+    """A key matchup between this game's two teams (step AHY): a tape that carried another game's edge would have
+    said "LAM's offensive rebounding against RMU's" in Vanderbilt at Ohio State. An edge naming no teams stands."""
+    named = [x for x in (e.get("off"), e.get("def"), e.get("team")) if x]
+    return all(x in c.teams for x in named)
+
+
 def _sides(c: Ctx) -> dict:
     return _tape(c).get("sides") or {}
 
@@ -925,7 +932,8 @@ def nba_tape(c: Ctx) -> dict | None:
     blocks = [{"type": "table", "title": "Tale of the tape", "head": ["", c.away, c.home], "rows": table,
                "rank_of": int(t.get("teams") or 30), "rank_skip": [r["label"] for r in rows if r.get("plain")],
                "note": _sentence(note) if note else ""}]
-    edges = [(e.get("text"), _unit_claim(e)) for e in t.get("edges") or [] if isinstance(e, dict) and e.get("text")]
+    edges = [(e.get("text"), _unit_claim(e)) for e in t.get("edges") or []
+             if isinstance(e, dict) and e.get("text") and _ours(c, e)]
     if edges:
         blocks += [_h("Key matchups"), _claimed_list(edges)]
     return _section("tape", "The matchup", blocks)
@@ -1062,7 +1070,8 @@ def nba_short(c: Ctx, built: dict) -> dict | None:
                          + (f" over the last {n}" if n else "") + ")")
     if leads:
         items.append(_sentence("Leading the scoring lately: " + _join(leads)))
-    edges = [e for e in (c.g.get("nba_tape") or {}).get("edges") or [] if isinstance(e, dict) and e.get("text")]
+    edges = [e for e in (c.g.get("nba_tape") or {}).get("edges") or []
+             if isinstance(e, dict) and e.get("text") and _ours(c, e)]
     if edges:
         e = edges[0]
         items.append(_sentence(f"The key matchup: {named(c, e.get('matchup') or e['text'])}"

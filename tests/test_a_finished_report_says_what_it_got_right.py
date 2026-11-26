@@ -146,9 +146,9 @@ def test_the_report_opens_on_how_it_did_and_the_call():
     first = rep["sections"][0]
     assert first["key"] == "graded" and first["title"] == "How this report did"
     lines = first["blocks"][0]["items"]
-    assert lines[0] == "Our pick to win: right — Celtics won 121-104.", lines
+    assert lines[0] == "Our pick to win: right — the Celtics won 121-104.", lines
     lost = G.call_line(_nba_report(), dict(FINAL, live={"state": "final", "away_score": 110, "home_score": 99}))
-    assert lost["words"] == "wrong — we picked Celtics; MIA won 110-99", lost
+    assert lost["words"] == "wrong — we picked the Celtics; MIA won 110-99", lost
     assert "Breakout candidates: 1 of 1 beat their average; 1 didn’t play." in lines, lines
     assert "Fades: 0 of 1 fell short of it." in lines and "Offense against defense: 2 of 2 right." in lines
     assert first["blocks"][1]["text"] == "In all, 3 of the report’s 4 graded reads were right."

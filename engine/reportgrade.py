@@ -470,11 +470,14 @@ def call_line(report: dict, g: dict) -> dict | None:
             for b in s.get("blocks") or []:
                 if b.get("type") == "winner" and b.get("team"):
                     right = b["team"] == won
-                    us = b.get("name") or b["team"]
+                    from .reportfacts import club
+                    sport = report.get("sport")
+                    us = club(b.get("name"), b["team"], sport)
+                    them = club(b.get("other_name"), won, sport)
                     score = f"{_num(max(a, h))}-{_num(min(a, h))}"
                     return {"right": right, "team": b["team"], "won": won,
                             "words": (f"right — {us} won {score}" if right else
-                                      f"wrong — we picked {us}; {b.get('other_name') or won} won {score}")}
+                                      f"wrong — we picked {us}; {them} won {score}")}
     return None
 
 

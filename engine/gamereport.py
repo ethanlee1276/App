@@ -1784,12 +1784,15 @@ def sec_swing(c: Ctx) -> dict | None:
     if not scen:
         return None
     blocks = []
+    # BY NAME (step AHY): "If he sits", "the newest word on him", "45% if he sits": the section names its
+    # quarterback, the last name where a line repeats it.
     for sc in scen:
         team, who = sc.get("team"), str(sc.get("starter") or "")
-        rep = str(sc.get("replacement") or "his backup")
+        last = _last_name(who) or who
+        rep = str(sc.get("replacement") or "the backup")
         status = SWING_STATUS.get(str(sc.get("status") or "").upper(), "questionable")
         when = ("the inactives come out 90 minutes before kickoff, and our picks post 75 minutes before it, after them"
-                if c.sport == "nfl" else "our picks post 90 minutes before kickoff, from the newest news on him")
+                if c.sport == "nfl" else f"our picks post 90 minutes before kickoff, from the newest news on {last}")
         if len(scen) > 1:
             blocks.append(_h(f"{who}, {c.name(team)}"))
         club = c.name(team)
@@ -1805,19 +1808,19 @@ def sec_swing(c: Ctx) -> dict | None:
                 stamp = _et_clock(at)
             except (TypeError, ValueError):
                 stamp = ""
-            line = f"The newest word on him, posted at {stamp}: {news['text']}" if stamp else \
-                f"The newest word on him: {news['text']}"
+            line = f"The newest word on {last}, posted at {stamp}: {news['text']}" if stamp else \
+                f"The newest word on {last}: {news['text']}"
             blocks.append(dict(_p(line), post_at=news.get("posted")) if stamp else _p(line))
         tier = str(sc.get("tier") or "")
         if c.sport == "nfl" and tier == "downgrade":
-            effect = (f"If he sits, {rep} starts, a step down by what each has thrown; behind a step down like that, "
+            effect = (f"If {last} sits, {rep} starts, a step down by what each has thrown; behind a step down like that, "
                       f"receivers have caught about 9% fewer passes for about 10% fewer yards (measured on the "
                       f"2022 to 2025 seasons)")
         elif tier == "similar":
-            effect = (f"If he sits, {rep} starts, a backup who has thrown about as well: nothing we measured moves "
+            effect = (f"If {last} sits, {rep} starts, a backup who has thrown about as well: nothing we measured moves "
                       f"behind a change like that")
         else:
-            effect = f"If he sits, {rep} starts"
+            effect = f"If {last} sits, {rep} starts"
         blocks.append(_p(effect))
         if sc.get("lean"):
             # The backup's own lean between his targets (engine/qblean, step ABZ), in the sits version's numbers.
@@ -1829,10 +1832,24 @@ def sec_swing(c: Ctx) -> dict | None:
         if moved:
             blocks.append(_list(
                 f"{pick_words({'player': r['player'], 'market': r['market'], 'side': 'OVER', 'line': r['line']})}: "
-                f"{_pct(r['plays'])} if he plays, {_pct(r['sits'])} if he sits" for r in moved[:SWING_SHOW]))
+                f"{_pct(r['plays'])} if {last} plays, {_pct(r['sits'])} if {last} sits" for r in moved[:SWING_SHOW]))
         else:
             blocks.append(_p("None of the team's priced numbers moves by a point either way"))
-    return _section("swing", "If he plays, and if he sits", blocks)
+    title = (f"If {_last_name(scen[0].get('starter')) or 'the starter'} plays, and if not" if len(scen) == 1
+             else "If the starters play, and if not")
+    return _section("swing", title, blocks)
+
+
+#: Name suffixes a last name is not.
+_SUFFIXES = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"}
+
+
+def _last_name(name) -> str:
+    """"Goff" for "Jared Goff", "Penix" for "Michael Penix Jr."; "" for no name."""
+    words = [w for w in str(name or "").split() if w]
+    while len(words) > 1 and words[-1].lower() in _SUFFIXES:
+        words.pop()
+    return words[-1] if words else ""
 
 
 #: How a listed player practised, in words (engine/practice.PRACTICE).

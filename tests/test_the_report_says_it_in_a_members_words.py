@@ -19,7 +19,9 @@ member meets them, what read wrong:
   * three backup lines named one stand-in, and each opposed pair said "the scripts pull apart" again;
   * the injury list said a starting lineman out twice, and a bye and its rest edge were two lines of one fact;
   * hockey's "BOS shoots the 11th-fewest a game" (shots what?), baseball's "rarely strikes out (20.5%)" beside a
-    22% league, "Phillies' starter's pitch mix" under a table that names him, "Elite CSW%" and "K upside capped".
+    22% league, "Phillies' starter's pitch mix" under a table that names the starter, "Elite CSW%" and "K upside
+    capped";
+  * a basketball report said whatever key matchup its tape carried, though it named another game's teams.
 
 Offline. Run directly: `python3 tests/test_the_report_says_it_in_a_members_words.py`
 """
@@ -162,6 +164,17 @@ def test_hockey_and_baseball_say_what_they_count():
     import test_every_league_gets_a_game_report as L
     rep, _ = L._attach(L._mlb_board(), "mlb")
     assert "Zack Wheeler's pitch mix: four-seamers 45%" in R.to_text(rep)
+
+
+def test_a_basketball_report_says_only_its_own_games_matchups():
+    import test_every_college_game_gets_a_report as T
+    from engine import leaguereport as L
+    board = T._board()
+    L.attach(board, "cbb", meta={}, out=None, at="2026-11-24T17:30:00")
+    osu = next(r for r in board["game_reports"] if r["home"] == "OSU")
+    assert "LAM" not in R.to_text(osu) and "Lamar" not in R.to_text(osu), "another game's edge is never said"
+    lam = next(r for r in board["game_reports"] if r["home"] == "LAM")
+    assert "Edge LAM: LAM's offensive rebounding (6th)" in R.to_text(lam), "its own still is"
 
 
 if __name__ == "__main__":

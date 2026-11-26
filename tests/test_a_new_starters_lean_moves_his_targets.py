@@ -105,7 +105,7 @@ def test_a_change_carries_it_and_the_effect_prices_it():
     g = _Game({"TB": chs["TB"]})
     te, why, _card = Q.effect(_Prop("receptions", "TE"), g)
     assert te == round(lean["factors"]["TE"], 4) and te > 1, te
-    assert "Kyle Trask has thrown 40% of his targets to tight ends, against the team's 30% lately" in why, why
+    assert "Kyle Trask has thrown 40% of passes to tight ends, against the team's 30% lately" in why, why
     wr, why, _card = Q.effect(_Prop("rec_yds", "WR", player="Mike Evans"), g)
     assert wr == round(0.897 * lean["factors"]["WR"], 4), "after the measured downgrade step"
     assert "receivers lost 10% (measured)" in why and "wide receivers" in why, why
@@ -118,8 +118,8 @@ def test_a_change_carries_it_and_the_effect_prices_it():
     finally:
         os.environ.pop(L.ENV, None) if was is None else os.environ.__setitem__(L.ENV, was)
     words = L.words(chs["TB"], "the Buccaneers")
-    assert words.startswith("Kyle Trask has thrown 40% of his targets to tight ends, 50% to wide receivers and 10% "
-                            "to backs in his starts (100 targets); the Buccaneers lately: 30%, 60% and 10%"), words
+    assert words.startswith("Kyle Trask has thrown 40% of passes to tight ends, 50% to wide receivers and 10% "
+                            "to backs in Trask's starts (100 targets); the Buccaneers lately: 30%, 60% and 10%"), words
     assert "the tight ends' targets +7%" in words and "the wide receivers' targets −3%" in words, words
     assert Q.card(chs["TB"])["lean"] == L.words(chs["TB"]), "the change's card says it"
 

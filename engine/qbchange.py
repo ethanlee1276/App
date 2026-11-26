@@ -467,10 +467,10 @@ def effect(prop, game) -> tuple:
     from . import qblean as _ql
     lean = _ql.multiplier(ch, prop)
     if lean != 1.0:
-        what = _ql.GROUP_WORDS.get(_ql.group(getattr(prop, "position", "")), "his position")
+        what = _ql.GROUP_WORDS.get(_ql.group(getattr(prop, "position", "")), "this position")
         lean_why = (f"QB change: {ch.get('replacement') or 'the new starter'} has thrown "
                     f"{round(float(((ch.get('lean') or {}).get('qb') or {}).get(_ql.group(prop.position), 0)) * 100)}% "
-                    f"of his targets to {what}, against the team's "
+                    f"of passes to {what}, against the team's "
                     f"{round(float(((ch.get('lean') or {}).get('team') or {}).get(_ql.group(prop.position), 0)) * 100)}% "
                     f"lately; a new starter's own split carried over a fifth of the way (measured) (×{lean:.2f})")
         reason = f"{reason}; {lean_why}" if reason else lean_why

@@ -111,8 +111,10 @@ def test_the_report_says_both_beside_our_picks():
     sec = next(s for s in rep["sections"] if s["key"] == "swing")
     text = " ".join(str(b.get("text") or "") + " ".join(map(str, b.get("items") or [])) for b in sec["blocks"])
     assert "Jared Goff, the Lions' starting quarterback, is questionable: the inactives come out" in text, text
-    assert "If he sits, Hendon Hooker starts" in text and "10% fewer yards" in text
-    assert "49% if he plays, 45% if he sits" in text, text
+    # By name (step AHY).
+    assert "If Goff sits, Hendon Hooker starts" in text and "10% fewer yards" in text
+    assert "49% if Goff plays, 45% if Goff sits" in text, text
+    assert sec["title"] == "If Goff plays, and if not", sec["title"]
     assert "Jahmyr Gibbs" not in text, "a number that does not move is not listed"
     assert "swing" not in [s["key"] for s in _report([])["sections"]], "no unsure starter, no section"
 
@@ -140,7 +142,7 @@ def test_the_newest_word_on_him_is_said_with_when_it_was_posted():
           "news": {"text": "Goff (ankle) is expected to play Sunday.", "posted": "2026-11-22T12:24:00Z"}}
     sec = next(s for s in _report([sc])["sections"] if s["key"] == "swing")
     line = next(b for b in sec["blocks"] if "newest word" in str(b.get("text")))
-    assert line["text"] == ("The newest word on him, posted at Sun 7:24 AM ET: Goff (ankle) is expected to play "
+    assert line["text"] == ("The newest word on Goff, posted at Sun 7:24 AM ET: Goff (ankle) is expected to play "
                             "Sunday."), line
     assert line["post_at"] == "2026-11-22T12:24:00Z", "the page says the time in the reader's zone"
     assert '_qs.attach_news(result["qb_scenarios"], "nfl")' in (ROOT / "nfl_build.py").read_text(encoding="utf-8")

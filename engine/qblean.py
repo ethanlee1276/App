@@ -264,19 +264,34 @@ def reunion_words(r: dict, who: str, club: str = "the team", now_on: set | None 
     n = int(r["starts"])
     years = f"{r['first']}" if r["first"] == r["last"] else f"{r['first']}–{r['last']}"
     att, cmp_ = int(r.get("att") or 0), int(r.get("cmp") or 0)
-    head = (f"{who} is back with {club}: in his {n} starts for them ({years}) he threw for "
+    # BY NAME (step AHY): "in his 25 starts for them he threw for ..." said with the quarterback's last name.
+    last = _last(who)
+    head = (f"{who} is back with {club}: in {n} starts for them ({years}), {last} threw for "
             f"{round(float(r.get('yds') or 0) / n)} yards and {float(r.get('td') or 0) / n:.1f} touchdowns a game"
-            + (f", completing {round(100 * cmp_ / att)}% of his passes" if att else ""))
+            + (f", completing {round(100 * cmp_ / att)}% of passes" if att else ""))
     # Shares of every target he threw there, the receivers under the line too.
     total = int(r.get("targets") or 0) or sum(int(v) for v in (r.get("tgt") or {}).values())
     mates = [(w, int(v)) for w, v in (r.get("tgt") or {}).items() if now_on is None or _norm(w) in now_on]
     if total and mates:
         head += (f". Of the receivers there now, " + ", ".join(
-            f"{w} drew {round(100 * v / total)}%" for w, v in mates[:most]) + " of his targets then")
+            f"{w} drew {round(100 * v / total)}%" for w, v in mates[:most]) + f" of {_own(last)} targets then")
     return head
 
 
 # --- the team's recent split, and the factors ----------------------------------------------------------------------
+def _last(name) -> str:
+    """"Cousins" for "Kirk Cousins", "Penix" for "Michael Penix Jr."; the name itself when it is one word."""
+    words = [w for w in str(name or "").split() if w]
+    while len(words) > 1 and words[-1].lower().rstrip(".") in ("jr", "sr", "ii", "iii", "iv", "v"):
+        words.pop()
+    return words[-1] if words else str(name or "")
+
+
+def _own(name: str) -> str:
+    """"Cousins'" and "Trask's"."""
+    return f"{name}'" if name.endswith("s") else f"{name}'s"
+
+
 def team_split(stats_rows, team: str, before_week: int | None = None, weeks: int = RECENT_WEEKS) -> dict | None:
     """The team's share of its targets by position over its last ``weeks`` weeks of the season's weekly stats
     (nflverse player_stats rows); None with too few targets to say."""
@@ -394,15 +409,15 @@ def words(ch: dict, club: str = "the team") -> str:
     who = ch.get("replacement") or "the new starter"
     qb, team = lean.get("qb") or {}, lean.get("team") or {}
     moved = [k for k in GROUPS if abs(f.get(k, 1.0) - 1) >= 0.01]
-    head = (f"{who} has thrown {round(qb.get('TE', 0) * 100)}% of his targets to tight ends, "
-            f"{round(qb.get('WR', 0) * 100)}% to wide receivers and {round(qb.get('RB', 0) * 100)}% to backs in his "
-            f"starts ({lean.get('targets')} targets); {club} lately: {round(team.get('TE', 0) * 100)}%, "
+    head = (f"{who} has thrown {round(qb.get('TE', 0) * 100)}% of passes to tight ends, "
+            f"{round(qb.get('WR', 0) * 100)}% to wide receivers and {round(qb.get('RB', 0) * 100)}% to backs in "
+            f"{_own(_last(who))} starts ({lean.get('targets')} targets); {club} lately: {round(team.get('TE', 0) * 100)}%, "
             f"{round(team.get('WR', 0) * 100)}% and {round(team.get('RB', 0) * 100)}%")
     if not moved:
         return head + ", close enough that nothing moves"
     bits = ", ".join(f"the {GROUP_WORDS[k]}' targets {'+' if f[k] > 1 else '−'}{abs(round((f[k] - 1) * 100))}%"
                      for k in moved)
-    return (f"{head}. A new starter's own split carried over a fifth of the way in his first starts (measured on "
+    return (f"{head}. A new starter's own split carried over a fifth of the way in the first starts (measured on "
             f"199 games, 2017–26), so {bits}")
 
 

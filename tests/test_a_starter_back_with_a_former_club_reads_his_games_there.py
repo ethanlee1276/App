@@ -83,11 +83,11 @@ def test_a_starter_back_with_a_former_club_has_that_stint_added_up():
 def test_the_card_and_the_report_say_it():
     r = L.reunion(_doc(), "Kirk Cousins", "MIN", 2026)
     w = L.reunion_words(r, "Kirk Cousins", "the Vikings", {"justin jefferson", "t j hockenson"})
-    assert w.startswith("Kirk Cousins is back with the Vikings: in his 25 starts for them (2022–2023) he threw for "
-                        "275 yards and 1.9 touchdowns a game, completing 67% of his passes"), w
+    assert w.startswith("Kirk Cousins is back with the Vikings: in 25 starts for them (2022–2023), Cousins threw "
+                        "for 275 yards and 1.9 touchdowns a game, completing 67% of passes"), w
     # Shares of all 750 targets he threw there (30 a start), the receivers under the line too.
-    assert w.endswith("Of the receivers there now, Justin Jefferson drew 31%, T.J. Hockenson drew 21% of his targets "
-                      "then"), w
+    assert w.endswith("Of the receivers there now, Justin Jefferson drew 31%, T.J. Hockenson drew 21% of Cousins' "
+                      "targets then"), w
     assert "Osborn" not in w, "only the men on the club now"
     stats = [{"recent_team": "MIN", "season": 2026, "week": 11, "player_display_name": "Justin Jefferson",
               "position": "WR", "targets": 9, "season_type": "REG"},

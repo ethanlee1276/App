@@ -169,11 +169,14 @@ def _weather_words(w: dict) -> str:
     if _f(w.get("wind_mph")) is not None:
         bits.append(f"wind {round(float(w['wind_mph']))} mph"
                     + (f" blowing {w['wind_dir']}" if w.get("wind_dir") in ("in", "out") else ""))
-    if _f(w.get("precip_chance")) is not None and float(w["precip_chance"]) > 0:
-        bits.append(f"a {round(float(w['precip_chance']) * 100)}% chance of rain")
-    if w.get("snow"):
+    chance = _f(w.get("precip_chance")) is not None and float(w["precip_chance"]) > 0
+    if chance:
+        bits.append(f"a {round(float(w['precip_chance']) * 100)}% chance of "
+                    f"{'snow' if w.get('snow') else 'rain'}")
+    # Said once (step AHY): "a 60% chance of rain, rain".
+    if w.get("snow") and not chance:
         bits.append("snow")
-    elif w.get("rain"):
+    elif w.get("rain") and not chance:
         bits.append("rain")
     return ", ".join(bits) or "no forecast"
 
@@ -227,7 +230,8 @@ def diff(old: dict, new: dict, home: str, away: str) -> list:
     if "pulled" in old and "pulled" in new:
         op, np_ = set(old["pulled"]), set(new["pulled"])
         for p in sorted(np_ - op):
-            out.append(f"Every book took {name(p)}'s props down")
+            # A POSSESSIVE AFTER A BRACKET (step AHY) read "Amon-Ra St. Brown (DET WR)'s props".
+            out.append(f"Every book took down its props on {name(p)}")
         # NOT "BACK UP" FOR A MAN STILL LISTED OUT. Kyle Monangai,
         # 2026-10-22, ruled out a third straight game: "Kyle Monangai's
         # props are back up" sat under a report that said he was out. The
@@ -236,7 +240,7 @@ def diff(old: dict, new: dict, home: str, away: str) -> list:
         # again is still not news a reader can use.
         listed = {p for p, st in (new.get("injuries") or {}).items() if st in OUT}
         for p in sorted(op - np_ - listed):
-            out.append(f"{name(p)}'s props are back up")
+            out.append(f"The books have props on {name(p)} again")
     ow, nw = old.get("weather"), new.get("weather")
     if ow and nw and _weather_moved(ow, nw):
         out.append(f"The forecast moved from {_weather_words(ow)} to {_weather_words(nw)}")
@@ -281,8 +285,11 @@ def drop_false_returns(entries: list, last: dict) -> list:
     out = {p for p, st in (last.get("injuries") or {}).items() if st in OUT}
     if not out:
         return entries
+    # Both wordings: the kept log holds lines written before step AHY.
     bad = {f"{p}'s props are back up" for p in out} | \
-          {f"{p} ({who[p]})'s props are back up" for p in out if who.get(p)}
+          {f"{p} ({who[p]})'s props are back up" for p in out if who.get(p)} | \
+          {f"The books have props on {p} again" for p in out} | \
+          {f"The books have props on {p} ({who[p]}) again" for p in out if who.get(p)}
     keep = []
     for e in entries:
         changes = [x for x in e.get("changes") or [] if x not in bad]

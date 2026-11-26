@@ -108,9 +108,9 @@ def test_a_move_is_written_under_its_time_right_under_the_short_version():
                  "The total moved from 48.5 to 47.",
                  "Our simulator moved DET from 58% to 64% to win.",
                  "Amon-Ra St. Brown (DET WR) is now out (listed questionable before).",
-                 "Every book took Amon-Ra St. Brown (DET WR)'s props down.",
+                 "Every book took down its props on Amon-Ra St. Brown (DET WR).",
                  "The forecast moved from 51°F, wind 6 mph, a 10% chance of rain to 44°F, wind 18 mph, "
-                 "a 60% chance of rain, rain."):
+                 "a 60% chance of rain."):
         assert want in items, (want, items)
     assert "what changed: 1 game(s) moved since the last build" in line, line
 
@@ -202,7 +202,7 @@ def test_the_first_forecast_and_a_listing_and_a_return():
     moved = L.diff(old, new, "DET", "GB")
     assert moved == ["A (GB WR) came off the injury report (listed out before)",
                      "C was listed doubtful",
-                     "A (GB WR)'s props are back up",
+                     "The books have props on A (GB WR) again",
                      "The first forecast is in: 38°F, wind 12 mph, snow"], moved
 
 

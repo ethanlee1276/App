@@ -92,13 +92,13 @@ def test_the_change_log_never_says_back_up_for_a_player_listed_out():
     # Not listed out: a return is news, and so is a player the books take
     # down after the report already has him out.
     assert L.diff({"injuries": {}, "pulled": ["Zay Flowers"]}, {"injuries": {}, "pulled": []},
-                  "BAL", "DAL") == ["Zay Flowers's props are back up"]
+                  "BAL", "DAL") == ["The books have props on Zay Flowers again"]
     assert L.diff({"injuries": {}, "pulled": ["Zay Flowers"]},
                   {"injuries": {"Zay Flowers": "questionable"}, "pulled": []}, "BAL", "DAL") == \
-        ["Zay Flowers was listed questionable", "Zay Flowers's props are back up"]
+        ["Zay Flowers was listed questionable", "The books have props on Zay Flowers again"]
     assert L.diff({"injuries": {"Kyle Monangai": "out"}, "pulled": []},
                   {"injuries": {"Kyle Monangai": "out"}, "pulled": ["Kyle Monangai"]}, "CHI", "NE") == \
-        ["Every book took Kyle Monangai's props down"]
+        ["Every book took down its props on Kyle Monangai"]
 
 
 def test_the_line_already_written_goes_on_the_next_build():
@@ -121,6 +121,10 @@ def test_the_line_already_written_goes_on_the_next_build():
     # A return for a player NOT listed out is kept.
     entries = [{"at": "x", "changes": ["Zay Flowers (BAL WR)'s props are back up"]}]
     assert L.drop_false_returns(entries, {"injuries": {}, "who": {"Zay Flowers": "BAL WR"}}) == entries
+    # The words since step AHY are dropped the same way.
+    new = [{"at": "y", "changes": ["The books have props on Kyle Monangai (CHI RB) again", "The total moved"]}]
+    assert L.drop_false_returns(new, {"injuries": {"Kyle Monangai": "out"}, "who": {"Kyle Monangai": "CHI RB"}}) == \
+        [{"at": "y", "changes": ["The total moved"]}]
 
 
 if __name__ == "__main__":

@@ -163,14 +163,14 @@ def test_the_lines_are_checked_against_the_final():
 def test_our_ratings_and_the_simulation_are_right_or_wrong_and_the_script_is_named():
     _rep, summary = _grade()
     assert summary["ratings"]["status"] == "wrong", summary["ratings"]
-    assert summary["ratings"]["words"] == "wrong — they had Heat (55%), the other side from the price"
+    assert summary["ratings"]["words"] == "wrong — they had the Heat (55%), the other side from the price"
     nfl = {"home": "DET", "away": "GB", "sections": [{"key": "verdict", "blocks": [{
         "type": "winner", "team": "DET", "other": "GB", "name": "Lions", "other_name": "Packers", "chance": 0.58,
         "sim": {"team": "DET", "chance": 0.61, "hist": [0.12, 0.17, 0.32, 0.22, 0.11, 0.06]}}]}]}
     fin = {"home": "DET", "away": "GB", "live": {"state": "final", "away_score": 17, "home_score": 20}}
     s = F.sim_check(nfl, fin)
     assert (s["status"], s["script"], s["share"]) == ("right", "C", 0.32), s
-    assert s["words"] == ("right — it had Lions winning 61% of its games; the game went Script C, the favorite by 1 "
+    assert s["words"] == ("right — it had the Lions winning 61% of its games; the game went Script C, the favorite by 1 "
                           "to 7, as 32% of them did"), s["words"]
     upset = F.sim_check(nfl, dict(fin, live={"state": "final", "away_score": 30, "home_score": 20}))
     assert (upset["status"], upset["script"], upset["share"]) == ("wrong", "B", 0.39), upset
@@ -337,8 +337,9 @@ def test_the_best_calls_and_biggest_misses_lead_the_summary():
     heads = [b.get("text") for b in first["blocks"] if b.get("type") == "h"]
     assert heads[:2] == ["What we got most right", "What we got most wrong"], heads
     lines = first["blocks"][0]["items"]
-    assert lines[:3] == ["Our pick to win: right — Celtics won 121-96.",
-                         "Our team ratings alone (unproven): wrong — they had Heat (55%), the other side from the price.",
+    assert lines[:3] == ["Our pick to win: right — the Celtics won 121-96.",
+                         "Our team ratings alone (unproven): wrong — they had the Heat (55%), the other side from the "
+                         "price.",
                          "The lines: Celtics −6.5, won by 25 (covered); total 227.5, 217 scored (under)."], lines
     total = next(b["text"] for b in first["blocks"] if b.get("type") == "p")
     assert total == "In all, 4 of the report’s 7 graded reads were right.", total
