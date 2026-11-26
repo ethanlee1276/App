@@ -91,6 +91,22 @@ def test_a_key_player_with_no_edge_is_named_not_left_out():
     assert "— No edge either way —" in text
     assert ("The Bears' D'Andre Swift (running back); the Lions' Jared Goff (quarterback): our numbers lean neither "
             "way on these matchups, so they are neither a breakout nor a fade.") in text, text
+    # One player alone is said as one.
+    one = [r for r in _reads() if r["player"] != "Jared Goff"]
+    text = R.to_text({"game": "CHI@DET", "away": "CHI", "home": "DET", "sections": [R.sec_watch(_ctx(one))],
+                      "when": "x", "title": "t"})
+    assert ("The Bears' D'Andre Swift (running back): our numbers lean neither way on this matchup, so the read is "
+            "neither a breakout nor a fade. The case is under Who's guarding who.") in text, text
+
+
+def test_every_league_calls_a_breakout_a_breakout_candidate():
+    """Basketball's and hockey's scans said "Breakout spot", the word a good spot now has for a read the defence did
+    not carry; every league says football's word, as the game page's Matchup scan always has."""
+    from engine.nba import scan as NBA
+    from engine.nhl import scan as NHL
+    from engine.mlb import scan as MLB
+    assert NBA.LABELS["breakout"] == NHL.LABELS["breakout"] == MLB.LABELS["breakout"] == "Breakout candidate"
+    assert 'breakout: "Breakout candidate"' in (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
 
 
 def test_the_big_day_line_seats_each_teams_best_two():

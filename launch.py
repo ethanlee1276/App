@@ -674,11 +674,14 @@ def _board_counts(path: str) -> dict:
                                         "no_twos": sum(1 for x in kept_short if not x.get("twos"))}
         out["td_pairs"] = int(c.get("scorers") or 0)
         # The two-leg tickets (every league's, TWO_SPORTS), and the games still
-        # to play short of their three.
+        # to play short of their three. A game waiting to post (its lists empty
+        # until then, hold_until_post) is waiting, not short, as with the threes:
+        # Thanksgiving's heartbeat read twos_short 12 with all 12 waiting.
         if str(gp.get("sport") or "").lower() in TWO_SPORTS:
             out["sgp_twos"] = int(c.get("twos") or 0)
             out["twos_short"] = sum(1 for x in gp["games"] if isinstance(x, dict) and not x.get("kept")
-                                    and not x.get("no_props") and len(x.get("twos") or []) < TWO_MIN)
+                                    and not x.get("post_at") and not x.get("no_props")
+                                    and len(x.get("twos") or []) < TWO_MIN)
             if c.get("filled_twos"):
                 out["twos_filled"] = int(c["filled_twos"])
         # EACH TICKET'S CLASS (gameparlays.ticket_class: safe, balanced, pop, long)

@@ -33,8 +33,8 @@ WHAT A READ COUNTS, each a reason for or against:
     side (engine/nba/schedspots);
   * the blowout — a double-digit spread takes a starter's fourth quarter.
 
-A breakout spot is a strong case built on role: minutes, usage or a
-teammate's absence moving toward him.
+A breakout candidate is a strong case built on role: minutes, usage or a
+teammate's absence moving toward the player.
 
 IT NEVER MOVES OUR NUMBER. The projection already reads the defence in each
 stat (engine/hoopsdvp, measured), the minutes model the rest and the
@@ -46,8 +46,9 @@ from __future__ import annotations
 
 from .teams import FT_WEIGHT, PLAIN, pace_said
 
-#: What each read is called, as the other leagues' scans say it.
-LABELS = {"breakout": "Breakout spot", "good": "Good matchup", "neutral": "Neutral",
+#: What each read is called, as the other leagues' scans say it (football's word for a breakout since step AHZ:
+#: "spot" is a good read the defence did not carry, its own list on the report).
+LABELS = {"breakout": "Breakout candidate", "good": "Good matchup", "neutral": "Neutral",
           "tough": "Tough matchup", "avoid": "Avoid"}
 #: The stats a read is about, the per-game production that makes each his,
 #: and their words.

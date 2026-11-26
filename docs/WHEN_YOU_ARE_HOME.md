@@ -10091,6 +10091,16 @@ update and listed no boards yet):
   right.
 - **CIN at WAS's replaced tickets settled.** The 13 tickets kept from before its tickets were rebuilt (5 two-leg,
   6 three-leg, 2 scorer pairs) have all settled: 10 won, 3 lost. None is open.
+- **Thanksgiving posted in full; the floors stay.** Read at 22:31 UTC on 26 November, off the heartbeat and the free
+  report record (`/api/report_record`, `/api/report_tickets`). The 17:05 check-in reached me five hours late (my
+  session restarted), so this is after the fact. CHI at DET posted everything at its post time: 6 picks, 3 three-leg
+  tickets, 3 two-leg and 3 touchdown pairs. Settled (the Bears won 39–35, as the report called it, at 52%): picks 5
+  of 6 (+1.6 units), three-leg 2 of 3 (+5.68), two-leg 3 of 3 (+4.72), touchdown pairs 2 of 3 (+4.39). The
+  heartbeat still counts one game kept short, with GB at LA's reasons (`few_props`, no two-leg ticket). PHI at DAL,
+  in progress, therefore posted its three-leg tickets too. So the floors (FILL_OTHER_FLOOR 0.55, LEG_FLOOR 0.60) did
+  not cut a full game's board. GB at LA was short on props: too few priced when its tickets posted. The floors stay
+  where they were measured. One count was wrong: `twos_short` read 12 with all 12 of those games still waiting to
+  post (each game's lists are empty until then). It now leaves out a waiting game, as `threes_short` always did.
 
 **AHS. A finished college basketball game keeps its player reads** (step 1011; 26 November; nothing to run). Two
 of my check-ins, read at 04:41 UTC off the live boards (`/data/{nba,nhl,cbb}.json`) and the live game pages:

@@ -201,7 +201,7 @@ def test_a_read_counts_the_defence_the_game_his_role_rest_and_the_blowout():
                         "Minutes up 20% over the last five (36.0 a game, 30.0 before)",
                         "MIA is playing a third game in four nights"], r["pro"]
     assert r["con"] == ["MIA allows the 2nd-fewest rebounds a game (40.2)"], r["con"]
-    assert r["read"] == "breakout" and r["label"] == "Breakout spot"
+    assert r["read"] == "breakout" and r["label"] == "Breakout candidate", "football's word, every league (AHZ)"
     # The read leans what he produces, less the stat the defence argues against.
     assert "pts" in r["lean"] and "ast" in r["lean"] and "reb" not in r["lean"], r["lean"]
     assert "pts_ast" in r["lean"] and "pra" not in r["lean"] and "pts_reb" not in r["lean"], r["lean"]

@@ -2911,19 +2911,22 @@ def even_blocks(c: Ctx, blocks: list) -> list:
         if _is_key(r) and r.get("read") == "neutral" and str(r.get("player") or "") not in listed \
                 and not r.get("availability"):
             by_team.setdefault(r.get("team"), []).append(r)
-    parts = []
+    parts, n = [], 0
     for t in c.teams:
         mine = sorted(by_team.get(t) or [], key=lambda r: -_volume(r))
         if mine:
+            n += len(mine)
             parts.append(f"{team_owner(c, t)} " + _join([f"{r.get('player')}"
                                                           + (f" ({pos_word(c, r.get('pos'))})"
                                                              if pos_word(c, r.get("pos")) else "")
                                                           for r in mine]))
     if not parts:
         return []
-    return [_h("No edge either way"),
-            _p(cap("; ".join(parts)) + ": our numbers lean neither way on these matchups, so they are neither a "
-               "breakout nor a fade. Each one's case is under Who's guarding who")]
+    said = ("our numbers lean neither way on these matchups, so they are neither a breakout nor a fade. Each one's "
+            "case is under Who's guarding who" if n > 1 else
+            "our numbers lean neither way on this matchup, so the read is neither a breakout nor a fade. The case is "
+            "under Who's guarding who")
+    return [_h("No edge either way"), _p(cap("; ".join(parts)) + ": " + said)]
 
 
 #: How many of the closest candidates a game with no qualifying play names.

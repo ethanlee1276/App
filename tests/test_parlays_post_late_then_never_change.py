@@ -250,6 +250,28 @@ def test_a_held_games_post_time_reads_in_the_readers_zone():
     assert "escapeHtml(postNote(g) || \"No three-leg ticket without a conflict in this game.\")" in rep
 
 
+def test_a_waiting_game_is_not_counted_short_of_two_leg_tickets_either():
+    """Thanksgiving's heartbeat read twos_short 12 with parlay_waiting 13: each waiting game's lists are empty until
+    it posts, so the two-leg count called it short as the three-leg count never did (step AHZ)."""
+    import launch as L
+    t2 = {"legs": [{"player": "A"}, {"player": "B"}]}
+    games = [{"home": "A", "threes": [], "twos": [], "scorers": [], "post_at": "2099-11-13T00:00:00Z"},
+             {"home": "B", "threes": [], "twos": [t2], "scorers": []}]
+    board = {"most_likely": [], "recommendations": [], "game_bets": [],
+             "game_parlays": {"sport": "nfl", "games": games, "counts": {"games": 2, "twos": 1}}}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(board, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert (got["parlay_waiting"], got["twos_short"], got["threes_short"]) == (1, 1, 1), got
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     fails = 0

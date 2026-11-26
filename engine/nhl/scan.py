@@ -29,8 +29,9 @@ from __future__ import annotations
 
 from . import model as M
 
-#: What each read is called, as the football and baseball scans say it.
-LABELS = {"breakout": "Breakout spot", "good": "Good matchup", "neutral": "Neutral",
+#: What each read is called, as the football and baseball scans say it (since step AHZ: "spot" is a good read the
+#: defence did not carry, its own list on the report).
+LABELS = {"breakout": "Breakout candidate", "good": "Good matchup", "neutral": "Neutral",
           "tough": "Tough matchup", "avoid": "Avoid"}
 #: The markets a skater's read leans; a starter's leans his saves.
 SKATER_LEANS = ["sog", "points", "assists", "goals", "anytime_goal"]
