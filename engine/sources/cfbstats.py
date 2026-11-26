@@ -456,7 +456,7 @@ def _merge_split_lines(bag: dict, ids: dict) -> int:
     one ESPN id (two players of one name carry two). Returns the lines joined."""
     by_game: dict = {}
     for key in bag:
-        gid, team, _opp, _home, player = key
+        gid, _team, _opp, _home, player = key
         by_game.setdefault((gid, player), []).append(key)
     joined = 0
     for (gid, player), keys in by_game.items():
