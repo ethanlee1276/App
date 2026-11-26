@@ -136,7 +136,7 @@ def test_the_report_says_which_ratings_and_what_they_were_fitted_on():
     try:
         GC.measured = lambda sport, market: {"shrink": 0.0, "n": 1204}
         assert R.ratings_why("cbb", "adjusted") == ("over 1,204 graded games, their disagreements with the "
-                                                    "closing line carried nothing"), "a measurement wins"
+                                                    "closing line told us nothing the line didn't"), "a measurement wins"
     finally:
         GC.measured = keep
 

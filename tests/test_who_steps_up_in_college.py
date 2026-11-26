@@ -66,11 +66,11 @@ def test_the_report_says_who_took_the_catches_in_the_games_without_him():
     # His 6 catches a game of the team's 14 in the nine games he played.
     assert lines[0] == "Indiana without Elijah Sarratt (WR, 43% of the catches): 43% of the catches this season to fill", lines
     assert lines[1] == ("In the 2 games this season that player had no catch or carry on record (Oct. 18 and Nov. 8), "
-                        "the catches went to: Omar Cooper Jr. (WR) 7 a game (4 a game with that player), 90 yards a "
-                        "game; Riley Nowakowski (TE) 5 a game (3 a game with that player), 40 yards a game"), lines[1]
-    assert lines[2] == ("Our numbers raise Omar Cooper Jr.'s receiving yards ×1.09 and catches ×1.12, the lift measured "
-                        "on college games for a player whose teammate ahead of him at his position is out, in every "
-                        "number we price on him"), lines[2]
+                        "the catches went to: Omar Cooper Jr. (WR) 7 catches a game (4 a game with that player), 90 "
+                        "yards a game; Riley Nowakowski (TE) 5 catches a game (3 a game with that player), 40 yards a "
+                        "game"), lines[1]
+    assert lines[2] == ("Our numbers raise Omar Cooper Jr.'s receiving yards by 9% and catches by 12%, the lift we "
+                        "measured on college games when a teammate ranked higher at the same position is out"), lines[2]
     assert all(cl is None for _t, cl in got["lines"]), "no graded read is claimed for college"
     assert got["outs"] == ["Elijah Sarratt"] and got["vacated"] == {"catches": 0.429}
 
@@ -82,7 +82,7 @@ def test_a_back_out_leaves_his_carries_and_a_quarterback_is_never_named_for_them
                                                            "rush_yds": 66.0 if d in MISSED else 20.0} for d in DAYS}}
     got = S.for_cfb_team(players, DAYS, "IND", "Indiana", [("Roman Hemby", "RB", "Out")], [], before="2026-11-22")
     text = " ".join(t for t, _ in got["lines"])
-    assert "Roman Hemby (RB" in text and "of the carries" in text and "Kaelon Black (RB) 14 a game" in text, text
+    assert "Roman Hemby (RB" in text and "of the carries" in text and "Kaelon Black (RB) 14 carries a game" in text, text
     assert "Fernando Mendoza" not in text, "a quarterback's carries are his own, never a back's to fill"
 
 

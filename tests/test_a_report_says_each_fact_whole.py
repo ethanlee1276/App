@@ -39,9 +39,10 @@ def test_a_case_names_three_out_and_counts_the_rest():
     rep = SHORT._chi_ne()
     items = [i for b in _sec(rep, "verdict")["blocks"] if b.get("type") == "list" for i in b["items"]]
     line = next(i for i in items if i.startswith("The Bears are without"))
-    assert line == ("The Bears are without T.J. Edwards (LB), out, Kyle Monangai (RB), out, Dayo Odeyingbo (DE), "
-                    "out and one more."), line
-    assert any(i == "The Patriots are without Carlton Davis III (CB), out." for i in items), "one: no count"
+    # In the short version's words (step AHY): positions said, "without" once, never "without X (LB), out".
+    assert line == ("The Bears are without linebacker T.J. Edwards, running back Kyle Monangai and defensive end "
+                    "Dayo Odeyingbo, and one more is out."), line
+    assert any(i == "The Patriots are without cornerback Carlton Davis III." for i in items), "one: no count"
     assert R._more_out(3) == [] and R._more_out(4) == ["one more"] and R._more_out(9) == ["6 more"]
 
 

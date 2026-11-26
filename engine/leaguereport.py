@@ -264,7 +264,10 @@ def mlb_pitching(c: Ctx) -> dict | None:
     for t in (t_a, t_h):
         s = _sides(c).get(t) or {}
         if s.get("mix"):
-            items.append(f"{c.poss(t)} starter's pitch mix: {s['mix']}")
+            # BY NAME (step AHY): "Phillies' starter's pitch mix" under a table that names him.
+            sp = _starter(c, t)
+            whose = f"{sp['name']}'s" if sp.get("name") else f"{c.poss(t)} starter's"
+            items.append(f"{whose} pitch mix: {s['mix']}")
         vh = s.get("vs_hand") or {}
         if _f(vh.get("factor")) is not None and vh.get("hand"):
             f = float(vh["factor"]) - 1
@@ -523,8 +526,8 @@ def nhl_tape(c: Ctx) -> dict | None:
             items.append(((f"{t} takes the {_ord(int(r_for))}-most shots ({_num(took)} a game), and {c.opp[t]} "
                            f"allows the {_ord(n - int(r_against) + 1)}-most ({_num(let)} a game) — a busy night "
                            f"for {c.opp[t]}'s goalie") if took is not None and let is not None else
-                          (f"{t} shoots the {_ord(int(r_for))}-most, and {c.opp[t]} allows the "
-                           f"{_ord(n - int(r_against) + 1)}-most shots — a busy night for {c.opp[t]}'s goalie"),
+                          (f"{t} takes the {_ord(int(r_for))}-most shots, and {c.opp[t]} allows the "
+                           f"{_ord(n - int(r_against) + 1)}-most — a busy night for {c.opp[t]}'s goalie"),
                           {"kind": "team", "team": t, "opp": c.opp[t], "stat": "sog", "favors": "more",
                            **({"base": round(base, 2)} if base is not None else {})}))
     blocks.append(_claimed_list(items))
@@ -662,9 +665,9 @@ def nhl_injuries(c: Ctx) -> dict | None:
     pulled = [p for p in _tape(c).get("pulled") or [] if p]
     blocks = [_claimed_list(items)]
     if pulled:
-        blocks.append(_p(f"Every sportsbook pulled its props on {_join(pulled)} before puck drop, so we treat "
-                         "them as out until the lineup or the books say "
-                         "otherwise"))
+        who = "that player" if len(pulled) == 1 else "those players"
+        blocks.append(_p(f"Every sportsbook pulled its props on {_join(pulled)} before puck drop, so we count "
+                         f"{who} as out until the lineup or the books say otherwise"))
     return _section("injuries", "Injuries", blocks)
 
 

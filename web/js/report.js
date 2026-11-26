@@ -239,7 +239,7 @@
     });
   }
   /* A line's lead-in, up to its first colon, in bold: "Who gets the
-     targets:", "Kickoff:", "Script A, DET controls it (17% of …):",
+     targets:", "Kickoff:", "Script A, DET by 8 to 14 (17% of …):",
      "Amon-Ra St. Brown (WR):". Only a short one with no sentence inside it
      (a sentence ends on a word or a number, not on "St." or "D.J."). */
   function named(text, names, marks, lead, ranks = true) {

@@ -228,12 +228,12 @@ def read_goalie(name: str, team: str, opp: str, teams: dict, ctx: dict, headshot
     # The shots he should face are ONE question — how many come at him —
     # whether it is asked of their attack or of his own team's defence.
     if shots_rank and shots_rank <= RANK_EDGE:
-        said(pro, (f"{opp} takes {_most(shots_rank, 'most')} shots{_pg(teams, opp, 'sog_for')}"
-                   if _pg(teams, opp, 'sog_for') else f"{opp} shoots {_most(shots_rank, 'most')} a game"), RL.DEFENSE)
+        # THE WORD "SHOTS" EITHER WAY (step AHY): with no count to say, this read "BOS shoots the 11th-fewest a game".
+        said(pro, f"{opp} takes {_most(shots_rank, 'most')} shots{_pg(teams, opp, 'sog_for') or ' a game'}",
+             RL.DEFENSE)
     elif shots_rank and shots_rank > len(teams) - RANK_EDGE:
         few = _most(len(teams) - shots_rank + 1, 'fewest')
-        said(con, (f"{opp} takes {few} shots{_pg(teams, opp, 'sog_for')}" if _pg(teams, opp, 'sog_for')
-                   else f"{opp} shoots {few} a game"), RL.DEFENSE)
+        said(con, f"{opp} takes {few} shots{_pg(teams, opp, 'sog_for') or ' a game'}", RL.DEFENSE)
     allow_rank = _ranks(teams, "sog_against", high_is_more=True).get(team)
     if allow_rank and allow_rank <= RANK_EDGE:
         said(pro, f"{team} gives up {_most(allow_rank, 'most')} shots{_pg(teams, team, 'sog_against')} — busy night "

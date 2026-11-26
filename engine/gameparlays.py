@@ -1322,6 +1322,30 @@ SCRIPT_SD = 13.5
 HIGH_TOTAL = {"nfl": 47.0, "cfb": 56.0}
 
 
+#: Two legs that want opposite leads, in the caveat's words (`pair_link`, `pulled_apart`).
+PULL_APART = "the scripts pull apart, so a close game suits this ticket best"
+
+
+def pulled_apart(legs: list, needs: list) -> str:
+    """One caveat for a ticket whose legs want opposite leads: who needs which, the need said once for the legs
+    that share it ("Tucker Kraft needs GB chasing or trading scores, and Amon-Ra St. Brown and Sam LaPorta need DET
+    chasing or trading scores: the scripts pull apart, ...")."""
+    order, by = [], {}
+    for l, n in zip(legs, needs):
+        if not n.get("margin"):
+            continue
+        need = str(n.get("why_margin") or "").split(" — ")[0]
+        if need not in by:
+            order.append(need)
+        by.setdefault(need, []).append(str(l.get("player") or ""))
+    parts = [f"{_join_names(by[k])} {'needs' if len(by[k]) == 1 else 'need'} {k}" for k in order]
+    return f"{', and '.join(parts)}: {PULL_APART}"
+
+
+def _join_names(names: list) -> str:
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 def script_words(needs: list[dict], game: dict | None, sport: str) -> tuple[str, float | None]:
     """(the script a ticket's legs share in words, how likely the lines
     make it — football only, else None)."""
@@ -1402,7 +1426,7 @@ def pair_link(sport: str, a: dict, b: dict, game: dict | None) -> tuple:
     na, nb = script_need(a, game), script_need(b, game)
     if na["margin"] * nb["margin"] < 0:
         opposed = (f"{a.get('player')} needs {na['why_margin']}; {b.get('player')} needs "
-                   f"{nb['why_margin']} — the scripts pull apart, so a close game suits this ticket best")
+                   f"{nb['why_margin']} — {PULL_APART}")
         caveat = "; ".join(x for x in (caveat, opposed) if x)
         rho, why = min(rho, OPPOSED_SCRIPT_RHO), "opposite scripts — priced as unrelated, not linked"
     if na["points"] * nb["points"] < 0:
@@ -1455,6 +1479,7 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
     from . import parlays as P
     from .twoleg import american
     rhos, whys, caveats = {}, [], []
+    opposed = False
     weight = link_weight()
     for (i, a), (j, b) in itertools.combinations(enumerate(legs), 2):
         mk = (_leg_id(a), _leg_id(b))
@@ -1469,6 +1494,13 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
         if rho > 0:
             rho *= weight                                   # the record's word on a positive link (LINK_FILE)
         rhos[(i, j)] = rho
+        # THE SCRIPTS PULLING APART, SAID ONCE A TICKET (step AHY, 26 November 2026): each opposed pair said it
+        # again ("Tucker Kraft needs GB chasing ...; Amon-Ra St. Brown needs DET chasing ... — the scripts pull
+        # apart" for one pair, then for the next), under a "What it needs: a close game" that had said it already.
+        # The pair's own caveat before it stays; the ticket says who needs which lead once, below.
+        if cav and PULL_APART in cav:
+            opposed = True
+            cav = cav[:cav.find(f"{a.get('player')} needs ")].rstrip("; ")
         if cav:
             caveats.append(cav)
         if why and abs(rho) >= 0.10:
@@ -1493,6 +1525,8 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
     take = fair * (1.0 + TAKE_EDGE)
     needs = [script_need(l, game) for l in legs]
     said, chance = script_words(needs, game, sport)
+    if opposed:
+        caveats.insert(0, pulled_apart(legs, needs))
     # Which way the whole ticket needs the game to go (`choose`: the tickets
     # a game posts are built to win together).
     lean_m = sum(n["margin"] for n in needs)

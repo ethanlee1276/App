@@ -233,10 +233,10 @@ def test_a_report_reads_a_measurement_only_for_the_ratings_it_measured():
     try:
         GC.measured = lambda sport, market: {"shrink": 0.0, "n": 1310}
         assert R.ratings_why("cbb", "adjusted") == ("over 1,310 graded games, their disagreements with the "
-                                                    "closing line carried nothing")
+                                                    "closing line told us nothing the line didn't")
         assert R.ratings_why("cbb") == "they haven't been measured against the price yet", "the average margins"
         assert R.ratings_why("nba") == ("over 1,310 graded games, their disagreements with the closing line "
-                                        "carried nothing")
+                                        "told us nothing the line didn't")
     finally:
         GC.measured = keep
     src = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")

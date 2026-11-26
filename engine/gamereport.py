@@ -87,6 +87,7 @@ import copy
 import argparse
 import datetime as _dt
 import json
+import re as _re
 import sys
 from pathlib import Path
 
@@ -258,10 +259,12 @@ FUNNEL_WORDS = {"wr_rec_yds": "receiving yards", "wr_rec": "catches", "wr_td": "
                 "qb_pass_yds": "passing yards", "qb_pass_td": "passing touchdowns",
                 "qb_rush_yds": "rushing yards"}
 
-#: Who a funnel's yards go to, said after "gives up the most … to".
-FUNNEL_TO = {"running backs on the ground": "running backs on the ground",
-             "running backs as receivers": "running backs as receivers",
-             "quarterbacks passing": "quarterbacks", "quarterbacks running": "quarterbacks on the run"}
+#: Who a funnel's yards go to, said after "gives up the most … to". The stat word already says rushing or
+#: receiving (step AHY, 26 November 2026): "the third-fewest rushing yards to running backs on the ground" said it
+#: twice, and the backs' touchdowns count the ones they catch too (defensevs.STATS "rb_td"), so "touchdowns to
+#: running backs on the ground" was wrong.
+FUNNEL_TO = {"running backs on the ground": "running backs", "running backs as receivers": "running backs",
+             "quarterbacks passing": "quarterbacks", "quarterbacks running": "quarterbacks"}
 
 SHELL_WORDS = {"COVER_0": "Cover 0", "COVER_1": "Cover 1", "COVER_2": "Cover 2",
                "COVER_3": "Cover 3", "COVER_4": "Cover 4 (quarters)", "COVER_6": "Cover 6",
@@ -477,7 +480,8 @@ class Ctx:
         self.allowed = allowed or {}
         self.sched = sched
         self.staff = staff or {}
-        self.names = names if names is not None else _team_names()
+        # A league's own names (step AHY): built with none, a college game's IND read "the Colts" off the NFL's.
+        self.names = names if names is not None else (_team_names() if sport in ("nfl", "", None) else {})
         n_teams = int((self.scan.get("method") or {}).get("teams") or self.scan.get("n_teams") or 32)
         self.n_teams = n_teams
         try:
@@ -1257,13 +1261,15 @@ def rematch_blocks(c: Ctx, m: dict) -> list:
         qb = next((r.get("player") for r in c.reads if r.get("team") == t
                    and str(r.get("pos") or "").upper() == "QB"), None)
         if qb and played_qb.get(t) is False:
-            changed.append(f"{qb} starts for {c.name(t)} and did not throw a pass in that game")
+            # THE TEAM'S OWN GRAMMAR (step AHY): "starts for Lions", "Lions is without", "Lions's field".
+            changed.append(f"{qb} starts for {team_np(c, t)} and did not throw a pass in that game")
         res = [x.get("player") for x in (c.scan.get("reserve") or {}).get(t) or [] if x.get("player")]
         if res:
-            changed.append(f"{c.name(t)} is without {_join(res)}, on a reserve list now — check whether "
-                           f"{'that player' if len(res) == 1 else 'they'} played in the first meeting")
+            changed.append(f"{cap(team_np(c, t))} {team_be(c, t)} without {_join(res)}, on a reserve list now — "
+                           f"check whether {'that player' if len(res) == 1 else 'they'} played in the first meeting")
     if m.get("home") and m["home"] != c.home and not m.get("neutral"):
-        changed.append(f"The game moves to {c.name(c.home)}'s field — the first was at {c.name(m['home'])}'s")
+        changed.append(f"The game moves to {team_owner(c, c.home)} field — the first was at "
+                       f"{team_owner(c, m['home'])}")
     if changed:
         out += [_h("What has changed since"), _list(changed)]
     return out
@@ -1702,15 +1708,19 @@ def sec_injuries(c: Ctx) -> dict | None:
     for t in c.teams:
         res = [r for r in (c.scan.get("reserve") or {}).get(t) or [] if isinstance(r, dict)]
         if res:
-            blocks.append(_p(f"{c.name(t)} without, for the season or a while: " + "; ".join(
+            # A SENTENCE, NOT A LABEL (step AHY): "Packers without, for the season or a while: …".
+            blocks.append(_p(f"On {team_owner(c, t)} reserve list, out for the season or a while: " + "; ".join(
                 f"{r['player']}" + (f" ({r['position']})" if r.get("position") else "")
                 + f" — {r['status']}; {r['what']} this season" for r in res)))
+    # THE STARTING LINE, ONLY WHERE IT ADDS (step AHY): every lineman this names is in the injury list above, and
+    # "Packers' offensive line: Zach Tom (RT) is out" sat under "Zach Tom (T) — out" saying it twice. Two or more
+    # starters out is its own fact (`line_sentence`): said then, with their spots.
     lines = c.scan.get("line_out") or {}
     for t in c.teams:
-        if lines.get(t):
-            own = c.name(t) + ("'" if c.name(t).endswith("s") else "'s")
-            blocks.append(_p(f"{own} offensive line: {_join(lines[t])} "
-                             f"{'is' if len(lines[t]) == 1 else 'are'} out"))
+        if len(lines.get(t) or []) >= 2:
+            n = len(lines[t])
+            blocks.append(_p(f"{cap(_COUNT_WORDS.get(n, str(n)))} of {team_owner(c, t)} starting offensive linemen "
+                             f"are out: {_join(lines[t])}"))
     # WHO STEPS UP (engine/stepup, step AEC): where an absent receiver's or back's work went in this season's games
     # without him, which picks our numbers raise for it, and each teammate named, graded after the game.
     from .stepup import report_blocks as _stepup
@@ -1718,8 +1728,10 @@ def sec_injuries(c: Ctx) -> dict | None:
     blocks += practice_blocks(c)
     pulled = [p for p in c.scan.get("pulled") or [] if p]
     if pulled:
-        blocks.append(_p(f"Every sportsbook has pulled its props on {_join(pulled)}, so we treat "
-                         "them as out until the props come back"))
+        # WHO "THEM" WAS (step AHY): "so we treat them as out until the props come back" read as the props.
+        who = "that player" if len(pulled) == 1 else "those players"
+        blocks.append(_p(f"Every sportsbook has pulled its props on {_join(pulled)}, so we count {who} as out "
+                         "until the props come back"))
     for q in c.result.get("qb_changes") or []:
         if isinstance(q, dict) and q.get("team") in c.teams and q.get("headline"):
             text = q["headline"]
@@ -2423,10 +2435,10 @@ def sec_redzone(c: Ctx) -> dict | None:
         blocks[0]["marks"] = marks
     for off in c.teams:
         if usage.get(off):
-            blocks += [_h(f"Who gets the ball inside the 20 for {c.name(off)}"), _list(usage[off])]
+            blocks += [_h(f"Who gets the ball inside the 20 for {team_np(c, off)}"), _list(usage[off])]
         scorers = td_chance_pairs(c, off)
         if scorers:
-            blocks += [_h(f"Who can score for {c.name(off)}"), _claimed_list(scorers)]
+            blocks += [_h(f"Who can score for {team_np(c, off)}"), _claimed_list(scorers)]
     if not blocks:
         return None
     return _section("redzone", "Red zone", blocks)
@@ -2461,6 +2473,14 @@ def sec_context(c: Ctx) -> dict | None:
         # The side with less rest says "Rest deficit", the other "Rest
         # edge" — the same fact twice; the edge is kept.
         notes = [str(n) for n in f.get("notes") or [] if n and not str(n).startswith("Rest deficit")]
+        # A BYE AND ITS REST EDGE ARE ONE FACT (step AHY): "DET comes off a bye: 14 days of rest and two weeks to
+        # prepare" sat over "DET has the rest edge: 14 days to GB's 7".
+        bye = next((n for n in notes if n.startswith("Off a bye: ")), None)
+        edge = next((n for n in notes if n.startswith("Rest edge: ")), None)
+        m = _re.match(r"Rest edge: (\d+) days to the opponent's (\d+)$", edge or "")
+        if bye and m:
+            notes = [f"Off a bye: {m.group(1)} days of rest to the opponent's {m.group(2)}, and two weeks to "
+                     f"prepare"] + [n for n in notes if n not in (bye, edge)]
         if f.get("rest_days") and f.get("rest_band") not in (None, "", "normal week") \
                 and not any("days" in n for n in notes):
             notes.insert(0, f"{f['rest_days']} days of rest ({f['rest_band']})")
@@ -2677,16 +2697,21 @@ def script_blocks(c: Ctx) -> list:
         return q[0].get("player") if q else ""
     fb, ft, fq = lead_back(fav), targets(fav), qb(fav)
     db, dt, dq = lead_back(dog), targets(dog), qb(dog)
+    # EACH SCRIPT SAYS ITS OWN MARGIN (step AHY, 26 November 2026). Script C read "a close game (21% of the
+    # simulated games)" two lines under "45% are decided by 8 points or fewer": it counts only the favorite's
+    # close wins, B every underdog win (it read "GB leads"), D only the favorite's blowouts. Said as the table
+    # above says them and as the finished game's check does (reportfacts.SCRIPT_SAID), short enough that the
+    # page still sets the lead-in in bold (report.js `named`, 60 characters).
     who = {
-        "A": (f"{fav} controls it", _join([x for x in (
+        "A": (f"{fav} by 8 to 14", _join([x for x in (
             f"{fb}'s carries" if fb else "", f"{ft[0]}'s short targets" if ft else "") if x]
             or [f"{fav}'s run game"]) + (f" carry the volume, and {dq} throws late" if dq else " carry the volume")),
-        "B": (f"{dog} leads", _join([x for x in (
-            f"{dq}'s attempts" if dq else "", _join(f"{p}'s targets" for p in dt) if dt else "") if x]
+        "B": (f"{dog} wins", _join([x for x in (
+            f"{dq}'s attempts" if dq else "", (_join([f"{p}'s" for p in dt]) + " targets") if dt else "") if x]
             or [f"{dog}'s passing game"]) + " go up" + (f", and {fav} has to throw ({fq})" if fq else "")),
-        "C": ("a close game", "steady volume for " + _join([p for p in (ft[:1] + dt[:1] + [fb, db]) if p]
-                                                          or ["both offenses"])),
-        "D": ("a blowout", f"{fav}'s starters can sit in the fourth"
+        "C": (f"{fav} by 1 to 7", "steady volume for " + _join(
+            [p for p in (ft[:1] + dt[:1] + [fb, db]) if p] or ["both offenses"])),
+        "D": (f"{fav} by 15 or more", f"{fav}'s starters can sit in the fourth"
               + (f", so {_join([p for p in (fb, ft[0] if ft else '') if p])} are at risk on overs"
                  if fb or ft else "")
               + (f", and {dog}'s garbage-time targets go to {dt[0]}" if dt else "")),
@@ -3282,6 +3307,15 @@ def _known_names(c: Ctx) -> set:
                 names.add(st.get("name") if isinstance(st, dict) else st)
         # And the teams themselves: a college's reason opens on its school.
         names |= {c.name(t) for t in c.teams}
+        # …and an NFL team's place (step AHY): "detroit gives up the fourth-most catches to tight ends".
+        if c.sport in ("nfl", "", None):
+            try:
+                from .sources.oddsapi import TEAM_ABBR
+                for full, abbr in TEAM_ABBR.items():
+                    if abbr in c.teams:
+                        names |= {full, full.rsplit(" ", 1)[0]}
+            except Exception:                                # noqa: BLE001
+                pass
         c._known = {str(n) for n in names if n}
     return c._known
 
@@ -3863,29 +3897,32 @@ def stepup_sentence(c: Ctx) -> str:
             else:
                 when = f"in the {n_games} games this season without {whom}"
                 per = " a game"
+            # WHAT EACH NUMBER COUNTS (step AHY): "(4 targets, 81 yards; 2.9 a game otherwise)" left the reader to
+            # work out that 2.9 was targets, and with whom.
+            plays = f"when {gone} plays" if len(outs) == 1 else "when they play"
             who = []
             for n in named:
                 one = f"{n['player']} ({_num(n['per_game'])} {kind}{per}"
                 if n.get("yards"):
-                    one += f", {_num(n['yards'])} yards{per}"
+                    one += f" for {_num(n['yards'])} yards{per}"
                 if n.get("with") is not None:
-                    one += f"; {_num(n['with'])} a game otherwise"
+                    one += f"; {_num(n['with'])} {kind} a game {plays}"
                 who.append(one + ")")
-            bits.append(f"without {gone} ({share:.0%} of the {kind} this season), {when}, the {kind} went to "
-                        + _join(who))
+            bits.append(f"{gone} {'is' if len(outs) == 1 else 'are'} out ({share:.0%} of the {kind} this season); "
+                        f"{when}, the {kind} went to " + _join(who))
         if not bits:
             continue
         s = f"Who steps up for {team_np(c, t)}: " + "; and ".join(bits)
         lift = got.get("lift") or {}
         if lift:
-            from .stepup import MARKET_WORDS as _MW
+            from .stepup import lift_bits as _bits
             by_mk: dict = {}
             for player, mk in sorted(lift.items()):
                 by_mk.setdefault(tuple(sorted(mk.items())), []).append(player)
             said = []
             for mk, players in by_mk.items():
                 owners = _join([p + ("'" if p.endswith("s") else "'s") for p in players])
-                said.append(f"{owners} {_join([f'{_MW.get(m, m)} ×{v:.2f}' for m, v in mk])}")
+                said.append(f"{owners} {_bits(dict(mk))}")
             s += "; our numbers raise " + "; and ".join(said) + " for it"
         parts.append(_sentence(s))
     return " ".join(parts)
@@ -5117,9 +5154,16 @@ def verdict_evidence(c: Ctx) -> dict:
     for t in c.teams:
         mine = sorted((r for r in rows if r.get("team") == t), key=lambda r: str(r.get("position") or "") != "QB")
         if mine:
-            said = [f"{r.get('player')}" + (f" ({r['position']})" if r.get("position") else "")
-                    + f", {status_words(r.get('status'))}" for r in mine[:VERDICT_NAMES_OUT]]
-            out[c.opp[t]].append(f"{cap(team_np(c, t))} {team_be(c, t)} without {_join(said + _more_out(len(mine)))}")
+            # IN THE SHORT VERSION'S WORDS (step AHY, 26 November 2026): this read "The Packers are without Zach Tom
+            # (T), out", "without" and "out" both, and "without X (WR), doubtful" for a player who may yet play.
+            # It says the positions as the short version does, and a doubtful player as doubtful.
+            line = absent_sentence(c, mine[:VERDICT_NAMES_OUT], per_team=VERDICT_NAMES_OUT).rstrip(".")
+            more, rest = _more_out(len(mine)), mine[VERDICT_NAMES_OUT:]
+            if more:
+                doubt = ["DOUBT" in str(r.get("status") or "").upper() for r in rest]
+                state = "doubtful" if all(doubt) else "out or doubtful" if any(doubt) else "out"
+                line += f", and {more[0]} {'is' if len(rest) == 1 else 'are'} {state}"
+            out[c.opp[t]].append(line)
     return out
 
 
@@ -5148,13 +5192,13 @@ _MORE_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
 #: baseball's from its ratings-alone moneylines; every other league says
 #: what engine/gamecal has measured of it, or that nothing has been.
 VERDICT_RATINGS_WHY = {
-    "nfl": "where they've disagreed with the closing line, the disagreement has carried nothing",
+    "nfl": "where they've disagreed with the closing line, they've told us nothing the line didn't already",
     "mlb": "bets on them alone against the price lost 12.4%",
 }
 #: The note under a call that shows the ratings beside it: why the call is
 #: the price's is said on the ratings' own line, so the note does not repeat it.
 VERDICT_NOTE_RATED = ("The call follows the price, the sharpest number on the board for who wins. "
-                      "The reasons above are the report's own data, for each side")
+                      "The reasons above are this report's own data, for each side.")
 
 
 #: What a league's ratings were measured on before any closing line graded
@@ -5186,7 +5230,7 @@ def ratings_why(sport: str, kind: str | None = None) -> str:
     except Exception:                                        # noqa: BLE001
         return RATINGS_FITTED_ON.get((sport, kind), "they haven't been measured against the price yet")
     if shrink <= 0.02:
-        return f"over {n:,} graded games, their disagreements with the closing line carried nothing"
+        return f"over {n:,} graded games, their disagreements with the closing line told us nothing the line didn't"
     return f"{shrink:.0%} of a disagreement with the closing line has held up, over {n:,} graded games"
 
 
@@ -5298,20 +5342,24 @@ def sec_verdict(c: Ctx) -> dict | None:
     elif not why and not case:
         blocks.append(_p("Nothing in the matchup, the records or the injury report tilts this one past the price"))
     note = VERDICT_NOTE_RATED if "ratings" in blocks[0] else VERDICT_NOTE.get(c.sport, VERDICT_NOTE[""])
-    blocks.append({"type": "note", "text": note if (why or case) else note.split(". The reasons above")[0]})
+    # A NOTE ENDS AS A SENTENCE (step AHY): the short one read "... so the call follows the price" with no stop.
+    blocks.append({"type": "note", "text": note if (why or case) else _sentence(note.split(". The reasons above")[0])})
     return _section("verdict", "Who we think wins", blocks)
 
 
-#: Why the chance is the price's, said only as far as it is measured.
+#: Why the chance is the price's, said only as far as it is measured. IN PLAIN WORDS (step AHY, 26 November 2026):
+#: these read "The chance is the price's, not our team ratings': ... the disagreement has carried nothing", and
+#: ended without a stop.
 VERDICT_NOTE = {
-    "nfl": ("The chance is the price's, not our team ratings': where our NFL ratings disagree with the closing "
-            "line, the disagreement has carried nothing (measured on every season we hold), so the call follows "
-            "the price. The reasons above are the report's own data, for each side"),
-    "mlb": ("The chance is the price's, not our team ratings': bets on our baseball ratings alone against the "
-            "price lost 12.4%, so the call follows the price. The reasons above are the report's own data, for "
-            "each side"),
-    "": ("The chance is the price's: it is the sharpest number on the board for who wins. The reasons above are "
-         "the report's own data, for each side"),
+    "nfl": ("The chance to win comes from the betting price, not from our team ratings: where our NFL ratings "
+            "disagree with the closing line, they have told us nothing the line didn't already (measured on every "
+            "season we hold), so the call follows the price. The reasons above are this report's own data, for "
+            "each side."),
+    "mlb": ("The chance to win comes from the betting price, not from our team ratings: bets on our baseball "
+            "ratings alone against the price lost 12.4%, so the call follows the price. The reasons above are this "
+            "report's own data, for each side."),
+    "": ("The chance to win comes from the betting price, the sharpest number on the board for who wins. The "
+         "reasons above are this report's own data, for each side."),
 }
 
 
@@ -6043,9 +6091,33 @@ def to_text(report: dict) -> str:
                         out.append(f"      {v['script']}")
                     if v.get("rule_note"):
                         out.append(f"      {v['rule_note']}")
-                    out += [f"      Backup: {x}" for x in v.get("backups") or []]
+                    out += [f"      Backup: {x}" for x in backup_lines(v.get("backups"), len(v.get("legs") or []))]
                     out += [f"      Caveat: {x}" for x in v.get("caveats") or []]
     return "\n".join(out)
+
+
+def backup_lines(backups, n_legs: int) -> list:
+    """A ticket's backups as the page says them (report.js `backupLines`, step AHY): one stand-in named for every
+    leg it covers, once — "If any leg is out or its number moves: …" — not three lines saying the same."""
+    sep = " is out or that number moves: "
+    order, by = [], {}
+    for x in backups or []:
+        line = str(x)
+        i = line.find(sep)
+        who = line[3:i] if i > 3 and line.startswith("If ") else ""
+        leg = line[i + len(sep):] if who else line
+        if leg not in by:
+            order.append(leg)
+            by[leg] = []
+        if who:
+            by[leg].append(who)
+    out = []
+    for leg in order:
+        who = by[leg]
+        out.append(leg if not who else f"If {who[0]}{sep}{leg}" if len(who) == 1 else
+                   f"If any leg is out or its number moves: {leg}" if len(who) == n_legs and n_legs > 2 else
+                   f"If {', '.join(who[:-1])} or {who[-1]}{sep}{leg}")
+    return out
 
 
 def _form_text(v: dict) -> list:

@@ -136,11 +136,11 @@ def test_the_report_carries_the_four_scripts_and_who_can_score():
     import test_the_game_report_reads_like_the_research as T
     text = R.to_text(T._report())
     for want in ("— Four scripts —",
-                 "Script A, DET controls it (17% of the simulated games): Jahmyr Gibbs's carries",
-                 "Script B, GB leads (42% of the simulated games)",
-                 "Script C, a close game (21% of the simulated games)",
-                 "Script D, a blowout (20% of the simulated games): DET's starters can sit in the fourth",
-                 "— Who can score for Lions —",
+                 "Script A, DET by 8 to 14 (17% of the simulated games): Jahmyr Gibbs's carries",
+                 "Script B, GB wins (42% of the simulated games): Christian Watson's and Matthew Golden's targets go up",
+                 "Script C, DET by 1 to 7 (21% of the simulated games)",
+                 "Script D, DET by 15 or more (20% of the simulated games): DET's starters can sit in the fourth",
+                 "— Who can score for the Lions —",
                  # 2026-11-15: his share of the red-zone work is said as counts
                  # above these lines (rz_usage_lines), not as our estimate here.
                  "Jahmyr Gibbs (RB): 43% to score, at +333; GB allows the "

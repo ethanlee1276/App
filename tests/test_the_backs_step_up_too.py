@@ -99,9 +99,10 @@ def test_the_short_version_says_who_took_the_carries():
     c = GR.Ctx({"home": "LA", "away": "GB", "date": "2026-11-25", "kickoff": "20:00"}, {"date": "2026-W11"})
     c.stepup = {"LA": got}
     s = GR.stepup_sentence(c)
-    assert ("in week 8, the one game this season without Kyren Williams, the carries went to Blake Corum (16 "
-            "carries, 75 yards; 5 a game otherwise)") in s, s
-    assert "our numbers raise Blake Corum's carries ×1.72 for it." in s, s
+    assert ("Kyren Williams is out (78% of the carries this season); in week 8, the one game this season without "
+            "Kyren Williams, the carries went to Blake Corum (16 carries for 75 yards; 5 carries a game when Kyren "
+            "Williams plays)") in s, s
+    assert "our numbers raise Blake Corum's carries by 72% for it." in s, s
     claims = [cl for _t, cl in got["lines"] if cl]
     assert any(cl["player"] == "Blake Corum" and cl["stat"] == "carries" for cl in claims), "graded after the game"
 

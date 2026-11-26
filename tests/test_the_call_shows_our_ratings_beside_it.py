@@ -44,7 +44,7 @@ def test_the_ratings_line_sits_under_the_price_and_says_why_it_is_unproven():
     items = _items(sec)
     assert items[0].startswith("The Lions to win, a 60% chance by the books' moneyline"), items
     assert items[1] == ("Our team ratings alone: the Lions 62%. Unproven: where they've disagreed with the "
-                        "closing line, the disagreement has carried nothing."), items[1]
+                        "closing line, they've told us nothing the line didn't already."), items[1]
     assert sec["blocks"][-1]["text"].startswith("The call follows the price"), "the note does not repeat the why"
 
 
@@ -69,7 +69,8 @@ def test_a_measured_league_says_what_was_measured():
     keep = GC.measured
     try:
         GC.measured = lambda sport, market: {"shrink": 0.0, "n": 412, "hit_rate": 0.5}
-        assert R.ratings_why("cfb") == "over 412 graded games, their disagreements with the closing line carried nothing"
+        assert R.ratings_why("cfb") == ("over 412 graded games, their disagreements with the closing line told us "
+                                        "nothing the line didn't")
         GC.measured = lambda sport, market: {"shrink": 0.3, "n": 950}
         assert R.ratings_why("nhl") == "30% of a disagreement with the closing line has held up, over 950 graded games"
     finally:
@@ -80,7 +81,7 @@ def test_without_ratings_the_call_reads_as_before():
     sec = R.sec_verdict(_ctx())
     assert "ratings" not in sec["blocks"][0]
     assert not any(i.startswith("Our team ratings alone") for i in _items(sec))
-    assert "the disagreement has carried nothing" in sec["blocks"][-1]["text"], "the NFL's own note stands"
+    assert "they have told us nothing the line didn't already" in sec["blocks"][-1]["text"], "the NFL's own note"
 
 
 def test_the_build_connection_reads_the_slip_model_with_baseball_starters():

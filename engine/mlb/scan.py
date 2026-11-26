@@ -245,7 +245,9 @@ def read_starter(prop, game, park) -> dict:
         if opp_k >= K_RATE_HIGH:
             said(pro, f"{opp} strikes out {opp_k:.1%} of the time (league {LEAGUE_K_RATE:.0%})", RL.DEFENSE)
         elif opp_k <= K_RATE_LOW:
-            said(con, f"{opp} rarely strikes out ({opp_k:.1%})", RL.DEFENSE)
+            # AS FAR AS IT GOES (step AHY): "rarely strikes out (20.5%)" beside a 22% league is less than most, not rare.
+            said(con, f"{opp} strikes out less than most teams ({opp_k:.1%}; the league is {LEAGUE_K_RATE:.0%})",
+                 RL.DEFENSE)
     breakout = False
     if me:
         # His own stuff is one reason, however many numbers say it.

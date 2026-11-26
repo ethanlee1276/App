@@ -83,10 +83,13 @@ def evaluate_statcast(p: StatcastProfile, market: str) -> StatcastEffect:
         if p.csw_pct is not None:
             factor = clamp(p.csw_pct / LEAGUE_CSW, 0.85, 1.20)
             mult *= 1.0 + (factor - 1.0) * 0.5
+            # IN PLAIN WORDS (step AHY): "Elite CSW%" and "K upside capped" were the trade's shorthand.
             if p.csw_pct >= 0.31:
-                reasons.append(f"Elite CSW% {p.csw_pct:.0%} — swing-and-miss stuff")
+                reasons.append(f"Gets a called strike or a whiff on {p.csw_pct:.0%} of pitches (CSW), among the "
+                               "league's best")
             elif p.csw_pct <= 0.25:
-                reasons.append(f"Below-average CSW% {p.csw_pct:.0%} — K upside capped")
+                reasons.append(f"Gets a called strike or a whiff on only {p.csw_pct:.0%} of pitches (CSW), below "
+                               "average — fewer strikeouts likely")
         elif p.whiff_pct is not None and p.whiff_pct >= 0.30:
             mult *= 1.04
             reasons.append(f"High whiff rate {p.whiff_pct:.0%}")

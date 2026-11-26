@@ -385,7 +385,7 @@ def test_the_reports_write_what_a_finished_game_checks():
     assert inj["claims"] == [{"kind": "injury", "player": "Tyler Herro", "team": "MIA", "status": "out"}], inj
     assert "claim" in R.PLAIN_SKIP and "expect" in R._NOT_TEXT, "what a final is checked by is never a sentence"
     src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
-    assert 'blocks += [_h(f"Who can score for {c.name(off)}"), _claimed_list(scorers)]' in src
+    assert 'blocks += [_h(f"Who can score for {team_np(c, off)}"), _claimed_list(scorers)]' in src
     assert "_claimed_list(\n                (f\"{r.get('player')} ({r.get('position') or '—'})" in src
     assert 'blocks[0]["sim"] = {k: v for k, v in (' in src and 'para["claim"] = claim' in src
     lsrc = (ROOT / "engine" / "leaguereport.py").read_text(encoding="utf-8")

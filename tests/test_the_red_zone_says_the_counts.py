@@ -70,8 +70,8 @@ def test_each_player_says_his_counts_his_rate_his_share_and_this_game():
     rep = R.build(board["games"][0], board, allowed=GR.ALLOWED, names=GR.NAMES)
     blocks = _redzone(rep)
     heads = [t for k, t in blocks if k == "h"]
-    assert "Who gets the ball inside the 20 for Lions" in heads, heads
-    lines = blocks[heads and [t for k, t in blocks].index("Who gets the ball inside the 20 for Lions") + 1][1]
+    assert "Who gets the ball inside the 20 for the Lions" in heads, heads
+    lines = blocks[heads and [t for k, t in blocks].index("Who gets the ball inside the 20 for the Lions") + 1][1]
     # GB allows 15% more plays inside the 20 than an average defense: x1.15.
     assert lines == [
         "Jahmyr Gibbs (RB): 14 carries (5 inside the 5) and 2 targets (1 inside the 10) in the last 6 games "
@@ -81,7 +81,7 @@ def test_each_player_says_his_counts_his_rate_his_share_and_this_game():
     ], lines
     # The counts come before who can score, for each team.
     order = [t for k, t in blocks if k == "h"]
-    assert order.index("Who gets the ball inside the 20 for Lions") < order.index("Who can score for Lions")
+    assert order.index("Who gets the ball inside the 20 for the Lions") < order.index("Who can score for the Lions")
     text = R.to_text(rep)
     assert "by our numbers" not in text
     assert "DET runs about 12 plays a game inside the opponent's 20" in text and "This game: about 13.8 for DET." in text

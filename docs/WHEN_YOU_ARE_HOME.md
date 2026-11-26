@@ -9883,6 +9883,39 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHY. The game reports say it in a member's words** (step 1017; 26 November; nothing to run). You: "i just want
+the game reports reporting the correct infor and data ... and wording everyhting correctly for the user". I read every
+league's report the way a member meets it, line by line, and fixed what read wrong or said a number wrong:
+
+- **"Without" and "out" both.** The case for a side read "The Packers are without Zach Tom (T), out", and a doubtful
+  player read as gone. It now says it as the short version does: "The Packers are without tackle Zach Tom, and wide
+  receiver Romeo Doubs is doubtful".
+- **A wrong number word.** "Touchdowns to running backs on the ground" was wrong: the backs' touchdowns we count
+  include the ones they catch. It says "to running backs" now, and "rushing yards to running backs on the ground" no
+  longer says it twice.
+- **The call's note.** "The chance is the price's, not our team ratings': ... the disagreement has carried nothing"
+  reads "The chance to win comes from the betting price, not from our team ratings: where our NFL ratings disagree
+  with the closing line, they have told us nothing the line didn't already ...", and it ends with a full stop.
+- **The four scripts said their own margins.** Script C read "a close game (21% of the simulated games)" two lines
+  under "45% are decided by 8 points or fewer", because it only counts the favorite's close wins. Each one now says
+  what it counts, as the table above it does: "Script A, DET by 8 to 14", "Script B, GB wins", "Script C, DET by 1 to
+  7", "Script D, DET by 15 or more". After the game the check already said them that way.
+- **Who steps up, in plain words.** The lines said "(engine/room)", a file name, and "×1.42"; they say "by 42%" now.
+  The short version reads "Puka Nacua is out (36% of the targets this season); in week 10, the one game this season without
+  Puka Nacua, ... Konata Mumpfield (4 targets for 81 yards; 2.9 targets a game when Puka Nacua plays)". Before, "2.9 a game
+  otherwise" never said 2.9 of what. (Those numbers are the test's, not a real game.)
+- **The parlays say a thing once.** Each pair of legs that wanted opposite leads repeated "the scripts pull apart"
+  under a "What it needs: a close game" that had already said it. A ticket now says who needs which lead in one line.
+  The copied text also names a backup once when it covers every leg, as the page already did.
+- **Said twice.** A starting lineman was listed twice in the injury section ("Zach Tom (T) — out" and "Packers'
+  offensive line: Zach Tom (RT) is out"). A bye and its rest edge were two lines of one fact. Each is said once now.
+- **Small ones.** "Who can score for the Lions" (it was "for Lions"), "the Lions are without" and "the Lions' field"
+  in the rematch notes, the pulled-props line says "we count that player as out" (it read "them", which sounded like
+  the props), "Detroit" stays capitalized in a clause, hockey's "BOS shoots the 11th-fewest a game" now says shots,
+  baseball says a lineup "strikes out less than most teams (20.5%; the league is 22%)" (it said "rarely" at 20.5%),
+  "Zack Wheeler's pitch mix" (it was "Phillies' starter's"), and the pitch-rate reasons drop the "Elite CSW%" and
+  "K upside capped" shorthand.
+
 **AHX. The backs step up too: a backup's carries are lifted, and the next back up is read** (step 1016; 26
 November; nothing to run). You: "do the same for running backs too". What a back had:
 

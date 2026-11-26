@@ -138,9 +138,10 @@ def test_the_block_says_which_lift_moved_each_pick():
     assert got == {"Colby Parkinson": {"rec_yds": 1.42}, "Tutu Atwell": {"receptions": 1.19}}
     assert kinds == {"Colby Parkinson": {"rec_yds": "room"}, "Tutu Atwell": {"receptions": "mate"}}
     line = S._lift_line("Colby Parkinson", got["Colby Parkinson"], kinds["Colby Parkinson"])
-    assert line == ("Our numbers raise Colby Parkinson's receiving yards ×1.42, the lift measured over ten seasons "
-                    "(2016-2025) for the receivers left beyond a team's top three when a fifth or more of its "
-                    "targets sit (engine/room), in every number we price on him"), line
+    # In a member's words (step AHY): no file name, "by 42%" for ×1.42.
+    assert line == ("Our numbers raise Colby Parkinson's receiving yards by 42%, the lift we measured over ten "
+                    "seasons (2016-2025) for the receivers left beyond a team's top three when a fifth or more of its "
+                    "targets sit"), line
 
 
 def _usage():
@@ -181,10 +182,11 @@ def test_the_short_version_says_who_steps_up():
         "lift": {"Colby Parkinson": {"receptions": 1.32, "rec_yds": 1.42},
                  "Blake Corum": {"receptions": 1.32, "rec_yds": 1.42}}}}
     s = GR.stepup_sentence(c)
-    assert s == ("Who steps up for the Rams: without Puka Nacua (36% of the targets this season), in week 10, the "
-                 "one game this season without Puka Nacua, the targets went to Konata Mumpfield (4 targets, 81 yards; "
-                 "2.9 a game otherwise) and Kyren Williams (5 targets, 9 yards; 5.1 a game otherwise); our numbers "
-                 "raise Blake Corum's and Colby Parkinson's receiving yards ×1.42 and catches ×1.32 for it."), s
+    assert s == ("Who steps up for the Rams: Puka Nacua is out (36% of the targets this season); in week 10, the "
+                 "one game this season without Puka Nacua, the targets went to Konata Mumpfield (4 targets for 81 "
+                 "yards; 2.9 targets a game when Puka Nacua plays) and Kyren Williams (5 targets for 9 yards; 5.1 "
+                 "targets a game when Puka Nacua plays); our numbers raise Blake Corum's and Colby Parkinson's "
+                 "receiving yards by 42% and catches by 32% for it."), s
     c.stepup = {}
     assert GR.stepup_sentence(c) == ""
     src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
@@ -219,10 +221,10 @@ def test_college_says_who_steps_up_in_its_short_version_too():
     c.stepup = {"IND": got}
     s = GR.stepup_sentence(c)
     assert s.startswith("Who steps up for "), s
-    assert ("without Elijah Sarratt (43% of the catches this season), in the 2 games this season without Elijah "
-            "Sarratt, the catches went to Omar Cooper Jr. (7 catches a game, 90 yards a game; 4 a game otherwise)"
-            in s), s
-    assert s.endswith("our numbers raise Omar Cooper Jr.'s receiving yards ×1.09 and catches ×1.12 for it."), s
+    assert ("Elijah Sarratt is out (43% of the catches this season); in the 2 games this season without Elijah "
+            "Sarratt, the catches went to Omar Cooper Jr. (7 catches a game for 90 yards a game; 4 catches a game "
+            "when Elijah Sarratt plays)" in s), s
+    assert s.endswith("our numbers raise Omar Cooper Jr.'s receiving yards by 9% and catches by 12% for it."), s
 
 
 def test_basketball_says_who_steps_up_in_its_short_version():

@@ -166,18 +166,29 @@ def raised(rows, team: str, outs: set, kinds: dict | None = None) -> dict:
 
 
 #: How each lift is said beside a raised number.
+#: IN A MEMBER'S WORDS (step AHY, 26 November 2026): these said "(engine/room)", a file name, and "×1.42" where a
+#: reader says "by 42%".
 LIFT_WORDS = {
-    "mate": "the lift measured over four seasons for a player whose teammate ahead of him at his position is out",
-    "room": ("the lift measured over ten seasons (2016-2025) for the receivers left beyond a team's top three when "
-             "a fifth or more of its targets sit (engine/room)"),
+    "mate": "the lift we measured over four seasons when a teammate ranked higher at the same position is out",
+    "room": ("the lift we measured over ten seasons (2016-2025) for the receivers left beyond a team's top three "
+             "when a fifth or more of its targets sit"),
 }
 
 
+def by_words(v) -> str:
+    """A lift as a reader says it: 1.42 is "by 42%"."""
+    return f"by {abs(float(v) - 1):.0%}"
+
+
+def lift_bits(mk: dict) -> str:
+    """"receiving yards by 42% and catches by 32%"."""
+    return _join([f"{MARKET_WORDS.get(m, m)} {by_words(v)}" for m, v in sorted(mk.items())])
+
+
 def _lift_line(player: str, mk: dict, kinds: dict) -> str:
-    bits = _join([f"{MARKET_WORDS[m]} ×{v:.2f}" for m, v in sorted(mk.items())])
     seen = {k for k in kinds.values()}
     why = [LIFT_WORDS[k] for k in ("mate", "room") if k in seen or "both" in seen]
-    return f"Our numbers raise {player}'s {bits}, {' and '.join(why)}, in every number we price on him"
+    return f"Our numbers raise {player}'s {lift_bits(mk)}, {' and '.join(why)}"
 
 
 def for_team(conn, season: int, week: int | None, team: str, team_name: str, outs: list, rows=None,
@@ -264,7 +275,8 @@ def for_team(conn, season: int, week: int | None, team: str, team_name: str, out
         parts = []
         per = "" if len(without) == 1 else " a game"
         for pg, name, pos, before_pg, yds in cands[:NAMED]:
-            bit = f"{name} ({pos}) {_num(pg)}{per}"
+            # The count says what it counts (step AHY): "Tutu Atwell (WR) 9" was 9 targets.
+            bit = f"{name} ({pos}) {_num(pg)} {kind}{per}"
             if before_pg is not None:
                 bit += f" ({_num(before_pg)} a game with {them})"
             if yds:
@@ -282,7 +294,7 @@ def for_team(conn, season: int, week: int | None, team: str, team_name: str, out
                 continue                          # unmeasured, or no step up to read: he had as much with them
             claim = {"kind": "player", "player": name, "team": team, "pos": pos,
                      "stat": "targets" if kind == "targets" else "carries", "favors": "more", "group": GROUP}
-            lines.append((f"{name} steps up: more {kind} than his own average", claim))
+            lines.append((f"{name} steps up: more {kind} than usual", claim))
     if not lines:
         return None
     kinds: dict = {}
@@ -292,7 +304,7 @@ def for_team(conn, season: int, week: int | None, team: str, team_name: str, out
     if vacated.get("targets", 0.0) >= ROOM_SHARE:
         m, se, n = ROOM_TE["receptions"]
         lines.append((f"When a third or more of a team's targets sat, over four seasons a tight end caught "
-                      f"{(m - 1) * 100:.0f}% more than his own form (± {se * 100:.0f}%, {n} games) and a back no "
+                      f"{(m - 1) * 100:.0f}% more than usual (± {se * 100:.0f}%, {n} games) and a back no "
                       f"more: said here, not in our numbers, since it fell just short of our bar", None))
     return {"lines": lines, "outs": named_out, "vacated": vacated, "found": found, "lift": lift, "kinds": kinds}
 
@@ -427,7 +439,7 @@ def for_cfb_team(players: dict, days: list, team: str, team_name: str, outs: lis
         per = "" if len(without) == 1 else " a game"
         parts = []
         for pg, name, pos, before_pg, ypg in cands[:NAMED]:
-            bit = f"{name} ({pos}) {_num(pg)}{per}"
+            bit = f"{name} ({pos}) {_num(pg)} {kind}{per}"
             if before_pg is not None:
                 bit += f" ({_num(before_pg)} a game with {them})"
             if ypg:
@@ -441,9 +453,8 @@ def for_cfb_team(players: dict, days: list, team: str, team_name: str, outs: lis
         return None
     lift = raised(rows, team, {_key(n) for n in named_out} | {_key(o[0]) for o in outs})
     for player, mk in sorted(lift.items()):
-        bits = _join([f"{MARKET_WORDS[m]} ×{v:.2f}" for m, v in sorted(mk.items())])
-        lines.append((f"Our numbers raise {player}'s {bits}, the lift measured on college games for a player whose "
-                      f"teammate ahead of him at his position is out, in every number we price on him", None))
+        lines.append((f"Our numbers raise {player}'s {lift_bits(mk)}, the lift we measured on college games when a "
+                      f"teammate ranked higher at the same position is out", None))
     return {"lines": lines, "outs": named_out, "vacated": vacated, "found": found, "lift": lift}
 
 

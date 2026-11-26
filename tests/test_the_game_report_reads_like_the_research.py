@@ -282,7 +282,7 @@ def test_every_number_is_the_boards_own():
     assert ("DET scores a touchdown on 80% of its trips inside the 20 (the third-best rate in the league). "
             "GB's defense gives up a touchdown on 70% of them (the 10th-worst).") in text
     assert "Where DET's defense is weakest, over 5 games: it gives up the most receiving yards (109 a game) to tight ends" in text
-    assert "Where it's strongest: it gives up the third-fewest rushing yards (70 a game) to running backs on the ground" in text
+    assert "Where it's strongest: it gives up the third-fewest rushing yards (70 a game) to running backs." in text
     assert "Expected red-zone chances" not in text or "about 2.4 a game" in text
 
 
@@ -346,7 +346,9 @@ def test_the_injury_report_is_named_when_it_was_not_read():
 
 def test_the_same_fact_is_not_said_twice():
     text = R.to_text(_report())
-    assert "Rest deficit" not in text and "DET has the rest edge: 14 days to GB's 7" in text
+    # A bye and its rest edge are one fact (step AHY).
+    assert "Rest deficit" not in text and "DET comes off a bye: 14 days of rest to GB's 7, and two weeks to " \
+        "prepare" in text and "has the rest edge" not in text, text
     assert text.count("Brandon Cisse (RCB) has allowed") == 0, "the corner's line says it once"
     assert "Someone else's quarterback change" not in text
 

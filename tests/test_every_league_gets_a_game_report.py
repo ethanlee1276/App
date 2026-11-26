@@ -171,7 +171,7 @@ def test_the_mlb_report_reads_the_pitching_matchup_the_park_and_the_reads():
                  "Ballpark: Wrigley Field — open air, grass; 355 feet to left, 400 to center, 353 to right",
                  "Lineups: not out yet", "Plate umpire: Pat Hoberg",
                  "The run line opened at PHI −1.5 and has not moved", "The total opened at 9 and is up 0.5",
-                 "Phillies' starter's pitch mix: four-seamers 45%, sliders 30%, changeups 15%",
+                 "Zack Wheeler's pitch mix: four-seamers 45%, sliders 30%, changeups 15%",
                  "PHI's lineup hits right-handed pitching 5% better than its average (8 hitters measured).",
                  "CHC's lineup hits right-handed pitching about its average (7 hitters measured)",
                  "CHC strikes out 25.0% of the time (the league average is 22%)",
@@ -231,7 +231,7 @@ def test_the_nhl_report_reads_the_tape_the_goalies_and_the_injuries():
                  "TOR takes the second-most shots (33.2 a game), and BOS allows the sixth-most (31.5 a game) — a busy night "
                  "for BOS's goalie",
                  "Charlie McAvoy (BOS) — out, shoulder",
-                 "Every sportsbook pulled its props on Brad Marchand before puck drop, so we treat them as out",
+                 "Every sportsbook pulled its props on Brad Marchand before puck drop, so we count that player as out",
                  "Starting goalies are confirmed after the morning skate; not yet for BOS"):
         assert want in text, (want, text)
     tab = next(b for s in rep["sections"] if s["key"] == "tape" for b in s["blocks"] if b["type"] == "table")

@@ -83,15 +83,15 @@ def test_the_report_names_who_took_the_targets_in_the_games_without_them():
     t = _texts(got)
     assert t[0] == ("Rams without Puka Nacua (WR, 32% of the targets) and Davante Adams (WR, 29% of the targets): "
                     "61% of the targets this season to fill"), t[0]
+    # Each count says what it counts (step AHY).
     assert t[1] == ("In the only game this season without them (week 7), the targets went to: Tutu Atwell (WR) 9 "
-                    "(4 a game with them), 70 yards; Colby Parkinson (TE) 7 (3 a game with them), 30 yards; Kyren "
-                    "Williams (RB) 3 (3 a game with them), 20 yards"), t[1]
+                    "targets (4 a game with them), 70 yards; Colby Parkinson (TE) 7 targets (3 a game with them), 30 "
+                    "yards; Kyren Williams (RB) 3 targets (3 a game with them), 20 yards"), t[1]
     assert "Gone Receiver" not in " ".join(t), "a man not with the team lately is never named"
-    assert ("Our numbers raise Tutu Atwell's receiving yards ×1.12 and catches ×1.19, the lift measured over four "
-            "seasons for a player whose teammate ahead of him at his position is out, in every number we price on "
-            "him") in t
+    assert ("Our numbers raise Tutu Atwell's receiving yards by 12% and catches by 19%, the lift we measured over "
+            "four seasons when a teammate ranked higher at the same position is out") in t, t
     assert any(x.startswith("When a third or more of a team's targets sat, over four seasons a tight end caught 12% "
-                            "more than his own form") for x in t), "61% gone: the tight end's measured note"
+                            "more than usual") for x in t), "61% gone: the tight end's measured note"
     assert got["vacated"] == {"targets": 0.614} and got["outs"] == ["Puka Nacua", "Davante Adams"]
 
 
@@ -111,13 +111,13 @@ def test_a_step_up_is_claimed_only_where_one_was_measured():
 def test_never_out_together_reads_the_games_without_the_biggest_one():
     got = S.for_team(_conn(_rams(puka_out=(6,), adams_out=(9,))), 2026, 12, "LA", "Rams", OUT, ROWS)
     assert _texts(got)[1].startswith("In the only game this season without Puka Nacua (week 6), the targets went to: "
-                                     "Tutu Atwell (WR) 7 (4.2 a game with Puka Nacua), 40 yards"), _texts(got)[1]
+                                     "Tutu Atwell (WR) 7 targets (4.2 a game with Puka Nacua), 40 yards"), _texts(got)[1]
 
 
 def test_the_bigger_one_never_missed_so_the_other_ones_games_are_read():
     got = S.for_team(_conn(_rams(puka_out=(), adams_out=(9,))), 2026, 12, "LA", "Rams", OUT, ROWS)
     assert _texts(got)[1].startswith("In the only game this season without Davante Adams (week 9), the targets went "
-                                     "to: Tutu Atwell (WR) 6 (4 a game with Davante Adams)"), _texts(got)[1]
+                                     "to: Tutu Atwell (WR) 6 targets (4 a game with Davante Adams)"), _texts(got)[1]
     none = S.for_team(_conn(_rams(puka_out=(), adams_out=())), 2026, 12, "LA", "Rams", OUT, ROWS)
     assert _texts(none)[1] == ("They have not missed a game this season, so there is no game of this team's own to "
                                "read it from yet"), _texts(none)

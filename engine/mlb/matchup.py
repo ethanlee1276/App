@@ -141,7 +141,8 @@ def _pitcher_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
         reasons.append(f"{prop.opponent} strikes out {opp_k:.0%} of the time "
                        f"({(factor - 1) * 100:+.0f}% vs league)")
     elif factor <= 0.92:
-        reasons.append(f"{prop.opponent} rarely strikes out ({opp_k:.0%}) — K upside capped")
+        reasons.append(f"{prop.opponent} strikes out less than most teams ({opp_k:.0%}) — fewer strikeouts to go "
+                       "around")
 
     me = game.pitchers.get(prop.team)
     if me and me.k_rate >= 0.27:

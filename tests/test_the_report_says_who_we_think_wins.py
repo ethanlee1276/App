@@ -78,13 +78,14 @@ def test_the_nfl_report_calls_it_and_says_both_sides():
                  "Prediction markets: Kalshi 61% and Polymarket 60%",
                  "The lines expect about Lions 27.8, Packers 24.8",
                  "Why the Lions", "The Packers' pass protection (22nd) against the Lions' pass rush (5th)",
-                 "The Packers are without Zach Tom (T), out",
+                 "The Packers are without tackle Zach Tom",
                  "The case for the Packers", "The Packers' passing game (4th) against the Lions' pass defense (22nd)"):
         assert any(want in s for s in said), (want, said)
     # Every reason in the two lists says the teams by name (step AEJ): no code beside a name.
     import re
     assert not [s for s in said[:-1] if re.search(r"\b(GB|DET)\b", s)], said
-    assert "the disagreement has carried nothing" in said[-1], said[-1]
+    assert "they have told us nothing the line didn't already" in said[-1], said[-1]
+    assert said[-1].endswith("for each side."), "the note ends as a sentence"
     assert "Who we think wins" not in R.to_text(rep).split("WHO WE THINK WINS")[0], "said once, as its section"
     assert "A lean: Lions — 60% to win" in R.to_text(rep)
 
@@ -122,7 +123,7 @@ def test_records_form_and_who_is_out_count_for_a_side():
     said = _text(sec)
     for want in ("The Lions are 8-2, the Packers 4-6",
                  "The Lions have won 4 of their last 5 (outscoring teams by 9.6 points a game); the Packers 2 of 5",
-                 "The Packers are without Jordan Love (QB), out"):
+                 "The Packers are without quarterback Jordan Love"):
         assert any(want in s for s in said), (want, said)
 
 
@@ -140,7 +141,8 @@ def test_the_other_leagues_say_their_own_facts():
     rep, _ = LEAGUES._attach(board, "nba", meta=meta)
     nba = _verdict(rep)
     assert nba["blocks"][0]["team"] == "BOS" and nba["blocks"][0]["word"] == "A clear favorite"
-    assert _text(nba)[-1] == "The chance is the price's: it is the sharpest number on the board for who wins", \
+    assert _text(nba)[-1] == ("The chance to win comes from the betting price, the sharpest number on the board "
+                              "for who wins."), \
         "no reasons, so the note does not point at any"
 
 
