@@ -476,10 +476,25 @@ def mate_mult(row) -> float | None:
     return round(v, 3)
 
 
+def room_lifted(sport, mult) -> bool:
+    """Is a journaled multiplier the room's own (engine/room.ROOM, step AHW)? The journal keeps the multiplier, not
+    which step made it; the room's four NFL values are none of the NFL teammate step's (engine/teammates.EFFECT,
+    EFFECT_SNAPS), so the value says it. A pick both steps moved carries their product and counts as raised."""
+    if str(sport or "") != "nfl":
+        return False
+    try:
+        from .room import ROOM
+        v = float(mult)
+    except Exception:                                        # noqa: BLE001
+        return False
+    return any(abs(v - x) < 0.0015 for x in set(ROOM.values()))
+
+
 def bet_record(conn, since: str | None = None) -> dict:
-    """{sport: {book: {"raised": [won, lost, pushed, units], "lowered": [...], "open": n}}}: the settled picks
-    a teammate's absence (or return) moved, by league and book, from the journal's `mate_mult` (stamped from
-    25 November 2026 on; nothing before it is guessed). {} before any. Never raises."""
+    """{sport: {book: {"raised": [won, lost, pushed, units], "lowered": [...], "room": [...], "open": n}}}: the
+    settled picks a teammate's absence (or return) moved, by league and book, from the journal's `mate_mult`
+    (stamped from 25 November 2026 on; nothing before it is guessed), the room's own lift apart (`room_lifted`,
+    from 26 November). {} before any. Never raises."""
     out: dict = {}
     try:
         cats = [c for cs in BET_BOOKS.values() for c in cs]
@@ -492,7 +507,7 @@ def bet_record(conn, since: str | None = None) -> dict:
     for sport, cat, mult, status, units in rows:
         b = out.setdefault(str(sport), {}).setdefault(book_of.get(cat, "edge"), {})
         if status in ("won", "lost", "push"):
-            way = "raised" if float(mult) > 1 else "lowered"
+            way = ("room" if room_lifted(sport, mult) else "raised") if float(mult) > 1 else "lowered"
             x = b.setdefault(way, [0, 0, 0, 0.0])
             x[("won", "lost", "push").index(status)] += 1
             x[3] = round(x[3] + float(units or 0.0), 3)

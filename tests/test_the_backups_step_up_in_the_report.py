@@ -242,6 +242,26 @@ def test_basketball_says_who_steps_up_in_its_short_version():
     assert "Who steps up" not in RR.to_text(board["game_reports"][0]), "too few games: nothing claimed"
 
 
+def test_the_record_counts_the_rooms_picks_apart():
+    from engine import stepup as S
+    import test_who_steps_up_when_receivers_sit as T
+    assert S.room_lifted("nfl", 1.42) and S.room_lifted("nfl", 1.16)
+    assert not S.room_lifted("nfl", 1.19) and not S.room_lifted("nfl", 1.108), "the teammate step's own values"
+    assert not S.room_lifted("cfb", 1.16), "college is never the room's"
+    conn = T._conn([])
+    conn.execute("CREATE TABLE IF NOT EXISTS bets (id INTEGER PRIMARY KEY, sport TEXT, category TEXT, date TEXT, "
+                 "status TEXT, pnl_units REAL, mate_mult REAL)")
+    conn.executemany("INSERT INTO bets (sport, category, date, status, pnl_units, mate_mult) VALUES (?,?,?,?,?,?)",
+                     [("nfl", "likely", "2026-11-27", "won", 0.9, 1.42), ("nfl", "likely", "2026-11-27", "lost", -1, 1.32),
+                      ("nfl", "likely", "2026-11-27", "won", 0.8, 1.19), ("nfl", "main", "2026-11-27", "open", 0, 1.24)])
+    conn.commit()
+    got = S.bet_record(conn)
+    assert got["nfl"]["likely"]["room"] == [1, 1, 0, -0.1], got
+    assert got["nfl"]["likely"]["raised"] == [1, 0, 0, 0.8] and got["nfl"]["edge"]["open"] == 1, got
+    js = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
+    assert 'said(sum[b].room, "raised for the room left")' in js
+
+
 def test_the_measurement_is_in_the_repo():
     src = (ROOT / "roomfit.py").read_text(encoding="utf-8")
     assert "THE CALIBRATING MULTIPLIER" in src and "NOBODY SAT: the control" in src

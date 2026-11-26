@@ -3472,7 +3472,7 @@ function recStepupSection(x, scope) {
   const sum = {};
   (scope ? [scope] : Object.keys(x || {})).forEach((lg) => Object.entries((x || {})[lg] || {}).forEach(([book, v]) => {
     const s = (sum[book] = sum[book] || {});
-    ["raised", "lowered"].forEach((way) => {
+    ["raised", "lowered", "room"].forEach((way) => {
       if (!(v || {})[way]) return;
       const t = (s[way] = s[way] || [0, 0, 0, 0]);
       for (let i = 0; i < 4; i++) t[i] += Number(v[way][i] || 0);
@@ -3481,9 +3481,10 @@ function recStepupSection(x, scope) {
   }));
   const said = (t, what) => (t ? `${what}: <b>${t[0]}–${t[1]}</b>${t[2] ? `–${t[2]}` : ""} (${t[3] >= 0 ? "+" : MINUS}${
     Math.abs(t[3]).toFixed(2)}u)` : "");
-  const rows = REC_STEPUP_BOOKS.filter(([b]) => sum[b] && (sum[b].raised || sum[b].lowered || sum[b].open)).map(([b, w]) => {
-    const parts = [said(sum[b].raised, "raised for a teammate out"), said(sum[b].lowered, "lowered for one back")]
-      .filter(Boolean);
+  const rows = REC_STEPUP_BOOKS.filter(([b]) => sum[b] && (sum[b].raised || sum[b].lowered || sum[b].room
+    || sum[b].open)).map(([b, w]) => {
+    const parts = [said(sum[b].raised, "raised for a teammate out"), said(sum[b].room, "raised for the room left"),
+      said(sum[b].lowered, "lowered for one back")].filter(Boolean);
     return `<div class="rec-row flush tight"><span class="rr-what">${escapeHtml(w)}</span>
       <span>${parts.join(" · ") || "none settled yet"}${sum[b].open ? ` · ${sum[b].open} open` : ""}</span></div>`;
   }).join("");
@@ -3493,8 +3494,10 @@ function recStepupSection(x, scope) {
         : ""}</span></div>
     <div class="card rec-report">${rows}
       <p class="rr-note">A player whose teammate ahead of him at his position is ruled out is projected up by the lift
-        measured over four seasons, and a player whose teammate comes back, down. Each pick is counted in the book that
-        posted it, from 25 November 2026 on.</p>
+        measured over four seasons, and a player whose teammate comes back, down. When a fifth or more of a team's
+        targets sit, the receivers left beyond its top three are projected up by the lift measured over ten seasons
+        (the room left, from 26 November). Each pick is counted in the book that posted it, from 25 November 2026
+        on.</p>
     </div>`;
 }
 

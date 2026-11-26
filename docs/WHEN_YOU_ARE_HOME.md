@@ -9911,7 +9911,8 @@ the report had: a "Who steps up" block, at the bottom of the injury section. Wha
   The top three left are lifted by the teammate step where it was measured (a receiver behind a man out at his
   position), and not otherwise: their own room numbers came and went by season. The lift rides the same card as
   the teammate step, so the pick's "why" says it, the injury block says which measurement moved each pick, and
-  the journal keeps it for the Record's step-up record. For the Rams before week 12, Colby Parkinson, Blake Corum
+  the journal keeps it. The Record's "Who steps up" section counts the room's picks on their own line ("raised for
+  the room left"), so whether it wins is on the record from its first graded pick. For the Rams before week 12, Colby Parkinson, Blake Corum
   and Davis Allen take ×1.32 catches and ×1.42 yards; Mumpfield keeps the teammate step's ×1.10. A team throws about
   4% less in those games (×0.96), so this is the room's share of the work, not more passing.
 - **Every league's short version says it.** College football says it from its own "Who steps up" block (who
