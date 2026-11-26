@@ -158,8 +158,7 @@ def lift(room: dict | None, out, me: str, market: str) -> tuple:
 def words(info: dict, team: str, market: str) -> str:
     """The card's note for a room lift that applied."""
     who = " and ".join(n for n, _s in info.get("sat") or [])
-    lo = next((lo for lo, hi, b in BUCKETS if b == info.get("bucket")), 0.2)
-    hi = next((hi for lo_, hi, b in BUCKETS if b == info.get("bucket")), 1.0)
+    lo, hi = next(((a, z) for a, z, b in BUCKETS if b == info.get("bucket")), (0.2, 1.0))
     span = f"{lo:.0%} to {hi:.0%}" if hi <= 1 else f"{lo:.0%} or more"
     what = {"receptions": "catches", "rec_yds": "receiving yards"}.get(market, "numbers")
     return (f"{who} out: {info['vacated']:.0%} of {team}'s targets sit. Measured {MEASURED}: when {span} of a "

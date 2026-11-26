@@ -266,7 +266,7 @@ def main() -> None:
             my, sey, _ = net(pool, lo, hi, rank_lo, rank_hi, "receiving_yards")
             seasons = []
             for y in sorted(per):
-                mm, _s, nn = net([r for r in pool if r["season"] == y], lo, hi, rank_lo, rank_hi, "targets")
+                mm, _s, _nn = net([r for r in pool if r["season"] == y], lo, hi, rank_lo, rank_hi, "targets")
                 if mm:
                     seasons.append(f"{mm:.2f}")
             if m:
@@ -329,7 +329,7 @@ def main() -> None:
                 o, n = over(sub)
                 yrs = []
                 for y in sorted(per):
-                    oy, ny = over([r for r in sub if r["season"] == y])
+                    oy, _ny = over([r for r in sub if r["season"] == y])
                     yrs.append(f"{oy:.0%}" if oy is not None else "-")
                 cells.append(f"{lo:.0%}+ {o:.1%} (n {n:,}; " + " ".join(yrs) + ")")
             print(f"    {label:<10} nobody sat {c:.1%} (n {nc:,}) | " + " | ".join(cells))
@@ -388,7 +388,7 @@ def main() -> None:
             my, sey, _ = ratio(sub, "receiving_yards")
             by_season = []
             for y in sorted(per):
-                mm, _s, nn = ratio([r for r in sub if r["season"] == y], "targets")
+                mm, _s, _nn = ratio([r for r in sub if r["season"] == y], "targets")
                 if mm:
                     by_season.append(f"{y}: {mm:.2f}")
             if m:
