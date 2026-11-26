@@ -9914,6 +9914,10 @@ the report had: a "Who steps up" block, at the bottom of the injury section. Wha
   the journal keeps it for the Record's step-up record. For the Rams before week 12, Colby Parkinson, Blake Corum
   and Davis Allen take ×1.32 catches and ×1.42 yards; Mumpfield keeps the teammate step's ×1.10. A team throws about
   4% less in those games (×0.96), so this is the room's share of the work, not more passing.
+- **Every league's short version says it.** College football says it from its own "Who steps up" block (who
+  took the catches in the games the starter had no catch on record), and basketball from its "What the absences
+  change" section ("Who steps up for the Heat: in the 6 games Tyler Herro missed this season, Bam Adebayo took 28%
+  of the points (23% with Tyler Herro playing) ..."), only where that section has enough missed games to say it.
 - **Breakout candidates stay measured.** A breakout still needs a starter's share (18% or more of the targets) and
   two counted reasons. A backup with 9% of the targets now has a read, a counted teammate-out reason where our
   numbers move, and the step-up lines, but not the breakout label. Whether his prop is a pick is the board's call

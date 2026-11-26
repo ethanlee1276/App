@@ -225,6 +225,23 @@ def test_college_says_who_steps_up_in_its_short_version_too():
     assert s.endswith("our numbers raise Omar Cooper Jr.'s receiving yards ×1.09 and catches ×1.12 for it."), s
 
 
+def test_basketball_says_who_steps_up_in_its_short_version():
+    import test_the_basketball_report_does_the_research as T
+    from engine import leaguereport as L
+    from engine import gamereport as RR
+    rep = T._report()
+    short = next(sec for sec in rep["sections"] if sec["key"] == "short")
+    items = [x for b in short["blocks"] for x in (b.get("items") or []) if isinstance(x, str)]
+    assert ("Who steps up for the Heat: in the 6 games Tyler Herro missed this season, Bam Adebayo took 28% of the "
+            "points (23% with Tyler Herro playing) and Norman Powell took 21% of the points (17% with Tyler Herro "
+            "playing).") in items, items
+    g, meta = T._research()
+    meta["absences"]["MIA"].update(n_out=2, enough=False)
+    board = {"date": "2026-11-16", "games": [g], "scan_reads": {}}
+    L.attach(board, "nba", meta={"MIA@BOS": meta})
+    assert "Who steps up" not in RR.to_text(board["game_reports"][0]), "too few games: nothing claimed"
+
+
 def test_the_measurement_is_in_the_repo():
     src = (ROOT / "roomfit.py").read_text(encoding="utf-8")
     assert "THE CALIBRATING MULTIPLIER" in src and "NOBODY SAT: the control" in src

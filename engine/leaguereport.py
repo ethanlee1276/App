@@ -1011,6 +1011,27 @@ def nba_before(c: Ctx) -> dict | None:
     return _section("before", "Before tip-off", [_list(lines)])
 
 
+def nba_stepup_sentence(c: Ctx) -> str:
+    """WHO STEPS UP, in the basketball short version (step AHW; Ethan, 26 November: "when there is alot of players
+    out ... we dont ... say anything about them or how there usage could step up in the game reports"). The
+    report's "What the absences change" section (`nba_absences`) has who took the biggest absent man's share of the
+    points in the games he missed; the short version said only who was out. Said here only where that section says
+    it: enough missed games, and a teammate whose share rose."""
+    ab = c.meta.get("absences") or {}
+    parts = []
+    for t in c.teams:
+        a = ab.get(t) or {}
+        of, n = a.get("of") or "", int(a.get("n_out") or 0)
+        takers = [x for x in a.get("takers") or [] if isinstance(x, dict) and x.get("player")]
+        if not (of and a.get("enough") and takers):
+            continue
+        parts.append(_sentence(
+            f"Who steps up for {team_np(c, t)}: in the {n} games {of} missed this season, " + _join(
+                f"{x['player']} took {_pct(x['without'])} of the points ({_pct(x['with'])} with {of} playing)"
+                for x in takers)))
+    return " ".join(parts)
+
+
 def nba_short(c: Ctx, built: dict) -> dict | None:
     """The short version, in sentences (see mlb_short)."""
     items = _short_common(c)
@@ -1024,6 +1045,9 @@ def nba_short(c: Ctx, built: dict) -> dict | None:
     gone = absent_sentence(c, outs, per_team=6)
     if gone:
         items.append(gone)
+    steps = nba_stepup_sentence(c)
+    if steps:
+        items.append(steps)
     carry = c.meta.get("carry") or {}
     leads = []
     for t in c.teams:
