@@ -9894,8 +9894,18 @@ update and listed no boards yet):
   and no three-leg or two-leg ticket at all, where CIN at WAS on Monday posted three of each. Nothing was lost: the
   record holds what was posted. Why it posted none is on its report, which is paid, and the heartbeat's
   short-game counts covered only games still to play. The heartbeat now also counts the games kept short at their
-  start and why (`kept_threes_short`: games, the reasons, how many posted no two-leg ticket either). I read it
-  after this update to see why GB at LA had none.
+  start and why (`kept_threes_short`: games, the reasons, how many posted no two-leg ticket either). Read at 06:20
+  UTC, after the update: `{"games": 1, "why": {"few_props": 1}, "no_twos": 1}`. GB at LA had fewer than three legs
+  to build from when its tickets posted: its report's player picks (one, Matthew Stafford's passing yards; the
+  touchdowns ride the scorer pairs and the moneyline is a game bet) and the game's other props at 55% or better once
+  corrected. Nothing broke and nothing was lost; the floors held. Whether that is the props being thin or the
+  floors cutting a primetime game's whole board is what Thursday's three games will show: between a game's post
+  time and its kickoff the heartbeat says why a short game is short in detail (`threes_few_picks`,
+  `threes_no_fit_why`).
+- **Who steps up, graded (steps AEC and AED).** The heartbeat counts 8 teams, 13 reads and 109 numbers moved for the
+  NFL, with no step failing. The Record carries `stepup_record` (the NFL's Edge and Most Likely books, each with one
+  raised pick graded so far, both lost), and GB at LA's row on the report record has its step-up group: 1 of 3
+  right.
 - **CIN at WAS's replaced tickets settled.** The 13 tickets kept from before its tickets were rebuilt (5 two-leg,
   6 three-leg, 2 scorer pairs) have all settled: 10 won, 3 lost. None is open.
 
