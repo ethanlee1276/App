@@ -100,7 +100,7 @@ def test_the_card_and_the_report_say_it():
     L.attach({"MIN": ch}, _doc(), stats, 12)
     assert ch["reunion"]["now_on"] == ["justin jefferson", "t j hockenson"] and ch["reunion"]["starts"] == 25
     card = Q.card(ch)
-    assert card["reunion"].startswith("Kirk Cousins is back with the Vikings: in his 25 starts"), card["reunion"]
+    assert card["reunion"].startswith("Kirk Cousins is back with the Vikings: in 25 starts"), card["reunion"]
     assert "Osborn" not in card["reunion"]
     assert Q.club_words("MIN") == "the Vikings" and Q.club_words("SF") == "the 49ers" and Q.club_words("ZZZ") == "ZZZ"
     gr = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
