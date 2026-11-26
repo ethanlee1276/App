@@ -656,6 +656,22 @@ def _board_counts(path: str) -> dict:
             errs = sorted({str(x["rebuild_error"]).split(":")[0] for x in short if x.get("rebuild_error")})
             if errs:
                 out["rebuild_errors"] = errs[:5]
+        # A STARTED GAME THAT POSTED SHORT (step AHT, 26 November 2026). GB at LA, the first game of NFL week 12,
+        # kept its report's picks and touchdown pairs at kickoff and no three- or two-leg ticket, and nothing public
+        # said why: the counts above are for games still to play. The same reasons, for the games kept short at
+        # their start (their entry is the one posted, the reasons it carried then). Counts only.
+        kept_short = [x for x in gp["games"] if isinstance(x, dict) and x.get("kept")
+                      and len(x.get("threes") or []) < THREE_MIN]
+        if kept_short:
+            kw: dict = {}
+            for x in kept_short:
+                k = ("rebuild_failed" if x.get("rebuild_error")
+                     else str(x["no_props"]) if x.get("no_props")
+                     else "few_props" if int(x.get("legs_wider") or 0) < 3 and x.get("legs_wider") is not None
+                     else "no_fit" if x.get("legs_wider") is not None else "no_reason_kept")
+                kw[k] = kw.get(k, 0) + 1
+            out["kept_threes_short"] = {"games": len(kept_short), "why": kw,
+                                        "no_twos": sum(1 for x in kept_short if not x.get("twos"))}
         out["td_pairs"] = int(c.get("scorers") or 0)
         # The two-leg tickets (every league's, TWO_SPORTS), and the games still
         # to play short of their three.

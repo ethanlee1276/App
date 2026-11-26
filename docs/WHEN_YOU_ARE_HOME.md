@@ -9883,6 +9883,22 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHT. The first game of NFL week 12 kept its record, and posted no parlays** (step 1012; 26 November; nothing to
+run). A check-in read at 05:31 UTC, off the boards themselves (the heartbeat had just restarted with the 05:31
+update and listed no boards yet):
+
+- **Kickoff records held everywhere.** `report_keep`: the NFL kept 1 (GB at LA), the NBA 9, college basketball 69
+  and the NHL 14, with nothing lost and nothing restored on any board. Last week's lost kickoff records have not
+  come back.
+- **GB at LA posted short.** Its kept report holds 4 picks (3 won, 1 lost) and 3 touchdown pairs (1 won, 2 lost),
+  and no three-leg or two-leg ticket at all, where CIN at WAS on Monday posted three of each. Nothing was lost: the
+  record holds what was posted. Why it posted none is on its report, which is paid, and the heartbeat's
+  short-game counts covered only games still to play. The heartbeat now also counts the games kept short at their
+  start and why (`kept_threes_short`: games, the reasons, how many posted no two-leg ticket either). I read it
+  after this update to see why GB at LA had none.
+- **CIN at WAS's replaced tickets settled.** The 13 tickets kept from before its tickets were rebuilt (5 two-leg,
+  6 three-leg, 2 scorer pairs) have all settled: 10 won, 3 lost. None is open.
+
 **AHS. A finished college basketball game keeps its player reads** (step 1011; 26 November; nothing to run). Two
 of my check-ins, read at 04:41 UTC off the live boards (`/data/{nba,nhl,cbb}.json`) and the live game pages:
 

@@ -181,6 +181,20 @@ def test_the_heartbeat_counts_the_short_and_the_filled():
     assert (got["td_short"], got["td_filled"]) == (1, 2), got
     assert (got["threes_props_filled"], got["threes_board_filled"]) == (1, 2), got
     assert (got["sgp_twos"], got["twos_short"]) == (0, 2), "the two-leg tickets are counted in every league"
+    # A started game that posted short says so too, and why (step AHT: GB at LA kept no three- or two-leg ticket).
+    assert got["kept_threes_short"] == {"games": 1, "why": {"no_reason_kept": 1}, "no_twos": 1}, got
+    games[2].update(legs_wider=1)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(board, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert got["kept_threes_short"]["why"] == {"few_props": 1}, got
 
 
 def test_ask_and_the_record_page_say_three_of_each():
