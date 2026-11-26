@@ -1317,7 +1317,7 @@ function rpKinds(rep) {
    (performance.by_grade) says how each has done; the picks from before 20 November, journaled as one
    kind, are said last as what they are. A split is two rows or more, one of them a kind. */
 const RP_SOURCES = [["Our picks", "Our picks"], ["Matchup read", "Matchup reads"],
-                    ["Breakout candidate", "Breakout candidates"], ["Fade", "Fades"]];
+                    ["Breakout candidate", "Breakout candidates"], ["Good spot", "Good spots"], ["Fade", "Fades"]];
 const RP_SOURCE_BEFORE = ["Report pick", "Earlier picks, every kind together"];
 function rpSourcesHTML(rep) {
   const by = (rep && rep.by_grade) || {};

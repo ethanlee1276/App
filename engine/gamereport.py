@@ -2016,7 +2016,8 @@ def sec_matchups(c: Ctx) -> dict | None:
         sub = []
         keys = sorted((r for r in c.reads_for(off) if _is_key(r)), key=lambda r: -_volume(r))
         whys = [_why(r) for r in keys]
-        common = _shared(whys)
+        # A spot card says what made it a spot on the card itself (step AHZ), so its reason is not one to share.
+        common = _shared([[w for w in why if w not in (r.get("spot_why") or [])] for r, why in zip(keys, whys)])
         if common:
             order = [w for why in whys for w in why]
             said = sorted(common, key=order.index)
@@ -2027,9 +2028,21 @@ def sec_matchups(c: Ctx) -> dict | None:
         items = []
         for r, why in zip(keys, whys):
             tone, label = verdict_of(r)
-            # A spot or a mixed read says what the defence itself says, first (step ACW).
+            # A spot or a mixed read says what the defence itself says, first (step ACW). A SPOT SAYS WHAT MADE IT ONE
+            # (step AHZ; Ethan, on Bears at Lions: Amon-Ra St. Brown's FAVORABLE SPOT card opened on "CHI gives up 234
+            # passing yards a game — the 15th-fewest of 32", which reads as no edge): the game's reason first, then
+            # the defence's own number as what it is.
             first = [mixed_line(r)] if r.get("mixed") else []
-            if (r.get("mixed") or r.get("spot")) and r.get("defense_line"):
+            if r.get("spot") and not r.get("mixed") and tone in ("favorable", "unfavorable"):
+                said_why = [w for w in r.get("spot_why") or [] if w]
+                if said_why:
+                    first.append(f"{'Favorable' if tone == 'favorable' else 'Tough'} because of the game, not the "
+                                 f"defense: " + "; ".join(w[:1].lower() + w[1:] if w.split(" ")[0] in (
+                                     "The", "A", "An", "Wind", "Rain", "Snow") else w for w in said_why))
+                if r.get("defense_line"):
+                    first.append(f"The defense itself: {r['defense_line']} — the number our projection reads for "
+                                 f"this matchup")
+            elif r.get("mixed") and r.get("defense_line"):
                 first.append(f"{r['defense_line']} — the number our projection reads for this matchup")
             scorer = scorer_words(c, r, lead=True) if _go_to(r) else ""
             if scorer and tone == "unfavorable":
@@ -2048,7 +2061,8 @@ def sec_matchups(c: Ctx) -> dict | None:
                           "title": f"{r.get('player')} vs {against}", "role": _role_line(r),
                           "why": ([_sentence(cap(scorer))] if scorer else [])
                           + [_sentence(cap(w)) for w in first if w]
-                          + [_sentence(w) for w in why if w not in common][:4]
+                          + [_sentence(w) for w in why if w not in common
+                             and not (r.get("spot") and w in (r.get("spot_why") or []))][:4]
                           # What the defence gives up to his own position, in every stat his bets are on (step
                           # AHO): shown, never counted (engine/gamescan.POSITION_STATS).
                           + ([_sentence(r["vs_position"])] if r.get("vs_position") else []),
@@ -2878,10 +2892,38 @@ def sec_watch(c: Ctx) -> dict | None:
                     # A key player's season is on his card under "Who's
                     # guarding who" already; the rest carry theirs here.
                     form_fn=lambda r: None if _is_key(r) else form_lines(c, r),
-                    fade_ok=lambda r: _is_key(r) and not _go_to(r), vol=_volume, head_fn=_h)
+                    fade_ok=lambda r: _is_key(r) and not _go_to(r), vol=_volume, head_fn=_h,
+                    # Every key player with a good read is named (step AHZ).
+                    key_fn=_is_key)
+    blocks += even_blocks(c, blocks)
     blocks += no_play_blocks(c)
     blocks += role_blocks(c)
     return _section("watch", "Players to watch", blocks)
+
+
+def even_blocks(c: Ctx, blocks: list) -> list:
+    """THE KEY PLAYERS WITH NO EDGE EITHER WAY, NAMED (step AHZ; Ethan, 26 November: "Not mentioning key players at all
+    makes it seem like they are a bad bet"). A key player (the report's matchup cards) whose read leans neither way is
+    on no list above; one sentence names them, team by team, so a reader never takes silence for a fade."""
+    listed = {str(it.get("player") or "") for b in blocks if b.get("type") == "verdicts" for it in b.get("items") or []}
+    by_team: dict = {}
+    for r in c.reads:
+        if _is_key(r) and r.get("read") == "neutral" and str(r.get("player") or "") not in listed \
+                and not r.get("availability"):
+            by_team.setdefault(r.get("team"), []).append(r)
+    parts = []
+    for t in c.teams:
+        mine = sorted(by_team.get(t) or [], key=lambda r: -_volume(r))
+        if mine:
+            parts.append(f"{team_owner(c, t)} " + _join([f"{r.get('player')}"
+                                                          + (f" ({pos_word(c, r.get('pos'))})"
+                                                             if pos_word(c, r.get("pos")) else "")
+                                                          for r in mine]))
+    if not parts:
+        return []
+    return [_h("No edge either way"),
+            _p(cap("; ".join(parts)) + ": our numbers lean neither way on these matchups, so they are neither a "
+               "breakout nor a fade. Each one's case is under Who's guarding who")]
 
 
 #: How many of the closest candidates a game with no qualifying play names.
@@ -3714,10 +3756,19 @@ def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_
 def _big_day_lines(c: Ctx, shine: list, reads: list, shine_n: int) -> list:
     """The big-day line, each team's best seated (breakouts.team_balanced), then a sentence for each team with no
     favorable read (`quiet_team_line`); [] without a favorable read. Notes both for the heartbeat (`lift_both`)."""
-    from .breakouts import team_balanced
+    from .breakouts import PER_TEAM, team_balanced
     if not shine:
         return []
-    seated = team_balanced(shine, shine_n, c.teams)
+    # TWO A TEAM WHEN BOTH HAVE ONE (step AHZ; Ethan, on Bears at Lions: the Lions' top target, FAVORABLE SPOT under
+    # Who's guarding who, was left off this line while a third Bear's seat would have been free): each team's best two,
+    # no more; a team alone with good reads keeps the line's three.
+    teams_with = [t for t in c.teams if any(r.get("team") == t for r in shine)]
+    if len(teams_with) > 1:
+        seated = [r for t in teams_with for r in [x for x in shine if x.get("team") == t][:PER_TEAM]]
+        order = {id(r): i for i, r in enumerate(shine)}
+        seated.sort(key=lambda r: order[id(r)])
+    else:
+        seated = team_balanced(shine, shine_n, c.teams)
     out = ["Who could have a big day: " + _clauses(c, seated, "up")]
     for t in c.teams:
         if not _has_favorable(c, t, shine):
@@ -5506,8 +5557,8 @@ def section_hint(c: Ctx, s: dict) -> str:
         n = sum(len(b.get("items") or []) for b in blocks if b.get("type") == "parlays")
         return _plural(n, "ticket") if n else ""
     if key == "watch":
-        from .breakouts import CANDIDATES_HEAD, FADES_HEAD
-        said = {CANDIDATES_HEAD: "breakout", FADES_HEAD: "fade"}
+        from .breakouts import CANDIDATES_HEAD, FADES_HEAD, SPOTS_HEAD
+        said = {CANDIDATES_HEAD: "breakout", SPOTS_HEAD: "good spot", FADES_HEAD: "fade"}
         return ", ".join(_plural(len(b.get("items") or []), said[h["text"]]) for h, b in zip(blocks, blocks[1:])
                          if h.get("type") == "h" and h.get("text") in said and b.get("type") == "verdicts" and b.get("items"))
     if key == "weather":

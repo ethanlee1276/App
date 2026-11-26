@@ -4,6 +4,12 @@
     {
       "date": "2026-11-26",
       "kind": "fix",
+      "title": "Players in a good spot are named, on a list of their own",
+      "body": "A game report's Players to watch now has an 'In a good spot' list beside the breakout candidates: players the game around them favors (the points the lines expect, the pace, the weather) though the defense itself is neutral. Every key player with a favorable read is named on one list or the other, each team's best two first, and key players with no edge either way are named too, so leaving a player off never reads as a fade. The 'Who could have a big day' line names each team's best two, and good spots are graded on their own line of the record."
+    },
+    {
+      "date": "2026-11-26",
+      "kind": "fix",
       "title": "Game reports say it plainly, and say each thing once",
       "body": "We read every league's game report line by line and fixed what read wrong. Running backs' touchdowns are no longer called 'on the ground' (they include catches). A player listed as doubtful reads as doubtful, not as out. The four game scripts each say the margin they count, as the simulation table does. The 'who steps up' lines say 'by 42%' instead of '×1.42'. A parlay says once that its legs want opposite leads. And a lineman out, or a bye with its rest edge, is said once instead of twice."
     },

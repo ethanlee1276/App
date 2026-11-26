@@ -40,10 +40,10 @@ from __future__ import annotations
 KEY = "report_bets"
 CATEGORY = "report"
 #: Where a report shows a pick, in the order a reader meets them.
-SOURCES = ("card", "read", "breakout", "fade")
+SOURCES = ("card", "read", "breakout", "spot", "fade")
 #: Each one in the report's own words.
 SOURCE_WORDS = {"card": "Our picks", "read": "Matchup read", "breakout": "Breakout candidate",
-                "fade": "Fade"}
+                "spot": "Good spot", "fade": "Fade"}
 #: The label every report pick was journaled under before 20 November 2026, all kinds as one (`journal`).
 GRADE_BEFORE = "Report pick"
 #: The key a finished report carries its bets under until `attach` lifts them.
@@ -103,6 +103,9 @@ def source_of(section_key: str, item: dict) -> str:
     if section_key == "card":
         return "card"
     v = str((item or {}).get("verdict") or "")
+    # A good spot's card (engine/breakouts SPOTS_HEAD, step AHZ) is its own place.
+    if (item or {}).get("group") == "spots":
+        return "spot"
     return "breakout" if v == "up" else "fade" if v == "down" else "read"
 
 

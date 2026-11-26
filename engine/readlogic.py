@@ -147,6 +147,11 @@ def mark_spot(read: dict, fam: dict | None) -> dict:
     if key in SPOT_LABELS and drivers and not set(drivers) & MATCHUP_FAMILIES:
         read["label"] = SPOT_LABELS[key]
         read["spot"] = True
+        # What carried it, in its own words (step AHZ): the texts on its side whose family carried the read.
+        side = read.get("pro") if key == "good" else read.get("con")
+        why = [t for t in side or [] if (fam or {}).get(t) in drivers]
+        if why:
+            read["spot_why"] = why
     return read
 
 

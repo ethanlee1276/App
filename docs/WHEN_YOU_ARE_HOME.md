@@ -9883,6 +9883,30 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHZ. A key player in a good spot is named, on a list of its own** (step 1018; 26 November; nothing to run).
+You, with three screenshots of Bears at Lions: "in the Who's guarding who, we show a lot of lions players as they are
+in a good spot but then u go to the breakout candidates and who could have a big day and they are no where too be
+seen ... Not mentioning key players at all makes it seem like they are a bad bet". What happened, and what changed:
+
+- **Why they were missing.** Amon-Ra St. Brown and Jameson Williams were FAVORABLE SPOT: a good read that came from
+  the game around them (the points the lines expect, in the board's highest total), not from the Bears' defense.
+  Players to watch put those on one list with the good matchups, gave each team only its single best seat, and let
+  the stronger cases fill the rest, so at most one Lion could be named there, below the Bears' matchups. The
+  big-day line had three seats: two Bears and Jahmyr Gibbs.
+- **Now.** Players to watch has a list of its own, "In a good spot", under the breakout candidates, and every key
+  player on the matchup cards with a good read is on one list or the other. Each team's best two are seated before
+  the rest fill in. A key player whose read leans neither way is named under "No edge either way", so being left
+  off the lists is never mistaken for a fade.
+- **The big-day line** names each team's best two when both teams have one (a team alone keeps the line's three):
+  "the Lions' Jahmyr Gibbs (running back) and Amon-Ra St. Brown (wide receiver) — the lines expect the Lions to
+  score about 28".
+- **A spot card says why.** Under Who's guarding who, Amon-Ra's card opened on "CHI gives up 234 passing yards a
+  game — the 15th-fewest of 32", which reads like no edge. It now opens "Favorable because of the game, not the
+  defense: the lines expect DET to score about 28 ...", then "The defense itself: ...".
+- **Kept honest.** A good spot is graded on its own line of the record ("players in a good spot ... beat their
+  average") and its picks are journaled as their own place ("Good spot"), so the breakout candidates' record
+  (56 of 108, 52%, on the screenshot) keeps meaning what it says.
+
 **AHY. The game reports say it in a member's words** (step 1017; 26 November; nothing to run). You: "i just want
 the game reports reporting the correct infor and data ... and wording everyhting correctly for the user". I read every
 league's report the way a member meets it, line by line, and fixed what read wrong or said a number wrong:

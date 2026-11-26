@@ -366,7 +366,7 @@ def _record(where, sport: str, day: _dt.date) -> dict:
 # --- how each kind of read has done, said on the next report -------------------------------------
 #: The sections whose reads are graded, and the kinds of read each makes
 #: (engine/reportgrade.GROUPS).
-SECTION_KINDS = {"matchups": ("matchups",), "watch": ("candidates", "fades"), "angles": ("angles",),
+SECTION_KINDS = {"matchups": ("matchups",), "watch": ("candidates", "spots", "fades"), "angles": ("angles",),
                  "trenches": ("units",), "defense": ("units",), "tape": ("units",),
                  "scripts": ("script",), "script": ("script",), "pitching": ("starters",), "goalies": ("starters",)}
 #: How a kind of read is said in a sentence.
@@ -410,12 +410,14 @@ def track_lines(t: dict, sport: str) -> dict:
         return (int(a), int(n)) if int(n) >= TRACK_MIN else None
     out: dict = {}
     for key, kinds in SECTION_KINDS.items():
-        if kinds == ("candidates", "fades"):
-            c, f = got("candidates"), got("fades")
+        if kinds == ("candidates", "spots", "fades"):
+            c, sp, f = got("candidates"), got("spots"), got("fades")
             parts = ([f"breakout candidates beat their average {c[0]} of {c[1]} times ({_pct(*c)})"] if c else []) \
+                + ([f"players in a good spot {sp[0]} of {sp[1]} ({_pct(*sp)})"] if sp else []) \
                 + ([f"fades fell short of it {f[0]} of {f[1]} times ({_pct(*f)})"] if f else [])
             if parts:
-                out[key] = f"Our record so far: {' and '.join(parts)}{tail}."
+                said = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+                out[key] = f"Our record so far: {said}{tail}."
             continue
         x = got(kinds[0])
         if x:

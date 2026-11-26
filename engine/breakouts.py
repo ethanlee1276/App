@@ -40,6 +40,18 @@ CANDIDATES_N, FADES_N = 6, 4
 #: The headings the research used.
 CANDIDATES_HEAD, FADES_HEAD = "Breakout candidates", "Fades"
 NONE_LINE = "No one in this game reads as a breakout candidate or a good matchup"
+#: A GOOD SPOT IS NAMED, AND ON ITS OWN LIST (step AHZ, 26 November 2026). Ethan, with three screenshots of Bears at
+#: Lions: "in the Who's guarding who, we show a lot of lions players as they are in a good spot but then u go to the
+#: breakout candidates and who could have a big day and they are no where too be seen ... Not mentioning key players
+#: at all makes it seem like they are a bad bet". A good read the defence did not carry (readlogic.mark_spot: the
+#: points the lines expect, the pace, the weather) shared one list with the matchups, where each team's best took one
+#: seat and the stronger cases filled the rest, so Amon-Ra St. Brown and Jameson Williams, FAVORABLE SPOT under Who's
+#: guarding who, were not named anywhere below it. Now a spot has its own list, every key player on the report's
+#: matchup cards with a good read is named on one list or the other, and each team's best two take seats before the
+#: rest fill in. A spot is graded on its own line of the record ("group": "spots"), never as a breakout candidate.
+SPOTS_HEAD, SPOTS_N = "In a good spot", 4
+#: Each team's best this many take seats before the rest fill in by strength (`team_balanced` ``per_team``).
+PER_TEAM = 2
 
 
 def _sentence(text: str) -> str:
@@ -47,15 +59,15 @@ def _sentence(text: str) -> str:
     return t if not t or t[-1] in ".!?" else t + "."
 
 
-def team_balanced(rows: list, n: int, teams=None) -> list:
+def team_balanced(rows: list, n: int, teams=None, per_team: int = 1) -> list:
     """BOTH TEAMS IN A REPORT (step AEH, 24 November 2026; Ethan, on a Bears-Lions report that named three Bears
     under "Who could have a big day", each for the same reason, and no Lion: "A team like the lions is still a highs
     scoring team so too have data and shit then say nothing about the lions in the report doesn't make sense too me
     ... make sure all game reports and bets included not always just favore the favored team").
 
     The first ``n`` of ``rows`` (already best first), each of ``teams`` that has a row among them seated by its own
-    best before the rest fill in by order; returned in the rows' own order. ``teams`` defaults to the rows' teams in
-    order. Measured the same day on every finished game's report picks: the team with more picks held a median 82%
+    best ``per_team`` before the rest fill in by order; returned in the rows' own order. ``teams`` defaults to the
+    rows' teams in order. Measured the same day on every finished game's report picks: the team with more picks held a median 82%
     of a game's NFL picks (every pick in 14% of NFL games, 13% of hockey's, 22% of college football's), and its picks
     hit 65.9% against the other team's 60.9% (+5.0 ± 3.6 points): a weak lean, which keeps the order, and no reason
     to say nothing of the other team."""
@@ -64,10 +76,11 @@ def team_balanced(rows: list, n: int, teams=None) -> list:
         return []
     teams = list(teams) if teams else list(dict.fromkeys(str(r.get("team") or "") for r in rows))
     picked: list = []
-    for t in teams:
-        first = next((r for r in rows if str(r.get("team") or "") == str(t or "") and t), None)
-        if first is not None and len(picked) < n:
-            picked.append(first)
+    for k in range(max(1, int(per_team))):
+        for t in teams:
+            mine = [r for r in rows if str(r.get("team") or "") == str(t or "") and t]
+            if k < len(mine) and len(picked) < n and not any(mine[k] is x for x in picked):
+                picked.append(mine[k])
     for r in rows:
         if len(picked) >= n:
             break
@@ -101,7 +114,7 @@ def strength(r: dict, tone: str, vol=volume) -> tuple:
     return (not lead, -case, -vol(r), str(r.get("player") or ""))
 
 
-def card(r: dict, tone: str, *, pick: str = "", role: str = "", form=None) -> dict:
+def card(r: dict, tone: str, *, pick: str = "", role: str = "", form=None, group: str = "") -> dict:
     """One player's case as a card: his reasons, his notes, the main way it
     loses, his pick; the page draws it as a verdict card."""
     pro = [str(x) for x in r.get("pro") or [] if x]
@@ -121,6 +134,9 @@ def card(r: dict, tone: str, *, pick: str = "", role: str = "", form=None) -> di
     out = {"title": r.get("player"), "player": r.get("player"), "team": r.get("team"),
            "pos": r.get("pos") or "", "label": r.get("label") or "", "verdict": tone,
            "headshot": r.get("headshot") or "", "why": why}
+    # Which list it sits on, when not the breakout candidates or the fades: the record grades it there (step AHZ).
+    if group:
+        out["group"] = group
     if role:
         out["role"] = role
     # The stats the read leans on: what a finished game grades it by (engine/reportgrade).
@@ -145,28 +161,47 @@ def card(r: dict, tone: str, *, pick: str = "", role: str = "", form=None) -> di
     return out
 
 
+def seated(rows: list, n: int, key_fn=None, per_team: int = PER_TEAM) -> list:
+    """The cards a list shows: every key player on it (``key_fn``: the report's matchup cards), then the rest by
+    strength up to ``n`` in all, each team's best ``per_team`` first (`team_balanced`); in the rows' own order."""
+    rows = [r for r in rows or [] if isinstance(r, dict)]
+    keys = [r for r in rows if key_fn is not None and key_fn(r)]
+    rest = [r for r in rows if not any(r is k for k in keys)]
+    picked = keys + team_balanced(rest, max(0, n - len(keys)), per_team=per_team)
+    order = {id(r): i for i, r in enumerate(rows)}
+    return sorted(picked, key=lambda r: order[id(r)])
+
+
 def blocks(reads: list, *, pick_fn=None, role_fn=None, form_fn=None, fade_ok=None, vol=volume,
-           head_fn=None) -> list:
-    """The research's two lists for a game, as report blocks: the breakout
-    candidates, then the fades. ``fade_ok`` keeps a fade to the players
-    worth one (football: a featured role who is not his team's go-to
-    scorer); ``head_fn`` makes a heading block (the report's own)."""
+           head_fn=None, key_fn=None) -> list:
+    """The research's lists for a game, as report blocks: the breakout
+    candidates, the players in a good spot (step AHZ), then the fades.
+    ``fade_ok`` keeps a fade to the players worth one (football: a featured
+    role who is not his team's go-to scorer); ``key_fn`` names the players
+    a good list never leaves out (the report's matchup cards); ``head_fn``
+    makes a heading block (the report's own)."""
     head = head_fn or (lambda text: {"type": "h", "text": text})
     reads = [r for r in reads or [] if isinstance(r, dict) and r.get("player")]
     up = sorted((r for r in reads if r.get("read") in UP_READS), key=lambda r: strength(r, "up", vol))
     down = sorted((r for r in reads if r.get("read") in DOWN_READS and (fade_ok is None or fade_ok(r))),
                   key=lambda r: strength(r, "down", vol))
+    matchup, spots = [r for r in up if not r.get("spot")], [r for r in up if r.get("spot")]
 
-    def one(r, tone):
+    def one(r, tone, group=""):
         return card(r, tone, pick=(pick_fn(r) if pick_fn else "") or "",
-                    role=(role_fn(r) if role_fn else "") or "", form=form_fn(r) if form_fn else None)
+                    role=(role_fn(r) if role_fn else "") or "", form=form_fn(r) if form_fn else None, group=group)
     out = []
-    # Each team's strongest case seated first (`team_balanced`, step AEH), the strongest case still first in the list.
-    if up:
+    # Each team's strongest cases seated first (`team_balanced`, steps AEH and AHZ), the strongest still first.
+    if matchup:
         out += [head(CANDIDATES_HEAD),
-                {"type": "verdicts", "items": [one(r, "up") for r in team_balanced(up, CANDIDATES_N)]}]
+                {"type": "verdicts", "items": [one(r, "up") for r in seated(matchup, CANDIDATES_N, key_fn)]}]
+    if spots:
+        out += [head(SPOTS_HEAD),
+                {"type": "verdicts", "items": [one(r, "up", "spots") for r in seated(spots, SPOTS_N, key_fn)]}]
     if down:
-        out += [head(FADES_HEAD), {"type": "verdicts", "items": [one(r, "down") for r in team_balanced(down, FADES_N)]}]
+        out += [head(FADES_HEAD),
+                {"type": "verdicts", "items": [one(r, "down") for r in team_balanced(down, FADES_N,
+                                                                                    per_team=PER_TEAM)]}]
     if reads and not up:
         out.append({"type": "p", "text": _sentence(NONE_LINE)})
     return out

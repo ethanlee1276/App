@@ -648,7 +648,7 @@ def volume_note(sport: str, item: dict, mine: dict, past: list) -> dict | None:
 
 #: How each group's read is said beside a name, by the card's verdict.
 LABEL = {"matchups": {"favorable": "a favorable matchup", "unfavorable": "a tough matchup"},
-         "candidates": {"": "a breakout candidate"}, "fades": {"": "a fade"},
+         "candidates": {"": "a breakout candidate"}, "spots": {"": "in a good spot"}, "fades": {"": "a fade"},
          "starters": {"favorable": "a favorable start", "unfavorable": "a tough start"},
          "angles": {"": "an angle"}}
 #: How many of each the summary lists.

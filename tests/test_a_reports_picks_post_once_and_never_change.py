@@ -164,7 +164,8 @@ def test_every_leagues_report_runs_it_and_the_page_says_the_readers_time():
     assert "return finish(c, fns, short)" in (ROOT / "engine" / "leaguereport.py").read_text(encoding="utf-8")
     js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert "b.post_at ? postNote({ threes_note: b.text, post_at: b.post_at }) : b.text" in js
-    assert GR.PICKS_NOT_IN == ("parlays",) and reportbets.SOURCES == ("card", "read", "breakout", "fade")
+    # A good spot's card is its own place since step AHZ (engine/breakouts SPOTS_HEAD).
+    assert GR.PICKS_NOT_IN == ("parlays",) and reportbets.SOURCES == ("card", "read", "breakout", "spot", "fade")
 
 
 def test_report_picks_says_when_a_waiting_games_picks_post():

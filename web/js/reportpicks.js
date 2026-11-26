@@ -290,7 +290,8 @@ function rpShare(pair) {
   return n ? `${a} of ${n} (${Math.round((100 * a) / n)}%)` : "";
 }
 //: How each kind of read is said, in the order the reports' summary says them (engine/reportgrade.GROUPS).
-const RP_KINDS = [["matchups", "Matchup reads"], ["candidates", "Breakout candidates"], ["fades", "Fades"],
+const RP_KINDS = [["matchups", "Matchup reads"], ["candidates", "Breakout candidates"], ["spots", "Good spots"],
+  ["fades", "Fades"],
   ["starters", "Starters"], ["angles", "The angles"], ["units", "Offense against defense"],
   ["stepup", "Who steps up"], ["script", "How the game would go"]];
 //: [right, of] for the players a report listed: the record's pair less the regulars who sat off it.

@@ -97,11 +97,13 @@ UNIT_WORDS = {
     "pts": ("scored", "{n} points"), "reb": ("grabbed", "{n} rebounds"), "tov": ("turned it over", "{n} times"),
 }
 #: The groups the summary counts, in the order it says them.
-GROUPS = (("matchups", "Matchup reads"), ("candidates", "Breakout candidates"), ("fades", "Fades"),
+GROUPS = (("matchups", "Matchup reads"), ("candidates", "Breakout candidates"), ("spots", "Good spots"),
+          ("fades", "Fades"),
           ("starters", "Starters"), ("angles", "The angles"), ("units", "Offense against defense"),
           ("stepup", "Who steps up"), ("script", "How the game would go"))
 #: How each group's right answer is said.
-RIGHT_WORDS = {"candidates": "beat their average", "fades": "fell short of it", "stepup": "beat their average"}
+RIGHT_WORDS = {"candidates": "beat their average", "spots": "beat their average", "fades": "fell short of it",
+               "stepup": "beat their average"}
 
 
 def _f(x):
@@ -434,6 +436,9 @@ def _group(section_key: str, item: dict) -> str | None:
     if section_key == "matchups":
         return "matchups"
     if section_key == "watch":
+        # A good spot is graded on its own line (engine/breakouts SPOTS_HEAD, step AHZ), never as a breakout.
+        if item.get("group") == "spots":
+            return "spots"
         return "candidates" if item.get("verdict") == "up" else "fades" if item.get("verdict") == "down" else None
     if section_key in ("pitching", "goalies"):
         return "starters"

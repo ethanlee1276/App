@@ -1851,6 +1851,9 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             key, label = "neutral", dict(READS)["neutral"]
             drivers = []
     spot = bool(key in SPOT_LABELS and drivers and RL.DEFENSE not in drivers)
+    # WHAT MAKES IT A SPOT, IN ITS OWN WORDS (step AHZ): the card under Who's guarding who said only what the defence
+    # gives up ("the 15th-fewest of 32") under FAVORABLE SPOT; it says what carried the read too.
+    spot_why = [t for t in winning0 if fam.get(t)] if spot else []
     if spot:
         label = SPOT_LABELS[key]
     # The number his projection reads for this matchup, in words (defensevs.MODEL_STAT), for a card that leans
@@ -1905,6 +1908,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             "role": role, "facts": facts,
             # What carried the read, and whether it is a spot or mixed (step ACW).
             **({"drivers": drivers} if drivers else {}), **({"spot": True} if spot else {}),
+            **({"spot_why": spot_why} if spot_why else {}),
             **({"mixed": mixed, "mixed_with": mixed_with, "mixed_was": mixed_was} if mixed else {}),
             **({"defense_line": defense_line} if defense_line else {}),
             **({"vs_position": vs_position} if vs_position else {}),
