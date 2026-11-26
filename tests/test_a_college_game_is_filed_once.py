@@ -129,7 +129,9 @@ def test_one_college_game_is_one_provisional_copy():
     ing = (ROOT / "engine" / "ingest.py").read_text(encoding="utf-8")
     i = ing.index("def cfb_games_for(")
     body = ing[i:ing.index("\ndef ", i + 10)]
-    assert "ORDER BY period, game_id" in body and "out.setdefault(espn_id, entry)" in body
+    assert "ORDER BY period, game_id" in body
+    # The ESPN number joins the pair's earliest standing row a day or less older (step AHV), else its own.
+    assert "out.setdefault(espn_id, stood if stood is not entry and _within_a_day(stood, entry) else entry)" in body
 
 
 if __name__ == "__main__":

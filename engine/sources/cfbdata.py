@@ -1408,6 +1408,38 @@ def fetch_summary(game_id: str, ttl: int = 30 * 24 * 3600) -> dict:
                       user_agent=DEFAULT_AGENT)
 
 
+def one_row_a_game(rows) -> list[dict]:
+    """``ingest_player_logs``' games, once each: {game_id: the ESPN number, period: the pair's earliest day a day
+    or less before, home, away}, from games rows ordered by period. A row naming no ESPN number (the mirror's
+    espn_game_id, else a numeric game id) still sets its pair's day; a number read once stays read."""
+    days: dict = {}
+    seen: set = set()
+    out = []
+    for g in rows:
+        pair = (g["away"], g["home"])
+        period = str(g["period"] or "")
+        try:
+            day = _dt.date.fromisoformat(period[:10])
+        except ValueError:
+            day = None
+        stood = days.setdefault(pair, [])
+        first = next((p for p, d in stood if day is not None and d is not None and abs((day - d).days) <= 1), None)
+        if first is None:
+            stood.append((period, day))
+            first = period
+        try:
+            extra = json.loads(g["extra"] or "{}") or {}
+        except (ValueError, TypeError, KeyError, IndexError):
+            extra = {}
+        gid = str(g["game_id"] or "")
+        event = str(extra.get("espn_game_id") or "").strip() or (gid if gid.isdigit() else "")
+        if not event or event in seen:
+            continue
+        seen.add(event)
+        out.append({"game_id": event, "period": first, "home": g["home"], "away": g["away"]})
+    return out
+
+
 def ingest_player_logs(conn, start: str, end: str,
                        quiet: bool = False) -> dict:
     """Box scores for every completed CFB game already in the games table.
@@ -1426,13 +1458,21 @@ def ingest_player_logs(conn, start: str, end: str,
 
     result: dict = {"games": 0, "player_logs": 0, "skipped": []}
     rows = conn.execute(
-        "SELECT game_id, period, home, away FROM games "
+        "SELECT game_id, period, home, away, extra FROM games "
         "WHERE sport='cfb' AND period >= ? AND period <= ? "
         "AND home_score IS NOT NULL AND away_score IS NOT NULL "
-        "ORDER BY period",
+        "ORDER BY period, game_id",
         (start, end)).fetchall()
     prows, arows = [], []
-    for g in rows:
+    # ONE SUMMARY A GAME, FILED ON ITS EARLIEST DAY (step AHV, 26 November
+    # 2026). One game can sit in the games table twice, a night game's
+    # Eastern and UTC days, and since the nightly rekey (ingest.
+    # remap_cfb_game_ids) under away@home, whose summary ESPN cannot serve.
+    # This filed one copy of the game's stat lines for every row: the event
+    # is now the row's ESPN number (the mirror's espn_game_id, else a numeric
+    # game id), read once, on the first day it appears, and filed under that
+    # number, the id the play file's rows carry.
+    for g in one_row_a_game(rows):
         try:
             summary = fetch_summary(str(g["game_id"]))
         except DataUnavailable as exc:

@@ -81,18 +81,29 @@ def _flag(value) -> bool:
 
 
 def _date(start_date: str) -> str:
-    """``YYYY-MM-DD`` from the feed's ISO instant.
+    """``YYYY-MM-DD`` from the feed's ISO instant: the game's US Eastern day,
+    the day the scoreboard (`cfbdata.to_eastern`) files it under.
 
-    Deliberately a plain slice of the UTC stamp rather than a conversion.
-    A Saturday night kickoff is Sunday in UTC, so this puts a handful of
-    games on the following day — which is wrong for a board and
-    irrelevant here: nothing in the calibration reads the date except to
-    order the season and key the row. `engine.sources.cfbdata` does the
-    Eastern conversion properly, because there it decides whether a game
-    is a marquee night window or a weeknight, and getting it wrong would
-    hand the most-watched game of the week a low-attention haircut.
+    THE SAME DAY AS THE SCOREBOARD'S (step AHV, 26 November 2026). This was
+    a plain slice of the UTC stamp, on the reasoning that only the
+    calibration read it. The row's day is also its key, and it is the only
+    row that names the game's ESPN number (`_extra`'s espn_game_id), which
+    the play file joins its stat lines through (engine/ingest.cfb_games_for).
+    A Saturday night kickoff is Sunday in UTC, so every night game sat in
+    the games table twice, Saturday (the scoreboard) and Sunday (this
+    feed), and the nightly play file filed its stat lines under Sunday
+    beside the Saturday rows the 14 November cleanup kept: 17,401 copies on
+    25 November (heartbeat cfb_copies, "a day apart, same teams"; A'Marion
+    Peterson's UTSA at Texas on 09-19 and 09-20). A stamp with no time of
+    day is a date already and is kept as it is.
     """
-    return str(start_date or "").strip()[:10]
+    s = str(start_date or "").strip()
+    if len(s) > 10 and s[10] in "T ":
+        from .cfbdata import to_eastern
+        t = to_eastern(s)
+        if t is not None:
+            return t.date().isoformat()
+    return s[:10]
 
 
 def team_key(espn_id, id_to_abbr: dict | None) -> str | None:

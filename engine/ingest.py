@@ -1102,8 +1102,28 @@ def cfb_games_for(conn, season: int) -> dict:
         out.setdefault(str(r["game_id"]), entry)
         espn_id = str(extra.get("espn_game_id") or "").strip()
         if espn_id:
-            out.setdefault(espn_id, entry)
+            # THE ESPN NUMBER JOINS THE GAME'S EARLIEST DAY TOO (step AHV,
+            # 26 November 2026). Only the mirror's row names it, and until
+            # this step the mirror dated a night game by its UTC day, a day
+            # after the scoreboard's row of the same game; first-stands kept
+            # the pair's key on Saturday and this alias on Sunday, so the
+            # play file (which joins on the number) filed every night game
+            # under Sunday again. The number now takes the row already
+            # standing under the pair's key when it is a day or less older.
+            stood = out.get(str(r["game_id"]))
+            out.setdefault(espn_id, stood if stood is not entry and _within_a_day(stood, entry) else entry)
     return out
+
+
+def _within_a_day(a: dict | None, b: dict) -> bool:
+    """Are two cfb_games_for entries' days a day or less apart?"""
+    import datetime as _d
+    try:
+        da = _d.date.fromisoformat(str((a or {}).get("period") or "")[:10])
+        db_ = _d.date.fromisoformat(str(b.get("period") or "")[:10])
+    except ValueError:
+        return False
+    return abs((db_ - da).days) <= 1
 
 
 #: How long a CURRENT-season player file may be served from cache.

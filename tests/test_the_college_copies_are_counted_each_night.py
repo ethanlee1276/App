@@ -87,7 +87,8 @@ def test_the_chores_keep_it_and_the_heartbeat_carries_it():
     doc = M.run_cfb_census(lines.append, today=datetime.date(2026, 11, 25), path=path, state_path=state)
     assert doc["season"] == 2026 and doc["games"] == 5 and doc["copies"] == 5
     assert json.loads(Path(state).read_text())["kinds"] == doc["kinds"]
-    assert lines == ["  cfb copies: 5 player-game(s) of 2026 filed more than once, 5 extra row(s) (step AFG)"]
+    assert lines == ["  cfb copies: 5 player-game(s) of 2026 filed more than once, 5 extra row(s), 0 of them in games "
+                     "since 2026-11-14 (steps AFG, AHV)"]
     assert M.run_cfb_census(lines.append, path=os.path.join(tempfile.mkdtemp(), "none.db")) == {}
     src = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
     i = src.index("def _run_chores(")

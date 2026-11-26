@@ -3045,7 +3045,8 @@ def run_cfb_census(log=print, today: _dt.date | None = None, path=None, state_pa
     doc = {"at": round(_t.time()), "season": season, "seconds": round(_t.monotonic() - t0, 1), **got}
     _keep_index_state(Path(state_path or CFB_COPIES_STATE), doc)
     log(f"  cfb copies: {got['games']:,} player-game(s) of {season} filed more than once, "
-        f"{got['copies']:,} extra row(s) (step AFG)")
+        f"{got['copies']:,} extra row(s), {got['since']['copies']:,} of them in games since "
+        f"{got['since']['day']} (steps AFG, AHV)")
     return doc
 
 

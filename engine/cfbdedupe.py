@@ -89,37 +89,70 @@ def clusters(rows) -> list:
     return out
 
 
+def games_of(cluster) -> list:
+    """One player's rows of one market a day or less apart, split into games: two rows are one game when
+    they share his school or his opponent (one school plays one game a week, so a code that differs on
+    the other side is the same game: BUF and BUFF, step AFE). Rows that share neither, two players of
+    one name, stay apart. Each game's rows in their order."""
+    n = len(cluster)
+    root = list(range(n))
+
+    def find(i):
+        while root[i] != i:
+            root[i] = root[root[i]]
+            i = root[i]
+        return i
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = cluster[i], cluster[j]
+            if a["team"] == b["team"] or a["opponent"] == b["opponent"]:
+                root[find(j)] = find(i)
+    out: dict = {}
+    for i in range(n):
+        out.setdefault(find(i), []).append(cluster[i])
+    return list(out.values())
+
+
 def plan_logs(conn, season: int) -> dict:
     """What would go from one season's stat lines: {"rows", "keys", "groups",
-    "delete": [rowid…], "disagree", "examples"}. Streams the season."""
+    "delete": [rowid…], "by_kind": {"same teams": n, "another code": n},
+    "disagree", "examples"}. Streams the season, one player's market at a
+    time; a game is `games_of` its rows a day or less apart (step AHV, 26
+    November 2026: until then the same two teams only, which left 1,300
+    rows of one game under another code for one side on 25 November)."""
     q = ("SELECT rowid AS rid, period, game_id, player, team, opponent, market, value "
          "FROM player_game_logs WHERE sport='cfb' AND season=? "
-         "ORDER BY player, team, opponent, market, period")
-    res = {"rows": 0, "keys": 0, "groups": 0, "delete": [], "disagree": 0, "examples": []}
+         "ORDER BY player, market, period")
+    res = {"rows": 0, "keys": 0, "groups": 0, "delete": [], "by_kind": {"same teams": 0, "another code": 0},
+           "disagree": 0, "examples": []}
     key, buf = None, []
 
     def flush():
         if not buf:
             return
         res["keys"] += 1
-        for group in clusters(buf):
-            if len(group) < 2:
-                continue
-            res["groups"] += 1
-            group = sorted(group, key=_rank)
-            keep = group[0]
-            res["delete"].extend(r["rid"] for r in group[1:])
-            other = {float(r["value"]) for r in group[1:] if str(r["game_id"]).endswith(BOX)}
-            if not str(keep["game_id"]).endswith(BOX) and other - {float(keep["value"])}:
-                res["disagree"] += 1
-                if len(res["examples"]) < EXAMPLES:
-                    res["examples"].append(
-                        f"{keep['player']} ({keep['team']} vs {keep['opponent']}) {keep['market']} "
-                        f"{keep['period']}: kept {float(keep['value']):g}, box {sorted(other)}")
+        for cluster in clusters(buf):
+            for group in (games_of(cluster) if len(cluster) > 1 else ()):
+                if len(group) < 2:
+                    continue
+                res["groups"] += 1
+                group = sorted(group, key=_rank)
+                keep = group[0]
+                for r in group[1:]:
+                    res["delete"].append(r["rid"])
+                    same = r["team"] == keep["team"] and r["opponent"] == keep["opponent"]
+                    res["by_kind"]["same teams" if same else "another code"] += 1
+                other = {float(r["value"]) for r in group[1:] if str(r["game_id"]).endswith(BOX)}
+                if not str(keep["game_id"]).endswith(BOX) and other - {float(keep["value"])}:
+                    res["disagree"] += 1
+                    if len(res["examples"]) < EXAMPLES:
+                        res["examples"].append(
+                            f"{keep['player']} ({keep['team']} vs {keep['opponent']}) {keep['market']} "
+                            f"{keep['period']}: kept {float(keep['value']):g}, box {sorted(other)}")
 
     for r in conn.execute(q, (int(season),)):
         res["rows"] += 1
-        k = (r["player"], r["team"], r["opponent"], r["market"])
+        k = (r["player"], r["market"])
         if k != key:
             flush()
             key, buf = k, []
@@ -207,6 +240,10 @@ KINDS = ("same day, same teams", "a day apart, same teams", "the opponent under 
          "his school under another code", "the other side", "other")
 #: Examples kept a kind.
 CENSUS_EXAMPLES = 2
+#: THE CLEANUP'S DAY (00e, run with --apply on 14 November 2026). A copy of a game played on or after it can
+#: only have been filed since, so `census` counts those apart ("since"): a writer still filing copies shows
+#: there the next night, whatever the old rows do (step AHV, 26 November 2026).
+CLEANED = "2026-11-14"
 
 
 def _id_shape(gid) -> str:
@@ -235,11 +272,15 @@ def copy_kind(head, row) -> str:
 def census(conn, season: int) -> dict:
     """A season's stored copies, counted: {"rows": rows read, "games": player-games filed more than once,
     "copies": rows beyond the first of their game, "kinds": {kind: rows}, "ids": {kind: {"espn+box": rows}},
-    "examples": {kind: ["player, market, day: ids"]}}. Writes nothing. Copies are found as `plan_logs` finds
-    them, a day or less apart, but within one player's market whatever the teams (`copy_kind`)."""
+    "examples": {kind: ["player, market, day: ids"]}, "since": {"day": CLEANED, "copies", "kinds"} for games
+    played on or after the cleanup, "latest": {kind: the newest game's example}}. Writes nothing. Copies are
+    found as `plan_logs` finds them, a day or less apart, but within one player's market whatever the teams
+    (`copy_kind`): "the other side" and "other" can be two players of one name, and the cleanup leaves them."""
     q = ("SELECT period, game_id, player, team, opponent, market FROM player_game_logs "
          "WHERE sport='cfb' AND season=? ORDER BY market, player, period")
-    out = {"rows": 0, "games": 0, "copies": 0, "kinds": {}, "ids": {}, "examples": {}}
+    out = {"rows": 0, "games": 0, "copies": 0, "kinds": {}, "ids": {}, "examples": {},
+           "since": {"day": CLEANED, "copies": 0, "kinds": {}}, "latest": {}}
+    newest: dict = {}
     games: set = set()
     key, buf = None, []
 
@@ -256,11 +297,19 @@ def census(conn, season: int) -> dict:
                 out["kinds"][kind] = out["kinds"].get(kind, 0) + 1
                 ids = out["ids"].setdefault(kind, {})
                 ids[shape] = ids.get(shape, 0) + 1
+                said = (f"{head['player']}, {head['market']}, {head['period']}: {head['game_id']} "
+                        f"({head['team']} v {head['opponent']}) and {r['game_id']} on {r['period']} "
+                        f"({r['team']} v {r['opponent']})")
                 ex = out["examples"].setdefault(kind, [])
                 if len(ex) < CENSUS_EXAMPLES:
-                    ex.append(f"{head['player']}, {head['market']}, {head['period']}: {head['game_id']} "
-                              f"({head['team']} v {head['opponent']}) and {r['game_id']} on {r['period']} "
-                              f"({r['team']} v {r['opponent']})")
+                    ex.append(said)
+                day = str(head["period"] or "")[:10]
+                if day >= CLEANED:
+                    out["since"]["copies"] += 1
+                    out["since"]["kinds"][kind] = out["since"]["kinds"].get(kind, 0) + 1
+                if day > newest.get(kind, ""):
+                    newest[kind] = day
+                    out["latest"][kind] = said
 
     for r in conn.execute(q, (int(season),)):
         out["rows"] += 1
@@ -291,10 +340,12 @@ def main(argv=None) -> int:
     try:
         for season in (a.season or seasons_of(conn)):
             logs, games = plan_logs(conn, season), plan_games(conn, season)
+            bk = logs["by_kind"]
             print(f"cfb {season}: {logs['rows']:,} stat rows, {logs['groups']:,} game(s) filed more than once, "
-                  f"{len(logs['delete']):,} row(s) to remove; {logs['disagree']:,} where a box copy's number "
-                  f"differs from the kept one; {games['pairs']:,} game(s) in the games table more than once, "
-                  f"{len(games['delete']):,} row(s) to remove")
+                  f"{len(logs['delete']):,} row(s) to remove ({bk['same teams']:,} under the same two teams, "
+                  f"{bk['another code']:,} with one side under another code); {logs['disagree']:,} where a box "
+                  f"copy's number differs from the kept one; {games['pairs']:,} game(s) in the games table more "
+                  f"than once, {len(games['delete']):,} row(s) to remove")
             for ex in logs["examples"]:
                 print(f"    {ex}")
             if a.apply and (logs["delete"] or games["delete"]):

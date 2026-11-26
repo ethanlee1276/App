@@ -6397,13 +6397,13 @@ def _team_index_public() -> dict:
 
 def _cfb_copies_public() -> dict:
     """THE COLLEGE COPIES, COUNTED (engine/maintenance.run_cfb_census, step AFG): this season's player-games filed
-    more than once, by kind and by the two ids' shapes, with two examples a kind; {} before the first count. Never
-    fails."""
+    more than once, by kind and by the two ids' shapes, with two examples a kind, the copies of games played since
+    the 14 November cleanup and each kind's newest example (step AHV); {} before the first count. Never fails."""
     try:
         from engine.maintenance import CFB_COPIES_STATE
         doc = json.loads(CFB_COPIES_STATE.read_text())
-        return {k: doc[k] for k in ("at", "season", "seconds", "rows", "games", "copies", "kinds", "ids", "examples")
-                if k in doc}
+        return {k: doc[k] for k in ("at", "season", "seconds", "rows", "games", "copies", "kinds", "ids", "examples",
+                                    "since", "latest") if k in doc}
     except Exception:  # noqa: BLE001 — the heartbeat never fails for a side read
         return {}
 

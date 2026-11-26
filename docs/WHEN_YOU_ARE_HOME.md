@@ -9883,6 +9883,29 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHV. College football stops filing a night game twice; the cleanup runs again** (step 1014; 26 November; two
+commands, RUN_NEXT 00t). The nightly count (step AFG, heartbeat `cfb_copies`) found 25,028 college stat rows on 25
+November that copied a game already on file, eleven days after the 14 November cleanup removed 130,078. The biggest
+kind, 17,401 rows, was one game a day apart under the same two teams and the same ESPN number: A'Marion Peterson's
+UTSA at Texas on 19 and 20 September. The writer:
+
+- **The mirror dated a game by its UTC day.** One of the two college schedule feeds (the cfbfastR mirror) cut the
+  date off the UTC kickoff stamp, so a Saturday night game landed on Sunday, a day after the scoreboard's row of the
+  same game. Only the mirror's row names the ESPN number the nightly play file joins its stat lines through, so the
+  play file filed every night game again under Sunday, beside the Saturday rows the cleanup kept. It now dates a game
+  on its Eastern day, as the scoreboard does.
+- **The join takes the earliest day.** Until the old Sunday rows go, the ESPN number now joins the game's Saturday
+  row when the pair has one a day or less older. A rematch weeks later is still its own game.
+- **The box-score backfill reads each game once.** `ingest.py cfb` read one summary for every games row (twice for a
+  night game) and none for a game under an away@home key, which the nightly rekey gives every row. It now reads each
+  ESPN number once and files it on the game's earliest day.
+- **The cleanup learned one more kind.** One game with one school under another code (BUF and BUFF): 1,300 rows on 25
+  November. It still leaves the same name on the two teams of one game (3,325) and on two unrelated games (1,692),
+  because those can be two different players.
+- **The nightly count says what is new.** `cfb_copies.since` counts the copies of games played since 14 November,
+  which can only have been filed since, and `latest` gives each kind's newest example. After the cleanup runs it
+  should read close to nothing.
+
 **AHU. College's bold picks are matched; whether they hold up is now on the heartbeat** (step 1013; 26 November;
 nothing to run). Step AFR asked why the NFL's "bolder than the books" picks were a kind on paper (said 72%, hit 51%
 over 246) and college's were no kind at all. The learn pass after 03:00 Eastern counted each league's bold book:
