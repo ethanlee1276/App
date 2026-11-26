@@ -206,6 +206,25 @@ def test_the_step_up_block_hands_the_short_version_what_it_found():
     assert 'setattr(c, "stepup", found)' in src
 
 
+def test_college_says_who_steps_up_in_its_short_version_too():
+    import test_who_steps_up_in_college as T
+    from engine import gamereport as GR
+    from engine import stepup as S
+    got = S.for_cfb_team(T._indiana(), T.DAYS, "IND", "Indiana", T.OUT, T._rows(), before="2026-11-22",
+                         positions={S._key("Riley Nowakowski"): "TE"}, season=2026)
+    f = got["found"][0]
+    assert (f["kind"], f["games"], f["when"]) == ("catches", 2, "Oct. 18 and Nov. 8"), f
+    c = GR.Ctx({"home": "IND", "away": "PUR", "date": "2026-11-28", "kickoff": "12:00"}, {"date": "2026-11-28"},
+               sport="cfb")
+    c.stepup = {"IND": got}
+    s = GR.stepup_sentence(c)
+    assert s.startswith("Who steps up for "), s
+    assert ("without Elijah Sarratt (43% of the catches this season), in the 2 games this season without Elijah "
+            "Sarratt, the catches went to Omar Cooper Jr. (7 catches a game, 90 yards a game; 4 a game otherwise)"
+            in s), s
+    assert s.endswith("our numbers raise Omar Cooper Jr.'s receiving yards ×1.09 and catches ×1.12 for it."), s
+
+
 def test_the_measurement_is_in_the_repo():
     src = (ROOT / "roomfit.py").read_text(encoding="utf-8")
     assert "THE CALIBRATING MULTIPLIER" in src and "NOBODY SAT: the control" in src

@@ -3853,11 +3853,15 @@ def stepup_sentence(c: Ctx) -> str:
             if not outs or not named:
                 continue
             gone = _join(outs)
-            if len(weeks) == 1:
-                when = f"in week {weeks[0]}, the one game this season without {gone if len(outs) == 1 else 'them'}"
+            n_games = int(f.get("games") or len(weeks))
+            said_when = f.get("when") or (f"week {weeks[0]}" if len(weeks) == 1 else "")
+            whom = gone if len(outs) == 1 else "them"
+            if n_games == 1:
+                when = f"in {said_when}, the one game this season without {whom}" if said_when else \
+                    f"in the one game this season without {whom}"
                 per = ""
             else:
-                when = f"in the {len(weeks)} games this season without {gone if len(outs) == 1 else 'them'}"
+                when = f"in the {n_games} games this season without {whom}"
                 per = " a game"
             who = []
             for n in named:

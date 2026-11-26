@@ -256,6 +256,7 @@ def for_team(conn, season: int, week: int | None, team: str, team_name: str, out
             continue
         found.append({"kind": kind, "out": [(n, p, round(sh, 3)) for n, p, sh, _st in out_here],
                       "vacated": round(total, 3), "weeks": sorted(without), "them": them,
+                      "games": len(without), "when": _weeks_words(without),
                       "named": [{"player": name, "pos": pos, "per_game": round(pg, 1),
                                  "with": None if before_pg is None else round(before_pg, 1),
                                  "yards": round(yds, 1) if yds else None}
@@ -361,6 +362,7 @@ def for_cfb_team(players: dict, days: list, team: str, team_name: str, outs: lis
     lines: list = []
     vacated: dict = {}
     named_out: list = []
+    found: list = []
     for kind, market, out_pos, take_pos, bar, yds in CFB_KINDS:
         team_total = {d: sum(_cfb_value(g.get(d), market) for g in games.values()) for d in prior}
 
@@ -415,6 +417,13 @@ def for_cfb_team(players: dict, days: list, team: str, team_name: str, outs: lis
         cands.sort(key=lambda x: (-x[0], x[1]))
         if not cands:
             continue
+        found.append({"kind": kind, "out": [(n, p, round(sh, 3)) for n, p, sh, _st in out_here],
+                      "vacated": round(total, 3), "weeks": [], "them": them, "games": len(without),
+                      "when": _days_words(without, season),
+                      "named": [{"player": name, "pos": pos, "per_game": round(pg, 1),
+                                 "with": None if before_pg is None else round(before_pg, 1),
+                                 "yards": round(ypg, 1) if ypg else None}
+                                for pg, name, pos, before_pg, ypg in cands[:NAMED]]})
         per = "" if len(without) == 1 else " a game"
         parts = []
         for pg, name, pos, before_pg, ypg in cands[:NAMED]:
@@ -435,7 +444,7 @@ def for_cfb_team(players: dict, days: list, team: str, team_name: str, outs: lis
         bits = _join([f"{MARKET_WORDS[m]} ×{v:.2f}" for m, v in sorted(mk.items())])
         lines.append((f"Our numbers raise {player}'s {bits}, the lift measured on college games for a player whose "
                       f"teammate ahead of him at his position is out, in every number we price on him", None))
-    return {"lines": lines, "outs": named_out, "vacated": vacated}
+    return {"lines": lines, "outs": named_out, "vacated": vacated, "found": found, "lift": lift}
 
 
 # --- the bets a teammate's absence moved, on the record ------------------------------------------------------------
@@ -577,4 +586,9 @@ def _cfb_blocks(c) -> list:
                            season=getattr(c, "season", None))
         if got:
             blocks.append(_claimed_list(got["lines"]))
+            found = getattr(c, "stepup", None)
+            if not isinstance(found, dict):
+                found = {}
+                setattr(c, "stepup", found)
+            found[t] = got
     return ([_h("Who steps up")] + blocks) if blocks else []
