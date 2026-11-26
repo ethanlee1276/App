@@ -1056,24 +1056,33 @@ def keep_pregame(out: dict, public_path, date) -> str:
         return ""
     tapes = {f"{g.get('away')}@{g.get('home')}": g["nba_tape"] for g in prev.get("games") or []
              if isinstance(g, dict) and g.get("nba_tape")}
-    reads = prev.get("scan_reads") or {}
-    n = 0
+    reads = prev.get("scan_reads") if isinstance(prev.get("scan_reads"), dict) else {}
+    n = nr = 0
     for gd in out.get("games") or []:
         k = f"{gd.get('away')}@{gd.get('home')}"
-        if gd.get("nba_tape") or not tapes.get(k):
-            continue
-        gd["nba_tape"] = tapes[k]
-        n += 1
-        if isinstance(reads, dict) and reads.get(k) and k not in (out.get("scan_reads") or {}):
+        kept_tape = False
+        if not gd.get("nba_tape") and tapes.get(k):
+            gd["nba_tape"] = tapes[k]
+            n += 1
+            kept_tape = True
+        # THE READS ON THEIR OWN (step AHS, 26 November 2026). At 04:41 UTC the college board carried player reads
+        # for 3 of the night's 69 games: every game had a tape (the box's own tale of the tape, made for every game),
+        # so the tape test above kept nothing and the 63 finished games' reads went with it, while the 3 games still
+        # to tip had this build's. A game that has begun keeps the last board's reads when this build made none.
+        begun = bool((gd.get("live") or {}).get("state"))
+        if reads.get(k) and k not in (out.get("scan_reads") or {}) and (kept_tape or begun):
             out.setdefault("scan_reads", {})[k] = reads[k]
+            nr += 1
     shapes = False
     if not out.get("team_shapes") and prev.get("team_shapes"):
         out["team_shapes"] = prev["team_shapes"]
         out["team_shapes_season"] = prev.get("team_shapes_season")
         shapes = True
-    if not (n or shapes):
+    if not (n or nr or shapes):
         return ""
-    bits = ([f"{n} started game(s)' pregame scan"] if n else []) + (["the team shapes"] if shapes else [])
+    bits = (([f"{n} started game(s)' pregame scan"] if n else [])
+            + ([f"{nr} game(s)' player reads"] if nr and nr != n else [])
+            + (["the team shapes"] if shapes else []))
     return "Kept from the last board: " + " and ".join(bits)
 
 

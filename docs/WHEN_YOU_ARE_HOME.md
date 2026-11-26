@@ -9883,6 +9883,28 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHS. A finished college basketball game keeps its player reads** (step 1011; 26 November; nothing to run). Two
+of my check-ins, read at 04:41 UTC off the live boards (`/data/{nba,nhl,cbb}.json`) and the live game pages:
+
+- **Closing lines (step ADT).** Every started NBA game (9) and NHL game (14) carries its close, and no stored
+  spread disagrees with its moneyline (a road favorite's spread is positive for the home side in every case). College
+  basketball: all 47 games that had a line carry their close. The other 22 never had a line at all, not even an
+  opening one: 9 against schools outside Division I and 13 Division I games our odds pulls did not cover.
+- **The college scan after the tips (step ADW).** Every college game kept its tape (69 of 69) and 126 of 138 teams
+  their Team shapes (the 12 without are the non-Division I visitors). But the paid board carried player reads for 3
+  of the 69 games. ADW kept the last board's reads only along with a kept tape, and every college game now gets a
+  tape of its own from the box, so once a build made reads for the 3 games still to tip, the 63 finished games' reads
+  were dropped. A game that has begun now keeps the last board's reads whenever this build made none for it, never
+  over this build's own (nba_build.keep_pregame). Tonight's are gone (the last board no longer had them); from the
+  next night they stay.
+- **Live game pages across the leagues.** Rendered at 390 px, one per league: the NBA's (SAC at GSW, third quarter),
+  the NHL's (MTL at COL, third period) and college basketball's (WASH at VCU, second half) live pages carry the same
+  cards in the same order (score header, court or rink stage, line score, the game's flow, win chances, game chat,
+  then Stats, Play-By-Play, Standings and Our picks), and so do their finals (stage, line score, the 30-second
+  recap). The NFL's final (GB at LA) has no stage card, the field having no last snap to draw; the drive chart sits
+  in its Stats tab, as decided under step AHD. No NFL game was live to compare. The header said DEMO for the NFL in my
+  local copy only; the live site says "Live data" for both the NFL and the NBA.
+
 **AHR. The rest of the game reports say the numbers behind their ranks** (step 1010; 25 November; nothing to
 run). Ethan, after step AHO: "keep going and fix the rest of the game reports too". I read every section of the NFL,
 hockey and basketball reports for the same shortcut, a rank or a word with no number behind it, and fixed what I

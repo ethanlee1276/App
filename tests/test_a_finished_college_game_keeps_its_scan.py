@@ -48,6 +48,25 @@ def test_the_last_boards_scan_and_shapes_stand_past_the_last_tip():
     assert said == "Kept from the last board: 1 started game(s)' pregame scan and the team shapes", said
 
 
+def test_a_begun_game_keeps_its_reads_though_this_build_made_its_tape():
+    """Step AHS: every college game gets a tape from the box, so the reads ride on their own. At 04:41 UTC on 26
+    November the board carried reads for 3 of 69 games: the 63 finished games had lost theirs."""
+    prev = dict(PREV, scan_reads={"VCU@PROV": {"players": [{"player": "A"}]},
+                                  "DEN@KU": {"players": [{"player": "B"}]},
+                                  "WIN@ILL": {"players": [{"player": "C"}]}})
+    path = _prev(prev)
+    out = {"games": [{"away": "VCU", "home": "PROV", "nba_tape": {"rows": ["box"]}, "live": {"state": "final"}},
+                     {"away": "DEN", "home": "KU", "nba_tape": {"rows": ["box"]}},
+                     {"away": "WIN", "home": "ILL", "nba_tape": {"rows": ["box"]}, "live": {"state": "live"}}],
+           "scan_reads": {"WIN@ILL": {"players": [{"player": "this build's"}]}}, "team_shapes": {"VCU": {}}}
+    said = nba_build.keep_pregame(out, path, "2026-11-23")
+    assert out["scan_reads"]["VCU@PROV"] == {"players": [{"player": "A"}]}, "a finished game keeps its reads"
+    assert "DEN@KU" not in out["scan_reads"], "a game still to tip gets this build's reads, or none"
+    assert out["scan_reads"]["WIN@ILL"] == {"players": [{"player": "this build's"}]}, "never over this build's own"
+    assert out["games"][0]["nba_tape"] == {"rows": ["box"]}, "this build's tape stands"
+    assert said == "Kept from the last board: 1 game(s)' player reads", said
+
+
 def test_another_slate_or_a_build_that_made_its_own_keeps_nothing():
     path = _prev(PREV)
     out = {"games": [{"away": "VCU", "home": "PROV"}]}
