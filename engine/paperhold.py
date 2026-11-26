@@ -231,9 +231,16 @@ def _test(rows: list) -> dict | None:
     if var <= 0:
         return None
     z = (wins - said) / math.sqrt(var)
+    # p ROUNDED LIKE EVERY OTHER NUMBER HERE (26 November 2026). A kind that
+    # hit exactly what it said has z = 0 and p = 1, but summing sixty 0.70s
+    # lands on 42.00000000000002, so z came out at -6e-15 and p at
+    # 0.9999999999999951 — and step AHU puts that number on the heartbeat and
+    # in the saved state for a person to read. said, hit, gap_pts and z are
+    # all rounded on their way out of here; p was the one that was not.
+    p = min(1.0, 2.0 * (1.0 - 0.5 * (1.0 + math.erf(abs(z) / math.sqrt(2.0)))))
     return {"n": n, "said": round(said / n, 4), "hit": round(wins / n, 4),
             "gap_pts": round((said - wins) / n * 100.0, 1), "z": round(z, 3),
-            "p": min(1.0, 2.0 * (1.0 - 0.5 * (1.0 + math.erf(abs(z) / math.sqrt(2.0)))))}
+            "p": round(p, 4)}
 
 
 def _in(kind: dict, r: dict) -> bool:

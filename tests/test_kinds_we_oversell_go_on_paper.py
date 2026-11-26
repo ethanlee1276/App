@@ -68,6 +68,16 @@ def test_the_bands_read_the_gap_to_the_market_first():
     assert abs(P.gap_of(row) - 0.02) < 1e-9, "the price rule's field first"
 
 
+def test_every_number_a_kinds_test_hands_out_is_rounded():
+    """A kind that hit exactly what it said has z = 0 and p = 1. Summing sixty 0.70s lands on
+    42.00000000000002, so z arrived at -6e-15 and p at 0.9999999999999951 — and step AHU puts p on the
+    heartbeat and in the saved state. Every number out of _test is rounded, p with the rest."""
+    t = P._test([{"won": i < 42, "prob": 0.70} for i in range(60)])
+    assert (t["said"], t["hit"], t["gap_pts"], t["z"], t["p"]) == (0.7, 0.7, 0.0, 0.0, 1.0), t
+    hot = P._test([{"won": i < 22, "prob": 0.76} for i in range(60)])
+    assert hot["z"] < 0 and hot["p"] == round(hot["p"], 4), hot
+
+
 def test_a_kind_that_ran_far_hot_goes_on_paper_and_an_honest_one_stays():
     rows = P.rows_from_ledger(_journal(
         _kind(60, 0.76, 22, edge=0.18)                                 # said 76%, hit 37%
