@@ -2929,10 +2929,13 @@ def even_blocks(c: Ctx, blocks: list) -> list:
                                                           for r in mine]))
     if not parts:
         return []
-    said = ("our numbers lean neither way on these matchups, so they are neither a breakout nor a fade. Each one's "
-            "case is under Who's guarding who" if n > 1 else
-            "our numbers lean neither way on this matchup, so the read is neither a breakout nor a fade. The case is "
-            "under Who's guarding who")
+    # The matchup's word, not "our numbers": a pick on the same player (a touchdown, say) is our projection's, and the
+    # line said "our numbers lean neither way" beside it (step AIA).
+    said = ("the matchup leans neither way for these players, so they are neither breakout candidates nor fades. Each "
+            "one's case is under Who's guarding who; a pick on any of them comes from our projection, not the matchup"
+            if n > 1 else
+            "the matchup leans neither way, so the read is neither a breakout nor a fade. The case is under Who's "
+            "guarding who; a pick on this player comes from our projection, not the matchup")
     return [_h("No edge either way"), _p(cap("; ".join(parts)) + ": " + said)]
 
 

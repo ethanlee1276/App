@@ -9904,6 +9904,9 @@ found, and what changed:
   against this report's good spot for St. Brown: ..."), before the reasons.
 - **Names keep their particle:** "St. Brown" and "Van Noy", not "Brown" and "Noy" (a first name like Van Jefferson's is
   left alone). This also fixes the plays-or-sits section's title.
+- **"No edge either way" says the matchup, not our numbers.** It read "our numbers lean neither way on these
+  matchups", which a touchdown pick on the same player contradicts (the pick is our projection's). It now reads "the
+  matchup leans neither way for these players ... a pick on any of them comes from our projection, not the matchup".
 - **One more count fixed:** the heartbeat's touchdown-pairs short count (`td_short`) read 12 with all 12 games still
   waiting to post, as the two-leg count did; it now leaves a waiting game out too.
 

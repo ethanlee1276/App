@@ -89,14 +89,16 @@ def test_a_key_player_with_no_edge_is_named_not_left_out():
     text = R.to_text({"game": "CHI@DET", "away": "CHI", "home": "DET", "sections": [R.sec_watch(_ctx())],
                       "when": "x", "title": "t"})
     assert "— No edge either way —" in text
-    assert ("The Bears' D'Andre Swift (running back); the Lions' Jared Goff (quarterback): our numbers lean neither "
-            "way on these matchups, so they are neither a breakout nor a fade.") in text, text
+    assert ("The Bears' D'Andre Swift (running back); the Lions' Jared Goff (quarterback): the matchup leans neither "
+            "way for these players, so they are neither breakout candidates nor fades. Each one's case is under Who's "
+            "guarding who; a pick on any of them comes from our projection, not the matchup.") in text, text
     # One player alone is said as one.
     one = [r for r in _reads() if r["player"] != "Jared Goff"]
     text = R.to_text({"game": "CHI@DET", "away": "CHI", "home": "DET", "sections": [R.sec_watch(_ctx(one))],
                       "when": "x", "title": "t"})
-    assert ("The Bears' D'Andre Swift (running back): our numbers lean neither way on this matchup, so the read is "
-            "neither a breakout nor a fade. The case is under Who's guarding who.") in text, text
+    assert ("The Bears' D'Andre Swift (running back): the matchup leans neither way, so the read is neither a "
+            "breakout nor a fade. The case is under Who's guarding who; a pick on this player comes from our "
+            "projection, not the matchup.") in text, text
 
 
 def test_every_league_calls_a_breakout_a_breakout_candidate():
