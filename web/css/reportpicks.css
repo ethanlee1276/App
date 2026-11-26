@@ -56,6 +56,8 @@ button.rpk-rec:empty { display: none; }
 .rpk-fact-v { font: 700 var(--fs-xl) / 1.1 var(--font-display); font-variant-numeric: tabular-nums; color: var(--text); }
 .rpk-fact-sub { color: var(--text-mute); font-size: var(--fs-xs); }
 .rpk-fact-kinds { margin: 12px 0 0; padding-left: 18px; display: grid; gap: 3px; font-size: var(--fs-sm); }
+/* An ordinary game beside the reads' record (engine/reportrecord.BASE_RATES, step AIB). */
+.rpk-fact-base { margin: 6px 0 0; color: var(--text-mute); }
 .rpk-fact-span { margin: 8px 0 0; color: var(--text-mute); font-size: var(--fs-sm); }
 .rpk-fact-h { margin: 20px 0 8px; font-size: var(--fs-md); }
 .rpk-fact-list { display: grid; gap: 14px; }

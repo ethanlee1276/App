@@ -4,6 +4,12 @@
     {
       "date": "2026-11-26",
       "kind": "fix",
+      "title": "The reads' record says what an ordinary game does",
+      "body": "Under a football report's Players to watch, and in How our reports did, our record of breakout candidates and fades now has an ordinary game beside it. Measured on every key player's games from 2017 to 2025 (25,403 of them), a key player beats their own recent average 42% of the time and falls short of it 57%, because catches and yards are skewed. So a breakout candidate right 52% of the time is about ten points better than an ordinary game, not a coin flip."
+    },
+    {
+      "date": "2026-11-26",
+      "kind": "fix",
       "title": "A parlay leg or pick against the report's own read says so",
       "body": "When a game report calls a player favorable (a good spot, a good matchup, a breakout candidate) but one of its parlays or picks takes that player's under, or calls a player a fade but takes the over, the ticket and the pick's card now say so plainly, with our projection and which side of the line it sits on (on Thanksgiving a Bears at Lions ticket took Amon-Ra St. Brown's catches under 7.5 while the report called St. Brown a good spot, and said nothing). Both stay: a read never moves our number, and our numbers are what the record grades. Basketball and hockey reports now say 'Breakout candidate' as football's do."
     },

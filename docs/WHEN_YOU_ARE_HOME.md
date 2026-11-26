@@ -9883,6 +9883,24 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIB. Our reads' record says what an ordinary game does** (step 1020; 26 November; nothing to run). Your Bears at
+Lions screenshot read "breakout candidates beat their average 56 of 108 times (52%)". That looks like a coin flip,
+and it is not one. I measured it the way the record grades a read: the read's first stat (catches for receivers and
+tight ends, rushing yards for backs, passing yards for quarterbacks) against the player's previous games, at most
+10, at least 2. The data is public weekly stats for every key player in the 2017-2025 regular seasons, 25,403
+games. A key player beats that average in **42%** of ordinary games and falls short in **57%**, and every season
+sat between 40% and 44%. The stats are skewed, so the average sits above most games. So:
+
+- breakout candidates (52%) are about ten points better than an ordinary game, and fades (68%) about eleven;
+- the record line under Players to watch now says the ordinary game beside ours ("For comparison, a key player in
+  an ordinary game beats that average 42% of the time and falls short of it 57% (measured over the 2017–2025
+  seasons)"), and so does How our reports did on the Report Picks page (football only; the other leagues are not
+  measured yet, so they say nothing of the kind);
+- **the angles group is the weak one.** The free record has the angles (a defense's leak pointed at a player) at
+  50 of 117 (43%), no better than an ordinary game's 42%. They are explanations and never move a number, but as
+  calls they show no lift yet. Worth deciding whether to keep grading them as calls or rework what makes one;
+  I have not changed them.
+
 **AIA. A parlay leg or pick against the report's own read says so** (step 1019; 26 November; nothing to run). You:
 "keep going harder and working better on the game reports". Bears at Lions' tickets are on the free record, and one
 of them took Amon-Ra St. Brown's catches under 7.5 (it won, 7 catches), in the same report that called St. Brown a

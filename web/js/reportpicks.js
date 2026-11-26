@@ -299,7 +299,8 @@ function rpListed(x) {
   const inj = (x || {}).injuries;
   return inj ? [inj[0], Math.max(0, inj[1] - ((x || {}).missed || 0))] : [0, 0];
 }
-function rpTotalsHTML(t) {
+//: ``base``: an ordinary game for comparison (engine/reportrecord.BASE_RATES, step AIB), where it is measured.
+function rpTotalsHTML(t, base) {
   if (!t || !t.games) return `<p class="set-note">No finished game graded in this stretch.</p>`;
   const tile = (k, pair, sub) => pair && pair[1] ? `<div class="rpk-fact-tile"><span class="rpk-fact-k">${escapeHtml(k)}</span>
       <b class="rpk-fact-v">${Math.round((100 * pair[0]) / pair[1])}%</b><span class="rpk-fact-sub">${escapeHtml(sub || `${pair[0]} of ${pair[1]}`)}</span></div>` : "";
@@ -321,6 +322,8 @@ function rpTotalsHTML(t) {
       ${tile("Who we think wins", t.call)}${tile("The reads", t.reads)}${tile("Our ratings alone", t.ratings)}
       ${tile("Our simulation", t.sim)}${inj}${td}</div>
     ${kinds ? `<ul class="rpk-fact-kinds">${kinds}</ul>` : ""}
+    ${kinds && base && base.words ? `<p class="mini rpk-fact-base">${escapeHtml(base.words)}: a breakout candidate or a
+      good spot is right when it beats it, a fade when it falls short.</p>` : ""}
     ${rpCalibHTML(t.calibration)}
     <p class="mini rpk-fact-span">${escapeHtml(plural(t.games, "finished game"))}${t.since ? escapeHtml(`, ${formatGameDate(t.since)}`
       + (t.through && t.through !== t.since ? ` to ${formatGameDate(t.through)}` : "")) : ""}.</p>`;
@@ -527,7 +530,7 @@ async function rpFactsFill(host, league) {
   body.innerHTML = `${split ? `<div class="std-chips rpk-fact-span-chips">
       <button class="al-cat on" type="button" data-rpk-span="all">Every game</button>
       <button class="al-cat" type="button" data-rpk-span="recent">Last ${b.recent_days} days</button></div>` : ""}
-    <div data-rpk-totals>${rpTotalsHTML(b.totals)}</div>
+    <div data-rpk-totals>${rpTotalsHTML(b.totals, b.base)}</div>
     ${rpFeaturedHTML(fx)}
     <h4 class="rpk-fact-h">Every finished game</h4>
     ${fxKeys.size ? `<div class="std-chips rpk-fact-span-chips">
@@ -540,7 +543,7 @@ async function rpFactsFill(host, league) {
     ${b.more ? `<p class="mini">${escapeHtml(plural(b.more, "older game"))} not shown.</p>` : ""}`;
   body.querySelectorAll("[data-rpk-span]").forEach((btn) => btn.addEventListener("click", () => {
     body.querySelectorAll("[data-rpk-span]").forEach((x) => x.classList.toggle("on", x === btn));
-    body.querySelector("[data-rpk-totals]").innerHTML = rpTotalsHTML(btn.dataset.rpkSpan === "recent" ? b.recent : b.totals);
+    body.querySelector("[data-rpk-totals]").innerHTML = rpTotalsHTML(btn.dataset.rpkSpan === "recent" ? b.recent : b.totals, b.base);
   }));
   // One listener on the list for every row's report, the rows drawn later too.
   const list = body.querySelector(".rpk-fact-list");

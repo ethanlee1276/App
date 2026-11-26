@@ -777,7 +777,7 @@ def _summary_section(report: dict, summary: dict) -> None:
     blocks.append({"type": "note", "text": (
         "Each player’s read is graded on the stat it leans on, against the player’s own average over the games "
         "before this one: a favorable read or a breakout candidate is right when the night beat it, an unfavorable "
-        "read or a fade when it fell short; a teammate named to step up for a player who is out, when his targets "
+        "read or a fade when it fell short; a teammate named to step up for a player who is out, when the teammate's targets "
         "(carries, for a back) beat it. An offense against a defense is graded on the night’s numbers against the team’s own, "
         "and how the game would go on its final score. The lines, our team ratings, the simulation, the injury "
         "report and the touchdown chances are checked on their own lines, never counted among the reads. Our picks "

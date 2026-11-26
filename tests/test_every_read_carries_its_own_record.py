@@ -50,7 +50,9 @@ def test_each_graded_section_says_how_its_kind_of_read_has_done():
     tail = ", on 13 finished NFL games since Nov 12."
     assert lines["matchups"] == "Our matchup reads so far: 43 of 73 right (59%)" + tail, lines["matchups"]
     assert lines["watch"] == ("Our record so far: breakout candidates beat their average 29 of 60 times (48%) and "
-                              "fades fell short of it 12 of 14 times (86%)" + tail), lines["watch"]
+                              "fades fell short of it 12 of 14 times (86%)" + tail + " For comparison, a key player "
+                              "in an ordinary game beats that average 42% of the time and falls short of it 57% "
+                              "(measured over the 2017–2025 seasons)."), lines["watch"]
     assert lines["trenches"] == lines["defense"] == lines["tape"] == \
         "Our offense-against-defense reads so far: 9 of 14 right (64%)" + tail
     assert lines["scripts"] == lines["script"] == "Our reads on how the game would go so far: 12 of 20 right (60%)" + tail

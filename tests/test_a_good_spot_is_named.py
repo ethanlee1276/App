@@ -154,9 +154,9 @@ def test_the_record_and_the_journal_keep_a_good_spot_apart():
     line = reportrecord.track_lines({"games": 12, "since": "2026-11-12",
                                      "groups": {"candidates": (30, 50), "spots": (11, 20), "fades": (9, 14)}},
                                     "nfl")["watch"]
-    assert line == ("Our record so far: breakout candidates beat their average 30 of 50 times (60%), players in a good "
-                    "spot 11 of 20 (55%) and fades fell short of it 9 of 14 times (64%), on 12 finished NFL games "
-                    "since Nov 12."), line
+    assert line.startswith("Our record so far: breakout candidates beat their average 30 of 50 times (60%), players "
+                           "in a good spot 11 of 20 (55%) and fades fell short of it 9 of 14 times (64%), on 12 "
+                           "finished NFL games since Nov 12. For comparison, a key player in an ordinary game"), line
     js = (ROOT / "web" / "js" / "reportpicks.js").read_text(encoding="utf-8")
     assert '["spots", "Good spots"]' in js
     assert '["Good spot", "Good spots"]' in (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")

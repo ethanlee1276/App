@@ -360,6 +360,9 @@ def _record(where, sport: str, day: _dt.date) -> dict:
     slate = last_slate(where, sport)
     if slate.get("games"):
         out["last_slate"] = slate
+    # The ordinary game beside the reads' record (BASE_RATES, step AIB), where it is measured.
+    if base_words(sport):
+        out["base"] = {"words": base_words(sport), **BASE_RATES[sport]}
     return out
 
 
@@ -393,6 +396,26 @@ def _pct(a: int, n: int) -> str:
     return f"{round(100 * a / n)}%"
 
 
+#: AN ORDINARY GAME, FOR COMPARISON (step AIB, measured 26 November 2026). Our record read "breakout candidates beat
+#: their average 56 of 108 times (52%)", which a member reads as a coin flip. It is not one: the stats a read is graded
+#: on (catches, rushing yards, passing yards) are skewed, so a player's average sits above most of the player's games.
+#: Measured as reportgrade grades a read (the read's first stat against the player's previous games, at most 10, at
+#: least 2), on nflverse weekly stats for every key player (receivers at 12% of the targets or more, backs at 25% of
+#: the carries, quarterbacks at 20 passes a game) in the 2017-2025 regular seasons, 25,403 games: the player beat that
+#: average in 42.2% of them and fell short in 56.6% (even 1.2%), and every season sat between 40% and 44%.
+#: Leagues not measured say nothing.
+BASE_RATES = {"nfl": {"over": 0.422, "under": 0.566, "seasons": "2017–2025"}}
+
+
+def base_words(sport: str) -> str:
+    """The ordinary game beside the record (BASE_RATES), or ''."""
+    b = BASE_RATES.get(str(sport or "").lower())
+    if not b:
+        return ""
+    return (f"For comparison, a key player in an ordinary game beats that average {b['over']:.0%} of the time and "
+            f"falls short of it {b['under']:.0%} (measured over the {b['seasons']} seasons)")
+
+
 def track_lines(t: dict, sport: str) -> dict:
     """{section key: one sentence on how its kind of read has done so far},
     for every kind with enough graded (TRACK_MIN) — the next report says, beside
@@ -417,7 +440,8 @@ def track_lines(t: dict, sport: str) -> dict:
                 + ([f"fades fell short of it {f[0]} of {f[1]} times ({_pct(*f)})"] if f else [])
             if parts:
                 said = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
-                out[key] = f"Our record so far: {said}{tail}."
+                base = base_words(sport)
+                out[key] = f"Our record so far: {said}{tail}." + (f" {base}." if base else "")
             continue
         x = got(kinds[0])
         if x:
