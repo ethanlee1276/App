@@ -9883,6 +9883,30 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHX. The backs step up too: a backup's carries are lifted, and the next back up is read** (step 1016; 26
+November; nothing to run). You: "do the same for running backs too". What a back had:
+
+- **His carries were never in the step.** The teammate step lifted a back's rushing yards behind a starter just
+  ruled out (×1.66), his catches and his receiving yards, but the fit had never measured carries. So the board
+  priced a backup's carries at his own form while raising his yards by two thirds. Measured now on the same four
+  seasons (2022-2025) and the same rule as every other cell (two standard errors from 1.0, three seasons of four):
+
+  | the case | carries, snap-ranked (what the board uses) | target-ranked |
+  |---|---|---|
+  | the back ahead of him just ruled out | ×1.72 (± .12, 99 games, up in every season) | ×1.74 |
+  | the back ahead already out | ×1.33 (± .06, 227 games, every season) | ×1.32 |
+  | a back below him just out | ×1.07 (3 seasons of 4) | ×1.07 |
+  | a back below him already out | ×1.07 (3 seasons of 4) | short of the rule, not applied |
+
+  A teammate back coming back is read for carries too (the deflation test passes, as it does for the yards). The
+  test that re-runs the fit on the real box scores and requires our tables to match it passes with them.
+- **The next back up had no read.** The scan reads a back with a quarter of his team's carries this season. For
+  example (the test's numbers, not a real game), behind a lead back with 60%, a backup with 22% had no read unless a
+  book priced him. With a lead back's share sitting, a back's share is now read as his share of the carries left
+  (22% becomes 55%), and the read says it.
+- **The short version** already says who took the carries in the games without him (step AHW's sentence), and now
+  which of our numbers it raises, in the test's example: "our numbers raise Blake Corum's carries ×1.72 for it".
+
 **AHW. When receivers sit, the report names who steps up, reads the next men up, and our numbers lift the room**
 (step 1015; 26 November; nothing to run). You, after Packers at Rams: "when there is alot of players out we dont
 reccomend any props for the backups ... and dont say anything about them or how there usage could step up". What

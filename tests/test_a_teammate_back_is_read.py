@@ -217,7 +217,8 @@ def test_the_card_the_page_and_the_chain_agree():
 def test_the_tables_are_what_the_measurement_shipped():
     """Pinned so a refit that moves them is seen (`python3 matefit.py --back`)."""
     assert T.BACK_CELLS == frozenset({("rec_yds", "RB"), ("rec_yds", "TE"), ("rec_yds", "WR"),
-                                      ("receptions", "RB"), ("receptions", "WR"), ("rush_yds", "RB")})
+                                      ("receptions", "RB"), ("receptions", "WR"), ("rush_yds", "RB"),
+                                      ("rush_att", "RB")}), "carries since step AHX"
     assert T.BACK_RESIDUAL == {("receptions", "RB", "below_back"): 0.903}
     held = {("receptions", "TE", 2022): {"raw": 10.0, "deflated": 9.0},
             ("receptions", "TE", 2023): {"raw": 10.0, "deflated": 10.1},

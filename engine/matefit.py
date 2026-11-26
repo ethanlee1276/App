@@ -41,7 +41,11 @@ MARKETS = {
     "TE": [("rec_yds", ("receiving_yards",), 15.0), ("receptions", ("receptions",), 1.5),
            ("anytime_td", ("receiving_tds", "rushing_tds"), 0.0)],
     "RB": [("rush_yds", ("rushing_yards",), 15.0), ("receptions", ("receptions",), 1.5),
-           ("rec_yds", ("receiving_yards",), 12.0), ("anytime_td", ("receiving_tds", "rushing_tds"), 0.0)],
+           ("rec_yds", ("receiving_yards",), 12.0), ("anytime_td", ("receiving_tds", "rushing_tds"), 0.0),
+           # CARRIES (step AHX, 26 November 2026): the market the lift never asked of a back. His rushing yards were
+           # lifted x1.66 behind a starter just ruled out while his carries stayed at his form; the floor is the
+           # yards' (15) at the league's 4.3 yards a carry.
+           ("rush_att", ("carries",), 3.5)],
 }
 FIRST_WEEK = 4
 MIN_GAMES = 3

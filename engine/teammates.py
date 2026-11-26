@@ -53,6 +53,11 @@ EFFECT = {
     ("receptions", "WR", "above_new"): 1.180,    # ± .063  n 196
     ("receptions", "WR", "above_cont"): 1.091,   # ± .034  n 428
     ("rec_yds", "WR", "above_cont"): 1.107,      # ± .045  n 432
+    # CARRIES (step AHX, 26 November 2026; `python3 matefit.py`, 2022-2025): the market the step never asked of a
+    # back, so his rushing yards rose x1.65 behind a starter just ruled out while his carries stayed at his form.
+    ("rush_att", "RB", "above_new"): 1.741,      # ± .109  n 108
+    ("rush_att", "RB", "above_cont"): 1.323,     # ± .059  n 250
+    ("rush_att", "RB", "below_new"): 1.070,      # ± .027  n 374
 }
 #: THE SAME, WITH THE DEPTH ORDER RANKED ON SNAP SHARE — what the board
 #: uses whenever the build has snap counts (engine/matefit.volume). Filled
@@ -81,6 +86,11 @@ EFFECT_SNAPS = {
     ("rush_yds", "RB", "above_new"): 1.657,      # ± .162  n 95
     ("rush_yds", "RB", "below_cont"): 1.093,     # ± .033  n 601
     ("rush_yds", "RB", "below_new"): 1.144,      # ± .046  n 330
+    # Carries (step AHX; `python3 matefit.py --snaps`, 2022-2025), every case the rule passes.
+    ("rush_att", "RB", "above_new"): 1.723,      # ± .117  n 99
+    ("rush_att", "RB", "above_cont"): 1.331,     # ± .061  n 227
+    ("rush_att", "RB", "below_cont"): 1.066,     # ± .023  n 614
+    ("rush_att", "RB", "below_new"): 1.066,      # ± .028  n 335
 }
 #: The words for each case, on the card.
 CASE_WORDS = {"above_new": "just ruled out ahead of the player", "above_cont": "out ahead of the player",
@@ -92,6 +102,8 @@ CASE_WORDS = {"above_new": "just ruled out ahead of the player", "above_cont": "
 BACK_CELLS = frozenset({
     ("rec_yds", "RB"), ("rec_yds", "TE"), ("rec_yds", "WR"),
     ("receptions", "RB"), ("receptions", "WR"), ("rush_yds", "RB"),
+    # A back's carries with the back ahead of him returned (step AHX: `python3 matefit.py --back`, passes).
+    ("rush_att", "RB"),
 })
 #: What is left after the deflation, by matefit's shipping rule on every
 #: season: a back's catches with the back behind him returned. Snap-ranked
