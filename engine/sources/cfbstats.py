@@ -405,6 +405,75 @@ def _side_of(game: dict, team_name: str):
     return None
 
 
+#: The columns that name the side WITH the ball: who ran, threw, caught, was thrown at, was sacked, kicked.
+OFFENSE_COLUMNS = ("rush_player", "completion_player", "reception_player", "incompletion_player",
+                   "target_player", "sack_taken_player", "interception_thrown_player",
+                   "field_goal_attempt_player")
+
+
+def play_side(game: dict, r: dict, roster: dict | None):
+    """``(team_key, opponent_key, is_home)`` for the side a play's names play for, or None.
+
+    THE FEED FILES SOME PLAYS UNDER THE DEFENCE (step AHV, 26 November
+    2026). A sack, a pass broken up, an interception, and some plain
+    incompletions are filed once, on a row whose ``team`` is the defending
+    school, and that row names the other side's passer and receiver: on
+    Owen McCown's incompletion to A'Marion Peterson, both UTSA, the row
+    says South Florida. The 2026 file has 197,178 rows naming a player; by
+    each name's school on the season's roster, 10,297 name only the other
+    side's players and 4 mix the two. Read as the row says, each opened a
+    line for the passer and the receiver under the wrong school, and since
+    a stat row's key holds no school, that line and the real one wrote one
+    row: 17,037 of 2026's stat rows two ways (Peterson's three touchdowns
+    against USF, and 0), the last one written kept. So the row's own school
+    stands unless the roster puts its names with the other one and none
+    with it; a name the roster does not list leaves the row as it says
+    (`_merge_split_lines` then joins a line split by one ESPN id)."""
+    side = _side_of(game, _name(r.get("team")))
+    if not side or not roster:
+        return side
+    mine = _name(r.get("team"))
+    other = game.get("away_name") if mine == game.get("home_name") else game.get("home_name")
+    schools = set()
+    for column in OFFENSE_COLUMNS:
+        ident = _name(r.get(column + "_id"))
+        if ident and _name(r.get(column)):
+            school = (roster.get(ident) or {}).get("team")
+            if school:
+                schools.add(school)
+    if other and other in schools and mine not in schools:
+        team, opponent, home = side
+        return opponent, team, not home
+    return side
+
+
+#: The markets a merged line keeps the larger of, not the sum.
+_LONGEST = ("fg_long",)
+
+
+def _merge_split_lines(bag: dict, ids: dict) -> int:
+    """One player's line in one game under both schools, joined into the side he did more on, when the two carry
+    one ESPN id (two players of one name carry two). Returns the lines joined."""
+    by_game: dict = {}
+    for key in bag:
+        gid, team, _opp, _home, player = key
+        by_game.setdefault((gid, player), []).append(key)
+    joined = 0
+    for (gid, player), keys in by_game.items():
+        if len(keys) < 2:
+            continue
+        idents = {ids.get((k[1], player), "") for k in keys}
+        if len(idents) != 1 or not next(iter(idents)):
+            continue
+        keys.sort(key=lambda k: -sum(v for m, v in bag[k].items() if m not in _LONGEST))
+        keep = bag[keys[0]]
+        for k in keys[1:]:
+            for m, v in bag.pop(k).items():
+                keep[m] = max(keep.get(m, 0.0), v) if m in _LONGEST else keep.get(m, 0.0) + v
+            joined += 1
+    return joined
+
+
 def parse_player_stats(rows, season: int, games: dict,
                        roster: dict | None = None, targets: bool = True) -> dict:
     """Per-player-per-game ``player_game_logs`` rows from play rows.
@@ -452,7 +521,7 @@ def parse_player_stats(rows, season: int, games: dict,
         if not game:
             skip("game not ingested")
             continue
-        side = _side_of(game, _name(r.get("team")))
+        side = play_side(game, r, roster)
         if not side:
             skip("team not in this game")
             continue
@@ -563,6 +632,9 @@ def parse_player_stats(rows, season: int, games: dict,
         _slot(bag, receiver_key)["rec_td"] += 1
         _slot(bag, passer_key)["pass_td"] += 1
 
+    joined = _merge_split_lines(bag, ids)
+    if joined:
+        skipped["lines under both schools, joined"] = joined
     for slot in bag.values():
         slot["anytime_td"] = slot["rush_td"] + slot["rec_td"]
     dropped = {w for w, mode in modes.items() if mode == DROP}
@@ -714,7 +786,7 @@ def _impossible_games(bag: dict, games: dict, skipped: dict) -> set:
 
 
 def parse_rosters(rows) -> dict:
-    """``{athlete_id: {"position", "name", "headshot"}}``.
+    """``{athlete_id: {"position", "name", "headshot", "team"}}``.
 
     Position because college box scores carry none; name because the
     play file lower-cases the second capital in "McMillan"; headshot
@@ -732,6 +804,8 @@ def parse_rosters(rows) -> dict:
             "position": _name(r.get("position")).upper(),
             "name": (first + " " + last).strip(),
             "headshot": _name(r.get("headshot_url")),
+            # His school, as the play file spells it (`play_side`).
+            "team": _name(r.get("team")),
         }
     return out
 

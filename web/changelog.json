@@ -4,8 +4,8 @@
     {
       "date": "2026-11-26",
       "kind": "fix",
-      "title": "College football files a night game once",
-      "body": "A Saturday night college game was being filed a second time under Sunday, its UTC day, by the nightly stat pull: 17,401 copies by 25 November. The feed now dates games on the Eastern day, the box-score backfill reads each game once, the same-night box score is filed under one id, and the cleanup also removes a game filed with one school under another code."
+      "title": "College stat lines count for the right school, and a night game is filed once",
+      "body": "The college play file files some plays (a sack, a pass broken up, an interception) under the defending school, naming the other side's passer and receiver. We read them as the defence's, and the phantom line overwrote the real one: this season's stored college stats held 8,165 of 9,271 touchdowns and 61,923 of 87,963 pass attempts. A play now counts for the school its players are on. A Saturday night game was also being filed again under Sunday, its UTC day (17,401 copies); games are now dated on the Eastern day and filed once."
     },
     {
       "date": "2026-11-26",

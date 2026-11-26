@@ -9883,8 +9883,8 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
-**AHV. College football stops filing a night game twice; the cleanup runs again** (step 1014; 26 November; two
-commands, RUN_NEXT 00t). The nightly count (step AFG, heartbeat `cfb_copies`) found 25,028 college stat rows on 25
+**AHV. College football's stat lines count for the right school, and a night game is filed once** (step 1014; 26
+November; three commands, RUN_NEXT 00t). The nightly count (step AFG, heartbeat `cfb_copies`) found 25,028 college stat rows on 25
 November that copied a game already on file, eleven days after the 14 November cleanup removed 130,078. The biggest
 kind, 17,401 rows, was one game a day apart under the same two teams and the same ESPN number: A'Marion Peterson's
 UTSA at Texas on 19 and 20 September. The writer:
@@ -9907,10 +9907,25 @@ UTSA at Texas on 19 and 20 September. The writer:
   because those can be two different players.
 - **The nightly count says what is new.** `cfb_copies.since` counts the copies of games played since 14 November,
   which can only have been filed since, and `latest` gives each kind's newest example. After the cleanup runs it
-  should read close to nothing. `markets` and `zeros` say what the rows left on the other side of a game are: one
-  of them credits A'Marion Peterson (UTSA) to USF, the team he played on 8 October, in the play file's own row. If
-  those rows read zero on both sides, the play file opened a slot under the wrong school and the fix is in its
-  parser; that is the next step once the count shows it.
+  should read close to nothing. `markets` and `zeros` say what is left on the other side of a game.
+- **A play counts for the side with the ball. This is the big one.** The count's "other side" kind (3,325 rows)
+  named A'Marion Peterson (UTSA) under South Florida, the team he played on 8 October, in the play file's own row.
+  I downloaded the mirror's 2026 file and read that game's plays. The feed files a sack, a pass broken up, an
+  interception and some plain incompletions once, on a row whose school is the defence, and that row names the
+  offence's passer and receiver: Owen McCown's incompletion to Peterson, both UTSA, says South Florida. By each
+  name's school on the season's roster, 10,297 of the 197,178 rows that name a player name only the other side's
+  players, and 4 mix the two. We read each such play as the defence's, opening a line for the passer and the
+  receiver under the wrong school. A stat row's key is the game, the player and the market, with no school, so the
+  phantom line and the real one wrote the same row and the last one stood. Run through our own parser, the table
+  kept 8,165 of 2026's 9,271 touchdowns, 61,923 of 87,963 pass attempts, 48,340 of 53,342 receptions and 580,595 of
+  642,163 receiving yards. Peterson's three touchdowns in that game were stored as 0, and McCown's 31 attempts and
+  22 completions as 5 and 0. Last season lost 280 of 6,370 touchdowns and 21,706 pass attempts; 2023 lost 225
+  touchdowns. Every college read that counts these was short: the touchdown board's base rates, a passer's attempts,
+  a receiver's catches, and what a defence allows. A play now counts for the school its players are on, by the
+  roster (`cfbstats.play_side`), in the stat lines and the carry, route and passing charts. A line one ESPN id still
+  splits across both schools is joined, and two players of one name stay apart. Re-run on the 2026 file: no line
+  under both schools, 26,964 phantom rows gone. This season's rows are rewritten on the next nightly pull. The past
+  seasons need `ingest.py cfbhist --seasons 2022-2025` (RUN_NEXT 00t).
 
 **AHU. College's bold picks are matched; whether they hold up is now on the heartbeat** (step 1013; 26 November;
 nothing to run). Step AFR asked why the NFL's "bolder than the books" picks were a kind on paper (said 72%, hit 51%

@@ -243,7 +243,7 @@ class CfbCarries:
         game = self.games.get(gid)
         if not game:
             return
-        side = CS._side_of(game, _clean(r.get("team")))
+        side = CS.play_side(game, r, self.roster)        # the side with the ball (step AHV)
         if not side:
             return
         team, opponent, home = side
