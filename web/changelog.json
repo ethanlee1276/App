@@ -5,7 +5,7 @@
       "date": "2026-11-26",
       "kind": "fix",
       "title": "College football files a night game once",
-      "body": "A Saturday night college game was being filed a second time under Sunday, its UTC day, by the nightly stat pull: 17,401 copies by 25 November. The feed now dates games on the Eastern day, the box-score backfill reads each game once, and the cleanup also removes a game filed with one school under another code."
+      "body": "A Saturday night college game was being filed a second time under Sunday, its UTC day, by the nightly stat pull: 17,401 copies by 25 November. The feed now dates games on the Eastern day, the box-score backfill reads each game once, the same-night box score is filed under one id, and the cleanup also removes a game filed with one school under another code."
     },
     {
       "date": "2026-11-26",

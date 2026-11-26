@@ -723,7 +723,14 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
                 res["skipped"].append(f"{league} {g['away']}@{g['home']}: the summary does not say the "
                                       "game is over yet — a box score read mid-game is never filed")
                 continue
-            rows = nfl_rows(payload, g) if league == "nfl" else cfb_rows(payload, g)
+            # A COLLEGE COPY UNDER ITS ESPN NUMBER, WHATEVER THE ROW'S KEY (step
+            # AHV, 26 November 2026). The nightly rekey (ingest.
+            # remap_cfb_game_ids) renames a game's row from ESPN's number to
+            # away@home, so a box score filed before it under "401864545-box"
+            # was filed again after it under "UTEP@AFA-box": Adam Hrynciw's 20
+            # November game, twice, on the heartbeat's count of the 25th. The
+            # event read is the same game either way.
+            rows = nfl_rows(payload, g) if league == "nfl" else cfb_rows(payload, {**dict(g), "game_id": eid})
         except Exception as exc:                          # noqa: BLE001
             res["skipped"].append(f"{league} {g['away']}@{g['home']}: {exc}")
             continue

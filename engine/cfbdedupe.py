@@ -273,13 +273,14 @@ def census(conn, season: int) -> dict:
     """A season's stored copies, counted: {"rows": rows read, "games": player-games filed more than once,
     "copies": rows beyond the first of their game, "kinds": {kind: rows}, "ids": {kind: {"espn+box": rows}},
     "examples": {kind: ["player, market, day: ids"]}, "since": {"day": CLEANED, "copies", "kinds"} for games
-    played on or after the cleanup, "latest": {kind: the newest game's example}}. Writes nothing. Copies are
+    played on or after the cleanup, "latest": {kind: the newest game's example}, "markets": {kind: its four
+    commonest markets}, "zeros": {kind: copies where both rows read 0}}. Writes nothing. Copies are
     found as `plan_logs` finds them, a day or less apart, but within one player's market whatever the teams
     (`copy_kind`): "the other side" and "other" can be two players of one name, and the cleanup leaves them."""
-    q = ("SELECT period, game_id, player, team, opponent, market FROM player_game_logs "
+    q = ("SELECT period, game_id, player, team, opponent, market, value FROM player_game_logs "
          "WHERE sport='cfb' AND season=? ORDER BY market, player, period")
     out = {"rows": 0, "games": 0, "copies": 0, "kinds": {}, "ids": {}, "examples": {},
-           "since": {"day": CLEANED, "copies": 0, "kinds": {}}, "latest": {}}
+           "since": {"day": CLEANED, "copies": 0, "kinds": {}}, "latest": {}, "markets": {}, "zeros": {}}
     newest: dict = {}
     games: set = set()
     key, buf = None, []
@@ -303,6 +304,10 @@ def census(conn, season: int) -> dict:
                 ex = out["examples"].setdefault(kind, [])
                 if len(ex) < CENSUS_EXAMPLES:
                     ex.append(said)
+                mk = out["markets"].setdefault(kind, {})
+                mk[r["market"]] = mk.get(r["market"], 0) + 1
+                if not float(r["value"] or 0) and not float(head["value"] or 0):
+                    out["zeros"][kind] = out["zeros"].get(kind, 0) + 1
                 day = str(head["period"] or "")[:10]
                 if day >= CLEANED:
                     out["since"]["copies"] += 1
@@ -320,6 +325,10 @@ def census(conn, season: int) -> dict:
         buf.append(r)
     flush()
     out["games"] = len(games)
+    # Each kind's four commonest markets, enough to tell a copy of a game from a name the feed put on the wrong
+    # side of it (a row of zeros under the other school is a slot the play file opened, not a stat line).
+    out["markets"] = {k: dict(sorted(v.items(), key=lambda kv: (-kv[1], kv[0]))[:4])
+                      for k, v in out["markets"].items()}
     return out
 
 

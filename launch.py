@@ -6403,7 +6403,7 @@ def _cfb_copies_public() -> dict:
         from engine.maintenance import CFB_COPIES_STATE
         doc = json.loads(CFB_COPIES_STATE.read_text())
         return {k: doc[k] for k in ("at", "season", "seconds", "rows", "games", "copies", "kinds", "ids", "examples",
-                                    "since", "latest") if k in doc}
+                                    "since", "latest", "markets", "zeros") if k in doc}
     except Exception:  # noqa: BLE001 — the heartbeat never fails for a side read
         return {}
 

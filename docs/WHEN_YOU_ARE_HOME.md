@@ -9899,12 +9899,18 @@ UTSA at Texas on 19 and 20 September. The writer:
 - **The box-score backfill reads each game once.** `ingest.py cfb` read one summary for every games row (twice for a
   night game) and none for a game under an away@home key, which the nightly rekey gives every row. It now reads each
   ESPN number once and files it on the game's earliest day.
+- **The same-night box copy is filed once.** A box score filed under the game's ESPN number one night was filed
+  again under its away@home key the next, after the nightly rekey renamed the game's row: Adam Hrynciw's Air Force
+  game against UTEP on 20 November sat there twice. The copy is now always filed under the ESPN number.
 - **The cleanup learned one more kind.** One game with one school under another code (BUF and BUFF): 1,300 rows on 25
   November. It still leaves the same name on the two teams of one game (3,325) and on two unrelated games (1,692),
   because those can be two different players.
 - **The nightly count says what is new.** `cfb_copies.since` counts the copies of games played since 14 November,
   which can only have been filed since, and `latest` gives each kind's newest example. After the cleanup runs it
-  should read close to nothing.
+  should read close to nothing. `markets` and `zeros` say what the rows left on the other side of a game are: one
+  of them credits A'Marion Peterson (UTSA) to USF, the team he played on 8 October, in the play file's own row. If
+  those rows read zero on both sides, the play file opened a slot under the wrong school and the fix is in its
+  parser; that is the next step once the count shows it.
 
 **AHU. College's bold picks are matched; whether they hold up is now on the heartbeat** (step 1013; 26 November;
 nothing to run). Step AFR asked why the NFL's "bolder than the books" picks were a kind on paper (said 72%, hit 51%

@@ -16,9 +16,12 @@ What holds now:
   * the ESPN number joins the game's earliest day when an older row of the same pair stands a day or less before;
   * the box-score backfill reads each game once, under its ESPN number, on its earliest day
     (`cfbdata.one_row_a_game`), where it read one copy for every games row (and none at all for an away@home key);
+  * the same-night box copy is filed under the game's ESPN number, so the nightly rekey to away@home does not file
+    it again (Adam Hrynciw's 20 November game sat under "401864545-box" and "UTEP@AFA-box");
   * the cleanup also takes one game under another code for one side (BUF and BUFF), and still leaves two players
     of one name apart ("the other side", "other");
-  * the nightly count says how many copies are of games played since the cleanup, and each kind's newest example.
+  * the nightly count says how many copies are of games played since the cleanup, each kind's newest example, its
+    commonest markets and how many of its copies read zero on both rows.
 
     python3 tests/test_a_night_game_is_filed_on_its_own_day.py
 """
@@ -185,8 +188,30 @@ def test_the_nightly_count_says_the_copies_since_the_cleanup():
     assert got["latest"]["a day apart, same teams"] == (
         "Wayne Harris, rec_yds, 2026-11-18: 401858300 (KENT v OHIO) and 401858300 on 2026-11-19 (KENT v OHIO)"), \
         got["latest"]
+    assert got["markets"]["the other side"] == {"pass_yds": 1} and got["markets"]["other"] == {"rush_yds": 1}
+    assert got["zeros"] == {}, "every fixture row carries a number"
     launch = (ROOT / "launch.py").read_text(encoding="utf-8")
-    assert '"since", "latest") if k in doc}' in launch
+    assert '"since", "latest", "markets", "zeros") if k in doc}' in launch
+
+
+def test_a_box_copy_is_one_copy_across_the_nightly_rekey():
+    """Filed under the game's ESPN number, a box score is the same copy after the nightly rekey renames its games
+    row to away@home: the next pass finds it on file and writes nothing."""
+    import test_a_box_score_on_file_is_not_written_again as T
+    from engine import boxsettle as B
+    from engine.ingest import remap_cfb_game_ids
+    L, H = T._college_game()
+    payload = T._payload()
+    fs = lambda lg, eid: payload                                       # noqa: E731
+    fr = lambda lg: []                                                 # noqa: E731
+    first = B.ingest_for_open(L, H, "cfb", log=lambda *a: None, fetch_rows=fr, fetch_summary=fs)
+    assert first["games"] == 1, first
+    assert remap_cfb_game_ids(H)["renamed"] == 1
+    assert "@" in H.execute("SELECT game_id FROM games").fetchone()[0]
+    second = B.ingest_for_open(L, H, "cfb", log=lambda *a: None, fetch_rows=fr, fetch_summary=fs)
+    assert second["games"] == 0 and second.get("unchanged") == 1, second
+    ids = {r[0] for r in H.execute("SELECT DISTINCT game_id FROM player_game_logs WHERE sport='cfb'")}
+    assert ids == {"401999-box"}, ids
 
 
 def test_the_writers_say_why():
