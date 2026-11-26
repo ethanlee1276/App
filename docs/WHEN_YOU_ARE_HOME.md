@@ -9899,9 +9899,9 @@ of my check-ins, read at 04:41 UTC off the live boards (`/data/{nba,nhl,cbb}.jso
   next night they stay.
 - **Live game pages across the leagues.** Rendered at 390 px, one per league: the NBA's (SAC at GSW, third quarter),
   the NHL's (MTL at COL, third period) and college basketball's (WASH at VCU, second half) live pages carry the same
-  cards in the same order (score header, court or rink stage, line score, the game's flow, win chances, game chat,
-  then Stats, Play-By-Play, Standings and Our picks), and so do their finals (stage, line score, the 30-second
-  recap). The NFL's final (GB at LA) has no stage card, the field having no last snap to draw; the drive chart sits
+  cards in the same order (score header, court or rink stage, line score, the newest play, the win-chance chart,
+  Call it, game chat, then Stats, Play-By-Play, Standings and Our picks), and so do their finals (stage, line score,
+  the 30-second recap). The NFL's final (GB at LA) has no stage card, the field having no last snap to draw; the drive chart sits
   in its Stats tab, as decided under step AHD. No NFL game was live to compare. The header said DEMO for the NFL in my
   local copy only; the live site says "Live data" for both the NFL and the NBA.
 
