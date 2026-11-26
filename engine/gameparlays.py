@@ -1500,7 +1500,8 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
         # The pair's own caveat before it stays; the ticket says who needs which lead once, below.
         if cav and PULL_APART in cav:
             opposed = True
-            cav = cav[:cav.find(f"{a.get('player')} needs ")].rstrip("; ")
+            at = cav.find(f"{a.get('player')} needs ")
+            cav = cav[:at].rstrip("; ") if at >= 0 else ""
         if cav:
             caveats.append(cav)
         if why and abs(rho) >= 0.10:

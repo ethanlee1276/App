@@ -548,7 +548,9 @@ def nhl_goalies(c: Ctx) -> dict | None:
         if not s.get("starter"):
             items.append(f"{t}: no starter named yet")
             continue
-        bits = ["confirmed" if s.get("starter_sure") else "probable, not confirmed"]
+        # ONE WORD FOR IT (step AHY): the short version said "expected, not confirmed yet" for the goalie this
+        # called "probable, not confirmed".
+        bits = ["confirmed" if s.get("starter_sure") else "expected, not confirmed yet"]
         if _f(s.get("starter_sv")) is not None:
             bits.append(f".{round(float(s['starter_sv']) * 1000):03d} save rate")
         if _f(s.get("starter_gsax")) is not None:

@@ -225,7 +225,7 @@ def test_the_nhl_report_reads_the_tape_the_goalies_and_the_injuries():
                  "Puck drop: Wednesday, Oct. 21, 7:00 PM ET",
                  "Bruins: the second night of a back-to-back",
                  "BOS has played 6 games this season, so last season still carries 40% of its numbers",
-                 "Jeremy Swayman for BOS — probable, not confirmed; .904 save rate; has let in 3.4 more goals "
+                 "Jeremy Swayman for BOS — expected, not confirmed yet; .904 save rate; has let in 3.4 more goals "
                  "than expected lately; started 70% of the Bruins' last 10 games",
                  "Anthony Stolarz for TOR — confirmed",
                  "TOR takes the second-most shots (33.2 a game), and BOS allows the sixth-most (31.5 a game) — a busy night "
