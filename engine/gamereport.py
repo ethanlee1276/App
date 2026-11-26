@@ -1788,7 +1788,7 @@ def sec_swing(c: Ctx) -> dict | None:
     # quarterback, the last name where a line repeats it.
     for sc in scen:
         team, who = sc.get("team"), str(sc.get("starter") or "")
-        last = _last_name(who) or who
+        last = _last_name(who) or "the starter"
         rep = str(sc.get("replacement") or "the backup")
         status = SWING_STATUS.get(str(sc.get("status") or "").upper(), "questionable")
         when = ("the inactives come out 90 minutes before kickoff, and our picks post 75 minutes before it, after them"

@@ -166,6 +166,13 @@ def test_hockey_and_baseball_say_what_they_count():
     assert "Zack Wheeler's pitch mix: four-seamers 45%" in R.to_text(rep)
 
 
+def test_a_quarterback_is_named_and_a_missing_name_reads_as_the_starter():
+    assert R._last_name("Jared Goff") == "Goff" and R._last_name("Michael Penix Jr.") == "Penix"
+    assert R._last_name("") == "" and R._last_name("Hendon Hooker III") == "Hooker"
+    src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
+    assert 'last = _last_name(who) or "the starter"' in src
+
+
 def test_a_basketball_report_says_only_its_own_games_matchups():
     import test_every_college_game_gets_a_report as T
     from engine import leaguereport as L
