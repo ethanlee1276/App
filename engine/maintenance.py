@@ -256,6 +256,55 @@ def cfb_player_seasons(today, have: int) -> list[int]:
     return seasons
 
 
+#: THE PAST SEASONS READ AGAIN WITH THE SIDE WITH THE BALL (step AHV, 26 November 2026). The play file files
+#: some plays under the defending school, and until `cfbstats.play_side` the parser read them as the defence's:
+#: run on the mirror's own files, the table kept 6,090 of 2025's 6,370 college touchdowns and 8,651 of 2023's
+#: 8,876. The season being played is read every night and is rewritten by the next one; the four before it are
+#: read again here, one a night and the newest first, each once (`cfb_reread_season`), so the box never has to
+#: run the backfill by hand. Against the games rows already stored, so each changed row is rewritten in place.
+CFB_REREAD_STATE = ROOT / "data" / "cache" / "cfb_play_side.json"
+#: The parser change the re-read is for; a new one would read every season again.
+CFB_REREAD_FOR = "play_side"
+
+
+def cfb_reread_season(today: _dt.date, have: int, state_path=None) -> int | None:
+    """The newest of the four college seasons before this one not yet read again with `CFB_REREAD_FOR`, or None
+    (all done, or a box still waiting for its first backfill, which reads them all anyway)."""
+    if have < CFB_MIN_PLAYER_ROWS:
+        return None
+    season = today.year if today.month >= 8 else today.year - 1
+    try:
+        doc = json.loads(Path(state_path or CFB_REREAD_STATE).read_text())
+    except (OSError, ValueError):
+        doc = {}
+    done = set(doc.get("read") or []) if doc.get("for") == CFB_REREAD_FOR else set()
+    for past in range(season - 1, season - 5, -1):
+        if past not in done:
+            return past
+    return None
+
+
+def cfb_reread_done(season: int, rows: int, state_path=None) -> dict:
+    """Mark one past season read again (`cfb_reread_season`); returns the state as kept."""
+    path = Path(state_path or CFB_REREAD_STATE)
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError):
+        doc = {}
+    if doc.get("for") != CFB_REREAD_FOR:
+        doc = {"for": CFB_REREAD_FOR, "read": [], "rows": {}}
+    if int(season) not in doc["read"]:
+        doc["read"].append(int(season))
+    import time as _t
+    doc.setdefault("rows", {})[str(int(season))] = int(rows)
+    doc["at"] = round(_t.time())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(doc))
+    os.replace(tmp, path)
+    return doc
+
+
 def _backup_due(state: dict, today: _dt.date) -> bool:
     last = state.get("last_backup")
     if last:
@@ -3779,6 +3828,11 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 "AND market='anytime_td'").fetchone()[0]
             season = today.year if today.month >= 8 else today.year - 1
             seasons = cfb_player_seasons(today, have)
+            from . import modelstate as _ms
+            # Never in the suite's sandbox (`_run_push`'s rule): the state file is the box's.
+            reread = None if os.environ.get(_ms.ENV_VAR) else cfb_reread_season(today, have)
+            if reread is not None and reread not in seasons:
+                seasons = sorted(seasons + [reread])
             if seasons:
                 res = ingest_cfb_player_history(_pconn, seasons, quiet=True,
                                                 fresh=season)
@@ -3788,6 +3842,11 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                     f"now has usage to price")
                 for s_ in res["skipped"]:
                     log(f"  ⚠️  {s_}")
+                got = next((x for x in res["seasons"] if x["season"] == reread), None)
+                if got is not None:
+                    cfb_reread_done(reread, got["rows"])
+                    log(f"  cfb {reread} read again with the side with the ball: {got['rows']:,} rows "
+                        f"(step AHV)")
                 # AND FIT IT NOW, NOT ON WEDNESDAY. The deep refit that
                 # owns `cfb:anytime_td` runs weekly; college football
                 # plays on Saturday. On a box that has just ingested its

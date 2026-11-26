@@ -6398,14 +6398,23 @@ def _team_index_public() -> dict:
 def _cfb_copies_public() -> dict:
     """THE COLLEGE COPIES, COUNTED (engine/maintenance.run_cfb_census, step AFG): this season's player-games filed
     more than once, by kind and by the two ids' shapes, with two examples a kind, the copies of games played since
-    the 14 November cleanup and each kind's newest example (step AHV); {} before the first count. Never fails."""
+    the 14 November cleanup and each kind's newest example, and the past seasons read again (step AHV); {} before
+    the first count. Never fails."""
     try:
         from engine.maintenance import CFB_COPIES_STATE
         doc = json.loads(CFB_COPIES_STATE.read_text())
-        return {k: doc[k] for k in ("at", "season", "seconds", "rows", "games", "copies", "kinds", "ids", "examples",
-                                    "since", "latest", "markets", "zeros") if k in doc}
+        out = {k: doc[k] for k in ("at", "season", "seconds", "rows", "games", "copies", "kinds", "ids", "examples",
+                                   "since", "latest", "markets", "zeros") if k in doc}
     except Exception:  # noqa: BLE001 — the heartbeat never fails for a side read
-        return {}
+        out = {}
+    try:
+        # The past seasons read again with the side with the ball, one a night (maintenance.cfb_reread_season).
+        from engine.maintenance import CFB_REREAD_STATE
+        rd = json.loads(CFB_REREAD_STATE.read_text())
+        out["reread"] = {"for": rd.get("for"), "read": rd.get("read") or [], "rows": rd.get("rows") or {}}
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
 
 def _write_heartbeat(interval: int, swept: str = "ran") -> None:

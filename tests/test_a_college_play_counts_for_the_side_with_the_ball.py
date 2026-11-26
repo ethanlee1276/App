@@ -18,7 +18,9 @@ pass attempts of 87,963; 2025, 6,090 touchdowns of 6,370 and 73,522 attempts of 
     charts alike;
   * a line one ESPN id still splits across both schools of a game is joined into the side he did more on;
     two players of one name (two ids) stay apart;
-  * the roster keeps each player's school.
+  * the roster keeps each player's school;
+  * the nightly reads the four seasons before this one again with the fix, one a night and the newest first,
+    each once, and the heartbeat says which are done (cfb_copies.reread).
 
     python3 tests/test_a_college_play_counts_for_the_side_with_the_ball.py
 """
@@ -117,6 +119,38 @@ def test_the_charts_read_the_same_side():
     src = (ROOT / "engine" / "sources" / "cfbstats.py").read_text(encoding="utf-8")
     assert "THE FEED FILES SOME PLAYS UNDER THE DEFENCE (step AHV" in src
     assert "side = play_side(game, r, roster)" in src
+
+
+def test_the_nightly_reads_the_past_seasons_again_one_a_night():
+    import datetime as dt
+    import json
+    import tempfile
+    from engine import maintenance as M
+    state = Path(tempfile.mkdtemp()) / "cfb_play_side.json"
+    day = dt.date(2026, 11, 27)
+    stocked = M.CFB_MIN_PLAYER_ROWS
+    order = []
+    while (got := M.cfb_reread_season(day, stocked, state_path=state)) is not None:
+        order.append(got)
+        M.cfb_reread_done(got, 1000 + got, state_path=state)
+    assert order == [2025, 2024, 2023, 2022], order
+    doc = json.loads(state.read_text())
+    assert doc["for"] == "play_side" and doc["rows"]["2025"] == 3025
+    assert M.cfb_reread_season(day, stocked - 1, state_path=state) is None, "a box still to backfill reads them all"
+    state.write_text(json.dumps({"for": "an older parser", "read": [2025, 2024, 2023, 2022]}))
+    assert M.cfb_reread_season(day, stocked, state_path=state) == 2025, "a new parser reads them again"
+    src = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
+    i = src.index("seasons = cfb_player_seasons(today, have)")
+    body = src[i:i + 1500]
+    assert "reread = None if os.environ.get(_ms.ENV_VAR) else cfb_reread_season(today, have)" in body
+    assert "seasons = sorted(seasons + [reread])" in body and "cfb_reread_done(reread, got[\"rows\"])" in body
+    import launch as L
+    real = M.CFB_REREAD_STATE
+    try:
+        M.CFB_REREAD_STATE = state
+        assert L._cfb_copies_public()["reread"]["read"] == [2025, 2024, 2023, 2022]
+    finally:
+        M.CFB_REREAD_STATE = real
 
 
 if __name__ == "__main__":

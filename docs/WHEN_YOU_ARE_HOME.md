@@ -9884,7 +9884,7 @@ better. C, like u said not a problem."
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
 **AHV. College football's stat lines count for the right school, and a night game is filed once** (step 1014; 26
-November; three commands, RUN_NEXT 00t). The nightly count (step AFG, heartbeat `cfb_copies`) found 25,028 college stat rows on 25
+November; two commands, RUN_NEXT 00t). The nightly count (step AFG, heartbeat `cfb_copies`) found 25,028 college stat rows on 25
 November that copied a game already on file, eleven days after the 14 November cleanup removed 130,078. The biggest
 kind, 17,401 rows, was one game a day apart under the same two teams and the same ESPN number: A'Marion Peterson's
 UTSA at Texas on 19 and 20 September. The writer:
@@ -9924,8 +9924,9 @@ UTSA at Texas on 19 and 20 September. The writer:
   a receiver's catches, and what a defence allows. A play now counts for the school its players are on, by the
   roster (`cfbstats.play_side`), in the stat lines and the carry, route and passing charts. A line one ESPN id still
   splits across both schools is joined, and two players of one name stay apart. Re-run on the 2026 file: no line
-  under both schools, 26,964 phantom rows gone. This season's rows are rewritten on the next nightly pull. The past
-  seasons need `ingest.py cfbhist --seasons 2022-2025` (RUN_NEXT 00t).
+  under both schools, 26,964 phantom rows gone. This season's rows are rewritten on the next nightly pull. The nightly
+  also reads the four seasons before it again, one a night and the newest first, against the games rows already
+  stored, so each changed row is rewritten in place (`cfb_copies.reread` on the heartbeat says which are done).
 
 **AHU. College's bold picks are matched; whether they hold up is now on the heartbeat** (step 1013; 26 November;
 nothing to run). Step AFR asked why the NFL's "bolder than the books" picks were a kind on paper (said 72%, hit 51%
