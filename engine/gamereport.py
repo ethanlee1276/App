@@ -3830,6 +3830,63 @@ def absent_sentence(c: Ctx, rows: list, per_team: int = 5) -> str:
     return _sentence(cap("; ".join(parts))) if parts else ""
 
 
+def stepup_sentence(c: Ctx) -> str:
+    """WHO STEPS UP, in the short version (step AHW). Ethan, 26 November, after Packers at Rams with Puka Nacua and
+    Davante Adams on injured reserve: "when there is alot of players out ... we dont ... say anything about them
+    or how there usage could step up in the game reports". The injury section's "Who steps up" block
+    (engine/stepup.report_blocks) had it, below everything else; the short version said only who was out.
+
+    For each team with that block: who is out and the share of the work they leave, who took it in this season's
+    games without them (each one's number then, beside his number with them playing), and which picks our numbers
+    raise for it, by the lift each was measured with. Nothing new is counted here: it says what the block found."""
+    found = getattr(c, "stepup", None) or {}
+    parts = []
+    for t in c.teams:
+        got = found.get(t) or {}
+        bits = []
+        for f in got.get("found") or []:
+            kind = f.get("kind") or "targets"
+            outs = [n for n, _p, _s in f.get("out") or []]
+            share = f.get("vacated") or 0.0
+            weeks = f.get("weeks") or []
+            named = f.get("named") or []
+            if not outs or not named:
+                continue
+            gone = _join(outs)
+            if len(weeks) == 1:
+                when = f"in week {weeks[0]}, the one game this season without {gone if len(outs) == 1 else 'them'}"
+                per = ""
+            else:
+                when = f"in the {len(weeks)} games this season without {gone if len(outs) == 1 else 'them'}"
+                per = " a game"
+            who = []
+            for n in named:
+                one = f"{n['player']} ({_num(n['per_game'])} {kind}{per}"
+                if n.get("yards"):
+                    one += f", {_num(n['yards'])} yards{per}"
+                if n.get("with") is not None:
+                    one += f"; {_num(n['with'])} a game otherwise"
+                who.append(one + ")")
+            bits.append(f"without {gone} ({share:.0%} of the {kind} this season), {when}, the {kind} went to "
+                        + _join(who))
+        if not bits:
+            continue
+        s = f"Who steps up for {team_np(c, t)}: " + "; and ".join(bits)
+        lift = got.get("lift") or {}
+        if lift:
+            from .stepup import MARKET_WORDS as _MW
+            by_mk: dict = {}
+            for player, mk in sorted(lift.items()):
+                by_mk.setdefault(tuple(sorted(mk.items())), []).append(player)
+            said = []
+            for mk, players in by_mk.items():
+                owners = _join([p + ("'" if p.endswith("s") else "'s") for p in players])
+                said.append(f"{owners} {_join([f'{_MW.get(m, m)} ×{v:.2f}' for m, v in mk])}")
+            s += "; our numbers raise " + "; and ".join(said) + " for it"
+        parts.append(_sentence(s))
+    return " ".join(parts)
+
+
 #: Small counts as a reader says them.
 _COUNT_WORDS = {2: "two", 3: "three", 4: "four", 5: "five"}
 
@@ -4042,6 +4099,10 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
     gone = absent_sentence(c, outs)
     if gone:
         items.append(gone)
+    # Who takes their work (engine/stepup's block, step AHW): right after who is out.
+    steps = stepup_sentence(c)
+    if steps:
+        items.append(steps)
     line = line_sentence(c)
     if line:
         items.append(line)

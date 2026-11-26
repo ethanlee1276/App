@@ -174,7 +174,14 @@ def depth_table(stats: list[dict], teams, upto_week: int, snaps: list[dict] | No
                                           sorted(w for w in games[(team, pos, n)] if w < upto_week)]
                                          for n, v, g, lw in got]
     weeks = _team_weeks(stats, snaps, teams, upto_week)
-    return {"order": order, "last": last, "basis": basis, "seen": seen, "weeks": weeks}
+    # THE ROOM (engine/room, step AHW): every receiver's, tight end's and back's share of the targets this season,
+    # what the room's lift reads once the injuries are in.
+    try:
+        from .room import table as _room_table
+        room = _room_table(stats, teams, upto_week)
+    except Exception:                                        # noqa: BLE001
+        room = {}
+    return {"order": order, "last": last, "basis": basis, "seen": seen, "weeks": weeks, "room": room}
 
 
 def _team_weeks(stats, snaps, teams, upto_week: int) -> dict:
@@ -212,12 +219,13 @@ def stamp(slate, depth: dict, injuries, reset_players=()) -> dict:
     basis = (depth or {}).get("basis") or "targets"
     seen = (depth or {}).get("seen") or {}
     weeks = (depth or {}).get("weeks") or {}
+    room = (depth or {}).get("room") or {}
     for g in slate.games:
         g.lineup = {t: {"order": {pos: order.get(f"{t}|{pos}") or [] for pos in GROUPS},
                         "out": sorted(out.get(t, ())), "maybe": sorted(maybe.get(t, ())),
                         "last": last.get(t, 0), "basis": basis,
                         "seen": {pos: seen.get(f"{t}|{pos}") or [] for pos in GROUPS},
-                        "weeks": weeks.get(t) or []}
+                        "weeks": weeks.get(t) or [], "room": room.get(t) or {}}
                     for t in (g.home, g.away)}
     return {t: sorted(v) for t, v in out.items()}
 
@@ -262,6 +270,38 @@ def if_sits(prop, lu: dict, order: list, me: str, playing: set, mult: float):
 
 
 def effect(prop, game, form_mean=None) -> tuple:
+    """(multiplier, reason, card) for one prop from its game's lineup: the teammate step (`_effect`) times the
+    room's (engine/room, step AHW), when 20%+ of his team's targets sit tonight and he ranks fourth or lower among
+    the receivers left. The room's lift rides the same card (``card["room"]``), so every page that says a teammate
+    step says this one, and the journal keeps it (`stepup.mate_mult`)."""
+    mult, reason, card = _effect(prop, game, form_mean)
+    try:
+        from . import room as _room
+        lu = ((getattr(game, "lineup", None) or {}).get(getattr(prop, "team", "")) or {})
+        rmult, info = _room.lift(lu.get("room"), lu.get("out") or [], getattr(prop, "player", ""),
+                                 str(getattr(prop, "market", "") or ""))
+    except Exception:                                        # noqa: BLE001
+        rmult, info = 1.0, None
+    if not info or rmult == 1.0:
+        return mult, reason, card
+    note = _room.words(info, getattr(prop, "team", ""), str(getattr(prop, "market", "") or ""))
+    who = [n for n, _s in info.get("sat") or []]
+    if card is None:
+        card = {"team": prop.team, "out": who, "case": "room",
+                "headline": f"{' and '.join(who)} out: {info['vacated']:.0%} of the targets sit",
+                "applied": round(rmult, 3), "note": note}
+    else:
+        card = dict(card)
+        card["out"] = list(dict.fromkeys(list(card.get("out") or []) + who))
+        card["applied"] = round(float(card.get("applied") or 1.0) * rmult, 3)
+        card["note"] = f"{card.get('note') or ''}. {note}".lstrip(". ")
+        card["case"] = card.get("case") or "room"
+    card["room"] = info
+    why = f"Room: {' and '.join(who)} out, {info['vacated']:.0%} of the targets — measured (×{rmult:.2f})"
+    return mult * rmult, f"{reason}; {why}" if reason else why, card
+
+
+def _effect(prop, game, form_mean=None) -> tuple:
     """(multiplier, reason, card) for one prop from its game's lineup.
 
     ``form_mean(logs, career_avg)`` is the projection's own form (its

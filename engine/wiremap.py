@@ -71,6 +71,8 @@ FITS = (
      "which defence number a catcher's read counts (step AHO): the overall one; his position's is said beside it"),
     ("engine.wxfit", "number", ("engine.weather",), "wind, cold and rain, measured 2016-2025"),
     ("engine.matefit", "number", ("engine.teammates",), "a teammate out at the same position (the lineup step)"),
+    ("roomfit", "number", ("engine.room",),
+     "the room left when a fifth of the targets sits (step AHW): the fourth man on and after, measured 2016-2025"),
     ("engine.qbfit", "number", ("engine.qbchange",), "a missing starting quarterback, for the team's receivers and backs"),
     ("engine.chemfit", "number", ("engine.qblean",), "a new starter's own lean between his targets (LEAN_W); a pair's chemistry, measured and left out"),
     ("engine.injuryfit", "number", ("engine.injuries",), "the knock-on rules (KNOCK_ONS), measured 2022-2024"),

@@ -1994,17 +1994,52 @@ def league_iw_rate(charting: dict | None) -> float | None:
     return (iw / att) if att > 0 else None
 
 
+#: THE ROOM LEFT (step AHW): a ruled-out receiver, tight end or back with this share of the targets, who played in
+#: one of his team's last ROOM_FRESH weeks, leaves it to the rest (engine/room, measured 2016-2025).
+ROOM_SIT, ROOM_FRESH = 0.10, 2
+
+
+def room_left(usage: dict, team: str, injuries=None) -> tuple:
+    """(the share of ``team``'s targets that sits tonight, [names that left it]): its ruled-out catchers and backs
+    with ROOM_SIT of the targets who played in one of the team's last ROOM_FRESH weeks (`usage`'s last_week)."""
+    out_names = {_key(getattr(i, "player", "")) for i in injuries or []
+                 if getattr(i, "team", "") == team and str(getattr(i, "status", "")).upper() in OUT_STATUSES}
+    mine = [(k, u) for (t, k), u in (usage or {}).items() if t == team and u.get("games")]
+    last = max((u.get("last_week") or 0 for _k, u in mine), default=0)
+    sat, names = 0.0, []
+    for k, u in mine:
+        if k not in out_names or _POS_GROUP.get((u.get("position") or "").upper()) not in ("wr", "te", "rb"):
+            continue
+        share = u.get("tgt_share") or 0.0
+        if share >= ROOM_SIT and (u.get("last_week") or 0) > last - ROOM_FRESH:
+            sat += share
+            names.append(u.get("name") or k)
+    return min(0.8, sat), names
+
+
+def _join_names(xs) -> str:
+    xs = [x for x in xs if x]
+    return xs[0] if len(xs) == 1 else f"{', '.join(xs[:-1])} and {xs[-1]}" if xs else ""
+
+
 def key_players(usage: dict, teams, injuries=None) -> list[dict]:
     """Prop-shaped rows ({player, team, position}) for each team's key
     players from this season's usage: the quarterback who threw the most
     in his team's latest game, the top KEY_BACKS backs by carry share and
     the top KEY_TARGETS receivers by target share, over the floors above.
-    A player ruled out is left off — there is no game to read him for."""
+    A player ruled out is left off — there is no game to read him for.
+
+    THE NEXT MEN UP (step AHW; Ethan, 26 November, Packers at Rams: "the rams had alot of WR out so obv alot of
+    there back ups were going to be used and we didnt mention anything of that"). With Puka Nacua out, Konata
+    Mumpfield's 8.7% of the Rams' targets was under the floor and he had no read unless a book priced him. When a
+    fresh share sits (`room_left`), a receiver's share is read as his share of the targets LEFT, so the men who
+    take the work are read with the rest."""
     out_names = {(getattr(i, "team", ""), _key(getattr(i, "player", "")))
                  for i in injuries or []
                  if str(getattr(i, "status", "")).upper() in OUT_STATUSES}
     rows: list = []
     for team in teams:
+        left = 1.0 - room_left(usage, team, injuries)[0]
         mine = [(k, u) for (t, k), u in (usage or {}).items()
                 if t == team and (t, k) not in out_names and u.get("games")]
         qbs = [u for _k, u in mine if (u.get("position") or "").upper() == "QB"
@@ -2016,7 +2051,7 @@ def key_players(usage: dict, teams, injuries=None) -> list[dict]:
                         and (u.get("carry_share") or 0) >= KEY_CARRY_SHARE),
                        key=lambda u: -(u.get("carry_share") or 0))[:KEY_BACKS]
         catchers = sorted((u for _k, u in mine if _POS_GROUP.get((u.get("position") or "").upper()) in ("wr", "te")
-                           and (u.get("tgt_share") or 0) >= KEY_TARGET_SHARE),
+                           and (u.get("tgt_share") or 0) / max(left, 0.2) >= KEY_TARGET_SHARE),
                           key=lambda u: -(u.get("tgt_share") or 0))[:KEY_TARGETS]
         rows += [{"player": u["name"], "team": team, "position": u.get("position") or ""}
                  for u in qbs + backs + catchers]
@@ -2099,6 +2134,8 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
     # that player").
     seen, reads = set(), []
     pulled_keys = {_key(p) for p in (pulled or [])}
+    # THE ROOM LEFT tonight, each team's (step AHW): what share of its targets sits, and who left it.
+    left_room = {t: room_left(usage, t, injuries) for t in teams}
     for r in list(props or []) + key_players(usage, teams, injuries):
         name, team = r.get("player") or "", r.get("team") or ""
         if team not in teams or not name or (team, name) in seen:
@@ -2201,6 +2238,17 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             shown_allowed=(shown_allowed or {}).get(opp[team]),
             contact=(contact or {}).get(opp[team]), weather=weather)
         read["notes"] = list(read.get("notes") or []) + maybe_lines
+        # HIS SHARE OF WHAT IS LEFT (step AHW): when a fifth or more of the team's targets sits tonight, the read says
+        # what this player's share comes to among the rest, beside the share the role line says.
+        vac, gone_names = left_room.get(team) or (0.0, [])
+        mine_share = u.get("tgt_share") or 0.0
+        if vac >= 0.20 and group in ("wr", "te", "rb") and mine_share > 0 and _key(name) not in {
+                _key(n) for n in gone_names}:
+            read["notes"].append(f"With {_join_names(gone_names)} out, {vac:.0%} of {team}'s targets sit tonight: "
+                                 f"{name} has taken {mine_share:.0%} of them this season, {mine_share / (1 - vac):.0%} "
+                                 f"of what is left")
+            read["room"] = {"vacated": round(vac, 3), "out": list(gone_names),
+                            "left_share": round(mine_share / (1 - vac), 3)}
         # HIS OWN LISTING, when it is short of out: the read assumes he plays.
         if own_status in ("QUESTIONABLE", "GTD"):
             read["notes"].insert(0, f"{name} is listed {own_status.lower()} — this read assumes {name} plays")

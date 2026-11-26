@@ -9883,6 +9883,42 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AHW. When receivers sit, the report names who steps up, reads the next men up, and our numbers lift the room**
+(step 1015; 26 November; nothing to run). You, after Packers at Rams: "when there is alot of players out we dont
+reccomend any props for the backups ... and dont say anything about them or how there usage could step up". What
+the report had: a "Who steps up" block, at the bottom of the injury section. What it lacked:
+
+- **No read on the next men up.** The matchup scan reads every player with a prop, plus each team's top
+  receivers by season target share, 12% or more. Konata Mumpfield had 8.7% of the Rams' targets with Puka Nacua
+  playing, so he got no read unless a book priced him. With a fresh share sitting, a receiver's share is now read
+  as his share of the targets left (Mumpfield 14%), and every read on that team says it ("With Puka Nacua out, 36%
+  of LA's targets sit tonight: Konata Mumpfield has taken 9% of them this season, 14% of what is left").
+- **Nothing in the short version.** It said who was out and nothing else. It now says, right after: "Who steps up
+  for the Rams: without Puka Nacua (36% of the targets this season), in the 3 games this season without Puka
+  Nacua, the targets went to Tyler Higbee (7.5 targets a game, 39.5 yards a game; 4 a game otherwise), Konata
+  Mumpfield (4.7 targets a game, 62 yards a game; 2.2 a game otherwise) and Kyren Williams (...)". That is the real
+  Rams week-12 read, off nflverse's own file.
+- **The rest of the room was not in our numbers.** I measured it before touching anything (roomfit.py, ten
+  seasons, 2016-2025, each season held out in turn). When a fifth or more of a team's targets sits, the receivers
+  left beat our number more often than the same players do in normal games: about 5 to 7 points more for every rank
+  at 20-35%, and 9 to 14 points more for the third man on down at 35% or more. As a flat bump on everyone it cut
+  no error, because who takes the work changes game to game. It does close the over/under gap for the fourth
+  receiver left and after, so only those cells ship (engine/room):
+  - 20-35% of the targets out: catches ×1.16, receiving yards ×1.24 (the gap from 6.4 to 3.2 points and from 5.9
+    to 3.0, closer in 7 and 8 seasons of 10);
+  - 35% or more out: catches ×1.32, yards ×1.42 (from 8.9 to 5.9 and from 9.8 to 3.4, in 8 and 9 of 10).
+
+  The top three left are lifted by the teammate step where it was measured (a receiver behind a man out at his
+  position), and not otherwise: their own room numbers came and went by season. The lift rides the same card as
+  the teammate step, so the pick's "why" says it, the injury block says which measurement moved each pick, and
+  the journal keeps it for the Record's step-up record. For the Rams before week 12, Colby Parkinson, Blake Corum
+  and Davis Allen take ×1.32 catches and ×1.42 yards; Mumpfield keeps the teammate step's ×1.10. A team throws about
+  4% less in those games (×0.96), so this is the room's share of the work, not more passing.
+- **Breakout candidates stay measured.** A breakout still needs a starter's share (18% or more of the targets) and
+  two counted reasons. A backup with 9% of the targets now has a read, a counted teammate-out reason where our
+  numbers move, and the step-up lines, but not the breakout label. Whether his prop is a pick is the board's call
+  on the lifted number against the book's line.
+
 **AHV. College football's stat lines count for the right school, and a night game is filed once** (step 1014; 26
 November; two commands, RUN_NEXT 00t). The nightly count (step AFG, heartbeat `cfb_copies`) found 25,028 college stat rows on 25
 November that copied a game already on file, eleven days after the 14 November cleanup removed 130,078. The biggest

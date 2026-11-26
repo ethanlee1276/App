@@ -139,9 +139,10 @@ def _weeks_words(wks: list) -> str:
     return f"week {wks[0]}" if len(wks) == 1 else f"weeks {_join([str(w) for w in wks])}"
 
 
-def raised(rows, team: str, outs: set) -> dict:
+def raised(rows, team: str, outs: set, kinds: dict | None = None) -> dict:
     """{player: {market: multiplier}}: the game's picks on ``team`` whose projection the teammate step raised for
-    one of ``outs`` (their `mate_card`: applied above 1, naming one of them out)."""
+    one of ``outs`` (their `mate_card`: applied above 1, naming one of them out). ``kinds``, when given, is filled
+    {player: {market: "mate" | "room" | "both"}}: which measured lift moved it (engine/teammates, engine/room)."""
     got: dict = {}
     for r in rows or []:
         if not isinstance(r, dict) or str(r.get("team") or "") != team:
@@ -156,8 +157,27 @@ def raised(rows, team: str, outs: set) -> dict:
         m = str(r.get("market") or "")
         if m in MARKET_WORDS:
             got.setdefault(str(r.get("player") or ""), {})[m] = round(mult, 2)
+            if kinds is not None:
+                rm = float(((c.get("room") or {}).get("applied")) or 1.0)
+                kind = ("room" if abs(rm - mult) < 1e-6 else "both") if rm > 1.0 + 1e-9 else "mate"
+                kinds.setdefault(str(r.get("player") or ""), {})[m] = kind
     got.pop("", None)
     return got
+
+
+#: How each lift is said beside a raised number.
+LIFT_WORDS = {
+    "mate": "the lift measured over four seasons for a player whose teammate ahead of him at his position is out",
+    "room": ("the lift measured over ten seasons (2016-2025) for the receivers left beyond a team's top three when "
+             "a fifth or more of its targets sit (engine/room)"),
+}
+
+
+def _lift_line(player: str, mk: dict, kinds: dict) -> str:
+    bits = _join([f"{MARKET_WORDS[m]} ×{v:.2f}" for m, v in sorted(mk.items())])
+    seen = {k for k in kinds.values()}
+    why = [LIFT_WORDS[k] for k in ("mate", "room") if k in seen or "both" in seen]
+    return f"Our numbers raise {player}'s {bits}, {' and '.join(why)}, in every number we price on him"
 
 
 def for_team(conn, season: int, week: int | None, team: str, team_name: str, outs: list, rows=None,
@@ -185,6 +205,7 @@ def for_team(conn, season: int, week: int | None, team: str, team_name: str, out
     lines: list = []
     vacated: dict = {}
     named_out: list = []
+    found: list = []
     absent = {by_key[_key(o[0])] for o in outs if _key(o[0]) in by_key}
     for kind, bar in (("targets", TARGET_SHARE), ("carries", CARRY_SHARE)):
         sh = shares(weeks, kind)
@@ -233,6 +254,12 @@ def for_team(conn, season: int, week: int | None, team: str, team_name: str, out
         cands.sort(key=lambda x: (-x[0], x[1]))
         if not cands:
             continue
+        found.append({"kind": kind, "out": [(n, p, round(sh, 3)) for n, p, sh, _st in out_here],
+                      "vacated": round(total, 3), "weeks": sorted(without), "them": them,
+                      "named": [{"player": name, "pos": pos, "per_game": round(pg, 1),
+                                 "with": None if before_pg is None else round(before_pg, 1),
+                                 "yards": round(yds, 1) if yds else None}
+                                for pg, name, pos, before_pg, yds in cands[:NAMED]]})
         parts = []
         per = "" if len(without) == 1 else " a game"
         for pg, name, pos, before_pg, yds in cands[:NAMED]:
@@ -257,17 +284,16 @@ def for_team(conn, season: int, week: int | None, team: str, team_name: str, out
             lines.append((f"{name} steps up: more {kind} than his own average", claim))
     if not lines:
         return None
-    lift = raised(rows, team, {_key(n) for n in named_out} | {_key(o[0]) for o in outs})
+    kinds: dict = {}
+    lift = raised(rows, team, {_key(n) for n in named_out} | {_key(o[0]) for o in outs}, kinds)
     for player, mk in sorted(lift.items()):
-        bits = _join([f"{MARKET_WORDS[m]} ×{v:.2f}" for m, v in sorted(mk.items())])
-        lines.append((f"Our numbers raise {player}'s {bits}, the lift measured over four seasons for a player whose "
-                      f"teammate ahead of him at his position is out, in every number we price on him", None))
+        lines.append((_lift_line(player, mk, kinds.get(player) or {}), None))
     if vacated.get("targets", 0.0) >= ROOM_SHARE:
         m, se, n = ROOM_TE["receptions"]
         lines.append((f"When a third or more of a team's targets sat, over four seasons a tight end caught "
                       f"{(m - 1) * 100:.0f}% more than his own form (± {se * 100:.0f}%, {n} games) and a back no "
                       f"more: said here, not in our numbers, since it fell just short of our bar", None))
-    return {"lines": lines, "outs": named_out, "vacated": vacated}
+    return {"lines": lines, "outs": named_out, "vacated": vacated, "found": found, "lift": lift, "kinds": kinds}
 
 
 # --- college football (step AEK) -----------------------------------------------------------------------------------
@@ -517,6 +543,12 @@ def report_blocks(c) -> list:
             got = for_team(c.conn, c.season, week, t, c.name(t), outs, rows, reserve)
             if got:
                 blocks.append(_claimed_list(got["lines"]))
+                # What the short version says from it (gamereport.stepup_sentence, step AHW).
+                found = getattr(c, "stepup", None)
+                if not isinstance(found, dict):
+                    found = {}
+                    setattr(c, "stepup", found)
+                found[t] = got
         return ([_h("Who steps up")] + blocks) if blocks else []
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ who steps up not read ({type(exc).__name__}: {exc})")
