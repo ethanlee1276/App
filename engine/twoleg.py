@@ -242,6 +242,9 @@ def _leg(r: dict, p, pool: str) -> dict | None:
             "fair_line": _fair_line_of(r),
             "game_date": r.get("game_date") or r.get("date") or "", "kickoff": r.get("kickoff") or "",
             "headline": r.get("headline") or "", "position": r.get("position") or "",
+            # Our projection for the stat (the row's own), so a leg against its player's read can say our number
+            # (gameparlays.read_against_words, step AIA).
+            **({"projection": r.get("projection")} if r.get("projection") is not None else {}),
             # Behind a new starting quarterback with too few passes to rate
             # (qbchange.card): gameparlays.off_parlays keeps a pass catcher's leg off.
             **({"_qb_unrated": True} if (r.get("qb_card") or {}).get("unrated") else {}),

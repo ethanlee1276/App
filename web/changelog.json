@@ -4,6 +4,12 @@
     {
       "date": "2026-11-26",
       "kind": "fix",
+      "title": "A parlay leg or pick against the report's own read says so",
+      "body": "When a game report calls a player favorable (a good spot, a good matchup, a breakout candidate) but one of its parlays or picks takes that player's under, or calls a player a fade but takes the over, the ticket and the pick's card now say so plainly, with our projection and which side of the line it sits on (on Thanksgiving a Bears at Lions ticket took Amon-Ra St. Brown's catches under 7.5 while the report called St. Brown a good spot, and said nothing). Both stay: a read never moves our number, and our numbers are what the record grades. Basketball and hockey reports now say 'Breakout candidate' as football's do."
+    },
+    {
+      "date": "2026-11-26",
+      "kind": "fix",
       "title": "Players in a good spot are named, on a list of their own",
       "body": "A game report's Players to watch now has an 'In a good spot' list beside the breakout candidates: players the game around them favors (the points the lines expect, the pace, the weather) though the defense itself is neutral. Every key player with a favorable read is named on one list or the other, each team's best two first, and key players with no edge either way are named too, so leaving a player off never reads as a fade. The 'Who could have a big day' line names each team's best two, and good spots are graded on their own line of the record."
     },

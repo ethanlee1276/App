@@ -793,6 +793,8 @@ def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> lis
     w, shift = legfit.w_for(sport, "three"), legfit.shift_for(sport, "three")
     reads = reads_by_player(board) if sport in OFF_PARLAY_SPORTS else {}
     lead, scrambles = _lead_carry(reads), scramble_rates(board) if sport in OFF_PARLAY_SPORTS else {}
+    # Each read's lean, so a leg against its player's read says so on its ticket (step AIA, `read_against`).
+    leans = leans_by_key(board)
     for get in (T.likely_legs, T.edge_legs, pool_legs, priced_legs):
         try:
             rows = get(board, sport, now)
@@ -825,6 +827,9 @@ def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> lis
                 continue
             k = (leg.get("player"), leg.get("market"), str(leg.get("side") or "").upper(), leg.get("line"))
             if k not in got or _speaks_first(leg, got[k]):
+                against = read_against(leg, leans)
+                if against:
+                    leg = dict(leg, read_against=against)
                 got[k] = leg
     # …each carried pick whose number no book lists now marked, for `tickets_of` (step AAE).
     return mark_unlisted(still_to_play(list(got.values()), board, now), board)
@@ -1151,6 +1156,63 @@ WHY_N = 3
 
 def _key(name) -> str:
     return " ".join(str(name or "").lower().replace(".", "").split())
+
+
+#: A LEG AGAINST ITS PLAYER'S READ SAYS SO (step AIA, 26 November 2026). Bears at Lions: the report called Amon-Ra
+#: St. Brown a good spot and named St. Brown for a big day, and a three-leg ticket took the catches under 7.5. Both
+#: were ours: a read never moves a number (the scan measured no lift over the model, engine/likely's LEAN), and the
+#: Most Likely card already said "matchup read leans the other way" (likelyboard.matchup_warning; Ethan, 6 October,
+#: "keep 3 with the warning"). The ticket said nothing, so the report read as arguing with itself. A leg kept against
+#: its player's read says so on the ticket, with our number.
+READ_AGAINST_WORDS = {"breakout": "breakout candidate", "good": "good matchup", "tough": "tough matchup",
+                      "avoid": "avoid"}
+
+
+def leans_by_key(board: dict) -> dict:
+    """{(player key, team, market): {"side", "read", "label"}}: each read's lean (engine/gamescan.leans_from_reads,
+    a mixed read leans nowhere), by the name key the legs are matched on."""
+    from .gamescan import leans_from_reads
+    try:
+        leans = leans_from_reads((board or {}).get("scan_reads") or {})
+    except Exception:                                        # noqa: BLE001
+        return {}
+    return {(_key(p), t, m): v for (p, t, m), v in leans.items()}
+
+
+def read_against(leg: dict, leans: dict) -> dict | None:
+    """{"read", "label", "side"} when the report's read on this leg's player leans the leg's market the other way;
+    None when it agrees, leans another market, or there is no read."""
+    side = str((leg or {}).get("side") or "").strip().lower()
+    if side not in ("over", "under"):
+        return None
+    lean = (leans or {}).get((_key(leg.get("player")), leg.get("team") or "", str(leg.get("market") or "")))
+    if not lean or lean.get("side") == side:
+        return None
+    return {"read": lean.get("read"), "label": str(lean.get("label") or ""), "side": lean.get("side")}
+
+
+def read_against_words(leg: dict, own: bool = False) -> str:
+    """The ticket's line for a leg against its player's read: "Amon-Ra St. Brown under 7.5 receptions goes against
+    this report's good spot for St. Brown: our number is 6.4 receptions, under the line even so." Our projection
+    when the leg carries one, else our chance. ``own``: the pick's own card says it ("This pick goes against ...").
+    '' for a leg that agrees."""
+    ra = (leg or {}).get("read_against")
+    if not isinstance(ra, dict):
+        return ""
+    from .gamereport import _last_name
+    who = str(leg.get("player") or "")
+    last = _last_name(who) or who
+    read = str(ra.get("read") or "")
+    label = (ra.get("label") or READ_AGAINST_WORDS.get(read, "read")).strip().lower()
+    what = "This pick" if own else pick_words(leg)
+    head = (f"{what} goes against this report's call to avoid {last}" if read == "avoid"
+            else f"{what} goes against this report's {label} for {last}")
+    side = str(leg.get("side") or "").strip().lower()
+    proj, line = _f(leg.get("projection")), _f(leg.get("line"))
+    unit = str(leg.get("market_label") or str(leg.get("market") or "").replace("_", " ")).lower()
+    if proj is not None and line is not None and ((side == "under" and proj < line) or (side == "over" and proj > line)):
+        return f"{head}: our number is {proj:.1f} {unit}, {side} the line even so"
+    return f"{head}: our numbers make the {side} the likelier side even so ({float(leg.get('p') or 0):.0%})"
 
 
 def reads_by_player(board: dict) -> dict:
@@ -1536,6 +1598,8 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
         st = str(l.get("injury_status") or l.get("own_status") or "").upper()
         if st in ("QUESTIONABLE", "GTD", "DAY-TO-DAY"):
             caveats.append(f"{l.get('player')} is listed questionable — confirm they play before you bet it")
+    # A leg against its player's read on the report, said with our number (step AIA, `read_against_words`).
+    caveats += [w for w in (read_against_words(l) for l in legs) if w]
     # HELD TO THE BOOK'S CHANCE (step AAM, `book_capped`): each such leg said once, with ours beside it.
     held = [l for l in legs if l.get("p_own") is not None and l.get("p") is not None]
     if held:

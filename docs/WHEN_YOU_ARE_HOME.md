@@ -9883,6 +9883,30 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIA. A parlay leg or pick against the report's own read says so** (step 1019; 26 November; nothing to run). You:
+"keep going harder and working better on the game reports". Bears at Lions' tickets are on the free record, and one
+of them took Amon-Ra St. Brown's catches under 7.5 (it won, 7 catches), in the same report that called St. Brown a
+good spot and named St. Brown for a big day. The same kind of mixed message your screenshots were about. What I
+found, and what changed:
+
+- **Both were ours, and both stay.** A read never moves a number (the scan measured no lift over our model), and the
+  Most Likely list already picks the read's side whenever a number on that side clears its bars. So an under on a
+  good spot means no over cleared. The Most Likely card already said "matchup read leans the other way" (your
+  October rule: "keep 3 with the warning"), but the parlay leg built from it dropped that warning, and so did the
+  report's own picks card. Dropping such legs would cost tickets our numbers back, with nothing measured to say they
+  lose.
+- **Now a leg against its player's read says so on its ticket,** with our projection and which side of the line it
+  sits on, in the form "<player> under <line> receptions goes against this report's good spot for <name>: our
+  number is <projection> receptions, under the line even so". Where a leg carries no projection, it gives our chance
+  instead. A fade (tough matchup, avoid) with an over leg reads the same way. A mixed read leans nowhere, so it says
+  nothing. Touchdowns ride their own research and are left out.
+- **The report's picks card says it first** when one of its picks goes against that player's read ("This pick goes
+  against this report's good spot for St. Brown: ..."), before the reasons.
+- **Names keep their particle:** "St. Brown" and "Van Noy", not "Brown" and "Noy" (a first name like Van Jefferson's is
+  left alone). This also fixes the plays-or-sits section's title.
+- **One more count fixed:** the heartbeat's touchdown-pairs short count (`td_short`) read 12 with all 12 games still
+  waiting to post, as the two-leg count did; it now leaves a waiting game out too.
+
 **AHZ. A key player in a good spot is named, on a list of its own** (step 1018; 26 November; nothing to run).
 You, with three screenshots of Bears at Lions: "in the Who's guarding who, we show a lot of lions players as they are
 in a good spot but then u go to the breakout candidates and who could have a big day and they are no where too be

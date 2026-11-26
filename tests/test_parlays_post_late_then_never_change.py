@@ -270,6 +270,7 @@ def test_a_waiting_game_is_not_counted_short_of_two_leg_tickets_either():
         finally:
             L._full_copy = was
     assert (got["parlay_waiting"], got["twos_short"], got["threes_short"]) == (1, 1, 1), got
+    assert got["td_short"] == 1, "nor of touchdown pairs (Thanksgiving read td_short 12, all 12 waiting)"
 
 
 if __name__ == "__main__":

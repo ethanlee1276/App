@@ -781,10 +781,12 @@ def _board_counts(path: str) -> dict:
         if c.get("unlisted_error"):
             out["unlisted_error"] = str(c["unlisted_error"]).split(":")[0]
         # Games still to play short of their three scorer pairs (ZR), where the
-        # league has a scorer market, and the pairs a stand-in scorer filled.
+        # league has a scorer market, and the pairs a stand-in scorer filled. A
+        # game waiting to post is waiting, not short (as the two-leg count).
         if str(gp.get("sport") or "").lower() in SCORER_MARKETS:
             out["td_short"] = sum(1 for x in gp["games"] if isinstance(x, dict) and not x.get("kept")
-                                  and not x.get("no_props") and len(x.get("scorers") or []) < SCORER_PER_GAME)
+                                  and not x.get("post_at") and not x.get("no_props")
+                                  and len(x.get("scorers") or []) < SCORER_PER_GAME)
             if c.get("filled_scorers"):
                 out["td_filled"] = int(c["filled_scorers"])
         # Three-leg tickets the Most Likely board's picks stood in on, where a

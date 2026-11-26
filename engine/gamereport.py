@@ -1844,11 +1844,18 @@ def sec_swing(c: Ctx) -> dict | None:
 _SUFFIXES = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"}
 
 
+#: The words a family name starts with ("St. Brown", "Van Noy"), never a first name ("Van Jefferson").
+_PARTICLES = {"st.", "st", "van", "von", "de", "del", "della", "da", "di", "du", "la", "le", "ten", "ter"}
+
+
 def _last_name(name) -> str:
-    """"Goff" for "Jared Goff", "Penix" for "Michael Penix Jr."; "" for no name."""
+    """"Goff" for "Jared Goff", "Penix" for "Michael Penix Jr.", "St. Brown" for "Amon-Ra St. Brown"; "" for no
+    name."""
     words = [w for w in str(name or "").split() if w]
     while len(words) > 1 and words[-1].lower() in _SUFFIXES:
         words.pop()
+    if len(words) > 2 and words[-2].lower() in _PARTICLES:
+        return f"{words[-2]} {words[-1]}"
     return words[-1] if words else ""
 
 
@@ -4634,6 +4641,10 @@ def card_form(c: Ctx, r: dict) -> str:
     return out
 
 
+#: The markets a read never leans (engine/gamescan._NO_LEAN_MARKETS): touchdowns ride their own research.
+_NO_LEAN = ("anytime_td", "pass_td", "pass_int")
+
+
 def card_why(c: Ctx, r: dict, angles: dict) -> list:
     """The matchup and the role behind the pick, as the research said them:
     the defence's leak to him (engine/angles), his read's reasons on this
@@ -4650,6 +4661,18 @@ def card_why(c: Ctx, r: dict, angles: dict) -> list:
         if lean and lean == side:
             reasons = rd.get("pro") if side == "OVER" else rd.get("con")
             out += [str(x) for x in (reasons or [])[:2] if x]
+        elif lean and side in ("OVER", "UNDER") and not rd.get("mixed") and r.get("market") in (rd.get("lean") or ()) \
+                and r.get("market") not in _NO_LEAN:
+            # A PICK AGAINST ITS PLAYER'S READ SAYS SO FIRST (step AIA), as its parlay leg does: the read a card
+            # above calls favorable, and this pick the other way, with our number.
+            from .gameparlays import read_against_words
+            leg = {"player": r.get("player"), "market": r.get("market"), "market_label": r.get("market_label"),
+                   "side": side, "line": r.get("line"), "projection": r.get("projection"),
+                   "p": r.get("model_prob") if r.get("model_prob") is not None else r.get("hit_prob"),
+                   "read_against": {"read": rd.get("read"), "label": rd.get("label")}}
+            said = read_against_words(leg, own=True)
+            if said:
+                out.insert(0, said)
         role = _role_line(rd)
         if role:
             out.append(f"Role: {role}")
