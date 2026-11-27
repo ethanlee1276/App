@@ -10269,6 +10269,20 @@ UTSA at Texas on 19 and 20 September. The writer:
   under both schools, 26,964 phantom rows gone. This season's rows are rewritten on the next nightly pull. The nightly
   also reads the four seasons before it again, one a night and the newest first, against the games rows already
   stored, so each changed row is rewritten in place (`cfb_copies.reread` on the heartbeat says which are done).
+- **Read the next morning (27 November, the count at 05:41 UTC).** The nightly ran with AHV and re-read 2025 (89,944
+  rows). "The other side" halved (3,325 to 1,594), so the rewrite counted plays for the side with the ball. But the
+  copies went up, 25,028 to 34,326: "a day apart, same teams" 17,401 to 24,523, "same day, same teams" 1,310 to
+  4,343, and "another code" (now two kinds, the player's own school or the opponent) 1,300 to 2,208. The rise is the
+  rewrite filing this season's lines on each game's Eastern day, next to the old day-after rows the cleanup has not
+  taken yet: it is in the play file's own markets (receptions, receiving yards and touchdowns, 2,888 each), and every
+  kind's newest example is a game played before AHV went live (20 to 24 November; for example the same ESPN game,
+  UTSA against UAB, on both 21 and 22 November). No college game played since then has been counted yet, so whether
+  the new writers stay clean shows after this weekend's games; I check it on Sunday morning.
+- **Your cleanup (RUN_NEXT 00t) keeps the right row.** Of a group it keeps a row filed under the ESPN number over a
+  box copy, then the earlier day, which is the rewritten one on the game's Eastern day. So `cfbdedupe --apply` clears
+  the new day-after rows too. What it leaves, by design, is "the other side" (1,594 rows, 827 of them zeros): the
+  same ESPN game a day apart with the two schools swapped, an old wrong-side line from before AHV. It keeps those
+  because the two rows share neither school, which is how it tells two players of one name apart.
 
 **AHU. College's bold picks are matched; whether they hold up is now on the heartbeat** (step 1013; 26 November;
 nothing to run). Step AFR asked why the NFL's "bolder than the books" picks were a kind on paper (said 72%, hit 51%
