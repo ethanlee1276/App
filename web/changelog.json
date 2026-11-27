@@ -5,7 +5,7 @@
       "date": "2026-11-27",
       "kind": "fix",
       "title": "The Record page says its counts and markets in words",
-      "body": "The account-health card on the Record page named a market by its database id (\"57% of volume is pass_yds\"); it now says \"passing yards\", as the My Bets card already did. Counts no longer read \"(s)\" (the baseball board's guide says \"4 measured markets\"), a verdict sitting at its break-even says 0.0 rather than -0.0, a quarterback who barely runs runs \"for 1 yard\", and the nightly write-up quotes units to two places instead of four, because the numbers it narrates are now handed to it rounded the way the page says them. The weekly brief stops saying hockey, college basketball, the WNBA and UFC have nothing journaled: it counted three of the Record page's books, and those leagues' graded picks are in Most Likely and the board."
+      "body": "The account-health card on the Record page named a market by its database id (\"57% of volume is pass_yds\"); it now says \"passing yards\", as the My Bets card already did. Counts no longer read \"(s)\" (the baseball board's guide says \"4 measured markets\"), a verdict sitting at its break-even says 0.0 rather than -0.0, a quarterback change reads \"1.0 runs a game for 1 yard\" rather than \"1 yards\", and the nightly write-up quotes units to two places instead of four, because the numbers it narrates are now handed to it rounded the way the page says them. The weekly brief stops saying hockey, college basketball, the WNBA and UFC have nothing journaled: it counted three of the Record page's books, and those leagues' graded picks are in Most Likely and the board."
     },
     {
       "date": "2026-11-27",
