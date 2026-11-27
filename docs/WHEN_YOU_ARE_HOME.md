@@ -9890,7 +9890,9 @@ what happened landed 3.1 below our number on average over 255 games, and the NFL
 line, so its misses lean low, and an under's lean high. The record now keeps each market's gap split by the side we
 picked (each game picked on one side only), so the next reading says whether the number itself runs off or only the
 side we take. Nothing on the page changes and no number moves; I read it after the next settle and say what it
-shows.
+shows. With it goes a fix to AIQ's after-game check: it looked a game's week up as "12" where the play-by-play files
+it "012", so it would have graded nothing. Caught before any game it checks was played (the first are Sunday's), and
+the test now files its weeks the box's way.
 
 **AIQ. Pass or run: measured, said in every NFL report, and checked after the game** (step 1035; 27 November;
 nothing to run). You asked us to judge, record and play off how often teams pass and run, and to go deeper on who

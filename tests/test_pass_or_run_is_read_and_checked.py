@@ -36,14 +36,15 @@ def _conn(games=GAMES, season=2026):
                  "home_score REAL, away_score REAL)")
     seen = set()
     for wk, off, dfn, db, ru, pf, pa in games:
+        # The week zero-padded, as the box files it (engine/sources/nflunits, engine/ingest: "012").
         conn.execute("INSERT INTO team_units VALUES ('nfl', ?, ?, ?, 'off', ?, ?, ?, ?)",
-                     (season, str(wk), off, dfn, db + ru, db, ru))
+                     (season, f"{wk:03d}", off, dfn, db + ru, db, ru))
         conn.execute("INSERT INTO team_units VALUES ('nfl', ?, ?, ?, 'def', ?, ?, ?, ?)",
-                     (season, str(wk), dfn, off, db + ru, db, ru))
+                     (season, f"{wk:03d}", dfn, off, db + ru, db, ru))
         key = (wk, frozenset((off, dfn)))
         if key not in seen:
             seen.add(key)
-            conn.execute("INSERT INTO games VALUES ('nfl', ?, ?, ?, ?, ?, ?)", (season, str(wk), dfn, off, pa, pf))
+            conn.execute("INSERT INTO games VALUES ('nfl', ?, ?, ?, ?, ?, ?)", (season, f"{wk:03d}", dfn, off, pa, pf))
     return conn
 
 
@@ -159,7 +160,7 @@ def test_a_finished_game_checks_the_read_once_the_play_by_play_is_in():
     assert reportfacts.passrun_check(late, conn) is None
     rep = {"sections": [{"key": "passrun", "blocks": [{"type": "p", "text": "x", "claim": late}]}]}
     assert not reportfacts.passrun_due(rep, conn)
-    conn.execute("INSERT INTO team_units VALUES ('nfl', 2026, '5', 'AAA', 'off', 'CCC', 60, 33, 27)")
+    conn.execute("INSERT INTO team_units VALUES ('nfl', 2026, '005', 'AAA', 'off', 'CCC', 60, 33, 27)")
     assert reportfacts.passrun_due(rep, conn)
     rep["sections"][0]["blocks"][0]["grade"] = reportfacts.passrun_check(late, conn)
     assert rep["sections"][0]["blocks"][0]["grade"]["status"] == "wrong"   # 55%, under its 60%

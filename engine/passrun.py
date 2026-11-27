@@ -187,8 +187,10 @@ def actual(conn, season, week, team: str):
     if conn is None:
         return None
     try:
-        row = conn.execute("SELECT dropbacks, rushes FROM team_units WHERE sport='nfl' AND season=? AND period=? "
-                           "AND team=? AND side='off'", (int(season), str(int(week)), team)).fetchone()
+        # The week as a number: team_units files it zero-padded ("012", engine/sources/nflunits).
+        row = conn.execute("SELECT dropbacks, rushes FROM team_units WHERE sport='nfl' AND season=? "
+                           "AND CAST(period AS INTEGER)=? AND team=? AND side='off'",
+                           (int(season), int(week), team)).fetchone()
     except Exception:                                        # noqa: BLE001
         return None
     if not row:
