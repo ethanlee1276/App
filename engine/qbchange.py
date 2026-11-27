@@ -258,9 +258,9 @@ def quarterbacks(specs, stats: list[dict], prior_stats: list[dict], upto_week: i
 def _as_named(table: dict, name: str | None) -> str | None:
     """``name`` as ``table`` (the passers' {name: ...} read of the weekly stats) spells it, when the depth chart,
     the news or the board spell it another way. ESPN's chart named the Colts' new starter "Anthony Richardson
-    Sr."; the weekly stats say "Anthony Richardson", and the exact lookup read 0 pass attempts for a passer with
-    hundreds, so his change was rated as if he had never thrown (27 November 2026). One loose match or none: two
-    passers under one loose name keep the name as given."""
+    Sr."; the weekly stats say "Anthony Richardson", and the exact lookup read 0 of the 6 attempts we hold for him
+    and none of this season's runs or air yards (27 November 2026). One loose match or none: two passers under one
+    loose name keep the name as given."""
     if not name or name in (table or {}):
         return name
     key = _norm(name)

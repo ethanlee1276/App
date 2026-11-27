@@ -2856,7 +2856,7 @@ function recHealthSection(h) {
       </div>
       <div style="font-size:.85em;color:var(--text-mute);margin-top:6px">
         ${b.bets} graded bets · beats the close ${b.beat_close_rate == null ? "—" : (b.beat_close_rate * 100).toFixed(0) + "%"}
-        · ${(b.concentration * 100).toFixed(0)}% in ${escapeHtml(b.top_market)}${
+        · ${(b.concentration * 100).toFixed(0)}% in ${escapeHtml(b.top_market_said || b.top_market)}${
         b.prop_share == null ? "" : ` · ${(b.prop_share * 100).toFixed(0)}% props`}</div>
       ${(b.drivers || []).length ? `<ul style="margin:8px 0 0;padding-left:18px;font-size:.85em;color:var(--text-body)">
         ${b.drivers.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""}

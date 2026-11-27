@@ -127,7 +127,10 @@ function mbHealth(bets) {
     if (sharp > 0.5) drivers.push("stakes are precise amounts, not round numbers");
     const actions = [];
     if (conc != null && conc >= 0.5) {
-      actions.push(`mix in main-line bets (sides/totals) so ${top[0]} isn’t ${pct(conc)} of your volume here`);
+      // A main line on top is told to spread out, not to add main lines (ledger.account_health says the same).
+      actions.push(["spread", "total", "moneyline", "team total"].includes(top[0])
+        ? `mix in other markets so ${top[0]} isn’t ${pct(conc)} of your volume here`
+        : `mix in main-line bets (sides/totals) so ${top[0]} isn’t ${pct(conc)} of your volume here`);
     } else if (propShare != null && propShare >= 0.8) {
       actions.push("add sides and totals — spread across many prop markets still "
         + "reads as an all-props account, and main lines are where a book has room to take you on");

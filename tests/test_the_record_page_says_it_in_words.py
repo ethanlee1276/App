@@ -12,6 +12,7 @@ A scan of every sentence the live site's public files carry found the slips a re
 
 Each is said as a person would say it now. Offline. Run directly: `python3 tests/test_the_record_page_says_it_in_words.py`
 """
+import json
 import os
 import sqlite3
 import sys
@@ -43,6 +44,34 @@ def test_the_health_card_names_the_market():
     assert b["top_market"] == "pass_yds", "the data field keeps the id; only the words change"
     said = " ".join(b["drivers"] + b["actions"])
     assert "pass_yds" not in said and "_" not in said, said
+
+
+def test_the_health_card_skips_a_book_no_desk_sits_behind_and_advises_a_main_line_sensibly():
+    """Live after the first fix: a card for a book called "best" (the journal's label for a game bet at the best
+    price across books, placed at no one book), advising "mix in main-line bets (sides/totals) so spread isn't 53%
+    of your volume here" to a book that was all main lines; and the card's own subline still said the id."""
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.execute("CREATE TABLE bets (status, category, date, book, closing_line, line, side, market, stake_dollars)")
+    rows = ([("best", "spread")] * 8 + [("BetMGM", "spread")] * 6 + [("BetMGM", "total")] * 4)
+    for i, (book, mk) in enumerate(rows):
+        c.execute("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?)",
+                  ("won" if i % 2 else "lost", "main", "2026-11-20", book, None, 3.5, "OVER", mk, 25))
+    books = {b["book"]: b for b in ledger.account_health(c)["books"]}
+    assert set(books) == {"BetMGM"}, books.keys()
+    b = books["BetMGM"]
+    assert "mix in other markets so spread isn't 60% of your volume here" in b["actions"], b["actions"]
+    assert not any("mix in main-line bets" in a for a in b["actions"]), b["actions"]
+    assert b["top_market"] == "spread" and b["top_market_said"] == "spread"
+    src = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
+    assert "escapeHtml(b.top_market_said || b.top_market)" in src
+    import test_your_own_account_health as AH
+    got = AH._node("console.log(JSON.stringify(mbHealth(" + json.dumps(
+        [{"book": "FanDuel", "desc": "Lions -3", "stake": 25, "odds": -110, "result": "win"}] * 4
+        + [{"book": "FanDuel", "desc": "Lions ML", "stake": 25, "odds": -110, "result": "loss"}] * 2) + ")));")
+    if got is not None:
+        acts = got["books"][0]["actions"]
+        assert any(a.startswith("mix in other markets so spread isn") for a in acts), acts
 
 
 def test_every_market_the_card_can_name_reads_as_words():
@@ -160,7 +189,7 @@ def test_the_other_counts_a_visitor_reads_say_it_too():
 def test_a_quarterback_change_finds_the_passer_under_another_spelling():
     """The NFL board, 26 November: "Daniel Jones BENCHED -> Anthony Richardson Sr. ... has 0 pass attempts in our
     data — too few to rate". ESPN's depth chart adds the "Sr."; the weekly stats do not, and the lookup was exact,
-    so a passer with hundreds of attempts was rated as if he had never thrown."""
+    so none of his numbers were read (the fixture's 650 attempts are an example, not his)."""
     qb = {"teams": {"IND": {"starter": "Daniel Jones", "backup": None}},
           "passing": {"Daniel Jones": (400.0, 2600.0), "Anthony Richardson": (650.0, 4290.0)},
           "usual": {"IND": ["Daniel Jones"]},

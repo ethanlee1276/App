@@ -10177,6 +10177,12 @@ HEALTH_BLIND_SPOTS = [
 ]
 
 
+#: Journal "books" no risk desk sits behind, left off the account-health cards: a game bet journaled at the best
+#: price across books ("best") was placed at no one book, and the Record page drew a limit-risk card for a book
+#: called "best", with advice for it (27 November 2026). "?" is a row with no book at all.
+HEALTH_NOT_BOOKS = ("best", "?")
+
+
 def _market_said(key: str) -> str:
     """A journal market id said in a sentence, in engine/markets' words: "pass_yds" → "passing yards",
     "anytime_td" → "anytime TD" (an abbreviation keeps its capitals). The Record page's card said the id itself,
@@ -10207,7 +10213,7 @@ def account_health(conn, since: str | None = None) -> dict:
 
     books = []
     for book, rows in by_book.items():
-        if len(rows) < HEALTH_MIN_BETS:
+        if len(rows) < HEALTH_MIN_BETS or book in HEALTH_NOT_BOOKS:
             continue
         # CLV beat rate — the strongest limit signal a book can see.
         clvs = [c for c in (_bet_clv(b) for b in rows) if c is not None]
@@ -10246,7 +10252,8 @@ def account_health(conn, since: str | None = None) -> dict:
             drivers.append(f"beats the close on {beat_rate:.0%} of tracked bets"
                            + (" — the #1 pattern risk desks act on"
                               if beat_rate >= 0.55 else ""))
-        drivers.append(f"{conc:.0%} of volume is {_market_said(top_market)}")
+        said = _market_said(top_market)
+        drivers.append(f"{conc:.0%} of volume is {said}")
         if prop_share >= 0.8:
             drivers.append(f"{prop_share:.0%} of volume is player props — the "
                            "lowest-limit markets on the board, and where "
@@ -10258,8 +10265,12 @@ def account_health(conn, since: str | None = None) -> dict:
             drivers.append("stakes are precise model-sized amounts, not round numbers")
         actions = []
         if conc >= 0.5:
-            actions.append(f"mix in main-line bets (sides/totals) so {_market_said(top_market)} "
-                           f"isn't {conc:.0%} of your volume here")
+            # A main line on top is told to spread out, not to add main lines: "mix in main-line bets
+            # (sides/totals) so spread isn't 53% of your volume here" was the card's advice to a book that was
+            # all main lines already.
+            actions.append(f"mix in other markets so {said} isn't {conc:.0%} of your volume here"
+                           if top_market in GAME_MARKETS else
+                           f"mix in main-line bets (sides/totals) so {said} isn't {conc:.0%} of your volume here")
         elif prop_share >= 0.8:
             # Only when concentration DIDN'T already say it — otherwise the
             # card gives the same advice twice in two different sentences.
@@ -10279,7 +10290,7 @@ def account_health(conn, since: str | None = None) -> dict:
             "book": book, "bets": len(rows), "score": score, "band": band,
             "beat_close_rate": round(beat_rate, 3) if beat_rate is not None else None,
             "avg_clv": round(sum(clvs) / len(clvs), 3) if clvs else None,
-            "top_market": top_market, "concentration": round(conc, 3),
+            "top_market": top_market, "top_market_said": said, "concentration": round(conc, 3),
             "prop_share": round(prop_share, 3),
             "sharp_stake_rate": round(sharp_stakes, 3),
             "drivers": drivers, "actions": actions})

@@ -9891,6 +9891,11 @@ league's board, the Record, the report record) for the slips a visitor sees, and
   "mix in main-line bets (sides/totals) so pass_yds isn't 57% of your volume here" (also rush_att, kick_pts,
   pass_cmp). It says "passing yards", "carries", "kicking points" and "completions" now, the names the site uses
   everywhere else. The My Bets card, which runs the same score over your own log, already said words.
+- **Two more on the same card, seen live after the push:** a card for a book called "best" (the journal's label
+  for a game bet at the best price across books, placed at no one book, so no risk desk sees it), telling it to
+  "mix in main-line bets (sides/totals) so spread isn't 53% of your volume here" when it was all main lines; and
+  the card's own subline still said the id ("57% in pass_yds"). The "best" card is gone, a main line on top is
+  told to mix in other markets (on My Bets too), and the subline says the words.
 - **A verdict at the break-even read "-0.0 standard errors"** (the stale-price lab): it reads 0.0.
 - **A replaced preregistration ended "...take the bets.. The terms above"**: one stop now.
 - **Counts said with "(s)"** on the Record page and the boards: "0 of 3 block(s)", "87 player(s) corrected", "763
@@ -9906,12 +9911,14 @@ league's board, the Record, the report record) for the slips a visitor sees, and
   unrounded. Each pick's units now go in to two places and its chance to three, as the page says them.
 - **How data is used: a quarterback change could not find its passer under another spelling.** The NFL board read
   "Daniel Jones BENCHED -> Anthony Richardson Sr. ... has 0 pass attempts in our data — too few to rate". ESPN's
-  depth chart adds the "Sr."; the weekly stats do not, and the lookup wanted the exact name, so a passer with
-  hundreds of attempts was rated as if he had never thrown. That decides more than the sentence: with no sample
-  the change counts as a downgrade, and every Colts receiver took the measured downgrade cut, whatever
-  Richardson's own numbers say. The lookup now matches names the way the rest of the site does (case,
-  punctuation, Jr./Sr./III), and the chart's name is still the one the page says. Two passers under one loose name
-  are never guessed between. The Colts play the Giants on Sunday; the next board build reads it. The same change
+  depth chart adds the "Sr."; the weekly stats do not, and the lookup wanted the exact name, so none of his numbers
+  were read. The lookup now matches names the way the rest of the site does (case, punctuation, Jr./Sr./III), and
+  the chart's name is still the one the page says. Two passers under one loose name are never guessed between.
+  Live after the push it reads "Anthony Richardson Sr. has 6 pass attempts in our data — too few to rate — 1.5
+  runs a game for 3 yards; 13.2 air yards an attempt against Daniel Jones's 7.5". I had written that he had
+  hundreds of attempts and that the fix would lift the receivers' downgrade cut; our data (last season and this
+  one) holds 6, so the change still counts as a downgrade, which is the rule for a starter we cannot rate yet. The
+  changelog says that now. The same change
   also carried no lean (the new starter's own split of targets between receivers, tight ends and backs): that file
   matched names with its own key, which kept the "Sr." too. It uses the site's matcher now, and so do the "if the
   quarterback plays, if he sits" reports, whose own key would have missed a questionable starter the injury report
