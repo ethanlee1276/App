@@ -9935,6 +9935,12 @@ league's board, the Record, the report record) for the slips a visitor sees, and
   game on a settled pick printed the club's code beside its mark, and the mark's own label is the code. The fix is
   in the settled card (settled.js, outside the first visit's budget), not the shared mark: beside its mark the
   printed code is hidden from a screen reader, and with no mark (no final yet) it is still read.
+- **A question for you, not a change: Most Likely wins often and still loses money.** The Record's week (20 to 26
+  November): Most Likely went 430-251 (63.1%) and lost 2.57 units; the one board went 986-597 (62.3%) and lost 4.71.
+  Their prices implied 64.2% and 64.1%, and our own chances averaged 61.6% and 61.9%, so on average these picks sit
+  where the book is surer than we are. That is what a likeliest list is (Edge is the list that asks for a better
+  price than the book's, and it went 99-80, +14.65 units). If you want Most Likely to stop losing, the lever is to
+  keep picks off it whose price asks more than our own chance; that changes what the list is, so it is your call.
 - Left alone: the Status page's feed readouts ("1 of 1 eligible game(s) priced ... 14 credit(s) each", "1.6 hour(s)
   old") are diagnostics, and ten tests pin their wording; a preregistration's stored reason still says "his
   offence" because a registration's record is kept as it was written, not edited; and the injury blurbs and news
