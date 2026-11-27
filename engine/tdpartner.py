@@ -27,11 +27,12 @@ in 656 such games those backs scored 34.6% and our number said 30.4%. Reading th
 did not hold (better in one season of four), and the teammate step's measured carries lift on the touchdown inputs
 (its share and red-zone carries, teammates.EFFECT_SNAPS rush_att RB) holds in one case only: the back ahead is
 out tonight and was out for the team's last game too ("above_cont"), and played at least one of this back's last
-RZ_WEEKS games, so the back's window still counts games behind him. There, 173 games over 2022-2025: scored 30.6%,
-our number 21.3%, lifted 25.3%; log-loss 0.5622 -> 0.5378, better in all four seasons. Where the back ahead has
-been out the whole window (13 games) the window already reads the new role and the lift overshot, and where the
-back ahead was just ruled out ("above_new", 168 games) the lift overshot too (27.0% said against 24.4%) and held
-in two seasons of four; neither is lifted. A back behind ruled out moved nothing (`stepped_up`).
+RZ_WEEKS games, so the back's window still counts games behind that back. There, 173 games over 2022-2025: scored
+30.6%, our number 21.3%, lifted 25.3%; log-loss 0.5622 -> 0.5378, better in all four seasons. Where the back ahead
+has been out the whole window (13 games) the window already reads the new role and the lift overshot, and where
+the back ahead was just ruled out ("above_new", 168 games) the lift overshot too (27.0% said against 24.4%) and
+held in two seasons of four, as did a smaller lift fitted on three seasons and tested on the fourth (the fit chose
+1.2 to 1.6); neither is lifted. A back behind ruled out moved nothing (`stepped_up`).
 """
 from __future__ import annotations
 
@@ -99,8 +100,8 @@ def _int(v):
 
 
 def volume(props, shared=None) -> float:
-    """A player's volume the way pipeline._opportunity_shares reads it (his rushing yards, receiving yards or
-    catches a game, the largest), with this season's games cut to ``shared`` when given; last season's stay."""
+    """A player's volume the way pipeline._opportunity_shares reads it (the player's rushing yards, receiving yards
+    or catches a game, the largest), with this season's games cut to ``shared`` when given; last season's stay."""
     keep = {int(w) for w in shared} if shared is not None else None
     best = 0.0
     for p in props:

@@ -866,6 +866,17 @@ def _board_counts(path: str) -> dict:
                     and str(b.get("text") or "").startswith("Who gets the ball inside the 20")]
         out["rz_count_lists"] = len(rz_lists)
         out["rz_count_players"] = sum(len(x.get("items") or []) for x in rz_lists if isinstance(x, dict))
+    # THE BACKFIELD PARTNER READ AT WORK (engine/tdpartner, steps AIE and AIG): scorers whose touchdown chance reads
+    # the games a returning partner played ("back"), and backs moving up for a lead back out a while that take the
+    # measured carries lift ("out"), each player once. The board is members' only, so this is how it is seen.
+    partners: dict = {}
+    for key in ("long_shots", "longshot_watch"):
+        for r in b.get(key) or []:
+            if isinstance(r, dict) and isinstance(r.get("partner_back"), dict) and r.get("player"):
+                partners[(r.get("team"), r["player"])] = r["partner_back"]
+    if partners:
+        out["td_partner"] = {"back": sum(1 for x in partners.values() if x.get("kind") != "out"),
+                             "out": sum(1 for x in partners.values() if x.get("kind") == "out")}
     # THE BOARD'S RULES AT WORK (engine/likelyboard METHOD_AVOID, td_rule —
     # Ethan's NFL Bet checking method, 2026-11-15): how many Most Likely
     # picks a rule held at Worth a look, and how many touchdown picks meet

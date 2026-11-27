@@ -9901,8 +9901,12 @@ ones** (step 1025; 27 November; nothing to run). Two things on a back's touchdow
   with the lift 25.3%; more accurate in all four seasons. Now that back's share and red-zone carries take the lift
   (its touchdowns as they were), and the row says so first ("Backfield partner out: ... carried about 33% more").
 - **What does not.** A back ahead just ruled out this week (168 games): the lift overshot (27.0% said against 24.4%
-  scored) and held in two seasons of four, so nothing changes there yet. A back ahead out the whole six games (13
-  games): the window already reads the new role, and the lift overshot. A back behind ruled out: nothing moved.
+  scored) and held in two seasons of four. A smaller lift, fitted on three seasons and tested on the fourth, also
+  held in two of four (the fit chose 1.2 to 1.6 times the carries), so nothing changes there yet. A back ahead out
+  the whole six games (13 games): the window already reads the new role, and the lift overshot. A back behind ruled
+  out: nothing moved.
+- **Seeing it work.** The board is members' only, so the heartbeat now counts these reads (`td_partner`: "back" for
+  a scorer whose partner is back, "out" for a back moving up this way, each player once).
 
 **AIF. Each defense's corners are one table** (step 1024; 27 November; nothing to run). More from your Bears at
 Lions research: its matchup map put each defender on one row, with how often each is thrown at and what each allows

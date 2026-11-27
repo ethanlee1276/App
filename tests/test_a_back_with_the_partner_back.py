@@ -209,6 +209,21 @@ def test_the_report_says_the_lift_on_a_back_moving_up():
             "moving up in this spot has run") in line, line
 
 
+def test_the_heartbeat_counts_the_partner_reads_each_player_once():
+    import json as _json
+    import launch
+    board = {"long_shots": [{"player": MATE, "team": "CHI", "partner_back": {"kind": "out", "partner": LEAD}}],
+             "longshot_watch": [{"player": MATE, "team": "CHI", "partner_back": {"kind": "out", "partner": LEAD}},
+                                {"player": LEAD, "team": "DET", "partner_back": {"partner": MATE, "games": 5}},
+                                {"player": "Someone Else", "team": "DET"}]}
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "board.json")
+        with open(path, "w") as fh:
+            _json.dump(board, fh)
+        got = launch._board_counts(path)
+    assert got.get("td_partner") == {"back": 1, "out": 1}, got
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     fails = 0
