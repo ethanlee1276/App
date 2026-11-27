@@ -9927,10 +9927,11 @@ research better for these games". I read it beside our CHI@DET report, section b
     partner back: ... so the chance is read over the 5 games both played"). Most Likely, the touchdown picks, the
     game report's scorers and the fantasy chances all read the same number. College isn't measured, so it is left
     alone.
-  - **The other way round is a different question.** When the partner is ruled out tonight, our number for the back
-    who plays ran low (34.6% scored against 28.9% said, raw). That is the teammate-absence step, and for touchdowns it
-    measured too noisy to price, so it stays shown and not priced. I'll measure it again with this method before
-    touching it.
+  - **The other way round did not pass.** When the partner is ruled out tonight, our number for the back who plays
+    runs low: in 656 such games those backs scored 34.6% and our number said 30.4%. Reading the back's games without
+    the partner (where there were two or more) moved it to 31.7%, but its accuracy got worse overall and was better
+    in only one of the four seasons. That is the same answer the teammate-absence step got for touchdowns before
+    ("too noisy to price"), so it stays shown on the row and not priced.
 
 **AID. The Record page and the boards say their counts and markets in words** (step 1022; 27 November; nothing
 to run). Still on "wording on the site and how data is used": I read every sentence in the site's public files (each
