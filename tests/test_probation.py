@@ -114,7 +114,8 @@ def test_the_payload_flag_is_read_off_the_slate_not_the_fit():
 # --- the module ---------------------------------------------------------------
 def test_an_unfitted_variance_blocks_a_stake():
     why = P.reasons(fitted=False, games=7)
-    assert why and "7 graded game(s)" in why[0]
+    assert why and "7 graded games" in why[0]
+    assert "1 graded game in" in P.reasons(fitted=False, games=1)[0]
 
 
 def test_a_fitted_variance_blocks_nothing():

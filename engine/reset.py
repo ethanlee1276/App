@@ -278,7 +278,7 @@ def decorate(recommendations: list[dict], report: dict) -> int:
             e = reset[player]
             r.setdefault("reasons", []).insert(0,
                 f"Sample reset ({e['kind']}, week {e['week']}): {e['detail']}. "
-                f"Projecting from the {e['kept']} game(s) since and discarding "
+                f"Projecting from the {e['kept']} game{'' if e['kept'] == 1 else 's'} since and discarding "
                 f"{e['dropped']} in a role that no longer exists")
             r["sample_reset"] = e
             n += 1
@@ -286,7 +286,7 @@ def decorate(recommendations: list[dict], report: dict) -> int:
             e = held[player]
             r.setdefault("warnings", []).append(
                 f"Stale sample ({e['kind']}, week {e['week']}): {e['detail']}, "
-                f"but only {e['kept']} game(s) since — too few to project from, "
+                f"but only {e['kept']} game{'' if e['kept'] == 1 else 's'} since — too few to project from, "
                 f"so the older games are still in the average. Treat this "
                 f"number as describing a role the player may no longer have")
             r["sample_reset"] = e

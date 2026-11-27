@@ -141,6 +141,22 @@ def test_the_weekly_brief_counts_every_book_the_record_page_grades():
     assert fb("cfb").startswith("Nothing journaled yet"), "a league with nothing anywhere still says so"
 
 
+def test_the_other_counts_a_visitor_reads_say_it_too():
+    """The sign-in throttle ("Try again in 1 minute(s)."), a pick card's sample reset ("Projecting from the 3
+    game(s) since"), the stake block's variance reason and the Record lab's edge slices."""
+    from engine import edgeslices, probation
+    assert "1 graded game in this database" in probation.variance_reason(False, 1)
+    assert "7 graded games in this database" in probation.variance_reason(False, 7)
+    assert edgeslices.reading({"tested": [{}], "survivors": [], "alpha": 0.1}).startswith("1 slice tested, none")
+    one = {"key": "odds", "value": "long", "auc_edge": 0.61, "q": 0.04}
+    assert edgeslices.reading({"tested": [{}, {}, {}], "survivors": [one]}).startswith("1 of 3 slices survives: ")
+    assert edgeslices.reading({"tested": [{}, {}, {}], "survivors": [one, one]}).startswith("2 of 3 slices survive: ")
+    for p in ("accounts.py", "reset.py", "probation.py", "edgeslices.py"):
+        s = (ROOT / "engine" / p).read_text(encoding="utf-8")
+        for slip in ("minute(s)", "game(s)", "slice(s)"):
+            assert slip not in s, (p, slip)
+
+
 def test_a_quarterback_who_barely_runs_runs_for_1_yard():
     ch = {"starter": "A Starter", "replacement": "B Backup",
           "replacement_profile": {"games": 3, "carries_pg": 1.0, "rush_yds_pg": 1.2}}

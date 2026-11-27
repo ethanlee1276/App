@@ -155,12 +155,13 @@ def reading(result: dict) -> str:
         return (f"No slice has {result.get('min_n')} settled bets yet — "
                 f"nothing to cut. The pooled figure is all there is.")
     if not surv:
-        return (f"{len(tested)} slice(s) tested, none survives false-discovery "
+        return (f"{len(tested)} slice{'' if len(tested) == 1 else 's'} tested, none survives false-discovery "
                 f"control at {result.get('alpha')}. The claimed edge is not "
                 f"noise on average and real somewhere — it is noise in every "
                 f"slice big enough to ask.")
     names = ", ".join(f"{s['key']} {s['value']} (AUC {s['auc_edge']:.3f}, "
                       f"q={s.get('q')})" for s in surv)
-    return (f"{len(surv)} of {len(tested)} slice(s) survive: {names}. "
+    return (f"{len(surv)} of {len(tested)} slice{'' if len(tested) == 1 else 's'} "
+            f"{'survives' if len(surv) == 1 else 'survive'}: {names}. "
             f"That is where selecting on edge is doing something; "
             f"everywhere else the pooled reading stands.")

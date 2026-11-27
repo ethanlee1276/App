@@ -9896,8 +9896,10 @@ league's board, the Record, the report record) for the slips a visitor sees, and
 - **Counts said with "(s)"** on the Record page and the boards: "0 of 3 block(s)", "87 player(s) corrected", "763
   settled bet(s) were left out", the baseball and college basketball boards' guide "4 measured market(s)", and the
   NBA board on Thanksgiving, with no games that day: "73 game(s) in the last 10 days" (college football's quiet date
-  said it the same way). They count in the singular and the plural now ("4 measured markets", "73 games"; a count of
-  one says "block", "player", "bet was").
+  said it the same way). So did the sign-in page's throttle ("Try again in 1 minute(s)."), a pick card's sample reset
+  ("Projecting from the N game(s) since"), the stake block's variance reason and the Record lab's edge slices.
+  They count in the singular and the plural now ("4 measured markets", "73 games"; a count of one says "block",
+  "player", "bet was", "minute").
 - **A quarterback change read "1.0 runs a game for 1 yards"**: "1 yard".
 - **How data is used: the nightly write-up quoted units to four places** ("returned less (+0.4435) than the win the
   market faded us on", "+0.5246 units"). The write-up narrates the numbers it is handed, and it was handed them

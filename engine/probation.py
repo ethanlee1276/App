@@ -70,7 +70,7 @@ def variance_reason(fitted, games=0) -> str | None:
         return None
     n = int(games or 0)
     return (f"the spread of results is a prior, not a fit — {n} graded "
-            f"game(s) in this database, so any stake would be Kelly on a "
+            f"game{'' if n == 1 else 's'} in this database, so any stake would be Kelly on a "
             f"number nobody measured")
 
 

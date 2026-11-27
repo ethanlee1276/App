@@ -538,8 +538,9 @@ def authenticate(conn, email, password, where: str | None = None) -> tuple[int, 
     key = f"{e}|{where}" if where else e
     wait = _throttled(key)
     if wait:
+        mins = max(1, wait // 60)
         return 429, {"error": f"Too many attempts. Try again in "
-                              f"{max(1, wait // 60)} minute(s)."}
+                              f"{mins} minute{'' if mins == 1 else 's'}."}
     row = conn.execute("SELECT id, verifier FROM users WHERE email=?",
                        (e,)).fetchone()
     if row is None:
