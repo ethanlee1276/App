@@ -10330,6 +10330,12 @@ of my check-ins, read at 04:41 UTC off the live boards (`/data/{nba,nhl,cbb}.jso
   were dropped. A game that has begun now keeps the last board's reads whenever this build made none for it, never
   over this build's own (nba_build.keep_pregame). Tonight's are gone (the last board no longer had them); from the
   next night they stay.
+- **Checked the next night (27 November, 05:14 UTC, the board built at 23:58 on the 26th): fixed.** All 21 of
+  Thanksgiving's college games were live or final, and the paid board carried player reads for 14 of them. That is
+  every game the board priced: the other 7 have reports that read the two teams alone (step AEM), because the board
+  priced no players there, so there were never any player reads to keep (the heartbeat counts them,
+  `reports_teams_only`: 7). 14 and 7 make the 21. One thing it leaves open: 19 of the 21 games carry a report, and
+  the free data does not say which 2 are missing one.
 - **Live game pages across the leagues.** Rendered at 390 px, one per league: the NBA's (SAC at GSW, third quarter),
   the NHL's (MTL at COL, third period) and college basketball's (WASH at VCU, second half) live pages carry the same
   cards in the same order (score header, court or rink stage, line score, the newest play, the win-chance chart,
