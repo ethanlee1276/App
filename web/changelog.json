@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-27",
+      "kind": "ship",
+      "title": "A game report lays out each defense's corners as a table",
+      "body": "Under each offense's matchup cards, the defense's corners now sit in one table, a row for each starter on the depth chart (left corner, right corner, nickel): how often each is thrown at, the yards a target and the passer rating allowed, touchdowns, our coverage grade where we grade one, and a note for the soft spot, the next man up or an injury listing. The soft spot is still said first, as the headline."
+    },
+    {
+      "date": "2026-11-27",
       "kind": "model",
       "title": "A back's touchdown chance reads the games its backfield partner played",
       "body": "When a running back's partner missed some of the back's recent games and plays tonight, the back's touchdown chance counted games it had the backfield alone: its share of the work, its red-zone touches and its touchdowns. Measured on 2022-2025 with each season held out, those backs scored in 26.6% of games while our number said 30.4%. The chance is now read over the back's recent games with the partner there (28.1% on the same games), and the row says so first in its reasons. When the partner is ruled out instead, nothing changes yet: that case measured too noisy to price."

@@ -112,7 +112,8 @@ def test_the_report_puts_it_on_his_card_the_corners_and_says_whose_it_is():
     rep = R.build(board["games"][0], board, names={}, form={"Top Wr": {"games": []}, "Mid Wr": {"games": []}},
                   grades=grades)
     text = json.dumps(next(s for s in rep["sections"] if s["key"] == "matchups"), ensure_ascii=False)
-    assert G.NOTE in text and "our coverage grade 81" in text
+    # The corners' table carries the grade in its own column (step AIF), and its note says how many were ranked.
+    assert G.NOTE in text and '"81 of 100"' in text and "ranked against the 140 defenders we grade" in text
     bare = R.build(board["games"][0], board, names={}, form={"Top Wr": {"games": []}})
     assert G.NOTE not in json.dumps(bare, ensure_ascii=False), "no grades, no note"
     assert R._week_of({"date": "2026-W07"}) == 7 and R._week_of({"date": "2026-10-24"}) is None

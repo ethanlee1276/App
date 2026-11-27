@@ -9,7 +9,9 @@ to watch, before kickoff). Two of its pieces it did not have, and now does:
     DraftKings' beside it, which is how it read "Gibbs is −270 at FanDuel and DraftKings, −250 at BetMGM" at a
     glance (the report said each scorer in a sentence with one price);
   * how tickets that share a leg play together: how often all of them cash, how often at least one does, and that
-    the shared leg missing loses every one ("Swift is on both tickets, so they win together").
+    the shared leg missing loses every one ("Swift is on both tickets, so they win together");
+  * the secondary as one table, a corner a row (step AIF): targets, yards a target, passer rating allowed and
+    touchdowns, where the report said them in one long sentence.
 
 The numbers in these fixtures are the test's own, not a real game's.
 
@@ -117,6 +119,37 @@ def test_three_on_one_leg_and_the_cases_the_arithmetic_is_not():
     apart = [{"joint": 0.3, "legs": [a, _leg("B", 0.5)]}, {"joint": 0.3, "legs": [_leg("C", 0.5), _leg("D", 0.6)]}]
     assert R.shared_leg_notes(apart, ["T1", "T2"]) == []
     assert R.shared_leg_notes([], []) == []
+
+
+def _room():
+    return {"corners": [
+        {"name": "Left Starter", "spot": "LCB", "status": "", "next_man_up": False, "targets": 40, "yds_per_tgt": 7.1,
+         "rating": 92.3, "td": 2},
+        {"name": "Right Fill", "spot": "RCB", "status": "Questionable", "next_man_up": True, "targets": 0,
+         "yds_per_tgt": None, "rating": None, "td": 0},
+        {"name": "Nickel Back", "spot": "NB", "status": "", "next_man_up": False, "targets": 31, "yds_per_tgt": 10.4,
+         "rating": 128.9, "td": 3}]}
+
+
+def test_the_secondary_is_one_table_a_corner_a_row():
+    t = R.corners_table(_ctx(), "DET", _room(), soft="Nickel Back")
+    assert t["title"] == "Lions corners" and t["head"] == ["Corner", "Spot", "Targets", "Yards a target",
+                                                           "Passer rating", "TDs", "Note"], t
+    assert t["rows"] == [["Left Starter", "Left corner", "40", "7.1", "92.3", "2", "—"],
+                         ["Right Fill", "Right corner", "0", "—", "—", "0", "next man up, questionable"],
+                         ["Nickel Back", "Nickel", "31", "10.4", "128.9", "3", "soft spot"]], t["rows"]
+    assert "on 6 or more targets, when it is 105 or more" in t["note"]
+    assert R.corners_table(_ctx(), "DET", {"corners": []}) is None
+
+
+def test_our_grade_has_a_column_only_where_we_grade_coverage():
+    from engine.grades import _key as grade_key
+    c = _ctx()
+    c.grades = {"coverage": {grade_key("DET", "Left Starter"): {"grade": 81, "n": 140}}}
+    t = R.corners_table(c, "DET", _room())
+    assert t["head"][-2:] == ["Our grade", "Note"], t["head"]
+    assert t["rows"][0][-2] == "81 of 100" and t["rows"][1][-2] == "—", t["rows"]
+    assert t["note"].endswith("ranked against the 140 defenders we grade in coverage."), t["note"]
 
 
 if __name__ == "__main__":

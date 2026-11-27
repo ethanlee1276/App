@@ -9883,6 +9883,16 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIF. Each defense's corners are one table** (step 1024; 27 November; nothing to run). More from your Bears at
+Lions research: its matchup map put each defender on one row, with how often each is thrown at and what each allows
+a target. Our "Who's guarding who" said a defense's corners in one long sentence ("DET's other corners: A (LCB) —
+92.3 passer rating allowed on 40 targets, 7.1 yards a target, 2 touchdowns — our coverage grade 61 of 100; B ...",
+the numbers there are an example). Now, under each offense's matchup cards, the defense's corners are a table, one
+row for each starter the depth chart lines up (left corner, right corner, nickel): targets, yards a target, passer
+rating allowed and touchdowns this season, our coverage grade where we grade one, and a note (the soft spot, next
+man up, or a listing such as questionable). The soft spot is still said first, as the headline sentence, so what an
+offense goes at reads before the table.
+
 **AIE. The game report learns from your Bears at Lions research** (step 1023; 27 November; nothing to run). You
 sent the research you bet Thanksgiving on, which won, and said: "learn from these reports and structure better and
 research better for these games". I read it beside our CHI@DET report, section by section.

@@ -1927,6 +1927,52 @@ def _corner_line(cn: dict, grade: dict | None = None) -> str:
     return " — ".join(bits)
 
 
+#: A corner's depth-chart spot, in words, for the corners' table (step AIF).
+CORNER_SPOT_WORDS = {"LCB": "Left corner", "RCB": "Right corner", "NB": "Nickel"}
+
+
+def corners_table(c: Ctx, dfn: str, room: dict, soft: str | None = None) -> dict | None:
+    """THE SECONDARY, AS A TABLE (step AIF, 27 November 2026). Ethan's own Bears at Lions research laid its
+    matchup map out as one row a defender: the corner, how often he is thrown at, and what he allows a target
+    ("Kyler Gordon OUT → Clark Phillips III plays nickel"). The report said ``dfn``'s corners in one long sentence
+    ("DET's other corners: A (LCB) — 92.3 passer rating allowed on 40 targets, 7.1 yards a target — …; B …"). Each
+    starter the depth chart lines up (left, right, nickel) on a row: targets, yards a target, passer rating allowed
+    and touchdowns this season, our grade where we grade coverage, and what else to know (the soft spot, next man
+    up, a listing). None with no corner named."""
+    from .grades import coverage_of as _cov_grade
+    from .gamescan import MIN_TARGETS, SOFT_RATING
+    corners = [cn for cn in (room or {}).get("corners") or [] if isinstance(cn, dict) and cn.get("name")]
+    if not corners:
+        return None
+    graded = {cn["name"]: _cov_grade(c.grades, dfn, cn["name"]) for cn in corners} if c.grades else {}
+    with_grade = any(graded.values())
+    rows = []
+    for cn in corners:
+        t = int(cn.get("targets") or 0)
+        note = []
+        if soft and cn["name"] == soft:
+            note.append("soft spot")
+        if cn.get("next_man_up"):
+            note.append("next man up")
+        if cn.get("status"):
+            note.append(str(cn["status"]).lower())
+        g = graded.get(cn["name"])
+        rows.append([cn["name"], CORNER_SPOT_WORDS.get(str(cn.get("spot") or ""), str(cn.get("spot") or "")),
+                     str(t), _num(cn.get("yds_per_tgt")) if t and cn.get("yds_per_tgt") is not None else "—",
+                     _num(cn.get("rating")) if t and cn.get("rating") is not None else "—", str(int(cn.get("td") or 0)),
+                     *([f"{g['grade']} of 100" if g else "—"] if with_grade else []), ", ".join(note) or "—"])
+    note = (f"This season, on the passes thrown at each corner, from Pro Football Reference's charting. The soft "
+            f"spot is the starter with the highest passer rating allowed, on {MIN_TARGETS} or more targets, when it "
+            f"is {_num(SOFT_RATING)} or more.")
+    if with_grade:
+        ranked = max(int((g or {}).get("n") or 0) for g in graded.values())
+        note += f" Our grade is out of 100, ranked against the {ranked} defenders we grade in coverage."
+    return {"type": "table", "title": f"{c.name(dfn)} corners",
+            "head": ["Corner", "Spot", "Targets", "Yards a target", "Passer rating", "TDs",
+                     *(["Our grade"] if with_grade else []), "Note"],
+            "rows": rows, "note": note}
+
+
 def funnel_lines(c: Ctx, dfn: str) -> list:
     """Where ``dfn`` leaks and where it holds, by position, off the defense-vs-position ratings: a back's and a
     quarterback's are the ones their props are priced against; a receiver's and a tight end's are priced against
@@ -2099,16 +2145,13 @@ def sec_matchups(c: Ctx) -> dict | None:
                 notes.append(f"The soft spot in {dfn}'s coverage: {_corner_line(w, _cg(w))}")
             else:
                 w = None
-        # The soft spot is said once (2026-11-15): the corners' line names
-        # the others.
-        rest = [cn for cn in corners if cn is not w]
-        if rest:
-            notes.append(f"{dfn}'s {'other ' if w else ''}corners: "
-                         + "; ".join(_corner_line(cn, _cg(cn)) for cn in rest))
+        # The soft spot is said once (2026-11-15), as the headline; every corner, the soft spot too, is a row of
+        # the corners' table (step AIF), not another long sentence.
         if room.get("missing"):
             notes.append(f"{dfn} is without {_join(room['missing'])} in the secondary")
         notes += funnel_lines(c, dfn)
         sub.append(_list(notes))
+        sub.append(corners_table(c, dfn, room, w.get("name") if w else None))
         sub = [b for b in sub if b]
         if sub:
             blocks += [_h(f"{c.name(off)} offense vs {c.name(dfn)} defense")] + sub
