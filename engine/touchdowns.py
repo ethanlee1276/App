@@ -229,6 +229,16 @@ class RedZoneUsage:
                         rz_touch_share=round(min((tgt + car) / team, 1.0), 3) if team > 0 else 0.0,
                         team_implied=round(sum(then) / len(then), 2) if then else None, games=n)
 
+    def carries_lifted(self, lift: float) -> RedZoneUsage:
+        """The same measure with his red-zone carries (and the inside-the-5 ones) times ``lift``, his share of the
+        team's touches taken again on them; targets as they were (engine/tdpartner.stepped_up)."""
+        from dataclasses import replace as _replace
+        car, tgt = self.carries_inside_10, self.targets_inside_10
+        team = (car + tgt) / self.rz_touch_share if self.rz_touch_share else 0.0
+        share = min(1.0, (car * lift + tgt) / team) if team > 0 else self.rz_touch_share
+        return _replace(self, carries_inside_10=round(car * lift, 2), carries_inside_5=round(self.carries_inside_5 * lift, 2),
+                        rz_touch_share=round(share, 3))
+
     @property
     def opportunities(self) -> float:
         """His red-zone chances per game, as measured over recent games."""
@@ -483,14 +493,20 @@ def defense_td_multiplier(opponent: Team, position: str) -> tuple[float, list[st
 def td_probability(prop: Prop, game: Game, opponent: Team,
                    opportunity_share: float,
                    red_zone: Optional[RedZoneUsage] = None,
-                   xfp: Optional[dict] = None) -> tuple[float, dict]:
-    """Model P(player scores a touchdown), plus the reasoning behind it."""
+                   xfp: Optional[dict] = None,
+                   shown_red_zone: Optional[RedZoneUsage] = None) -> tuple[float, dict]:
+    """Model P(player scores a touchdown), plus the reasoning behind it.
+
+    ``shown_red_zone``: his red-zone work as it happened, for the counts the row says ("11 red-zone carries ... in
+    the last 6 games", his share of the team's), when ``red_zone`` is the measure read again for the chance (a
+    back's games with the backfield partner, engine/tdpartner): the chance reads the one, the words the other."""
     pos = (prop.position or "").upper()
     team = prop.team
     implied = team_implied_total(game, team)
     team_tds = expected_team_tds(implied)
 
     rz = red_zone or infer_red_zone(prop, opportunity_share)
+    shown = shown_red_zone or rz
 
     # Player's share of his team's touchdowns. History and the role baseline are
     # *blended* by sample size rather than chosen between: a player with six
@@ -570,7 +586,7 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     # add nothing on top of this chain (AUC 0.7212 -> 0.7214), because xFP
     # and the red-zone share already carry them — so it is said, not
     # re-counted.
-    gl_text = rz.goal_line_text()
+    gl_text = shown.goal_line_text()
     if gl_text:
         reasons.append(f"Goal-line work: {gl_text}")
     if rz.rz_touch_share:
@@ -641,9 +657,9 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
         "rz_before": round(rz.opportunities, 2),
         # His real share of his team's carries and targets inside the 20 over
         # the same games (nflusage.red_zone_usage), for the report's counts.
-        "rz_share": round(rz.rz_touch_share, 3) if rz.measured and rz.rz_touch_share else None,
+        "rz_share": round(shown.rz_touch_share, 3) if shown.measured and shown.rz_touch_share else None,
         "rz_then_implied": rz.team_implied,
-        "goal_line": rz.goal_line(),
+        "goal_line": shown.goal_line(),
         "goal_line_text": gl_text,
         "primary_reason": reasons[0] if not def_reasons else def_reasons[0],
         "data_quality": 0.85 if not rz.measured else 1.0,
@@ -703,6 +719,10 @@ def partner_row(c: dict) -> dict | None:
     pb = (c or {}).get("partner_back") or None
     if not pb:
         return None
+    if pb.get("kind") == "out":
+        # The back ahead out a while (engine/tdpartner.stepped_up): the measured carries lift, and the games.
+        return {"kind": "out", "partner": pb.get("partner"), "lift": round(float(pb.get("lift") or 1.0), 3),
+                "with": pb.get("with"), "window": pb.get("window")}
     return {"partner": pb.get("partner"), "games": len(pb.get("shared") or []), "missed": pb.get("missed"),
             "window": pb.get("window")}
 
@@ -751,7 +771,7 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
         status = player_injury_status(prop, getattr(game, "injuries", None) or [])
         raw_prob, info = td_probability(c.get("chance_prop") or prop, game, opp,
                                         c.get("opportunity_share", 0.15),
-                                        c.get("red_zone"), c.get("xfp"))
+                                        c.get("red_zone"), c.get("xfp"), shown_red_zone=c.get("red_zone_shown"))
         if c.get("partner_back"):
             # The backfield partner back (engine/tdpartner): said first, as the reason the number moved.
             info["reasons"] = [c["partner_back"]["reason"], *(info.get("reasons") or [])]
@@ -901,7 +921,7 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
         prop, game, opp = c["prop"], c["game"], c["opponent"]
         prob, info = td_probability(c.get("chance_prop") or prop, game, opp,
                                     c.get("opportunity_share", 0.15),
-                                    c.get("red_zone"), c.get("xfp"))
+                                    c.get("red_zone"), c.get("xfp"), shown_red_zone=c.get("red_zone_shown"))
         if c.get("partner_back"):
             info["reasons"] = [c["partner_back"]["reason"], *(info.get("reasons") or [])]
         pick = build_pick(

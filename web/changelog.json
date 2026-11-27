@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-11-27",
+      "kind": "fix",
+      "title": "A back's red-zone counts are its real last six games",
+      "body": "Since this morning's change for a back whose backfield partner is back, the counts beside that back's touchdown chance (red-zone carries and targets, and the share of the team's) were taken over the games both backs played while calling them the last games. The chance still reads the games both played; the counts now say the real last six games."
+    },
+    {
+      "date": "2026-11-27",
+      "kind": "model",
+      "title": "A back moving up for a lead back out a while carries the measured lift",
+      "body": "When the back ahead has been out since before the team's last game and is out tonight, the back who plays ran low on touchdowns: over 173 such games in 2022-2025 it scored 30.6% of the time against our 21.3%. Its share and red-zone carries now take the carries lift already measured for that spot (about a third more), which brings the number to 25.3% and was more accurate in all four seasons. A back ahead ruled out only this week is left as it was: the same lift overshot there."
+    },
+    {
+      "date": "2026-11-27",
       "kind": "ship",
       "title": "A game report lays out each defense's corners as a table",
       "body": "Under each offense's matchup cards, the defense's corners now sit in one table, a row for each starter on the depth chart (left corner, right corner, nickel): how often each is thrown at, the yards a target and the passer rating allowed, touchdowns, our coverage grade where we grade one, and a note for the soft spot, the next man up or an injury listing. The soft spot is still said first, as the headline."

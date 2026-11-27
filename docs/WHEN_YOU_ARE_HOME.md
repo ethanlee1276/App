@@ -9883,6 +9883,27 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIG. A back moving up for a lead back out a while gets the measured carries lift; a row's counts are the real
+ones** (step 1025; 27 November; nothing to run). Two things on a back's touchdown chance, after step AIE:
+
+- **A slip of mine, fixed.** From 03:42 UTC today, for a back whose backfield partner was back, the chance read the
+  games both played (right), but so did the counts the row says: the report's "Who gets the ball inside the 20"
+  line and the scorer card's "Goal-line work" said that back's red-zone carries and targets over those games while
+  calling them "the last N games" (for example "in the last 5 games" when they were the last 5 games both played),
+  and the share beside them was that window's too. The chance now reads the games both played, and the words say
+  the back's real last six games and real share.
+- **The other way round, the one case that holds.** When a lead back is ruled out, the back who plays ran low (656
+  games, 2022-2025: scored 34.6%, our number 30.4%). Reading only the games without the lead back did not hold
+  (better in one season of four). The carries lift our teammate step already measured for that spot (a back moving
+  up carries about 33% more once the back ahead has been out a game) holds in one case: the back ahead is out
+  tonight, missed the team's last game too, and played in at least one of this back's last six games, so this
+  back's window still counts games behind the lead back. There, over 173 games: scored 30.6%, our number 21.3%,
+  with the lift 25.3%; more accurate in all four seasons. Now that back's share and red-zone carries take the lift
+  (its touchdowns as they were), and the row says so first ("Backfield partner out: ... carried about 33% more").
+- **What does not.** A back ahead just ruled out this week (168 games): the lift overshot (27.0% said against 24.4%
+  scored) and held in two seasons of four, so nothing changes there yet. A back ahead out the whole six games (13
+  games): the window already reads the new role, and the lift overshot. A back behind ruled out: nothing moved.
+
 **AIF. Each defense's corners are one table** (step 1024; 27 November; nothing to run). More from your Bears at
 Lions research: its matchup map put each defender on one row, with how often each is thrown at and what each allows
 a target. Our "Who's guarding who" said a defense's corners in one long sentence ("DET's other corners: A (LCB) —

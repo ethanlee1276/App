@@ -135,6 +135,80 @@ def test_the_report_says_what_the_chance_was_read_over():
                            "so this reads only the 5 games both played"), line
 
 
+class Out:
+    """A lineup with the back ahead out tonight (engine/teammates.stamp's shape): ``lead_weeks`` the weeks the back
+    ahead played; the team played weeks 1-8 and this back every one of them."""
+    def __init__(self, lead_weeks, out=(LEAD,), basis="snaps"):
+        self.home, self.away = "CHI", "DET"
+        lw = max(lead_weeks)
+        self.lineup = {"CHI": {"order": {"RB": [[LEAD, 0.6, len(lead_weeks), lw], [MATE, 0.4, 8, 8]]},
+                               "seen": {"RB": [[LEAD, 0.6, len(lead_weeks), lw, list(lead_weeks)],
+                                               [MATE, 0.4, 8, 8, list(range(1, 9))]]},
+                               "out": list(out), "last": 8, "basis": basis}}
+
+
+def test_the_back_moving_up_takes_the_measured_carries_lift_only_out_a_while():
+    from engine.teammates import EFFECT_SNAPS
+    second = _prop(ANYTIME_TD, [], player=MATE)
+    up = T.stepped_up(second, Out([1, 2, 3, 4, 5]))
+    assert up == {"kind": "out", "partner": LEAD, "lift": EFFECT_SNAPS[("rush_att", "RB", "above_cont")],
+                  "with": 3, "window": 6}, up
+    assert T.up_words(up, MATE).startswith("Backfield partner out: Lead Back has been out since before the team's "
+                                           "last game and is out tonight; Second Back's last 6 games include 3")
+    assert T.stepped_up(second, Out(range(1, 9))) is None, "just ruled out (above_new): overshot, not lifted"
+    assert T.stepped_up(second, Out([1, 2])) is None, "out the whole window: the window already reads the new role"
+    assert T.stepped_up(second, Out([1, 2, 3, 4, 5], out=())) is None, "the back ahead plays"
+    assert T.stepped_up(_prop(ANYTIME_TD, []), Out([1, 2, 3, 4, 5], out=(MATE,))) is None, "a back behind out: nothing"
+    assert T.stepped_up(second, Out([1, 2, 3, 4, 5], basis="cfb")) is None
+
+
+def test_the_lift_reaches_the_share_and_the_red_zone_carries_not_the_counts_said():
+    rz = RedZoneUsage(carries_inside_10=2.0, carries_inside_5=1.0, targets_inside_10=1.0, rz_touch_share=0.3,
+                      measured=True, games=6)
+    up = rz.carries_lifted(1.5)
+    assert (up.carries_inside_10, up.carries_inside_5, up.targets_inside_10) == (3.0, 1.5, 1.0), up
+    assert up.rz_touch_share == round(4.0 / 10.0, 3), "the team's 10 touches a game, his 3 carries and a target"
+
+    class Slate:
+        props = [_prop(RUSH_YDS, [(w, 50.0) for w in range(1, 9)], player=MATE), _prop(ANYTIME_TD, [], player=MATE)]
+    share, rz2, chance, partner = pipeline._partner_back(Slate, Slate.props[1], Out([1, 2, 3, 4, 5]), 0.3, rz, {})
+    assert abs(share - 0.3 * partner["lift"]) < 1e-9 and chance is None and partner["kind"] == "out", partner
+    assert rz2.carries_inside_10 == round(2.0 * partner["lift"], 2) and rz2.targets_inside_10 == 1.0
+
+
+def test_the_counts_a_row_says_are_the_games_as_they_happened():
+    """The chance reads the measure taken again; the words ("Goal-line work: ...", the row's counts and share) say
+    what happened, so a back's last six games are never called his last five (step AIG)."""
+    from engine.models import Game, Weather
+    from engine.touchdowns import td_probability
+    from engine import tdbacktest as TB
+    seen = RedZoneUsage(carries_inside_10=3.0, targets_inside_10=1.0, rz_touch_share=0.4, measured=True, games=6)
+    read = RedZoneUsage(carries_inside_10=2.0, targets_inside_10=1.0, rz_touch_share=0.3, measured=True, games=5)
+    prop = _prop(ANYTIME_TD, [(w, 0.0) for w in range(1, 7)])
+    game = Game(home="CHI", away="DET", weather=Weather(dome=True, measured=True), total=45.0, spread=-3.0)
+    p_read, info = td_probability(prop, game, TB._neutral_opponent("DET"), 0.4, read, shown_red_zone=seen)
+    p_bare, _ = td_probability(prop, game, TB._neutral_opponent("DET"), 0.4, read)
+    assert p_read == p_bare, "what is shown never moves the chance"
+    assert info["goal_line"]["games"] == 6 and info["goal_line"]["rz_car"] == 18, info["goal_line"]
+    assert info["rz_share"] == 0.4 and any("in the last 6 games" in r for r in info["reasons"]), info["reasons"]
+
+
+def test_the_report_says_the_lift_on_a_back_moving_up():
+    from engine import gamereport as R, gamescan as S
+    from engine.touchdowns import partner_row
+    row = partner_row({"partner_back": {"kind": "out", "partner": LEAD, "lift": 1.331, "with": 3, "window": 6,
+                                        "reason": "x"}})
+    assert row == {"kind": "out", "partner": LEAD, "lift": 1.331, "with": 3, "window": 6}, row
+    reads = {"CHI@DET": {"players": [{"player": MATE, "team": "CHI", "pos": "RB"}]}}
+    S.stamp_touchdowns(reads, {"longshot_watch": [{"player": MATE, "model_prob": 0.36, "odds": 150, "book": "FanDuel",
+                                                   "partner_back": row}]})
+    g = {"away": "CHI", "home": "DET", "date": "2026-11-26", "kickoff": "13:00", "spread": 1.5, "total": 45.5}
+    c = R.Ctx(g, {"games": [g], "scan_reads": reads}, names={"CHI": "Bears", "DET": "Lions"}, sport="nfl")
+    line = R.td_chance_pairs(c, "CHI")[0][0]
+    assert ("Lead Back has been out since before CHI's last game, so this counts about 33% more carries, what a back "
+            "moving up in this spot has run") in line, line
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     fails = 0

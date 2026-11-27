@@ -2333,7 +2333,12 @@ def td_chance_pairs(c: Ctx, off: str) -> list:
         # THE BACKFIELD PARTNER BACK (engine/tdpartner, step AIE; Ethan's "Swift scored in only 2 of the 5 games
         # both were active"): the chance above was read over the games both played, and the line says so.
         pb = td.get("partner") or {}
-        if pb.get("partner") and pb.get("games"):
+        if pb.get("kind") == "out" and pb.get("partner") and pb.get("lift"):
+            # The back ahead out a while (engine/tdpartner.stepped_up, step AIG): the measured carries lift.
+            bits.append(f"{pb['partner']} has been out since before {off}'s last game, so this counts about "
+                        f"{round((float(pb['lift']) - 1.0) * 100)}% more carries, what a back moving up in this spot "
+                        f"has run")
+        elif pb.get("partner") and pb.get("games"):
             bits.append(f"{pb['partner']} is back from missing {pb.get('missed')} of the last {pb.get('window')}, "
                         f"so this reads only the {pb['games']} games both played")
         # The rule's share (likelyboard.td_rule: his expected chances this week

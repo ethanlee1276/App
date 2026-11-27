@@ -22,9 +22,16 @@ not ruled out, and missed one or more of the back's last RZ_WEEKS games: the sha
 season's touchdown history are read over the back's most recent RZ_WEEKS games with the partner there (at least
 MIN_SHARED of them; fewer and nothing changes). Last season's games stay as they are. College is not measured.
 
-NOT THE OTHER WAY ROUND. A back whose partner is ruled out tonight is the teammate-absence step's question, and
-for touchdowns that measured too noisy to price (touchdowns.td_probability's mate card); it stays shown, not
-priced.
+THE OTHER WAY ROUND, ONE CASE OF IT (step AIG, 27 November 2026). A back whose partner is ruled out ran LOW:
+in 656 such games those backs scored 34.6% and our number said 30.4%. Reading the back's games without the partner
+did not hold (better in one season of four), and the teammate step's measured carries lift on the touchdown inputs
+(its share and red-zone carries, teammates.EFFECT_SNAPS rush_att RB) holds in one case only: the back ahead is
+out tonight and was out for the team's last game too ("above_cont"), and played at least one of this back's last
+RZ_WEEKS games, so the back's window still counts games behind him. There, 173 games over 2022-2025: scored 30.6%,
+our number 21.3%, lifted 25.3%; log-loss 0.5622 -> 0.5378, better in all four seasons. Where the back ahead has
+been out the whole window (13 games) the window already reads the new role and the lift overshot, and where the
+back ahead was just ruled out ("above_new", 168 games) the lift overshot too (27.0% said against 24.4%) and held
+in two seasons of four; neither is lifted. A back behind ruled out moved nothing (`stepped_up`).
 """
 from __future__ import annotations
 
@@ -102,6 +109,51 @@ def volume(props, shared=None) -> float:
         if vals:
             best = max(best, sum(vals) / len(vals))
     return best
+
+
+def stepped_up(prop, game) -> dict | None:
+    """{"kind": "out", "partner" (the back or backs ahead, out), "lift", "with" (of this back's last RZ_WEEKS games,
+    how many the back ahead played), "window"} for an NFL back whose teammate ahead at the position is out tonight
+    and missed the team's last game too (matefit.case_for "above_cont"), and played at least one of this back's
+    last RZ_WEEKS games. ``lift``: the carries lift the teammate step measured for that spot. None otherwise."""
+    from .matefit import case_for
+    from .nflusage import RZ_WEEKS
+    from .teammates import _norm, table_for
+    if str(getattr(prop, "position", "") or "").upper() != "RB":
+        return None
+    lu = ((getattr(game, "lineup", None) or {}).get(getattr(prop, "team", "")) or {})
+    if not lu or lu.get("basis") == "cfb":
+        return None
+    order = [tuple(o) for o in ((lu.get("order") or {}).get("RB") or []) if o]
+    names = [o[0] for o in order]
+    me = next((n for n in names if _norm(n) == _norm(getattr(prop, "player", "") or "")), None)
+    if me is None:
+        return None
+    out = {_norm(n) for n in lu.get("out") or []}
+    playing = {n for n in names if _norm(n) not in out}
+    if case_for(order, me, playing, int(lu.get("last") or 0)) != "above_cont":
+        return None
+    ahead = [n for n in names[:names.index(me)] if n not in playing]
+    seen = {_norm(s[0]): set(_weeks(s)) for s in (lu.get("seen") or {}).get("RB") or [] if s}
+    window = sorted(seen.get(_norm(me)) or [])[-RZ_WEEKS:]
+    with_them = [w for w in window if any(w in seen.get(_norm(a), set()) for a in ahead)]
+    if not window or not with_them:
+        return None                    # out the whole window: the window already reads the new role
+    lift = float(table_for(lu).get(("rush_att", "RB", "above_cont"), 1.0))
+    if lift <= 1.0:
+        return None
+    return {"kind": "out", "partner": " and ".join(ahead), "lift": lift, "with": len(with_them),
+            "window": len(window)}
+
+
+def up_words(info: dict, player: str) -> str:
+    """The reason line: "Backfield partner out: Lead Back has been out since before the team's last game and is
+    out tonight; Second Back's last 6 games include 3 with Lead Back, and a back moving up in this spot has carried
+    about 33% more, so the chance counts those carries that way (measured 2022-2025)"."""
+    return (f"Backfield partner out: {info['partner']} has been out since before the team's last game and is out "
+            f"tonight; {player}'s last {info['window']} games include {info['with']} with {info['partner']}, and a "
+            f"back moving up in this spot has carried about {round((float(info['lift']) - 1.0) * 100)}% more, so "
+            f"the chance counts those carries that way (measured 2022-2025)")
 
 
 def words(info: dict, player: str) -> str:

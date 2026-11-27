@@ -114,7 +114,9 @@ def test_the_factor_is_the_defenses_red_zone_plays_against_average_and_bounded()
 
 def test_the_counts_and_the_share_ride_the_touchdown_row_to_the_read():
     td_src = (ROOT / "engine" / "touchdowns.py").read_text(encoding="utf-8")
-    assert '"rz_share": round(rz.rz_touch_share, 3) if rz.measured and rz.rz_touch_share else None,' in td_src
+    # The share a row says is the one that happened (``shown``), even where the chance reads the measure taken
+    # again over some of the games (engine/tdpartner, step AIG).
+    assert '"rz_share": round(shown.rz_touch_share, 3) if shown.measured and shown.rz_touch_share else None,' in td_src
     assert '"rz_share": info.get("rz_share"),' in td_src
     scan_src = (ROOT / "engine" / "gamescan.py").read_text(encoding="utf-8")
     assert '"goal_line": r.get("goal_line"), "rz_share": r.get("rz_share"),' in scan_src

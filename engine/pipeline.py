@@ -319,14 +319,24 @@ def _partner_back(slate, prop, game, share, red_zone, cache: dict) -> tuple:
     """(share, red zone, the prop the chance reads, the partner) for a back whose backfield partner plays tonight
     after missing some of the back's recent games (engine/tdpartner, step AIE): the three inputs over the games both
     played. The inputs as given, and two Nones, otherwise."""
-    from .tdpartner import chance_prop, find, volume, words
+    from .tdpartner import chance_prop, find, stepped_up, up_words, volume, words
     try:
         c = _partner_inputs(slate, cache)
         info = find(prop, game, c["playing"].get(prop.team, set()))
     except Exception:                                        # noqa: BLE001
         info = None
     if not info:
-        return share, red_zone, None, None
+        # THE BACK AHEAD OUT A WHILE (step AIG): the share and the red-zone carries take the carries lift the
+        # teammate step measured for this spot; the touchdown history stays as it is.
+        try:
+            up = stepped_up(prop, game)
+        except Exception:                                    # noqa: BLE001
+            up = None
+        if not up:
+            return share, red_zone, None, None
+        lifted = red_zone.carries_lifted(up["lift"]) if getattr(red_zone, "rz_touch_share", None) is not None \
+            and getattr(red_zone, "measured", False) else red_zone
+        return min(1.0, share * up["lift"]), lifted, None, {**up, "reason": up_words(up, prop.player)}
     key = (prop.team, prop.player)
     v, tot = c["vol"].get(key), c["tot"].get(prop.team)
     if v is not None and tot:
@@ -519,9 +529,10 @@ def _long_shots(slate, usage: dict | None = None,
             continue
         keys = usage_keys(prop.player, prop.team, team_of)
         # THE BACKFIELD PARTNER BACK (engine/tdpartner, step AIE): a back's inputs over the games both played.
+        rz_seen = from_maps(rz_map, keys)
         share, rz, chance, partner = _partner_back(slate, prop, slate.game_for(prop),
                                                    shares.get((prop.team, prop.player), 0.15),
-                                                   from_maps(rz_map, keys), partner_cache)
+                                                   rz_seen, partner_cache)
         candidates.append({
             "prop": prop, "game": slate.game_for(prop),
             "opponent": slate.team(prop.opponent),
@@ -529,7 +540,8 @@ def _long_shots(slate, usage: dict | None = None,
             "odds": best.over_odds, "book": best.book,
             "under_odds": best.under_odds,
             "red_zone": rz,
-            **({"chance_prop": chance, "partner_back": partner} if partner else {}),
+            # Its counts as they happened, for the words (touchdowns.td_probability ``shown_red_zone``).
+            **({"chance_prop": chance, "partner_back": partner, "red_zone_shown": rz_seen} if partner else {}),
             "snap_share": from_maps(snap_map, keys),
             # His slice of the offence's expected points — the strongest
             # touchdown signal we record, and one engine/touchdowns could
@@ -630,10 +642,11 @@ def td_chances(slate, usage: dict | None = None) -> dict:
         try:
             keys = usage_keys(prop.player, prop.team, team_of)
             # The same backfield-partner read the touchdown watch takes (engine/tdpartner, step AIE).
+            rz_seen = from_maps(rz_map, keys)
             share, rz, chance, partner = _partner_back(slate, prop, slate.game_for(prop), shares.get(key, 0.15),
-                                                       from_maps(rz_map, keys), partner_cache)
+                                                       rz_seen, partner_cache)
             raw, info = td_probability(chance or prop, slate.game_for(prop), slate.team(prop.opponent),
-                                       share, rz, from_maps(xfp_map, keys))
+                                       share, rz, from_maps(xfp_map, keys), shown_red_zone=rz_seen)
             if partner:
                 info["reasons"] = [partner["reason"], *(info.get("reasons") or [])]
         except Exception:                                    # noqa: BLE001
