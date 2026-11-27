@@ -9883,6 +9883,18 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIL. Every league's record will say what an ordinary game does** (step 1030; 27 November; nothing to run). The
+reads are graded on "beat the player's own average", which is not a coin flip: stats are skewed, so an ordinary
+game falls short of the average more often than it beats it. The NFL's record says so beside its numbers (42% beat
+it, 57% fall short), but the other leagues say nothing, so a number like hockey's fades (right 47 of 104, 45%)
+can't be judged. Hockey's skater reads are graded on shots on goal, where an ordinary game likely falls short well
+over half the time, which would make 45% worse than doing nothing. Now a weekly job (engine/basefit, with
+Wednesday's refit) measures each league's ordinary game on our own history the same way: basketball's points for
+players at 24+ minutes, hockey's shots for skaters at 15+ minutes (goalies out), and college football by position
+like the NFL. Each league's record then shows it beside its reads; the NFL keeps its own measurement. The first
+numbers come with the 2 December refit (the heartbeat's `basefit` line), and I'll read them then: if hockey's or
+college basketball's reads run below their ordinary game, those reads get measured and fixed next.
+
 **AIK. The angles, measured: they don't predict a player's game, and the report now says so** (step 1029; 27
 November; nothing to run; one question for you at the end). Learning from our own reports' record: since 12
 November our NFL reports' reads are right 300 of 557 times, and one group lags, the angles at the top of each

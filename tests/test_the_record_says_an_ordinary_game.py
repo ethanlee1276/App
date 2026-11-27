@@ -82,9 +82,10 @@ def test_the_record_page_says_it_too():
     assert got["without"] is None, got
 
 
-def test_the_record_api_carries_it_for_football_only():
+def test_the_record_api_carries_it_for_every_measured_league():
+    # The NFL's measurement, and since step AIL every other league engine/basefit measures weekly.
     src = (ROOT / "engine" / "reportrecord.py").read_text(encoding="utf-8")
-    assert 'out["base"] = {"words": base_words(sport), **BASE_RATES[sport]}' in src
+    assert 'out["base"] = {"words": base_words(sport), **base_rates(sport)}' in src
 
 
 if __name__ == "__main__":

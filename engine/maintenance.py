@@ -2885,6 +2885,9 @@ def _run_deep_refit(log) -> list[str]:
     as seasons are added, with nobody pasting it."""
     return (_spawn_module("engine.deepfit", log) + _spawn_module("engine.scouthist", log)
             + _spawn_module("engine.posspread", log) + _spawn_module("engine.cfb.lineup", log)
+            # Each league's ordinary game for the Record (engine/basefit, step AIL): how often a key player beats
+            # the average of the player's previous games, which every league's reads are graded against.
+            + _spawn_module("engine.basefit", log)
             # A new starter's own lean between his targets (engine/qblean, step ABZ): each quarterback's career
             # split, off the play-by-play, kept for the NFL build's quarterback changes.
             + _spawn_module("engine.qblean", log)

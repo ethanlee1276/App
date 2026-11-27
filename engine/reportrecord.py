@@ -362,7 +362,7 @@ def _record(where, sport: str, day: _dt.date) -> dict:
         out["last_slate"] = slate
     # The ordinary game beside the reads' record (BASE_RATES, step AIB), where it is measured.
     if base_words(sport):
-        out["base"] = {"words": base_words(sport), **BASE_RATES[sport]}
+        out["base"] = {"words": base_words(sport), **base_rates(sport)}
     return out
 
 
@@ -407,9 +407,37 @@ def _pct(a: int, n: int) -> str:
 BASE_RATES = {"nfl": {"over": 0.422, "under": 0.566, "seasons": "2017–2025"}}
 
 
+#: Every other league's ordinary game, measured weekly on the history database (engine/basefit, step AIL), read
+#: once a day: {"day": ..., "rates": {league: {...}}}.
+_MEASURED: dict = {}
+
+
+def base_rates(sport: str) -> dict | None:
+    """The ordinary game for ``sport``: the NFL's measurement (BASE_RATES), else the weekly one engine/basefit writes,
+    or None where neither has the league."""
+    sport = str(sport or "").lower()
+    if sport in BASE_RATES:
+        return BASE_RATES[sport]
+    today = _dt.date.today().isoformat()
+    if _MEASURED.get("day") != today:
+        rates = {}
+        try:
+            from .basefit import BASE_PATH
+            raw = json.loads(Path(BASE_PATH).read_text(encoding="utf-8")) if Path(BASE_PATH).exists() else {}
+            for lg, m in (raw.get("leagues") or {}).items():
+                if isinstance(m, dict) and _f(m.get("over")) is not None and _f(m.get("under")) is not None \
+                        and m.get("seasons"):
+                    rates[str(lg)] = {"over": float(m["over"]), "under": float(m["under"]),
+                                      "seasons": str(m["seasons"]), "n": int(m.get("n") or 0)}
+        except Exception:                                    # noqa: BLE001
+            rates = {}
+        _MEASURED.update(day=today, rates=rates)
+    return (_MEASURED.get("rates") or {}).get(sport)
+
+
 def base_words(sport: str) -> str:
-    """The ordinary game beside the record (BASE_RATES), or ''."""
-    b = BASE_RATES.get(str(sport or "").lower())
+    """The ordinary game beside the record (base_rates), or ''."""
+    b = base_rates(sport)
     if not b:
         return ""
     return (f"For comparison, a key player in an ordinary game beats that average {b['over']:.0%} of the time and "
