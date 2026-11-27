@@ -1913,7 +1913,10 @@ def practice_blocks(c: Ctx) -> list:
 
 
 def _corner_line(cn: dict, grade: dict | None = None) -> str:
-    bits = [f"{cn.get('name')} ({cn.get('spot')})"]
+    """"left cornerback D.J. Reed — 126.5 passer rating allowed on 28 targets, ...": the spot in words, as the
+    short version and the corners' table say it (step AIH), never "(LCB)"."""
+    from .gamescan import corner_spot
+    bits = [f"{corner_spot(cn.get('spot'))} {cn.get('name')}"]
     if cn.get("targets"):
         bits.append(f"{_num(cn.get('rating'))} passer rating allowed on {_plural(cn['targets'], 'target')}"
                     + (f", {_num(cn.get('yds_per_tgt'))} yards a target" if cn.get("yds_per_tgt") else "")
@@ -1927,13 +1930,39 @@ def _corner_line(cn: dict, grade: dict | None = None) -> str:
     return " — ".join(bits)
 
 
-#: A corner's depth-chart spot, in words, for the corners' table (step AIF).
-CORNER_SPOT_WORDS = {"LCB": "Left corner", "RCB": "Right corner", "NB": "Nickel"}
+def _spot_label(spot) -> str:
+    """A corner's depth-chart spot for the corners' table (step AIF): "Left cornerback", the words every other line
+    uses (gamescan.corner_spot, step AIH), capitalised."""
+    from .gamescan import corner_spot
+    w = corner_spot(spot)
+    return w[:1].upper() + w[1:]
+
+
+def missing_corners_line(dfn: str, room: dict) -> str:
+    """"DET is without right cornerback Terrion Arnold (out) in the secondary; Rock Ya-Sin starts at right
+    cornerback." From 19 October to step AIH this line joined the scan's records as they were and printed them
+    ("DET is without {'name': ..., 'spot': 'RCB', 'status': 'Out'} in the secondary") whenever a starting corner
+    was ruled out. "" when no one is missing."""
+    from .gamescan import corner_spot, status_said
+    fill = {cn.get("spot"): cn.get("name") for cn in (room or {}).get("corners") or []
+            if isinstance(cn, dict) and cn.get("next_man_up") and cn.get("name")}
+    gone, subs = [], []
+    for m in (room or {}).get("missing") or []:
+        if isinstance(m, str) and m.strip():
+            gone.append(m.strip())
+        elif isinstance(m, dict) and m.get("name"):
+            spot = corner_spot(m.get("spot"))
+            gone.append(f"{spot} {m['name']}" + (f" ({status_said(m['status'])})" if m.get("status") else ""))
+            if fill.get(m.get("spot")):
+                subs.append(f"{fill[m.get('spot')]} starts at {spot}")
+    if not gone:
+        return ""
+    return f"{dfn} is without {_join(gone)} in the secondary" + (f"; {_join(subs)}" if subs else "")
 
 
 def corners_table(c: Ctx, dfn: str, room: dict, soft: str | None = None) -> dict | None:
     """THE SECONDARY, AS A TABLE (step AIF, 27 November 2026). Ethan's own Bears at Lions research laid its
-    matchup map out as one row a defender: the corner, how often he is thrown at, and what he allows a target
+    matchup map out as one row a defender: the corner, how often each is thrown at, and what each allows a target
     ("Kyler Gordon OUT → Clark Phillips III plays nickel"). The report said ``dfn``'s corners in one long sentence
     ("DET's other corners: A (LCB) — 92.3 passer rating allowed on 40 targets, 7.1 yards a target — …; B …"). Each
     starter the depth chart lines up (left, right, nickel) on a row: targets, yards a target, passer rating allowed
@@ -1957,7 +1986,7 @@ def corners_table(c: Ctx, dfn: str, room: dict, soft: str | None = None) -> dict
         if cn.get("status"):
             note.append(str(cn["status"]).lower())
         g = graded.get(cn["name"])
-        rows.append([cn["name"], CORNER_SPOT_WORDS.get(str(cn.get("spot") or ""), str(cn.get("spot") or "")),
+        rows.append([cn["name"], _spot_label(cn.get("spot")),
                      str(t), _num(cn.get("yds_per_tgt")) if t and cn.get("yds_per_tgt") is not None else "—",
                      _num(cn.get("rating")) if t and cn.get("rating") is not None else "—", str(int(cn.get("td") or 0)),
                      *([f"{g['grade']} of 100" if g else "—"] if with_grade else []), ", ".join(note) or "—"])
@@ -2148,7 +2177,7 @@ def sec_matchups(c: Ctx) -> dict | None:
         # The soft spot is said once (2026-11-15), as the headline; every corner, the soft spot too, is a row of
         # the corners' table (step AIF), not another long sentence.
         if room.get("missing"):
-            notes.append(f"{dfn} is without {_join(room['missing'])} in the secondary")
+            notes.append(missing_corners_line(dfn, room))
         notes += funnel_lines(c, dfn)
         sub.append(_list(notes))
         sub.append(corners_table(c, dfn, room, w.get("name") if w else None))

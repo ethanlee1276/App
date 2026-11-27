@@ -94,8 +94,10 @@ def test_the_page_sorts_the_case_for_the_under_and_says_why_it_stands():
     node = shutil.which("node")
     if not node:
         return
-    src = _js(["caseHighTotal", "caseLowTotal", "scriptExpected", "caseScriptFact", "pickCase", "pickCaseHTML"],
-              ["MINUS", "WHY_SCORER", "GS_HIGH_TOTAL", "GS_CATCH", "GS_PASS", "GS_RUSH"])
+    src = _js(["caseHighTotal", "caseLowTotal", "scriptExpected", "caseScriptFact", "pickCase", "pickCaseHTML",
+               "cornerSpot", "listingSaid"],
+              ["MINUS", "WHY_SCORER", "GS_HIGH_TOTAL", "GS_CATCH", "GS_PASS", "GS_RUSH", "CORNER_SPOT_WORDS",
+               "LISTING_SAID"])
     src = src.replace("const CASE_CLOSE_SPREAD", "var CASE_CLOSE_SPREAD")
     facts = _facts()
     game = {"home": "JAX", "away": "CIN", "spread": 2.5, "favorite": "CIN", "total": 49.5,
@@ -132,6 +134,9 @@ def test_the_page_sorts_the_case_for_the_under_and_says_why_it_stands():
     assert "shown — not in our number" in html and "in our number" in html
     assert "pull the other way" in html or "pulls the other way" in html, "the verdict says why it still stands"
     assert "Who covers the player" in html and "Tyson Campbell" in html and "171" in html
+    # The spot in words and the rating to the charting's decimal, as the report says them (step AIH).
+    assert "<b>Tyson Campbell</b> left cornerback" in html and "<span>98.1</span>" in html, html
+    assert "LCB" not in html and "158.3 is perfect" in html
     assert "this is worth" in html and "take it past" in html, "the fair price and the worst one to take"
     assert "back-and-forth" in over_for, "the same script backs the over"
 

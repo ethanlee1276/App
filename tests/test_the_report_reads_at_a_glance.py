@@ -116,11 +116,11 @@ def test_the_lines_that_read_worst_say_it_plainly():
     assert "True for every GB player below: DET gives up the most passing yards (320 a game)." in text
     assert "For all of" not in text
     # The soft spot is said once, as the headline; every corner is a row of the corners' table (step AIF).
-    assert text.count("D.J. Reed (LCB) — 126.5 passer rating") == 1
+    assert text.count("left cornerback D.J. Reed — 126.5 passer rating") == 1
     assert "[Lions corners]" in text and "other corners:" not in text
     table = next(b for b in _sec(rep, "matchups")["blocks"] if b.get("title") == "Lions corners")
-    assert ["Roger McCreary", "Nickel", "32", "8.3", "104.4", "2", "—"] in table["rows"], table["rows"]
-    assert text.count("Brandon Cisse (RCB) — 142.8 passer rating") == 1 and "GB's corners:" not in text
+    assert ["Roger McCreary", "Nickel back", "32", "8.3", "104.4", "2", "—"] in table["rows"], table["rows"]
+    assert text.count("right cornerback Brandon Cisse — 142.8 passer rating") == 1 and "GB's corners:" not in text
     # 2026-11-15 ("we should be going of the actual factual numbers and not
     # 'our numbers'"): the red zone says this game's plays from the two units'
     # rates, and a player's counts where the play-by-play has them

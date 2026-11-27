@@ -4,6 +4,12 @@
     {
       "date": "2026-11-27",
       "kind": "fix",
+      "title": "A missing corner reads as a sentence in the game report",
+      "body": "Since 19 October, when a defense's starting corner was ruled out, the game report's matchup section printed our stored record instead of a sentence. It now says who is missing, at which spot, with the listing in words, and who starts there instead. Every line of the report, the game plan and the player and game pages also says a corner's spot one way (left cornerback, right cornerback, nickel back) and the passer rating allowed to one decimal, the way the report's tables show it."
+    },
+    {
+      "date": "2026-11-27",
+      "kind": "fix",
       "title": "A back's red-zone counts are its real last six games",
       "body": "Since this morning's change for a back whose backfield partner is back, the counts beside that back's touchdown chance (red-zone carries and targets, and the share of the team's) were taken over the games both backs played while calling them the last games. The chance still reads the games both played; the counts now say the real last six games."
     },

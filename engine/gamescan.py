@@ -464,6 +464,39 @@ OUT_STATUSES = {"OUT", "IR", "DOUBTFUL", "PUP", "SUSPENDED", "INACTIVE"}
 _POS_GROUP = {"WR": "wr", "TE": "te", "RB": "rb", "FB": "rb", "QB": "qb"}
 _OL = ("LT", "LG", "C", "RG", "RT")
 _CORNERS = ("LCB", "RCB", "NB")
+#: A corner's depth-chart spot in words (step AIH, 27 November 2026). The scan, the game plan, the report and the
+#: pages said one corner four ways ("LCB", "LCB corner", "left cornerback", "Left corner"); now one.
+CORNER_SPOT_WORDS = {"LCB": "left cornerback", "RCB": "right cornerback", "NB": "nickel back"}
+#: The rest of the secondary, for a starter listed out at another spot ("LAC's starting safety ...").
+_BACK_WORDS = {"CB": "cornerback", "NCB": "nickel back", "SCB": "slot cornerback", "S": "safety",
+               "FS": "free safety", "SS": "strong safety", "DB": "defensive back"}
+#: The out statuses a sentence says in words ("is ir" read as a typo).
+_STATUS_SAID = {"IR": "on injured reserve", "PUP": "on the PUP list"}
+
+
+def corner_spot(spot) -> str:
+    """"left cornerback" for "LCB", "safety" for "S": a defensive back's depth-chart spot in words; "cornerback"
+    for no code, and a code with no word as it is."""
+    code = str(spot or "").upper().strip()
+    return CORNER_SPOT_WORDS.get(code) or _BACK_WORDS.get(code) or (str(spot).strip() if code else "cornerback")
+
+
+def status_said(status) -> str:
+    """"on injured reserve" for "IR", "out" for "OUT": a status as a sentence says it."""
+    s = str(status or "").strip()
+    return _STATUS_SAID.get(s.upper(), s.lower())
+
+
+def rating_num(rating) -> str:
+    """A passer rating allowed to the charting's one decimal, the way the report and the pages show it: "126.5",
+    and "92" for 92.0."""
+    return f"{float(rating):.1f}".rstrip("0").rstrip(".")
+
+
+def rating_said(rating) -> str:
+    """The same with its article: "a 126.5", "an 80.4"."""
+    w = rating_num(rating)
+    return f"{'an' if w.startswith('8') or w.split('.')[0] in ('11', '18') else 'a'} {w}"
 
 
 def _key(name: str) -> str:
@@ -1357,12 +1390,13 @@ def interception_facts(team: str, opp: str, *, targets: list | None, room: dict 
         tight = min(rated, key=lambda c: c["rating"])
         soft = max(rated, key=lambda c: c["rating"])
         if tight is soft:
-            text = (f"{opp}'s {tight['spot']} corner {tight['name']} has allowed a {tight['rating']:.0f} "
+            text = (f"{opp}'s {corner_spot(tight['spot'])} {tight['name']} has allowed {rating_said(tight['rating'])} "
                     f"passer rating on {tight['targets']} targets")
         else:
-            text = (f"{opp}'s corners: {tight['name']} ({tight['spot']}) has allowed a {tight['rating']:.0f} "
-                    f"passer rating on {tight['targets']} targets, {soft['name']} ({soft['spot']}) "
-                    f"{soft['rating']:.0f} on {soft['targets']}")
+            text = (f"{opp}'s corners: {corner_spot(tight['spot'])} {tight['name']} has allowed "
+                    f"{rating_said(tight['rating'])} passer rating on {tight['targets']} targets, "
+                    f"{corner_spot(soft['spot'])} {soft['name']} {rating_num(soft['rating'])} "
+                    f"on {soft['targets']}")
         sign = 1 if tight["rating"] <= TIGHT_RATING else -1 if soft["rating"] >= SOFT_RATING else 0
         facts.append({"text": text + (" — picks come from coverage this tight" if sign > 0 else
                                       " — a side that soft is where completions go, not picks" if sign < 0 else ""),
@@ -1567,15 +1601,15 @@ def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowe
         for c in room.get("corners") or []:
             st = str(c.get("status") or "").upper()
             if st in ("QUESTIONABLE", "Q", "LIMITED") and not c.get("next_man_up"):
-                spot = "slot corner" if c["spot"] == "NB" else f"{c['spot']} corner"
+                spot = corner_spot(c["spot"])
                 facts.append({"text": f"{opp}'s {spot} {c['name']} is questionable — if that player sits, the backup covers "
                                       f"that side; check the inactives 90 minutes before kickoff",
                               "sign": 0, "markets": ["rec_yds", "receptions"], "in_number": False,
                               "kind": "watch"})
         for m in room.get("missing") or []:
-            spot = "slot corner" if m["spot"] == "NB" else f"{m['spot']} corner"
+            spot = corner_spot(m["spot"])
             sub = fill.get(m["spot"])
-            facts.append({"text": f"{opp}'s starting {spot} {m['name']} is {str(m['status']).lower()}"
+            facts.append({"text": f"{opp}'s starting {spot} {m['name']} is {status_said(m['status'])}"
                                   + (f" — {sub} fills in" if sub else ""),
                           "sign": 1, "markets": ["rec_yds", "receptions", "anytime_td"],
                           "in_number": False, "kind": "secondary"})
@@ -1709,12 +1743,12 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         unit(_rank(d, "def", "passing"), f"{opp}'s pass defense")
         scoring()
         for m in (room or {}).get("missing") or []:
-            notes.append(f"{m['name']}, {opp}'s starting {m['spot']}, is {m['status'].lower()}")
+            notes.append(f"{m['name']}, {opp}'s starting {corner_spot(m['spot'])}, is {status_said(m['status'])}")
         soft = (room or {}).get("weakest")
         if soft:
             c = next(x for x in room["corners"] if x["name"] == soft)
-            notes.append(f"{soft} ({c['spot']}) has allowed a {c['rating']:.0f} passer rating "
-                         f"on {c['targets']} targets")
+            notes.append(f"{soft}, {opp}'s {corner_spot(c['spot'])}, has allowed {rating_said(c['rating'])} "
+                         f"passer rating on {c['targets']} targets")
         sch, sp = scheme or {}, split or {}
         look = ("zone" if (sch.get("zone") or 0) >= 0.65 else
                 "man" if (sch.get("man") or 0) >= 0.35 else None)

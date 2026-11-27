@@ -9883,6 +9883,20 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIH. A corner is said one way, and a missing starter reads as a sentence** (step 1026; 27 November; nothing to
+run). Reading the sample report again beside your Bears at Lions research:
+
+- **A slip of mine, since 19 October.** When a defense's starting corner was ruled out, "Who's guarding who" printed
+  the record as we store it: "DET is without {'name': ..., 'spot': 'RCB', 'status': 'Out'} in the secondary". No
+  test had a starting corner out, so nothing caught it. Now it reads "DET is without right cornerback A (out) in the
+  secondary; B starts at right cornerback" (the team and names there are an example), and a listing is said in words
+  everywhere ("on injured reserve", where the scan's lines said "is ir").
+- **One corner, one way.** The short version said "left cornerback", the soft-spot line "(LCB)", the corners' table
+  "Left corner", the player pages' facts "DET's LCB corner", the player pages' table "LCB" or "slot" and the game
+  page "Left CB". Now the report, the game plan and both pages say left cornerback, right cornerback or nickel back,
+  and a passer rating allowed to the charting's one decimal (126.5 everywhere, where the pages and the scan's lines
+  rounded it to 127).
+
 **AIG. A back moving up for a lead back out a while gets the measured carries lift; a row's counts are the real
 ones** (step 1025; 27 November; nothing to run). Two things on a back's touchdown chance, after step AIE:
 

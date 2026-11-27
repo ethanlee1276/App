@@ -357,7 +357,9 @@ def test_the_quarterback_s_card_lights_the_path_to_a_pick():
     assert "pass_int" in kinds["targets"]["markets"] and kinds["targets"]["sign"] == 0
     cov = kinds["coverage"]
     assert cov["sign"] == 1 and cov["markets"] == ["pass_int"] and cov["in_number"] is False
-    assert "T. Diggs (LCB) has allowed a 68 passer rating on 31 targets" in cov["text"]
+    # The spot in words, the charting's decimal (step AIH): "left cornerback", never "(LCB)".
+    assert "DAL's corners: left cornerback T. Diggs has allowed a 68 passer rating on 31 targets, right cornerback " \
+        "D. Bland 101 on 28" in cov["text"], cov["text"]
     assert "J. Lewis" not in cov["text"], "a corner with three targets is not rated"
     ch = kinds["charting"]
     assert ch["sign"] == 1 and "4.4% of the attempts" in ch["text"] and "league 2.9%" in ch["text"]

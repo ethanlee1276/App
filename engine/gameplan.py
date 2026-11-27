@@ -153,7 +153,7 @@ def absences(scan: dict) -> list:
 
 def matchup_lines(scan: dict, home: str, away: str) -> list:
     """The units that decide it, the soft spot, the rush — from the scan."""
-    from .gamescan import now_said
+    from .gamescan import corner_spot, now_said, rating_said, status_said
     out = []
     n = int((scan.get("method") or {}).get("teams") or 32)
 
@@ -174,11 +174,12 @@ def matchup_lines(scan: dict, home: str, away: str) -> list:
         if soft:
             c = next((x for x in room.get("corners") or [] if x.get("name") == soft), None)
             if c and c.get("rating") is not None:
-                out.append(f"{team}'s soft spot: {soft} ({c.get('spot')}) has allowed a {c['rating']:.0f} passer "
-                           f"rating on {c.get('targets')} targets.")
+                # One corner said one way (step AIH): "left cornerback", the charting's one decimal.
+                out.append(f"{team}'s soft spot: {corner_spot(c.get('spot'))} {soft}, who has allowed "
+                           f"{rating_said(c['rating'])} passer rating on {c.get('targets')} targets.")
         for m in room.get("missing") or []:
-            out.append(f"{team}'s starting {m.get('spot')} {m.get('name')} is {str(m.get('status', '')).lower()} — "
-                       f"the next man up is the one to throw at.")
+            out.append(f"{team}'s starting {corner_spot(m.get('spot'))} {m.get('name')} is "
+                       f"{status_said(m.get('status'))} — the backup is the one to throw at.")
         sch = (scan.get("scheme") or {}).get(team)
         if isinstance(sch, dict) and sch.get("zone") is not None:
             look = "zone" if (sch.get("zone") or 0) >= 0.65 else "man" if (sch.get("man") or 0) >= 0.35 else ""

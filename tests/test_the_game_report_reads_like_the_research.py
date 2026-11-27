@@ -153,7 +153,7 @@ def _board():
               pro=["Commands 31% of the targets (10.8 a game)",
                    "The lines expect DET to score about 28 (−3 at home, total 52.5)"],
               con=["GB gives up the 6th-fewest passing yards (209 a game)"],
-              notes=["Brandon Cisse (RCB) has allowed a 143 passer rating on 17 targets"]),
+              notes=["Brandon Cisse, GB's right cornerback, has allowed a 142.8 passer rating on 17 targets"]),
         _read("Jared Goff", "DET", "QB", "neutral", {"snap_pct": 0.99, "carry_share": 0.06},
               pro=["The lines expect DET to score about 28 (−3 at home, total 52.5)"],
               notes=["Charting: 2 throws that could have been intercepted in 191 attempts (1%)"]),
@@ -277,7 +277,8 @@ def test_every_number_is_the_boards_own():
     assert sims[0]["rows"][0] == ["DET by 15+", "20%"] and sims[0]["rows"][-1] == ["GB by 15+", "10%"]
     assert "covered −3 in 48% (a push in 6%)" in text
     # The corners, the rush, the red zone, the funnels.
-    assert "D.J. Reed (LCB) — 126.5 passer rating allowed on 28 targets, 11.3 yards a target, 2 touchdowns" in text
+    assert "left cornerback D.J. Reed — 126.5 passer rating allowed on 28 targets, 11.3 yards a target, " \
+        "2 touchdowns" in text
     assert "Aidan Hutchinson (15 pressures, 4 sacks)" in text and "Alim McNeill (10 pressures, 1 sack)" in text
     assert ("DET scores a touchdown on 80% of its trips inside the 20 (the third-best rate in the league). "
             "GB's defense gives up a touchdown on 70% of them (the 10th-worst).") in text
@@ -349,7 +350,7 @@ def test_the_same_fact_is_not_said_twice():
     # A bye and its rest edge are one fact (step AHY).
     assert "Rest deficit" not in text and "DET comes off a bye: 14 days of rest to GB's 7, and two weeks to " \
         "prepare" in text and "has the rest edge" not in text, text
-    assert text.count("Brandon Cisse (RCB) has allowed") == 0, "the corner's line says it once"
+    assert text.count("Brandon Cisse, GB's right cornerback, has allowed") == 0, "the corner's line says it once"
     assert "Someone else's quarterback change" not in text
 
 

@@ -135,9 +135,9 @@ def test_the_secondary_is_one_table_a_corner_a_row():
     t = R.corners_table(_ctx(), "DET", _room(), soft="Nickel Back")
     assert t["title"] == "Lions corners" and t["head"] == ["Corner", "Spot", "Targets", "Yards a target",
                                                            "Passer rating", "TDs", "Note"], t
-    assert t["rows"] == [["Left Starter", "Left corner", "40", "7.1", "92.3", "2", "—"],
-                         ["Right Fill", "Right corner", "0", "—", "—", "0", "next man up, questionable"],
-                         ["Nickel Back", "Nickel", "31", "10.4", "128.9", "3", "soft spot"]], t["rows"]
+    assert t["rows"] == [["Left Starter", "Left cornerback", "40", "7.1", "92.3", "2", "—"],
+                         ["Right Fill", "Right cornerback", "0", "—", "—", "0", "next man up, questionable"],
+                         ["Nickel Back", "Nickel back", "31", "10.4", "128.9", "3", "soft spot"]], t["rows"]
     assert "on 6 or more targets, when it is 105 or more" in t["note"]
     assert R.corners_table(_ctx(), "DET", {"corners": []}) is None
 

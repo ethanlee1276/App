@@ -542,11 +542,11 @@ function pickCaseHTML(r, lk, x, g, p) {
       No free data publishes which corner shadows which receiver, so this is the room, not a confirmed assignment.</p>
       <div class="pc-table" role="table">
         <div class="pc-tr pc-th" role="row"><span>Corner</span><span>Targets</span><span>Catches</span><span>Yards</span><span>Yds/target</span><span>Rating</span><span>TD</span></div>
-        ${c.corners.map((k) => `<div class="pc-tr" role="row"><span><b>${escapeHtml(k.name)}</b> ${escapeHtml(k.spot === "NB" ? "slot" : k.spot)}${
-          k.status ? ` · ${escapeHtml(String(k.status).toLowerCase())}` : ""}${k.next_man_up ? " · fills in" : ""}</span><span>${k.targets ?? "—"}</span><span>${
+        ${c.corners.map((k) => `<div class="pc-tr" role="row"><span><b>${escapeHtml(k.name)}</b> ${escapeHtml(cornerSpot(k.spot))}${
+          k.status ? ` · ${escapeHtml(listingSaid(k.status))}` : ""}${k.next_man_up ? " · fills in" : ""}</span><span>${k.targets ?? "—"}</span><span>${
           k.cmp ?? "—"}</span><span>${k.yds ?? "—"}</span><span>${k.yds_per_tgt != null ? num(k.yds_per_tgt) : "—"}</span><span>${
-          k.rating != null ? Math.round(k.rating) : "—"}</span><span>${k.td ?? "—"}</span></div>`).join("")}
-      </div><p class="pc-cover-note">This season, in coverage (passer rating allowed: 158 is perfect, about 90 is league average).</p></div>`;
+          k.rating != null ? num(k.rating) : "—"}</span><span>${k.td ?? "—"}</span></div>`).join("")}
+      </div><p class="pc-cover-note">This season, in coverage (passer rating allowed: 158.3 is perfect, about 90 is league average).</p></div>`;
   }
   return `<section class="pick-case" aria-label="The case for the ${escapeHtml(sideWord)}">
     <div class="pc-head">The case for the ${escapeHtml(sideWord)}</div>
@@ -1444,6 +1444,21 @@ function scanEdgeLine(e, n) {
     : [`Edge ${teamName(e.def)}`, `${b} against ${a}`];
 }
 
+/* A CORNER SAID ONE WAY (step AIH, 27 November 2026). The report, the game plan and these pages said one corner
+   four ways ("LCB", "LCB corner", "Left CB", "Left corner") and a listing as its code ("ir"); now the words the
+   report uses (engine/gamescan.CORNER_SPOT_WORDS, status_said), and a passer rating to the charting's one decimal. */
+const CORNER_SPOT_WORDS = { LCB: "left cornerback", RCB: "right cornerback", NB: "nickel back" };
+function cornerSpot(spot, cap) {
+  const w = CORNER_SPOT_WORDS[String(spot || "").toUpperCase()] || "cornerback";
+  return cap ? w.charAt(0).toUpperCase() + w.slice(1) : w;
+}
+const LISTING_SAID = { IR: "on injured reserve", PUP: "on the PUP list" };
+function listingSaid(st) {
+  const s = String(st || "").trim();
+  return LISTING_SAID[s.toUpperCase()] || s.toLowerCase();
+}
+const ratingOne = (x) => Number(x).toFixed(1).replace(/\.0$/, "");
+
 function scanCoverageHTML(scan, team) {
   const room = (scan.coverage || {})[team] || {};
   const sch = (scan.scheme || {})[team];
@@ -1461,17 +1476,17 @@ function scanCoverageHTML(scan, team) {
   const nowLine = cd ? `Blitz ${pct(cd.blitz_rate)} of dropbacks · 8+ in the box ${pct(cd.heavy_box_rate)} of runs · light boxes ${pct(cd.light_box_rate)}` : "";
   const offLine = co ? `Play action ${pct(co.play_action_rate)} · motion ${pct(co.motion_rate)} · RPO ${pct(co.rpo_rate)} · screens ${pct(co.screen_rate)} · no-huddle ${pct(co.no_huddle_rate)}` : "";
   const corners = (room.corners || []).map((c) => {
-    const spot = { LCB: "Left CB", RCB: "Right CB", NB: "Nickel" }[c.spot] || c.spot;
-    const st = c.status ? ` <span class="chip down">${escapeHtml(c.status.toLowerCase())}</span>` : "";
-    const now = c.targets ? `${c.targets} targets · ${c.yds_per_tgt ?? "—"} yds/target · ${c.rating != null ? Math.round(c.rating) : "—"} rating allowed`
+    const spot = cornerSpot(c.spot, true);
+    const st = c.status ? ` <span class="chip down">${escapeHtml(listingSaid(c.status))}</span>` : "";
+    const now = c.targets ? `${c.targets} targets · ${c.yds_per_tgt ?? "—"} yds/target · ${c.rating != null ? ratingOne(c.rating) : "—"} rating allowed`
       : "no targets yet this season";
-    const last = c.last && c.last.targets ? `last season ${c.last.targets} targets, ${c.last.rating != null ? Math.round(c.last.rating) : "—"} rating` : "";
+    const last = c.last && c.last.targets ? `last season ${c.last.targets} targets, ${c.last.rating != null ? ratingOne(c.last.rating) : "—"} rating` : "";
     const soft = room.weakest === c.name ? `<span class="ms-soft">Soft spot</span>` : "";
     return `<div class="ms-cb"><span class="ms-cb-spot">${escapeHtml(spot)}${c.next_man_up ? " · next man up" : ""}</span>
       <span class="ms-cb-who"><b>${escapeHtml(c.name)}</b>${st}${soft}</span>
       <span class="ms-cb-num">${escapeHtml(now)}${last ? `<br><span class="mini">${escapeHtml(last)}</span>` : ""}</span></div>`;
   }).join("");
-  const out = (room.missing || []).map((m) => `${escapeHtml(m.name)} (${escapeHtml(m.spot)}, ${escapeHtml(m.status.toLowerCase())})`);
+  const out = (room.missing || []).map((m) => `${escapeHtml(cornerSpot(m.spot))} ${escapeHtml(m.name)}${m.status ? ` (${escapeHtml(listingSaid(m.status))})` : ""}`);
   const schLine = sch ? `Zone ${Math.round(sch.zone * 100)}% · man ${Math.round(sch.man * 100)}% · single-high (Cover 1/3) ${Math.round(sch.mofc * 100)}% · two-high or open middle ${Math.round(sch.mofo * 100)}% · blitz ${Math.round(sch.blitz * 100)}% · pressure ${Math.round(sch.pressure * 100)}%` : "";
   const rushLine = rush.length ? rush.map((r) => `${escapeHtml(r.name)} ${r.pressures} pressures${r.status ? ` (${escapeHtml(r.status.toLowerCase())})` : ""}`).join(" · ") : "";
   return `<div class="ms-cov card">
@@ -1480,7 +1495,7 @@ function scanCoverageHTML(scan, team) {
       ${nowLine ? `<p class="ms-cov-line"><b>This season</b> ${nowLine}${when}</p>` : ""}
       ${offLine ? `<p class="ms-cov-line"><b>On offense</b> ${offLine}</p>` : ""}
       ${corners ? `<div class="ms-cbs">${corners}</div>` : ""}
-      ${out.length ? `<p class="ms-cov-line"><b>Out</b> ${out.join(", ")}</p>` : ""}
+      ${out.length ? `<p class="ms-cov-line"><b>Without</b> ${out.join(", ")}</p>` : ""}
       ${rushLine ? `<p class="ms-cov-line"><b>Pass rush</b> ${rushLine}</p>` : ""}
     </div>`;
 }
