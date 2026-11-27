@@ -697,6 +697,16 @@ def prop_depth(prop) -> dict:
     }
 
 
+def partner_row(c: dict) -> dict | None:
+    """What a scorer row keeps of its backfield partner read (engine/tdpartner): {"partner", "games" (the games
+    both played that the chance is read over), "missed", "window"}; None without one."""
+    pb = (c or {}).get("partner_back") or None
+    if not pb:
+        return None
+    return {"partner": pb.get("partner"), "games": len(pb.get("shared") or []), "missed": pb.get("missed"),
+            "window": pb.get("window")}
+
+
 def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
                  ) -> list[dict]:
     """The week's most likely scorers, ranked by model probability —
@@ -803,6 +813,7 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "matchup_card": info.get("matchup_card"),
             "qb_card": info.get("qb_card"),
             "mate_card": info.get("mate_card"),
+            "partner_back": partner_row(c),
             # THE WHOLE CHAIN, not one line of it. This list answers "who
             # is most likely to score", which is the question the model is
             # measurably GOOD at — it ranks a scorer above a non-scorer
@@ -912,6 +923,7 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
             pick.matchup_card = info.get("matchup_card")
             pick.qb_card = info.get("qb_card")
             pick.mate_card = info.get("mate_card")
+            pick.partner_back = partner_row(c)
             pick.game_date = getattr(game, "date", "")
             pick.game_kickoff = getattr(game, "kickoff", "")
             # THE PAGE, on the value picks too. `build_pick` prices; it

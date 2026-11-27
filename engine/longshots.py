@@ -214,6 +214,9 @@ class LongShot:
     matchup_card: dict | None = None
     qb_card: dict | None = None
     mate_card: dict | None = None
+    #: A back whose backfield partner is back tonight (engine/tdpartner, step AIE): {"partner", "games" (read
+    #: over), "missed", "window"}, so the game report can say what the chance was read over.
+    partner_back: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -235,6 +238,7 @@ class LongShot:
             "matchup_card": self.matchup_card,
             "qb_card": self.qb_card,
             "mate_card": self.mate_card,
+            "partner_back": self.partner_back,
             "vig": round(self.vig, 4), "vig_source": self.vig_source,
             "vig_listed": self.vig_listed,
             "game_date": self.game_date, "game_kickoff": self.game_kickoff,

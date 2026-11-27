@@ -116,6 +116,25 @@ def test_the_board_reads_all_three_over_the_games_both_played():
     assert same == (0.6, rz, None, None), "a partner who played throughout: the inputs as they were"
 
 
+def test_the_report_says_what_the_chance_was_read_over():
+    from engine import gamereport as R, gamescan as S
+    from engine.touchdowns import partner_row
+    cand = {"partner_back": {"partner": MATE, "shared": [1, 2, 3, 4, 8], "missed": 3, "window": 6, "reason": "x"}}
+    row = partner_row(cand)
+    assert row == {"partner": MATE, "games": 5, "missed": 3, "window": 6} and partner_row({}) is None
+    reads = {"CHI@DET": {"players": [{"player": LEAD, "team": "CHI", "pos": "RB"}]}}
+    result = {"longshot_watch": [{"player": LEAD, "model_prob": 0.41, "odds": -115, "book": "DraftKings",
+                                  "partner_back": row, "reasons": ["Backfield partner back: ..."]}]}
+    assert S.stamp_touchdowns(reads, result) == 1
+    td = reads["CHI@DET"]["players"][0]["td"]
+    assert td["partner"] == row and td["why"][0].startswith("Backfield partner back"), td
+    g = {"away": "CHI", "home": "DET", "date": "2026-11-26", "kickoff": "13:00", "spread": 1.5, "total": 45.5}
+    c = R.Ctx(g, {"games": [g], "scan_reads": reads}, names={"CHI": "Bears", "DET": "Lions"}, sport="nfl")
+    line = R.td_chance_pairs(c, "CHI")[0][0]
+    assert line.startswith("Lead Back (RB): 41% to score, at −115; Second Back is back from missing 3 of the last 6, "
+                           "so this reads only the 5 games both played"), line
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     fails = 0

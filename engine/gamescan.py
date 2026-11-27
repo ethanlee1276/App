@@ -2631,6 +2631,8 @@ def stamp_touchdowns(scan_reads: dict, result: dict) -> int:
                        "book": r.get("book") or "",
                        # EVERY BOOK'S PRICE ON HIM (step AIE): the report's touchdown board sets them side by side.
                        **({"books": td_books(r)} if td_books(r) else {}),
+                       # HIS BACKFIELD PARTNER BACK (engine/tdpartner, step AIE): what the chance was read over.
+                       **({"partner": r["partner_back"]} if r.get("partner_back") else {}),
                        "implied_total": r.get("implied_total"), "rz_chances": r.get("rz_chances"),
                        "rz_before": r.get("rz_before"), "rz_then_implied": r.get("rz_then_implied"),
                        # HIS RED-ZONE WORK AS COUNTS and his real share of his

@@ -2287,6 +2287,12 @@ def td_chance_pairs(c: Ctx, off: str) -> list:
         odds = _f(td.get("odds"))
         bits = [f"{_pct(p)} to score" + (f", at {_odds(odds)}" + (" (past the −250 limit)" if odds < TAKE_CAP else "")
                                          if odds is not None else "")]
+        # THE BACKFIELD PARTNER BACK (engine/tdpartner, step AIE; Ethan's "Swift scored in only 2 of the 5 games
+        # both were active"): the chance above was read over the games both played, and the line says so.
+        pb = td.get("partner") or {}
+        if pb.get("partner") and pb.get("games"):
+            bits.append(f"{pb['partner']} is back from missing {pb.get('missed')} of the last {pb.get('window')}, "
+                        f"so this reads only the {pb['games']} games both played")
         # The rule's share (likelyboard.td_rule: his expected chances this week
         # against his team's plays inside the 20), so "backs him" and "meets
         # our touchdown rule" say what the board decided. Not printed: the
