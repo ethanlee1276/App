@@ -9883,6 +9883,22 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIC. No pick is certain, on any path; the Record says the number we gave** (step 1021; 27 November; nothing to
+run). You: "There still more to fix with the site ... wording on the site and how data is used". I read the live
+Record page as a visitor (the free pages; everything else needs an account, and I do not make one). What I found:
+
+- **"Toughest miss: Jake Elliott under 10.5 Kicking Points (−170) at 100%."** The one board journaled that pick at
+  99.9%, against a price that says about 63%. The bold check has refused a number that high since 18 November
+  (Emmett Johnson's carries at 100%), but only inside the bold check, which runs only where the book's de-vigged
+  chance is known. A row without one was asked nothing, and the shared credibility check answers "credible" when it
+  has nothing to compare with. Now both boards refuse a chance of 99% or more whatever built it: the Most Likely list's
+  one bar, and the one board's hold, with the reason. A posted pick keeps its seat. The week before still says
+  what was posted (it lost); the card now says it as 99.9%, not "100%", since we never gave 100%.
+- **"Simulation right · Script C"** on each finished game meant nothing off the report. It now reads "Script C: the
+  favorite by 1 to 7" (the same words the finished report uses).
+- Left alone: a settled pick's team logos are read twice by a screen reader ("CHI CHI"); the fix touches a shared
+  mark used on every page, so I am noting it rather than changing it tonight.
+
 **AIB. Our reads' record says what an ordinary game does** (step 1020; 26 November; nothing to run). Your Bears at
 Lions screenshot read "breakout candidates beat their average 56 of 108 times (52%)". That looks like a coin flip,
 and it is not one. I measured it the way the record grades a read: the read's first stat (catches for receivers and

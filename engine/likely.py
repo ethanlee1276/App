@@ -1147,6 +1147,11 @@ def admissible(row: dict, floor=None, band=None) -> str:
         return "no probability"
     if float(prob) < _floor(floor):
         return "under the likelihood floor"
+    # NO PROP IS CERTAIN (step AIC; boldcheck.CERTAIN): the bold check refused a 100% row only where the book's
+    # de-vigged chance was known, so a row with none reached the boards at 99.9% (Jake Elliott's kicking points).
+    from .boldcheck import CERTAIN
+    if float(prob) >= CERTAIN:
+        return "a chance this near certain is a data problem, not a pick"
     if (row.get("book") or "").lower() == "proxy":
         # A fabricated price. `from_prop` catches this as `has_market`;
         # watch rows carry no such key and the book name is the tell.

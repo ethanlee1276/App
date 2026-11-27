@@ -159,7 +159,9 @@ def test_every_refusal_this_function_can_return_is_reachable():
               _row(model_prob=0.95, implied_prob=0.40),
               _row(injury_status="Questionable"),
               _row(prob_source="market", win_prob=0.99),
-              _row(engine_raw_prob=0.99, fair_prob=0.66)):
+              _row(engine_raw_prob=0.99, fair_prob=0.66),
+              # NO PROP IS CERTAIN (step AIC): a row with no fair number to compare at 99.9%.
+              _row(model_prob=0.999, implied_prob=None)):
         why = likely.admissible(r)
         if why:
             produced.add(why)

@@ -146,6 +146,19 @@ TIERS = (("top", "Top pick"), ("strong", "Strong"), ("look", "Worth a look"))
 HELD_CATEGORY, HELD_LABEL = "held", "Held back"
 
 
+def certain_reason(prob) -> str | None:
+    """Why a chance this near certain is held (boldcheck.CERTAIN: no prop is certain), or None."""
+    from .boldcheck import CERTAIN
+    try:
+        p = float(prob)
+    except (TypeError, ValueError):
+        return None
+    if p < CERTAIN:
+        return None
+    return (f"held back: our number says {p:.1%}, and no prop is that certain — a spread that narrow is the "
+            f"model's arithmetic, not a find")
+
+
 def held_reason(r: dict, checks: dict) -> str | None:
     """Why this pick comes OFF the board, or None — it stays.
 
@@ -186,6 +199,14 @@ def held_reason(r: dict, checks: dict) -> str | None:
     we learn and get them better"."""
     if r.get("locked"):
         return None
+    # NO PROP IS CERTAIN, ON EVERY ROW (step AIC, 27 November 2026). The week's record read "Toughest miss: Jake
+    # Elliott under 10.5 Kicking Points (−170) at 100%": the one board journaled it at 99.9%. boldcheck.CERTAIN
+    # has held such a number since 18 November (Emmett Johnson's carries at 100%), but only inside the bold check,
+    # which runs only where the book's de-vigged chance is known; a row without one was asked nothing. A chance
+    # this near certain is the model's spread collapsing, never a find, so it comes off whatever built it.
+    certain = certain_reason(r.get("model_prob"))
+    if certain:
+        return certain
     if r.get("paper_hold"):
         return r["paper_hold"]
     if r.get("idea_hold"):

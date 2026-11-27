@@ -3597,7 +3597,8 @@ function weekRecapHTML(w, scope) {
     return scoped && head ? `<section class="card wk-recap" aria-label="This week">${head}
       <p class="wk-none">No ${escapeHtml(name)} picks settled this week.</p></section>` : "";
   }
-  const pc = (v) => v == null ? "—" : `${Math.round(v * 100)}%`;
+  // A claim near certain is said to its tenth (step AIC): 0.999 rounded to "100%", a number we never gave.
+  const pc = (v) => v == null ? "—" : v > 0.995 && v < 1 ? `${(v * 100).toFixed(1)}%` : `${Math.round(v * 100)}%`;
   // The market in words (marketWord, the engine's own names): the card read "under 2.5 fg3m",
   // "over 13.5 pts reb" and "under 1.5 stl" on the live NBA record (RECDUP1, 2026-11-17).
   const bet = (x) => `${escapeHtml(x.player || "")} ${escapeHtml(String(x.side || "").toLowerCase())} ${x.line ?? ""} ${

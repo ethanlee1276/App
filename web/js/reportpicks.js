@@ -346,6 +346,9 @@ function rpCalibHTML(c) {
     <p class="mini rpk-fact-span">A side we gave 70% should win about seven times in ten. Each row is the games
       where the side we picked had that chance, and how many of them it won.</p></div>`;
 }
+//: Each script letter in words, as the finished report says it (engine/reportfacts.SCRIPT_SAID).
+const RP_SCRIPT = { A: "the favorite by 8 to 14", B: "the underdog won", C: "the favorite by 1 to 7",
+  D: "the favorite by 15 or more" };
 //: One finished game: the final, then its checks as chips, then a door to its report.
 function rpFactRowHTML(r) {
   // A name the row carries, unless it is the code itself (a report that named no side): then the page's own.
@@ -357,7 +360,9 @@ function rpFactRowHTML(r) {
   if (r.call) chips.push(chip(!!r.call.right, `Call ${r.call.right ? "right" : "wrong"}: ${nm(r.call.team)}`));
   if (r.reads && r.reads[1]) chips.push(chip(r.reads[0] * 2 >= r.reads[1], `Reads ${r.reads[0]} of ${r.reads[1]}`));
   if (r.ratings) chips.push(chip(r.ratings === "right", `Ratings ${r.ratings}`));
-  if (r.sim) chips.push(chip(r.sim === "right", `Simulation ${r.sim}${r.script ? ` · Script ${r.script}` : ""}`));
+  // The script in words (engine/reportfacts.SCRIPT_SAID, step AIC): "Script C" meant nothing off the report.
+  if (r.sim) chips.push(chip(r.sim === "right", `Simulation ${r.sim}${r.script ? ` · Script ${r.script}${
+    RP_SCRIPT[r.script] ? `: ${RP_SCRIPT[r.script]}` : ""}` : ""}`));
   const listed = rpListed(r);
   if (listed[1]) chips.push(chip(listed[0] === listed[1], `Injury report ${listed[0]} of ${listed[1]}`));
   if (r.missed) chips.push(chip(false, `${plural(r.missed, "regular")} sat off the report`));
