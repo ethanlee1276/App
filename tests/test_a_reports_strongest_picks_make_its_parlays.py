@@ -184,7 +184,7 @@ def test_every_page_carries_three_of_each_and_keeps_old_two_leg_tickets_readable
     # Every page draws the two-leg tickets beside the others.
     assert 'kind === "two" ? `Two-leg parlay ${n}`' in js["report"]
     assert '["Two-leg parlays", twos]' in js["reportpicks"] and 'gprTicketsRow(twos, "2-leg parlays"),' in js["detail"]
-    assert 'const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx_td", "sgpx_day_props", "sgpx_day_td"];' in js["record"], "the record lists the kinds built"
+    assert 'const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx2_props", "sgpx_td", "sgpx2_td", "sgpx_day_props", "sgpx_day2_props", "sgpx_day_td", "sgpx_day2_td"];' in js["record"], "the record lists the kinds built"
     ask = (ROOT / "engine" / "askbot.py").read_text(encoding="utf-8")
     assert 'TICKET_POOLS = (("twos", "two-leg parlay"), ("threes", "three-leg parlay"), ("scorers", "scorer pair"))' in ask
     from engine import askbot
