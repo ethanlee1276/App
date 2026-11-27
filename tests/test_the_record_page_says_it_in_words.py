@@ -179,6 +179,18 @@ def test_a_quarterback_change_finds_the_passer_under_another_spelling():
     assert qbchange.changes(two, [], {"IND": "Anthony Richardson Sr."})["IND"]["replacement_attempts"] == 0
 
 
+def test_the_new_starters_lean_finds_the_passer_under_another_spelling_too():
+    """The same Colts change carried no lean (the new starter's target split): engine/qblean matched names with
+    its own key, which kept the "Sr.", and the play-by-play names him "Anthony Richardson"."""
+    from engine import qblean
+    doc = {"seasons": {"2025": {"00-0039164": {"name": "Anthony Richardson", "WR": 300, "TE": 60, "RB": 90,
+                                               "starts": 11}}}}
+    got = qblean.career(doc, "Anthony Richardson Sr.")
+    assert got and got["targets"] == 450 and got["starts"] == 11, got
+    assert qblean.career(doc, "Anthony Richardson") == got
+    assert qblean._norm("Ja'Marr Chase") == qblean._norm("Ja’Marr Chase") == "jamarr chase"
+
+
 def test_a_passer_who_moved_says_whose_starts_they_were():
     """The Vikings' change: "in 11 starts this season the team threw on 59% of its plays (Kyler Murray’s starts:
     52%)", in an 11-game season with Murray starting for Minnesota too. A passer's starts this season can include

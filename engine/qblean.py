@@ -80,7 +80,12 @@ def group(position) -> str:
 
 
 def _norm(name) -> str:
-    return " ".join(str(name or "").lower().replace(".", " ").replace("'", "").replace("-", " ").split())
+    """The site's one loose key for a name (engine/sources/oddsapi.normalize_name: case, punctuation, accents and
+    Jr./Sr./III). This file's own kept the suffix, so ESPN's depth chart's "Anthony Richardson Sr." never found
+    "Anthony Richardson"'s career split in the play-by-play, and the Colts' change carried no lean (27 November
+    2026)."""
+    from .sources.oddsapi import normalize_name
+    return normalize_name(str(name or ""))
 
 
 # --- the career splits, off the play-by-play the box already caches ------------------------------------------------
