@@ -499,6 +499,11 @@ def brief_pack(lconn) -> dict:
     from . import ledger
     from . import losspatterns as lp
     week_ago = (_dt.date.today() - _dt.timedelta(days=7)).isoformat()
+    # EVERY BOOK THE RECORD PAGE GRADES, per league: its chips' own count (`ledger.journaled_counts`, the
+    # page's window). The diary below counts three books, and a league with none in them (hockey, college
+    # basketball, the WNBA, UFC) was briefed "Nothing journaled yet" beside a Record page grading its Most
+    # Likely picks, in a brief whose own overview said a WNBA market had closed itself (27 November 2026).
+    posted = ledger.journaled_counts(lconn, since=ledger.RECORD_EPOCH).get("by_sport") or {}
     per = {}
     for sp in ledger.TRACKED_SPORTS:
         rows = [dict(r) for r in lconn.execute(
@@ -517,6 +522,7 @@ def brief_pack(lconn) -> dict:
                             "won": int(rec.get("wins") or 0),
                             "lost": int(rec.get("losses") or 0),
                             "net_units": round(float(rec.get("net_units") or 0), 2)},
+            "posted_graded": int((posted.get(sp) or {}).get("settled") or 0),
             "diary_all_time": _tally(rows),
             "diary_by_category": {c: _tally([r for r in rows if r["category"] == c])
                                   for c in DIARY_CATEGORIES},
@@ -529,6 +535,10 @@ def brief_pack(lconn) -> dict:
         "diary_all_time": ("main + long shots + parlays, all time, staked or "
                            "not — a wider count; name it if you use it"),
         "this_week": "the last seven days by game day, diary categories",
+        "posted_graded": ("every graded pick the Record page shows for the league, in all its books (Most "
+                          "Likely and the board as well as the three above). A league with none in "
+                          "record_page or diary_all_time can still have these: say how many, never that "
+                          "nothing is journaled"),
     }
     from .ledger import _self_tuning_block
     st = _self_tuning_block()
@@ -565,6 +575,10 @@ def _week_fallback(pack: dict):
         rec = s.get("record_page") or s.get("season") or {}
         if not (rec.get("graded") or 0) and not (
                 (s.get("diary_all_time") or {}).get("graded") or 0):
+            n = int(s.get("posted_graded") or 0)
+            if n:
+                return (f"No Edge, Long Shots or parlay picks graded yet; the Record page grades "
+                        f"{n:,} of its other picks.")
             return "Nothing journaled yet — its learning switches on with " \
                    "its first graded picks."
         return (f"{wk.get('won', 0)}-{wk.get('lost', 0)} this week "

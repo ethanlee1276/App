@@ -9902,6 +9902,14 @@ league's board, the Record, the report record) for the slips a visitor sees, and
 - **How data is used: the nightly write-up quoted units to four places** ("returned less (+0.4435) than the win the
   market faded us on", "+0.5246 units"). The write-up narrates the numbers it is handed, and it was handed them
   unrounded. Each pick's units now go in to two places and its chance to three, as the page says them.
+- **How data is used: the weekly brief said hockey, college basketball, the WNBA and UFC had "Nothing journaled
+  yet"**, beside a Record page grading their picks, and in a brief whose own overview said a WNBA market had closed
+  itself (which takes graded picks). The brief counted three of the Record page's books (Edge, Long Shots,
+  parlays); those leagues' graded picks are in Most Likely and the board. Its pack now carries each league's count
+  over every book the Record page grades (the page's own chip count), the writer is told what it is, and a league
+  with picks only in the other books reads "No Edge, Long Shots or parlay picks graded yet; the Record page grades
+  N of its other picks." A league with nothing anywhere still says nothing is journaled. The next brief is the
+  first to read it.
 - Left alone: the Status page's feed readouts ("1 of 1 eligible game(s) priced ... 14 credit(s) each", "1.6 hour(s)
   old") are diagnostics, and ten tests pin their wording; a preregistration's stored reason still says "his
   offence" because a registration's record is kept as it was written, not edited; and the injury blurbs and news

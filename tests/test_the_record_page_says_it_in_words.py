@@ -120,6 +120,27 @@ def test_the_nightly_write_up_is_handed_units_to_two_places():
     assert prose._round(None, 2) is None
 
 
+def test_the_weekly_brief_counts_every_book_the_record_page_grades():
+    """The weekly brief said "Nothing journaled yet" for hockey, college basketball, the WNBA and UFC: it counts the
+    Edge, Long Shots and parlay books, and those leagues' graded picks are in Most Likely and the board. The same
+    brief's overview said a WNBA market had closed itself, which takes graded picks."""
+    from engine import prose
+    conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
+    for i, status in enumerate(("won", "lost", "won")):
+        conn.execute(
+            "INSERT INTO bets (sport,date,player,market,side,line,odds,grade,stake_units,status,category,pnl_units,"
+            "hit_prob) VALUES ('nhl','2026-11-20',?,'sog','OVER',2.5,-150,'B',0.1,?,'likely',?,0.7)",
+            (f"Skater {i}", status, 0.07 if status == "won" else -0.1))
+    conn.commit()
+    pack = prose.brief_pack(conn)
+    assert pack["by_sport"]["nhl"]["posted_graded"] == 3, pack["by_sport"]["nhl"]
+    assert pack["by_sport"]["nhl"]["record_page"]["graded"] == 0, "the Edge book's count is unchanged"
+    assert "posted_graded" in pack["scope"]
+    fb = prose._week_fallback(pack)
+    assert fb("nhl") == "No Edge, Long Shots or parlay picks graded yet; the Record page grades 3 of its other picks.", fb("nhl")
+    assert fb("cfb").startswith("Nothing journaled yet"), "a league with nothing anywhere still says so"
+
+
 def test_a_quarterback_who_barely_runs_runs_for_1_yard():
     ch = {"starter": "A Starter", "replacement": "B Backup",
           "replacement_profile": {"games": 3, "carries_pg": 1.0, "rush_yds_pg": 1.2}}
