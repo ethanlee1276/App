@@ -31158,10 +31158,7 @@ function recordRibbonsHTML(rec, ov, recent, opts) {
        on is how often it hits against what its prices need — the reason it
        wins bets and not money, said on the tile. */
     const hit = rate(lo), be = lo.breakeven == null ? null : Number(lo.breakeven);
-    // What the percentage is for, and the price with the page's own minus (step AIC): "needs 61.3% at -159" said
-    // neither that it is the break-even rate nor that −159 is the average price.
-    const need = be == null ? "" : ` · needs ${Math.round(be * 1000) / 10}% to break even at its average price, ${
-      lo.avg_price > 0 ? "+" + lo.avg_price : trueMinus(String(lo.avg_price))}`;
+    const need = be == null ? "" : ` · needs ${Math.round(be * 1000) / 10}% at ${lo.avg_price > 0 ? "+" : ""}${lo.avg_price}`;
     tiles.push(tile("Most Likely · tracked for its hit rate", wl(lo), `${Math.round(hit * 1000) / 10}% hit`,
                     "var(--text)", `${lo.settled} graded${need} · ${units(Number(lo.net_units || 0))} at its paper stakes`,
                     "", hit));
