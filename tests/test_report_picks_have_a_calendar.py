@@ -30,7 +30,12 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from engine import ledger as L                                       # noqa: E402
-import test_profit_calendar as PC                                    # noqa: E402
+
+
+def _pc():
+    """The profit calendar's own test file, for its node harness and its page text."""
+    import test_profit_calendar
+    return test_profit_calendar
 
 ROWS = [
     # ts, sport, date, game_day, player, market, side, line, odds, status, category, stake, pnl
@@ -145,6 +150,7 @@ LIKELY = """{days: [{date: "2026-11-20", day_u: 1.8, n: 80, w: 50, l: 30}], stat
 
 
 def test_the_switch_has_a_third_book():
+    PC = _pc()
     got = PC._node(f"""
       const src = {{curve: {PC.CURVE}, edge_state: {{}}}};
       const R = {REPORT}, M = {LIKELY};
@@ -189,6 +195,7 @@ def test_the_switch_has_a_third_book():
 
 
 def test_a_tapped_report_day_says_picks():
+    PC = _pc()
     node = shutil.which("node")
     if not node:
         print("  SKIP node not installed"); return
@@ -221,6 +228,7 @@ def test_a_tapped_report_day_says_picks():
 
 
 def test_the_page_hands_the_calendar_the_report_book():
+    PC = _pc()
     app = PC.APP
     i = app.index("async function renderRecord()")
     body = app[i:app.index("\nfunction _recordRooms(", i)]
