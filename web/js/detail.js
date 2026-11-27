@@ -1966,6 +1966,78 @@ function reportWatchFor(g, sport) {
 /* A weather number the page can print: present and a real number (null reads as 0 to Number, and is none). */
 function wxNum(v) { return v != null && v !== "" && Number.isFinite(Number(v)); }
 
+/* BAD WEATHER, SAID FIRST (step AIO; Ethan, 27 November 2026, on Broncos at Steelers' page: "if the weather is going
+   to be bad for that game, like high wind or rain or both or snow or whatever, it needs to be in red and shown at the
+   top so people know instantly that this game is going to be a rainy game or a snowy game"). A red line under the
+   game's date, and the same one at the top of its report, for an outdoor game whose forecast carries what our
+   measurements say changes a game:
+     * rain or snow when the chance of it is 60% or more, the bar the board itself calls likely (engine/nflwx
+       PRECIP_LIKELY), snow at or below freezing (FREEZING_F);
+     * for football, a wind of 13 mph or more at kickoff, the top of the forecast ranges the wind was measured in
+       (engine/wxfit.FORECAST_RANGES).
+   Each says what it has done to the numbers, measured on 2016-2025 games (engine/weather: WIND_FORECAST's "13+"
+   row, RAIN, SNOW; tests/test_bad_weather_is_said_first.py holds these to them). Cold on its own measured nothing
+   clear, so it raises no warning. No forecast (a dome, a roof read as closed, a game the pull never reached): no
+   warning. */
+const WX_ALERT = {
+  precipLikely: 0.6, freezingF: 32, windMph: 13,
+  wind: { pass_td: 0.870, rec_yds: 0.926 },
+  rain: { rec_yds: 0.869, pass_yds: 0.887 },
+  snow: { rec_yds: 0.834, receptions: 0.805 },
+};
+function wxCut(x) { return Math.round((1 - Number(x)) * 100); }
+/* {kinds, head, said, does} for a game whose forecast is bad, else null. */
+function wxAlert(g, sport) {
+  const w = (g && g.weather) || {};
+  const football = sport === "nfl" || sport === "cfb";
+  if (!football && sport !== "mlb") return null;
+  const roof = String((g && g.roof) || "").toLowerCase();
+  if (w.dome || w.retractable || (g && g.indoor) || roof === "dome" || roof === "closed") return null;
+  if (w.measured === false || !wxNum(w.temp_f)) return null;
+  const temp = Number(w.temp_f);
+  const wind = wxNum(w.wind_mph) ? Number(w.wind_mph) : 0;
+  const chance = wxNum(w.precip_chance) ? Number(w.precip_chance) : null;
+  const likely = chance != null && chance >= WX_ALERT.precipLikely;
+  const snow = !!w.snow || (likely && temp <= WX_ALERT.freezingF);
+  const rain = !snow && (!!w.rain || (likely && temp > WX_ALERT.freezingF));
+  const windy = football && wind >= WX_ALERT.windMph;
+  if (!snow && !rain && !windy) return null;
+  const at = sport === "mlb" ? "first pitch" : "kickoff";
+  const wet = snow ? "snowy" : rain ? "rainy" : "";
+  const head = `${windy ? "Windy" : ""}${windy && wet ? " and " : ""}${windy ? wet : wet.replace(/^./, (c) => c.toUpperCase())} game`;
+  const said = [];
+  if (windy) said.push(`${Math.round(wind)} mph${w.wind_dir ? ` ${w.wind_dir}` : ""} wind`);
+  const pct = chance != null ? Math.round(chance * 100) : null;
+  // "an 80%", "an 11%", "a 70%": the article the number is said with.
+  const art = pct != null && (pct === 8 || pct === 11 || pct === 18 || (pct >= 80 && pct <= 89)) ? "an" : "a";
+  if (snow || rain) said.push(pct != null ? `${art} ${pct}% chance of ${snow ? "snow" : "rain"}`
+    : `${snow ? "snow" : "rain"} likely`);
+  const sentence = `${said.join(" and ")} at ${at}, ${Math.round(temp)}°F`;
+  const does = [];
+  if (football && windy) {
+    does.push(`Wind this strong has cut passing touchdowns about ${wxCut(WX_ALERT.wind.pass_td)}% and receiving yards about ${
+      wxCut(WX_ALERT.wind.rec_yds)}%`);
+  }
+  if (football && snow) {
+    does.push(`snow has cut receivers’ yards about ${wxCut(WX_ALERT.snow.rec_yds)}% and their catches about ${
+      wxCut(WX_ALERT.snow.receptions)}%`);
+  } else if (football && rain) {
+    does.push(`rain has cut receivers’ yards about ${wxCut(WX_ALERT.rain.rec_yds)}% and passing yards about ${
+      wxCut(WX_ALERT.rain.pass_yds)}%`);
+  }
+  const doesSaid = !does.length ? "" : `${does.join("; ").replace(/^./, (c) => c.toUpperCase())
+    } (NFL games, 2016–2025). Our player numbers for this game already include it.`;
+  return { kinds: [windy && "wind", rain && "rain", snow && "snow"].filter(Boolean), head,
+           said: sentence.replace(/^./, (c) => c.toUpperCase()), does: doesSaid };
+}
+function wxAlertHTML(g, sport) {
+  const a = wxAlert(g, sport);
+  if (!a) return "";
+  return `<div class="wx-alert" role="alert"><span class="wx-alert-ico">${icon("warn", 16)}</span>
+    <div><b class="wx-alert-head">${escapeHtml(a.head)}</b> <span class="wx-alert-said">${escapeHtml(a.said)}</span>${
+      a.does ? `<p class="wx-alert-does">${escapeHtml(a.does)}</p>` : ""}</div></div>`;
+}
+
 function gameReportHTML(g, extras) {
   const d = state.data || {};
   const r = gameReportFor(g);
@@ -1981,6 +2053,9 @@ function gameReportHTML(g, extras) {
   // A finished game: the report grades its picks, reads, tickets and call (app.js reportResults).
   const results = reportResults(g);
   if (results) extras = Object.assign({}, extras, { results });
+  // Bad weather at the top of the report too (wxAlert), until the game is final.
+  const wxa = results ? "" : wxAlertHTML(g, state.sport);
+  if (wxa) extras = Object.assign({}, extras, { wxAlert: wxa });
   // What the watch has seen since the report was built (reportWatchFor).
   const watch = r && !results ? reportWatchFor(g, state.sport) : null;
   if (watch) extras = Object.assign({}, extras, { watch });
@@ -2567,6 +2642,7 @@ function renderGamePage() {
           <span>${gpTeamDoor(g.home, g.away)} ${score("home")}</span>
         </div>
         <div class="gp-sub">${escapeHtml(whenLabel(g.date, g.kickoff))}${inactivesNote(g)}</div>
+        ${isFinal ? "" : wxAlertHTML(g, state.sport)}
         <div id="gp-watch-slot">${isLive ? watchHTML(liveRowFor(state.sport, g) || g, state.sport, "gp-watch") : ""}</div>
         ${/* THE CARD'S LINES, ON THE PAGE THE CARD OPENS (Ethan, 2026-09-24,
               circling the spread · ML · total grid on the Home card: "we

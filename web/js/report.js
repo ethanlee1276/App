@@ -930,7 +930,9 @@
         folded ? `<button type="button" class="btn ghost" data-gr-all="1">Open every section</button>` : ""}</div>`;
     // The watch's newest, over the report, until the game is under way.
     const watch = extras && extras.watch && !CLOSED && !solo ? watchCardHTML(extras.watch, r.watch_at, stakesOf(r)) : "";
-    return `<div${solo ? "" : ' id="gp-sec-report"'} class="gr">${head}${featuredHTML(r.featured)}${tools}${watch}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
+    // Bad weather first, in red (detail.js wxAlertHTML, step AIO).
+    const wx = !solo && extras && extras.wxAlert ? extras.wxAlert : "";
+    return `<div${solo ? "" : ' id="gp-sec-report"'} class="gr">${head}${wx}${featuredHTML(r.featured)}${tools}${watch}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
   }
 
   /* EACH GAME'S PARLAYS, AS THE REPORT'S OWN CARDS (gameTickets, drawn on the

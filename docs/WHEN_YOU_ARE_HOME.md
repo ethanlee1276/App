@@ -9883,6 +9883,19 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIO. Bad weather is said first, in red** (step 1033; 27 November; nothing to run). You asked for bad weather to
+show at the top of the game page and the game report, in red, so people know at once it is a rainy, snowy or windy
+game. An outdoor game now gets a red line right under its date, above the lines, and the same line first thing in
+its report, when its forecast has rain or snow at a 60% chance or more (the bar our numbers already call likely;
+snow at or below freezing) or, in football, wind of 13 mph or more at kickoff (the top of the range our wind effects
+were measured in). It names the game ("Windy game", "Rainy game", "Windy and snowy game"), gives the forecast, and
+says what that weather has done to the numbers on 2016-2025 NFL games: wind this strong cut passing touchdowns about
+13% and receiving yards about 7%; rain cut receivers' yards about 13% and passing yards about 11%; snow cut
+receivers' yards about 17% and their catches about 19%. Our player numbers already include it. Domes, roofs read as
+closed, indoor sports and games with no forecast get nothing, and it comes off once the game is final. Cold on its
+own measured nothing clear in those games, so it raises no warning; the temperature stays on the chip. Broncos at
+Steelers today (17 mph) would have shown "Windy game".
+
 **AIN. Does our number run low? Now measured, by market** (step 1032; 27 November; nothing to run). With the new
 calendar's day lists I pulled every graded report pick (1,348) and looked for what loses. Two things. First, every
 league's report picks hit about what their prices need (63% against 65%), so they lose roughly the book's cut; our
