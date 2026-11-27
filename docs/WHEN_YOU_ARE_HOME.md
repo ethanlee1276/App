@@ -9904,6 +9904,14 @@ league's board, the Record, the report record) for the slips a visitor sees, and
 - **How data is used: the nightly write-up quoted units to four places** ("returned less (+0.4435) than the win the
   market faded us on", "+0.5246 units"). The write-up narrates the numbers it is handed, and it was handed them
   unrounded. Each pick's units now go in to two places and its chance to three, as the page says them.
+- **How data is used: a quarterback change could not find its passer under another spelling.** The NFL board read
+  "Daniel Jones BENCHED -> Anthony Richardson Sr. ... has 0 pass attempts in our data — too few to rate". ESPN's
+  depth chart adds the "Sr."; the weekly stats do not, and the lookup wanted the exact name, so a passer with
+  hundreds of attempts was rated as if he had never thrown. That decides more than the sentence: with no sample
+  the change counts as a downgrade, and every Colts receiver took the measured downgrade cut, whatever
+  Richardson's own numbers say. The lookup now matches names the way the rest of the site does (case,
+  punctuation, Jr./Sr./III), and the chart's name is still the one the page says. Two passers under one loose name
+  are never guessed between. The Colts play the Giants on Sunday; the next board build reads it.
 - **How data is used: the weekly brief said hockey, college basketball, the WNBA and UFC had "Nothing journaled
   yet"**, beside a Record page grading their picks, and in a brief whose own overview said a WNBA market had closed
   itself (which takes graded picks). The brief counted three of the Record page's books (Edge, Long Shots,

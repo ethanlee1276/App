@@ -157,6 +157,28 @@ def test_the_other_counts_a_visitor_reads_say_it_too():
             assert slip not in s, (p, slip)
 
 
+def test_a_quarterback_change_finds_the_passer_under_another_spelling():
+    """The NFL board, 26 November: "Daniel Jones BENCHED -> Anthony Richardson Sr. ... has 0 pass attempts in our
+    data — too few to rate". ESPN's depth chart adds the "Sr."; the weekly stats do not, and the lookup was exact,
+    so a passer with hundreds of attempts was rated as if he had never thrown."""
+    qb = {"teams": {"IND": {"starter": "Daniel Jones", "backup": None}},
+          "passing": {"Daniel Jones": (400.0, 2600.0), "Anthony Richardson": (650.0, 4290.0)},
+          "usual": {"IND": ["Daniel Jones"]},
+          "profile": {"Anthony Richardson": {"games": 2, "carries_pg": 6.0, "rush_yds_pg": 31.0}}}
+    ch = qbchange.changes(qb, [], {"IND": "Anthony Richardson Sr."})["IND"]
+    assert ch["replacement"] == "Anthony Richardson Sr.", "the chart's name is the one the page says"
+    assert ch["replacement_attempts"] == 650 and ch["replacement_ypa"] == 6.6, ch
+    assert ch["replacement_profile"] == qb["profile"]["Anthony Richardson"], ch
+    words = qbchange.detail(ch)
+    assert words.startswith("Anthony Richardson Sr. has thrown for 6.6 yards an attempt (650 attempts) against "
+                            "Daniel Jones’s 6.5"), words
+    assert "too few to rate" not in words
+    # Two passers under one loose name: neither is guessed.
+    two = dict(qb, passing={"Daniel Jones": (400.0, 2600.0), "Anthony Richardson": (650.0, 4290.0),
+                            "Anthony Richardson Jr.": (5.0, 30.0)})
+    assert qbchange.changes(two, [], {"IND": "Anthony Richardson Sr."})["IND"]["replacement_attempts"] == 0
+
+
 def test_a_quarterback_who_barely_runs_runs_for_1_yard():
     ch = {"starter": "A Starter", "replacement": "B Backup",
           "replacement_profile": {"games": 3, "carries_pg": 1.0, "rush_yds_pg": 1.2}}

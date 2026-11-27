@@ -251,6 +251,19 @@ def quarterbacks(specs, stats: list[dict], prior_stats: list[dict], upto_week: i
             "usual": {t: n for t, n in usual.items() if t in teams}, "profile": profile}
 
 
+def _as_named(table: dict, name: str | None) -> str | None:
+    """``name`` as ``table`` (the passers' {name: ...} read of the weekly stats) spells it, when the depth chart,
+    the news or the board spell it another way. ESPN's chart named the Colts' new starter "Anthony Richardson
+    Sr."; the weekly stats say "Anthony Richardson", and the exact lookup read 0 pass attempts for a passer with
+    hundreds, so his change was rated as if he had never thrown (27 November 2026). One loose match or none: two
+    passers under one loose name keep the name as given."""
+    if not name or name in (table or {}):
+        return name
+    key = _norm(name)
+    hits = [k for k in (table or {}) if _norm(k) == key]
+    return hits[0] if len(hits) == 1 else name
+
+
 def changes(qb: dict, injuries: list, depth_qb1: dict | None = None,
             news_qb: dict | None = None) -> dict:
     """{team: change} for every team whose starter is out or benched this week.
@@ -282,7 +295,9 @@ def changes(qb: dict, injuries: list, depth_qb1: dict | None = None,
                 replacement = cand
                 reported = news if cand == news.get("name") and cand != qb1 else None
                 break
-        tier, s_ypa, r_ypa = tier_of(qb.get("passing") or {}, starter, replacement or "")
+        passing = qb.get("passing") or {}
+        s_key, r_key = _as_named(passing, starter), _as_named(passing, replacement)
+        tier, s_ypa, r_ypa = tier_of(passing, s_key, r_key or "")
         # HIS USUAL STARTER BACK: the man the volume ranking called the
         # starter filled in; the depth chart's QB1 is the team's usual one.
         # Last season's leader comes first: a starter hurt early in week 1
@@ -302,10 +317,10 @@ def changes(qb: dict, injuries: list, depth_qb1: dict | None = None,
                                   if reported else None),
                      "starter_ypa": round(s_ypa, 1) if s_ypa else None,
                      "replacement_ypa": round(r_ypa, 1) if r_ypa else None,
-                     "replacement_attempts": int((qb.get("passing") or {}).get(replacement or "", (0, 0))[0]),
+                     "replacement_attempts": int(passing.get(r_key or "", (0, 0))[0]),
                      # This season's shape under each of them (see `quarterbacks`).
-                     "replacement_profile": (qb.get("profile") or {}).get(replacement or ""),
-                     "starter_profile": (qb.get("profile") or {}).get(starter)}
+                     "replacement_profile": (qb.get("profile") or {}).get(r_key or ""),
+                     "starter_profile": (qb.get("profile") or {}).get(s_key)}
     return out
 
 
