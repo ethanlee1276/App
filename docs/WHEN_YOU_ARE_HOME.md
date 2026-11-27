@@ -10294,6 +10294,15 @@ the 124 kinds tested. The heartbeat named only the kinds held, so which one coul
 each league's bold kind as tested on the heartbeat, held or not (`paper holds.makers`: said, hit, count, p, held),
 and the next learn pass, after 03:00 Eastern on 27 November, says it.
 
+- **What it said (the learn pass at 00:27 Eastern on 27 November, the last 90 days).** College's bold picks said
+  60.5% and hit 55.9% over 909 settled picks (p 0.0032). The NFL's said 71.4% and hit 51.0% over 251, and stay on
+  paper. College's miss is real: of 124 kinds tested, nine are on paper, so at least nine cleared
+  Benjamini-Hochberg at the 10% false-discovery rate, and a p of 0.0032 clears it from the fourth rank down. It
+  stays off paper because it does not run hot enough: a kind is held when it misses by 10 points or by a quarter of
+  what it claims, and college's misses by 4.7 points, 7.7% of its claim. So more settled picks would not decide it;
+  only a wider gap would (at 60.5% said, a hit near 50%). On 24 November (step AEE) the same kind read 501 of 900
+  against about 68% said, a 12-point miss: what college's bold picks claim has come down closer to what they hit.
+
 **AHT. The first game of NFL week 12 kept its record, and posted no parlays** (step 1012; 26 November; nothing to
 run). A check-in read at 05:31 UTC, off the boards themselves (the heartbeat had just restarted with the 05:31
 update and listed no boards yet):
