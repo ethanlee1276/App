@@ -235,6 +235,38 @@ def test_the_record_says_how_far_our_number_ran():
     assert ledger.number_vs_line(conn, "nba")["gap_by_market"] == {}, "listed once twenty of its games have finished"
     assert ledger.number_vs_line(conn)["gap_by_market"] == {}, "the bench and a thin market say nothing"
 
+
+def test_the_gap_splits_by_the_side_we_picked():
+    """The step after AIN: an over is picked where our number sits above the line, so a market's gap can read level
+    while its overs ran one way and its unders the other. Each game picked on one side only is split by that side;
+    a game picked both ways, at two lines, is in neither."""
+    from engine import ledger
+    conn = _journal()
+    ins = ("INSERT INTO bets (ts, sport, date, player, market, side, line, odds, projection, status, actual, category, "
+           "leg) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    rows = [("2026-11-15T00:00:00", "nba", "2026-11-15", f"A{i}", "assists", "OVER" if i < 10 else "UNDER", 5.5, -110,
+             6.0 if i < 10 else 5.0, "won", 7.0 if i < 10 else 4.0, "main", None) for i in range(20)]
+    rows += [("2026-11-15T00:00:00", "nba", "2026-11-15", "Alt", "rebounds", "OVER", 7.5, -110, 9.0, "won", 11.0,
+              "main", None),
+             ("2026-11-15T00:00:00", "nba", "2026-11-15", "Alt", "rebounds", "UNDER", 12.5, -110, 9.0, "won", 11.0,
+              "likely", None)]
+    conn.executemany(ins, rows)
+    conn.commit()
+    real = ledger.NUMBER_MARKET_MIN
+    try:
+        ledger.NUMBER_MARKET_MIN = 10
+        nba = ledger.number_vs_line(conn, "nba")
+    finally:
+        ledger.NUMBER_MARKET_MIN = real
+    assert nba["gap_by_market"]["assists"] == {"games": 20, "gap": 0.0, "over": 0.5, "under": 0.5}
+    assert nba["gap_by_side"]["assists"] == {"over": {"games": 10, "gap": 1.0}, "under": {"games": 10, "gap": -1.0}}
+    # Rebounds: R0-R9 were picked over (9.5 against 10 three times and 6 seven times); Alt was picked both ways.
+    assert nba["gap_by_side"]["rebounds"] == {"over": {"games": 10, "gap": -2.3}}, nba["gap_by_side"]
+    assert nba["gap_by_side"]["points"] == {"over": {"games": 12, "gap": -2.25}}
+    # At the real bar (twenty games), assists' twenty are listed and the thinner markets are not, on either list.
+    full = ledger.number_vs_line(conn, "nba")
+    assert set(full["gap_by_side"]) == set(full["gap_by_market"]) == {"assists"}, full["gap_by_side"]
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

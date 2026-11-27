@@ -8128,7 +8128,12 @@ def number_vs_line(conn, sport: str | None = None, since: str | None = None) -> 
     "over", "under"}}, each player's game in a market once (whatever its line
     or side, in whichever books), ``gap`` the average of what happened less our
     number (above zero, ours ran low), ``over`` and ``under`` the share of games
-    above and below it. A measurement: nothing reads it to move a number."""
+    above and below it. A measurement: nothing reads it to move a number.
+
+    BY THE SIDE WE PICKED (the step after AIN). A number that runs low overall can be the picks and not the number:
+    an over is picked where ours sits above the line, so its misses lean one way and an under's the other.
+    ``gap_by_side``: {market: {"over": {"games", "gap"}, "under": {...}}} over the games picked on one side only
+    (a game picked both ways, at two lines, is in neither), for each market ``gap_by_market`` lists."""
     q = ("SELECT sport, date, player, market, UPPER(COALESCE(side, '')), line, COALESCE(leg, 1), projection, actual "
          "FROM bets WHERE status IN ('won', 'lost', 'push') AND projection IS NOT NULL AND line IS NOT NULL "
          "AND actual IS NOT NULL AND player IS NOT NULL AND player != '' "
@@ -8150,10 +8155,13 @@ def number_vs_line(conn, sport: str | None = None, since: str | None = None) -> 
     out = {"picks": 0, "closer": 0, "farther": 0, "level": 0, "by_market": {}, "gap_by_market": {}}
     markets: dict = {}
     gaps: dict = {}             # market -> [games, sum of (what happened - ours), games above ours, games below]
+    sides: dict = {}            # game -> [the sides picked, its miss]
     for sp, day, player, market, side, line, leg, proj, actual in conn.execute(q, args).fetchall():
         if str(market or "") in NUMBER_SKIP_MARKETS:
             continue
         game = (str(sp).lower(), day, player, market, leg)
+        if side in ("OVER", "UNDER"):
+            sides.setdefault(game, [set(), None])[0].add(side)
         if game not in once:
             try:
                 miss = float(actual) - float(proj)
@@ -8161,6 +8169,8 @@ def number_vs_line(conn, sport: str | None = None, since: str | None = None) -> 
                 miss = None
             if miss is not None:
                 once.add(game)
+                if game in sides:
+                    sides[game][1] = miss
                 g = gaps.setdefault(str(market), [0, 0.0, 0, 0])
                 g[0] += 1
                 g[1] += miss
@@ -8189,6 +8199,15 @@ def number_vs_line(conn, sport: str | None = None, since: str | None = None) -> 
     out["gap_by_market"] = {k: {"games": v[0], "gap": round(v[1] / v[0], 2), "over": round(v[2] / v[0], 3),
                                 "under": round(v[3] / v[0], 3)}
                             for k, v in sorted(gaps.items(), key=lambda kv: -kv[1][0]) if v[0] >= NUMBER_MARKET_MIN}
+    by_side: dict = {}
+    for (_sp, _day, _player, market, _leg), (picked, miss) in sides.items():
+        if miss is None or len(picked) != 1 or str(market) not in out["gap_by_market"]:
+            continue
+        b = by_side.setdefault(str(market), {}).setdefault(next(iter(picked)).lower(), [0, 0.0])
+        b[0] += 1
+        b[1] += miss
+    out["gap_by_side"] = {k: {sd: {"games": n, "gap": round(t / n, 2)} for sd, (n, t) in sorted(v.items())}
+                          for k, v in by_side.items()}
     return out
 
 

@@ -9883,6 +9883,15 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIR. How far our number runs, split by the side we picked** (step 1036; 27 November; nothing to run). The first
+reading of how far our number runs from what happened (AIN) left two gaps to look at again: the NBA's points, where
+what happened landed 3.1 below our number on average over 255 games, and the NFL's passing yards, 7.7 above it over
+230. Part of a gap like that can be the picks and not the number: an over is picked where our number sits above the
+line, so its misses lean low, and an under's lean high. The record now keeps each market's gap split by the side we
+picked (each game picked on one side only), so the next reading says whether the number itself runs off or only the
+side we take. Nothing on the page changes and no number moves; I read it after the next settle and say what it
+shows.
+
 **AIQ. Pass or run: measured, said in every NFL report, and checked after the game** (step 1035; 27 November;
 nothing to run). You asked us to judge, record and play off how often teams pass and run, and to go deeper on who
 they throw and run more against and what style of defense. I measured it on 2017-2025 play-by-play and FTN's
@@ -9926,7 +9935,8 @@ says what that weather has done to the numbers on 2016-2025 NFL games: wind this
 receivers' yards about 17% and their catches about 19%. Our player numbers already include it. Domes, roofs read as
 closed, indoor sports and games with no forecast get nothing, and it comes off once the game is final. Cold on its
 own measured nothing clear in those games, so it raises no warning; the temperature stays on the chip. Broncos at
-Steelers today (17 mph) would have shown "Windy game".
+Steelers today (17 mph in the morning forecast) would have shown "Windy game"; by kickoff its forecast had turned to
+an 81% chance of rain at 38°F with 6 mph of wind, so it showed "Rainy game".
 
 **AIN. Does our number run low? Now measured, by market** (step 1032; 27 November; nothing to run). With the new
 calendar's day lists I pulled every graded report pick (1,348) and looked for what loses. Two things. First, every
