@@ -10075,6 +10075,27 @@ found, and what changed:
   matchup leans neither way for these players ... a pick on any of them comes from our projection, not the matchup".
 - **One more count fixed:** the heartbeat's touchdown-pairs short count (`td_short`) read 12 with all 12 games still
   waiting to post, as the two-leg count did; it now leaves a waiting game out too.
+- **How the other two Thanksgiving reports did** (read off the free record, 27 November, 04:51Z):
+  - **Chiefs at Bills (Bills 13-10):** the report called the Bills at 59.8%, right. 13 of 16 reads right: matchups
+    5 of 5, fades 4 of 4, the new good-spot group 1 of 1, step-up 1 of 1, script 1 of 1, angles 1 of 3, units 0 of
+    1. Picks 5-1, +2.79 units at their prices: the Bills' moneyline and −2.5, James Cook and Emmett Johnson to
+    score, and Khalil Shakir over 2.5 catches (3) won; Patrick Mahomes over 199.5 passing yards (174) lost. Tickets:
+    three-leg 0 of 3 and two-leg 0 of 3 (−3.00 units each), touchdown pairs 1 of 3 (+0.76; Cook and Johnson paid
+    +276). Every losing ticket carried a Chiefs passing over: Mahomes over 199.5 yards (174), Rashee Rice over 3.5
+    catches (2), Xavier Worthy over 1.5 catches (0), in a game that went 23 points, under the total. 1 of the 8
+    scorers the report listed scored (we expected 2.6).
+  - **Eagles at Cowboys (Eagles 39-38):** the report called the Cowboys at 79.7%, wrong, and the ratings (70.9%) and
+    the simulation were wrong too. 6 of 17 reads right: matchups 3 of 7, candidates 2 of 5, angles 0 of 3, script 1
+    of 2. Picks 3-3, −1.39 units: Javonte Williams to score, DeVonta Smith over 4.5 catches (11) and George Pickens
+    over 4.5 catches (5) won; CeeDee Lamb to score, Dak Prescott over 21.5 completions (19) and over 31.5 attempts
+    (28) lost. Tickets: three-leg 1 of 2 (+2.66; Smith, Pickens and Lamb over 6.5 catches paid +366), two-leg 1 of 3
+    (−0.27), touchdown pairs 0 of 3 (−3.00; Lamb, Pickens and Saquon Barkley did not score). 3 of the 8 listed
+    scorers scored (we expected 3.1).
+  - **All three Thanksgiving games, with Bears at Lions:** calls 2 of 3; picks 13-5, +3.00 units; three-leg 3 of 8
+    (+5.34), two-leg 4 of 9 (+1.45), touchdown pairs 3 of 9 (+2.15).
+  - **Whether a losing leg went against its player's read can't be told from the free record:** it carries each
+    leg's result, not the read, and the reads are in the members-only report. The question it leaves is whether the
+    Chiefs' passing legs ran against that report's own reads, since its fades went 4 of 4.
 
 **AHZ. A key player in a good spot is named, on a list of its own** (step 1018; 26 November; nothing to run).
 You, with three screenshots of Bears at Lions: "in the Who's guarding who, we show a lot of lions players as they are
