@@ -511,7 +511,7 @@ def _entry(pairs: list, min_settled: int = MIN_SETTLED) -> dict:
         else:
             out["reason"] = (
                 f"fitted, then refused by its own walk-forward — it closed "
-                f"the gap in {h.get('gap_improved_in', 0)} of {k} block(s) "
+                f"the gap in {h.get('gap_improved_in', 0)} of {k} block{'' if k == 1 else 's'} "
                 f"and improved Brier in {h.get('brier_improved_in', 0)} of "
                 f"{k}; on the last {h['test_n']} bets the gap went "
                 f"{h['gap_before'] * 100:.1f} → {h['gap_after'] * 100:.1f} "

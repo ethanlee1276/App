@@ -3479,7 +3479,8 @@ def stale_verdict(conn, since: str | None = None,
         if n < min_n:
             verdict, why = "hold", f"{n} settled flags, needs {min_n}"
         elif z < min_z:
-            verdict, why = "hold", (f"hit rate {hit:.1%} is {z:+.1f} standard errors "
+            zs = f"{z:+.1f}"
+            verdict, why = "hold", (f"hit rate {hit:.1%} is {'0.0' if zs in ('-0.0', '+0.0') else zs} standard errors "
                                     f"from the {be:.1%} break-even, needs {min_z:+.1f}")
         elif roi <= 0:
             verdict, why = "hold", f"flat-stake ROI {roi:+.1%} — beats the rate, not the vig"
@@ -10176,6 +10177,13 @@ HEALTH_BLIND_SPOTS = [
 ]
 
 
+def _market_said(key: str) -> str:
+    """A journal market id said in a sentence, in engine/markets' words: "pass_yds" → "passing yards",
+    "anytime_td" → "anytime TD" (an abbreviation keeps its capitals). The Record page's card said the id itself,
+    "57% of volume is pass_yds" (27 November 2026); the My Bets card already said words (app.js MB_PROP_WORDS)."""
+    return " ".join(w if w[:2].isupper() else w.lower() for w in _markets.label(key).split())
+
+
 def account_health(conn, since: str | None = None) -> dict:
     """Estimate, per book, how 'sharp' this journal looks to a risk desk.
 
@@ -10238,7 +10246,7 @@ def account_health(conn, since: str | None = None) -> dict:
             drivers.append(f"beats the close on {beat_rate:.0%} of tracked bets"
                            + (" — the #1 pattern risk desks act on"
                               if beat_rate >= 0.55 else ""))
-        drivers.append(f"{conc:.0%} of volume is {top_market}")
+        drivers.append(f"{conc:.0%} of volume is {_market_said(top_market)}")
         if prop_share >= 0.8:
             drivers.append(f"{prop_share:.0%} of volume is player props — the "
                            "lowest-limit markets on the board, and where "
@@ -10250,7 +10258,7 @@ def account_health(conn, since: str | None = None) -> dict:
             drivers.append("stakes are precise model-sized amounts, not round numbers")
         actions = []
         if conc >= 0.5:
-            actions.append(f"mix in main-line bets (sides/totals) so {top_market} "
+            actions.append(f"mix in main-line bets (sides/totals) so {_market_said(top_market)} "
                            f"isn't {conc:.0%} of your volume here")
         elif prop_share >= 0.8:
             # Only when concentration DIDN'T already say it — otherwise the

@@ -9883,6 +9883,31 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AID. The Record page and the boards say their counts and markets in words** (step 1022; 27 November; nothing
+to run). Still on "wording on the site and how data is used": I read every sentence in the site's public files (each
+league's board, the Record, the report record) for the slips a visitor sees, and fixed the ones the pages show:
+
+- **The Record page's account-health card named markets by their database id**: "57% of volume is pass_yds", and
+  "mix in main-line bets (sides/totals) so pass_yds isn't 57% of your volume here" (also rush_att, kick_pts,
+  pass_cmp). It says "passing yards", "carries", "kicking points" and "completions" now, the names the site uses
+  everywhere else. The My Bets card, which runs the same score over your own log, already said words.
+- **A verdict at the break-even read "-0.0 standard errors"** (the stale-price lab): it reads 0.0.
+- **A replaced preregistration ended "...take the bets.. The terms above"**: one stop now.
+- **Counts said with "(s)"** on the Record page and the boards: "0 of 3 block(s)", "87 player(s) corrected", "763
+  settled bet(s) were left out", and the baseball and college basketball boards' guide "4 measured market(s)". They
+  count in the singular and the plural now ("4 measured markets"; a count of one says "block", "player", "bet was").
+- **A quarterback change read "1.0 runs a game for 1 yards"**: "1 yard".
+- **How data is used: the nightly write-up quoted units to four places** ("returned less (+0.4435) than the win the
+  market faded us on", "+0.5246 units"). The write-up narrates the numbers it is handed, and it was handed them
+  unrounded. Each pick's units now go in to two places and its chance to three, as the page says them.
+- Left alone: the Status page's feed readouts ("1 of 1 eligible game(s) priced ... 14 credit(s) each", "1.6 hour(s)
+  old") are diagnostics, and ten tests pin their wording; a preregistration's stored reason still says "his
+  offence" because a registration's record is kept as it was written, not edited; and the injury blurbs and news
+  are the sources' own words.
+- What the Thanksgiving reports did: Bears at Lions went 5 of 6 on its picks, 3 of 3 on the two-leg parlays, 2 of 3
+  on the three-leg and 2 of 3 on the scorer pairs. Packers at Rams (Wednesday) went 3 of 4 and 1 of 3 on the scorer
+  pairs. Chiefs at Bills posted its full set at about 00:11Z; the 04:50Z check reads how it graded.
+
 **AIC. No pick is certain, on any path; the Record says the number we gave** (step 1021; 27 November; nothing to
 run). You: "There still more to fix with the site ... wording on the site and how data is used". I read the live
 Record page as a visitor (the free pages; everything else needs an account, and I do not make one). What I found:

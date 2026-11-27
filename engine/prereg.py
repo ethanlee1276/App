@@ -290,7 +290,7 @@ def verdict(test: dict, rows: list[dict]) -> dict:
         out["reading"] = (
             f"replaced by {test['superseded_by']} on "
             f"{test.get('superseded_on', '')} — "
-            f"{test.get('superseded_why', 'no reason recorded')}. The terms "
+            f"{str(test.get('superseded_why') or 'no reason recorded').rstrip().rstrip('.')}. The terms "
             f"above are the ones that were frozen; they are kept rather than "
             f"edited, because a preregistration nobody can read afterwards "
             f"protects nothing.")
@@ -369,12 +369,13 @@ def verdict(test: dict, rows: list[dict]) -> dict:
     # blocked entirely by the journal's date format is indistinguishable
     # from a quiet week, and the reader has no way to tell "nothing has
     # happened yet" from "this can never collect anything".
+    one = len(undated) == 1
     unplaced = ("" if not undated else
-                f" {len(undated)} settled bet(s) were left out because "
-                f"their journal date is a season-week label rather than a "
-                f"day, so there is no way to tell whether they predate the "
+                f" {len(undated)} settled {'bet was' if one else 'bets were'} left out because "
+                f"{'its' if one else 'their'} journal date is a season-week label rather than a "
+                f"day, so there is no way to tell whether {'it predates' if one else 'they predate'} the "
                 f"registration; until that is fixed this test cannot "
-                f"collect them.")
+                f"collect {'it' if one else 'them'}.")
 
     if len(pop) < test["min_n"]:
         out["status"] = "collecting"

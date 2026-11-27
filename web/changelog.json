@@ -4,6 +4,12 @@
     {
       "date": "2026-11-27",
       "kind": "fix",
+      "title": "The Record page says its counts and markets in words",
+      "body": "The account-health card on the Record page named a market by its database id (\"57% of volume is pass_yds\"); it now says \"passing yards\", as the My Bets card already did. Counts no longer read \"(s)\" (the baseball board's guide says \"4 measured markets\"), a verdict sitting at its break-even says 0.0 rather than -0.0, a quarterback who barely runs runs \"for 1 yard\", and the nightly write-up quotes units to two places instead of four, because the numbers it narrates are now handed to it rounded the way the page says them."
+    },
+    {
+      "date": "2026-11-27",
+      "kind": "fix",
       "title": "No pick is posted as near certain",
       "body": "A pick our model gives 99% or more is now held back on both the Most Likely list and the board, whatever built it: no prop is that certain, and a number that high means the model's spread collapsed. Last week a kicking-points under went up at 99.9% against a price that said about 63%, and lost. The Record's weekly card now says such a number to its tenth instead of rounding it to 100%, and each finished game's script is said in words."
     },

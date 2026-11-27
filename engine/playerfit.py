@@ -259,7 +259,7 @@ def report(path=None) -> list[dict]:
             "n_players": len(players),
             "top": worst,
             "fitted": d.get("fitted"),
-            "reading": (f"{len(players)} player(s) corrected"
+            "reading": (f"{len(players)} player{'' if len(players) == 1 else 's'} corrected"
                         if d.get("adopted") else "memory off — didn't help"),
         })
     return out

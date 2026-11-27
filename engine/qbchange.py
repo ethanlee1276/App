@@ -341,7 +341,8 @@ def shape_words(ch: dict) -> str:
             s += f" ({ch['starter']}’s starts: {sp['pass_rate']:.0%})"
         bits.append(s)
     if rp.get("games"):
-        bits.append(f"{rp['carries_pg']:.1f} runs a game for {rp['rush_yds_pg']:.0f} yards")
+        yds = f"{float(rp['rush_yds_pg']):.0f}"
+        bits.append(f"{rp['carries_pg']:.1f} runs a game for {yds} yard{'' if yds == '1' else 's'}")
     if rp.get("air_per_att"):
         s = f"{rp['air_per_att']:.1f} air yards an attempt"
         if sp.get("air_per_att"):

@@ -100,7 +100,7 @@ def _likely_measured(sport: str) -> str:
         span = (f"{aucs[0]:.2f}" if aucs[-1] - aucs[0] < 0.005
                 else f"{aucs[0]:.2f}-{aucs[-1]:.2f}")
         return (f"Ranked at {span} AUC across {len(live)} measured "
-                f"market(s), walked forward over {pairs:,} of our own "
+                f"market{'s' if len(live) != 1 else ''}, walked forward over {pairs:,} of our own "
                 f"logged picks.")
     if fitted:
         return (f"Measured, and not good enough yet: no market here "

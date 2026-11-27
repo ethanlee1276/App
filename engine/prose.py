@@ -321,6 +321,14 @@ def diary_date(lconn) -> str | None:
     return r[0] if r and r[0] else None
 
 
+def _round(v, places: int):
+    """``v`` to ``places``, or ``v`` itself when it is not a number (None stays None)."""
+    try:
+        return round(float(v), places)
+    except (TypeError, ValueError):
+        return v
+
+
 def postmortem_pack(lconn, date: str) -> dict:
     from .ledger import _bet_clv, process_grade
     rows = [dict(r) for r in lconn.execute(
@@ -350,10 +358,13 @@ def postmortem_pack(lconn, date: str) -> dict:
             "pushed": sum(1 for b in v if b["status"] == "push"),
             "voided": sum(1 for b in v if b["status"] == "void"),
             "net_units": round(sum(b.get("pnl_units") or 0 for b in v), 2),
-            "picks": [{k: b.get(k) for k in
-                       ("player", "market", "side", "line", "odds", "status",
-                        "stake_units", "pnl_units", "hit_prob", "category",
-                        "clv", "process", "cause")}
+            # Units to two places and the chance to three, as the page says them: the writer quotes the
+            # numbers it is handed, and an unrounded "+0.4435" reached the Record page (27 November 2026).
+            "picks": [{k: (_round(b.get(k), 3 if k == "hit_prob" else 2)
+                           if k in ("stake_units", "pnl_units", "hit_prob") else b.get(k))
+                       for k in ("player", "market", "side", "line", "odds", "status",
+                                 "stake_units", "pnl_units", "hit_prob", "category",
+                                 "clv", "process", "cause")}
                       for b in picks],
         }
         lost = [b for b in v if b["status"] == "lost"]
@@ -388,7 +399,7 @@ def _night_fallback(pack: dict):
         s = pack["by_sport"].get(sport) or {}
         return (f"{s.get('won', 0)}-{s.get('lost', 0)} on the night, "
                 f"{s.get('net_units', 0):+.2f}u across {s.get('graded', 0)} "
-                f"graded pick(s).")
+                f"graded pick{'' if s.get('graded', 0) == 1 else 's'}.")
     return fb
 
 
