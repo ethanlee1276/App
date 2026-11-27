@@ -155,6 +155,7 @@ def test_it_sits_at_the_top_of_the_game_and_its_report():
     assert 'class="gr">${head}${wx}${featuredHTML(r.featured)}' in REPORT, "first thing under the report's heading"
     block = CSS[CSS.index(".wx-alert {"):CSS.index(".wx-alert-does")]
     assert "var(--bad)" in block and ".wx-alert-head { color: var(--bad);" in CSS, "red, in both themes"
+    assert "border:" not in block, "a red tint, not an outline (tests/test_no_hard_lines.py)"
 
 
 if __name__ == "__main__":

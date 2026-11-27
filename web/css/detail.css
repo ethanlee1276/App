@@ -61,8 +61,8 @@
 .gp-inactives { color: var(--text-mute); font-size: var(--fs-sm); }
 /* BAD WEATHER, SAID FIRST (step AIO): red, under the game's date and at the top of its report. */
 .wx-alert { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0 12px; padding: 10px 12px;
-  border-radius: var(--radius); border: 1px solid var(--bad); color: var(--text);
-  background: color-mix(in srgb, var(--bad) 16%, transparent); font-size: var(--fs-sm); }
+  border-radius: var(--radius); color: var(--text);
+  background: color-mix(in srgb, var(--bad) 24%, transparent); font-size: var(--fs-sm); }
 .wx-alert-ico { color: var(--bad); flex: none; padding-top: 1px; }
 .wx-alert-head { color: var(--bad); text-transform: uppercase; letter-spacing: .04em; margin-right: 4px; }
 .wx-alert-does { margin: 4px 0 0; color: var(--text-mute); font-size: var(--fs-xs); }
