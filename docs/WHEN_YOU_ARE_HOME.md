@@ -9908,12 +9908,13 @@ to each position, and adding the lean on top passed the test in none of eleven m
 catches came out a little better in 2022-2025 and worse in the older seasons), so no pick number moves on it. Every
 NFL report now has a "Pass or run" section after "How each team plays". It gives each team's pass rate and rank, the
 lean of the defense it meets, our read for this game, and the two games each team threw most and least in, with
-their scores (a team behind throws more). From this season's play-by-play: Buffalo throws on 53%, the fewest in the
-league, and offenses have thrown 8 points more often than usual against Detroit, the most of any defense. Each read
-is checked once the play-by-play is in, a day or so after the game: right when the team threw more (or less) than
-its usual as read. A read close to a team's usual only says what happened. In 2022-2025, when the read sat 2 points
-or more from a team's own rate, the game landed on that side 58% to 66% of the time. The reports' record now counts
-"Pass or run" as its own kind of read, and the section opens with its record once ten are graded.
+their scores (a team behind throws more). On this week's board (games through week 11): Tampa Bay throws on 53% of
+its plays, the fewest in the league, and offenses have thrown about 8 points more often than usual against Buffalo
+and Detroit, the two biggest leans to the pass. Each read is checked once the play-by-play is in, a day or so after
+the game: right when the team threw more (or less) than its usual as read. A read close to a team's usual only says
+what happened. In 2022-2025, when the read sat 2 points or more from a team's own rate, the game landed on that side
+58% to 66% of the time. The reports' record now counts "Pass or run" as its own kind of read, and the section opens
+with its record once ten are graded.
 
 **AIP. SGPX tickets come in two legs too, and Best Parlays ranks each size** (step 1034; 27 November; nothing to
 run). You asked for the best two-leg and three-leg parlays ranked, and two-leg SGPX tickets. Every kickoff window
