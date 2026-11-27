@@ -1321,7 +1321,7 @@ def main() -> None:
         elif recent:
             out.update(status="no games today",
                        note=f"No {tune.name} games on this date, but the "
-                            f"season is running — {recent} game(s) in the "
+                            f"season is running — {recent} game{'' if recent == 1 else 's'} in the "
                             f"last {LOOKBACK_DAYS} days. A quiet date, not "
                             f"the offseason.")
         else:

@@ -1944,7 +1944,7 @@ def main() -> None:
             last = max(g.get("date", "")[:10] for g in recent)
             out.update(status="no games today",
                        note=f"No FBS games on this date, but the season is "
-                            f"running — {len(recent)} game(s) in the last "
+                            f"running — {len(recent)} game{'' if len(recent) == 1 else 's'} in the last "
                             f"{NEARBY_DAYS} days, most recently {last}. This "
                             f"is a quiet date, not the offseason.")
             _write(out, args.out)

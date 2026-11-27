@@ -93,6 +93,16 @@ def test_counts_are_said_in_the_singular_and_the_plural():
     assert "market{'s' if len(live) != 1 else ''}, walked forward" in src["boards.py"]
 
 
+def test_a_quiet_date_counts_its_games():
+    """The NBA board on Thanksgiving: "No NBA games on this date, but the season is running — 73 game(s) in the last
+    10 days." College football's quiet date said it the same way."""
+    nba = (ROOT / "nba_build.py").read_text(encoding="utf-8")
+    cfb = (ROOT / "cfb_build.py").read_text(encoding="utf-8")
+    assert "game(s) in the" not in nba and "game(s) in the" not in cfb
+    assert "{recent} game{'' if recent == 1 else 's'} in the " in nba
+    assert "{len(recent)} game{'' if len(recent) == 1 else 's'} in the last " in cfb
+
+
 def test_the_nightly_write_up_is_handed_units_to_two_places():
     """The write-up narrates the numbers it is handed (engine/prose), and it was handed a pick's units unrounded:
     "returned less (+0.4435) than the win the market faded us on" on the Record page."""
