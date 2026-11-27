@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-27",
+      "kind": "model",
+      "title": "A back's touchdown chance reads the games its backfield partner played",
+      "body": "When a running back's partner missed some of the back's recent games and plays tonight, the back's touchdown chance counted games it had the backfield alone: its share of the work, its red-zone touches and its touchdowns. Measured on 2022-2025 with each season held out, those backs scored in 26.6% of games while our number said 30.4%. The chance is now read over the back's recent games with the partner there (28.1% on the same games), and the row says so first in its reasons. When the partner is ruled out instead, nothing changes yet: that case measured too noisy to price."
+    },
+    {
+      "date": "2026-11-27",
       "kind": "ship",
       "title": "A game report's touchdown board puts every book side by side",
       "body": "Each game report's Red zone section now ends with the touchdown board: the scorers we price for both teams, up to 10, ranked by our chance, with that chance as a fair price, the best price posted and where, and FanDuel's and DraftKings' prices beside it (a dash where that book posts none). A best price past −250 says so, the limit our picks keep. And when two or more of a game's tickets share a leg, the Parlays section says how often all of them cash, how often at least one does, and that a game without that leg loses every one."

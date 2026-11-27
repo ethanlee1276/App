@@ -154,6 +154,12 @@ class RedZoneUsage:
     #: the ball this season (engine/nflusage.red_zone_usage): {"games",
     #: "rz_car", "i5_car", "rz_tgt", "i10_tgt"}. None when not read.
     season_counts: dict | None = None
+    #: The same counts game by game this season, {week: {"rz_car", "i5_car",
+    #: "rz_tgt", "i10_tgt", "team" (the team's red-zone touches that game),
+    #: "implied" (its implied points)}}, so the measure can be taken again
+    #: over some of those games (`over`; engine/tdpartner, step AIE). None
+    #: when not read.
+    by_week: dict | None = None
 
     def goal_line(self) -> dict | None:
         """His goal-line work as COUNTS over the games measured — how the
@@ -200,6 +206,28 @@ class RedZoneUsage:
         if not bits:
             return f"No red-zone touches{last}" + season
         return f"{', '.join(bits)}{last}" + season
+
+    def over(self, weeks, most: int = 6) -> RedZoneUsage | None:
+        """The same measure over only ``weeks``: the most recent ``most`` of
+        them with red-zone rows (engine/nflusage.RZ_WEEKS), averaged the
+        way `nflusage.red_zone_usage` averages them. The season's counts
+        stay whole. None when none of ``weeks`` carries a row."""
+        from dataclasses import replace as _replace
+        bw = self.by_week or {}
+        want = {int(w) for w in weeks}
+        keep = sorted((w for w in bw if int(w) in want), key=int, reverse=True)[:most]
+        if not keep:
+            return None
+        n = len(keep)
+
+        def avg(k):
+            return sum(float((bw[w] or {}).get(k) or 0.0) for w in keep) / n
+        car, i5, tgt, i10, team = avg("rz_car"), avg("i5_car"), avg("rz_tgt"), avg("i10_tgt"), avg("team")
+        then = [float(bw[w]["implied"]) for w in keep if (bw[w] or {}).get("implied") is not None]
+        return _replace(self, carries_inside_5=round(i5, 2), carries_inside_10=round(car, 2),
+                        targets_inside_10=round(tgt, 2), targets_goal_line=round(i10, 2),
+                        rz_touch_share=round(min((tgt + car) / team, 1.0), 3) if team > 0 else 0.0,
+                        team_implied=round(sum(then) / len(then), 2) if then else None, games=n)
 
     @property
     def opportunities(self) -> float:
@@ -711,9 +739,12 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
         # gate the prop board answers to.
         from .injuries import player_injury_status
         status = player_injury_status(prop, getattr(game, "injuries", None) or [])
-        raw_prob, info = td_probability(prop, game, opp,
+        raw_prob, info = td_probability(c.get("chance_prop") or prop, game, opp,
                                         c.get("opportunity_share", 0.15),
                                         c.get("red_zone"), c.get("xfp"))
+        if c.get("partner_back"):
+            # The backfield partner back (engine/tdpartner): said first, as the reason the number moved.
+            info["reasons"] = [c["partner_back"]["reason"], *(info.get("reasons") or [])]
         # The SAME tempering + market shrink the value picks get — the
         # MLB watchlist once used raw probabilities and inflated EV past
         # the broken-price guard, silently emptying itself.
@@ -857,9 +888,11 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
             outside += 1
             continue
         prop, game, opp = c["prop"], c["game"], c["opponent"]
-        prob, info = td_probability(prop, game, opp,
+        prob, info = td_probability(c.get("chance_prop") or prop, game, opp,
                                     c.get("opportunity_share", 0.15),
                                     c.get("red_zone"), c.get("xfp"))
+        if c.get("partner_back"):
+            info["reasons"] = [c["partner_back"]["reason"], *(info.get("reasons") or [])]
         pick = build_pick(
             player=prop.player, team=prop.team, opponent=prop.opponent,
             market=ANYTIME_TD, label=MARKET_LABELS[ANYTIME_TD],

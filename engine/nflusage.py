@@ -148,8 +148,23 @@ def red_zone_usage(conn, season: int | None = None) -> dict:
             "i5_car": int(round(sum(weeks[w].get("i5_car", 0.0) for w in every))),
             "rz_tgt": int(round(sum(weeks[w].get("rz_tgt", 0.0) for w in every))),
             "i10_tgt": int(round(sum(weeks[w].get("i10_tgt", 0.0) for w in every)))}
+        # GAME BY GAME, so the measure can be taken again over some of these
+        # games (RedZoneUsage.over): a back's games with his backfield
+        # partner there (engine/tdpartner, step AIE).
+        by_week = {}
+        for w in every:
+            try:
+                wk_no = int(str(w))
+            except ValueError:
+                continue
+            m = weeks[w]
+            by_week[wk_no] = {"rz_car": max(m.get("rz_car", 0.0), m.get("i5_car", 0.0)),
+                              "i5_car": m.get("i5_car", 0.0), "rz_tgt": m.get("rz_tgt", 0.0),
+                              "i10_tgt": m.get("i10_tgt", 0.0),
+                              "team": team_weeks.get(team, {}).get(w, 0.0),
+                              "implied": implied_by.get((team, w))}
         out[_short_key(player, team)] = RedZoneUsage(
-            season_counts=season_counts,
+            season_counts=season_counts, by_week=by_week,
             carries_inside_5=round(i5, 2),
             carries_inside_10=round(car, 2),
             targets_inside_10=round(tgt, 2),

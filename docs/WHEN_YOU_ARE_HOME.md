@@ -9905,10 +9905,32 @@ research better for these games". I read it beside our CHI@DET report, section b
   one does, and that a game without the shared leg loses every one. It treats each ticket's other legs as unrelated
   once the shared leg is in, as the cards' own chances do. Tickets that share two or more legs get no line: that
   arithmetic is different, and a wrong number is worse than none.
-- **Being measured first: the backfield-partner split** ("Swift scored in only 2 of the 5 games both were active").
-  Our number for a back counts its recent games, including ones its partner missed, so when the partner returns the
-  share can read too high. That would change our numbers, not just the words, so it goes the way every model change
-  does: measured on past seasons, held out, and shipped only if it beats what we have. I'll say what it found here.
+- **Measured, then shipped: the backfield-partner split** ("Swift scored in only 2 of the 5 games both were
+  active"; "7 of his 10 rushing TDs came in the 4 games without Monangai"). Our touchdown number for a back reads
+  the back's recent games whole: its share of the team's work, its red-zone touches and its touchdowns. When the
+  partner missed some of those games and plays tonight, all three count games the back had the backfield alone.
+  The site already did this for a back's yards and catches (the teammate-back step) and carries (step AHX), but
+  never for touchdowns.
+  Measured before anything moved:
+  - **On play-by-play, 2017-2026:** in 1,420 games where a back's partner (the team's other back with the most
+    carries, 20 or more) had missed some of the back's last six games and then played, the back got 86% of the
+    red-zone touches its recent share said. With the partner there throughout: 101%. Counted over only the games
+    both played: 99%.
+  - **Through our own touchdown model, 2022-2025, each season held out:** in those 695 games the backs scored 26.6%
+    of the time, and our number said 30.4%. Read over the games both played, it says 28.1%. It was better in three
+    of the four seasons, which is the bar the other teammate steps had to clear. The more games the partner had
+    missed, the higher our number ran: 3.1 points with one game missed, 5.3 with three or more.
+  - **What changed:** an NFL back whose top teammate back is on tonight's slate, isn't ruled out, and missed one or
+    more of the back's last six games now has its touchdown chance read over its most recent six games with the
+    partner there (at least two of them, or nothing changes). That covers its share, its red-zone touches and this
+    season's touchdowns; last season's games stay as they were. The row says so first in its reasons ("Backfield
+    partner back: ... so the chance is read over the 5 games both played"). Most Likely, the touchdown picks, the
+    game report's scorers and the fantasy chances all read the same number. College isn't measured, so it is left
+    alone.
+  - **The other way round is a different question.** When the partner is ruled out tonight, our number for the back
+    who plays ran low (34.6% scored against 28.9% said, raw). That is the teammate-absence step, and for touchdowns it
+    measured too noisy to price, so it stays shown and not priced. I'll measure it again with this method before
+    touching it.
 
 **AID. The Record page and the boards say their counts and markets in words** (step 1022; 27 November; nothing
 to run). Still on "wording on the site and how data is used": I read every sentence in the site's public files (each

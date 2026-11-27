@@ -295,6 +295,48 @@ def _opportunity_shares(slate) -> dict:
             for key, v in volume.items()}
 
 
+def _partner_inputs(slate, cache: dict) -> dict:
+    """What `_partner_back` reads, built once a slate: each player's volume props, volume and team total (as
+    `_opportunity_shares` reads them) and each team's names on the slate."""
+    if "vol" not in cache:
+        from .models import REC_YDS, RECEPTIONS, RUSH_YDS
+        from .tdpartner import volume
+        props: dict = {}
+        playing: dict = {}
+        for p in slate.props:
+            playing.setdefault(p.team, set()).add(p.player)
+            if p.market in (RUSH_YDS, REC_YDS, RECEPTIONS):
+                props.setdefault((p.team, p.player), []).append(p)
+        vol = {k: volume(v) for k, v in props.items()}
+        tot: dict = {}
+        for (team, _player), v in vol.items():
+            tot[team] = tot.get(team, 0.0) + v
+        cache.update(vol=vol, tot=tot, props=props, playing=playing)
+    return cache
+
+
+def _partner_back(slate, prop, game, share, red_zone, cache: dict) -> tuple:
+    """(share, red zone, the prop the chance reads, the partner) for a back whose backfield partner plays tonight
+    after missing some of the back's recent games (engine/tdpartner, step AIE): the three inputs over the games both
+    played. The inputs as given, and two Nones, otherwise."""
+    from .tdpartner import chance_prop, find, volume, words
+    try:
+        c = _partner_inputs(slate, cache)
+        info = find(prop, game, c["playing"].get(prop.team, set()))
+    except Exception:                                        # noqa: BLE001
+        info = None
+    if not info:
+        return share, red_zone, None, None
+    key = (prop.team, prop.player)
+    v, tot = c["vol"].get(key), c["tot"].get(prop.team)
+    if v is not None and tot:
+        v_on = volume(c["props"].get(key) or [], info["shared"])
+        rest = tot - v + v_on
+        share = v_on / rest if rest > 0 else share
+    rz = red_zone.over(info["shared"]) if getattr(red_zone, "by_week", None) else None
+    return share, rz or red_zone, chance_prop(prop, info["shared"]), {**info, "reason": words(info, prop.player)}
+
+
 def _game_key(game):
     """One game, keyed the way both teams agree on."""
     if game is None:
@@ -460,6 +502,7 @@ def _long_shots(slate, usage: dict | None = None,
     # Week 1 board that was two of six touchdown cards.
     team_of = usage.get("team_of") or {}
     shares = _opportunity_shares(slate)
+    partner_cache: dict = {}
     candidates = []
     for prop in slate.props:
         if prop.market != ANYTIME_TD or not prop.lines:
@@ -475,13 +518,18 @@ def _long_shots(slate, usage: dict | None = None,
         if best is None:
             continue
         keys = usage_keys(prop.player, prop.team, team_of)
+        # THE BACKFIELD PARTNER BACK (engine/tdpartner, step AIE): a back's inputs over the games both played.
+        share, rz, chance, partner = _partner_back(slate, prop, slate.game_for(prop),
+                                                   shares.get((prop.team, prop.player), 0.15),
+                                                   from_maps(rz_map, keys), partner_cache)
         candidates.append({
             "prop": prop, "game": slate.game_for(prop),
             "opponent": slate.team(prop.opponent),
-            "opportunity_share": shares.get((prop.team, prop.player), 0.15),
+            "opportunity_share": share,
             "odds": best.over_odds, "book": best.book,
             "under_odds": best.under_odds,
-            "red_zone": from_maps(rz_map, keys),
+            "red_zone": rz,
+            **({"chance_prop": chance, "partner_back": partner} if partner else {}),
             "snap_share": from_maps(snap_map, keys),
             # His slice of the offence's expected points — the strongest
             # touchdown signal we record, and one engine/touchdowns could
@@ -571,6 +619,7 @@ def td_chances(slate, usage: dict | None = None) -> dict:
     xfp_map = usage.get("xfp") or {}
     team_of = usage.get("team_of") or {}
     shares = _opportunity_shares(slate)
+    partner_cache: dict = {}
     out: dict = {}
     for prop in slate.props:
         if prop.market != ANYTIME_TD:
@@ -580,9 +629,13 @@ def td_chances(slate, usage: dict | None = None) -> dict:
             continue
         try:
             keys = usage_keys(prop.player, prop.team, team_of)
-            raw, info = td_probability(prop, slate.game_for(prop), slate.team(prop.opponent),
-                                       shares.get(key, 0.15), from_maps(rz_map, keys),
-                                       from_maps(xfp_map, keys))
+            # The same backfield-partner read the touchdown watch takes (engine/tdpartner, step AIE).
+            share, rz, chance, partner = _partner_back(slate, prop, slate.game_for(prop), shares.get(key, 0.15),
+                                                       from_maps(rz_map, keys), partner_cache)
+            raw, info = td_probability(chance or prop, slate.game_for(prop), slate.team(prop.opponent),
+                                       share, rz, from_maps(xfp_map, keys))
+            if partner:
+                info["reasons"] = [partner["reason"], *(info.get("reasons") or [])]
         except Exception:                                    # noqa: BLE001
             continue
         prob = clamp(calibrated("nfl", ANYTIME_TD, raw), 1e-4, 0.999)
