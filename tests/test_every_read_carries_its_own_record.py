@@ -206,6 +206,35 @@ def test_the_record_counts_how_often_our_number_beat_the_line():
     assert "function recNumberSection(x, scope) {" in rec and "Our number against the line" in rec
 
 
+def test_the_record_says_how_far_our_number_ran():
+    """Step AIN (27 November 2026): the NBA's report picks hit their overs more often than we said and their unders
+    less, which is what a projection set too low does; nearer-or-farther cannot show it. Each player's game in a
+    market counts once, whatever its line or side and in whichever books, and above zero means ours ran low."""
+    from engine import ledger
+    conn = _journal()
+    ins = ("INSERT INTO bets (ts, sport, date, player, market, side, line, odds, projection, status, actual, category, "
+           "leg) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    # One game at two lines, an over and an under: two picks for nearer-or-farther, one game for the miss.
+    conn.executemany(ins, [("2026-11-15T00:00:00", "nba", "2026-11-15", "Alt", "rebounds", "OVER", 7.5, -110, 9.0,
+                            "won", 11.0, "main", None),
+                           ("2026-11-15T00:00:00", "nba", "2026-11-15", "Alt", "rebounds", "UNDER", 12.5, -110, 9.0,
+                            "won", 11.0, "likely", None)])
+    conn.commit()
+    real = ledger.NUMBER_MARKET_MIN
+    try:
+        ledger.NUMBER_MARKET_MIN = 10
+        nba = ledger.number_vs_line(conn, "nba")
+    finally:
+        ledger.NUMBER_MARKET_MIN = real
+    # Points: 29.5 against 30 (8 games), 20 (3) and 27 (1). Rebounds: 9.5 against 10 (3) and 6 (7), and Alt's 9 against
+    # 11 once.
+    assert nba["gap_by_market"] == {"points": {"games": 12, "gap": -2.25, "over": 0.667, "under": 0.333},
+                                    "rebounds": {"games": 11, "gap": -1.91, "over": 0.364, "under": 0.636}}, \
+        nba["gap_by_market"]
+    assert nba["by_market"]["rebounds"] == [4, 12], "the two picks still count twice for nearer-or-farther"
+    assert ledger.number_vs_line(conn, "nba")["gap_by_market"] == {}, "listed once twenty of its games have finished"
+    assert ledger.number_vs_line(conn)["gap_by_market"] == {}, "the bench and a thin market say nothing"
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

@@ -9883,6 +9883,19 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIN. Does our number run low? Now measured, by market** (step 1032; 27 November; nothing to run). With the new
+calendar's day lists I pulled every graded report pick (1,348) and looked for what loses. Two things. First, every
+league's report picks hit about what their prices need (63% against 65%), so they lose roughly the book's cut; our
+printed chance is honest or cautious, never too high (the NBA said 62% and hit 65%), and picking only where our
+chance beat the price did not hold up from the first half of the days to the second, so nothing changes there.
+Second, the NBA's misses lean one way: rebound overs hit 67% where we said 62%, assist overs 70% where we said 60%,
+rebound unders 42% where we said 58%, and rebounds-and-assists unders 8 of 24 (33%) where we said 56%. That is what
+a projection set too low does. Nothing measured it, so the Record's "Our number against the line" now also keeps,
+for each league and market, how far what happened landed from our number on average (each player's game once) and
+how often it landed above. Nothing on the page changes and no number moves; I read it off the record after the next
+settle, and if the NBA's rebounds and assists run low by a margin that holds in both halves of the games, the fix is
+measured before it ships.
+
 **AIM. The game report picks have a profit calendar** (step 1031; 27 November; nothing to run). You asked for a
 calendar for the game report picks too. The Record page's profit calendar now has a third switch beside Edge bets
 and Most Likely: Report picks. It shows every pick our game reports posted (0.1 unit each, the same picks and

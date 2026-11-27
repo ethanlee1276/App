@@ -8117,7 +8117,18 @@ def number_vs_line(conn, sport: str | None = None, since: str | None = None) -> 
     line, how often the line was, and how often they were level:
     {"picks", "closer", "farther", "level", "by_market": {market: [closer, picks]}}
     (a market listed once NUMBER_MARKET_MIN of its picks have finished). Less
-    the bench, as every figure on the page is."""
+    the bench, as every figure on the page is.
+
+    AND HOW FAR OUR NUMBER RAN, ONE WAY OR THE OTHER (step AIN, 27 November
+    2026). Nearer or farther says nothing of a number that runs low every
+    night: the NBA's report picks hit their rebound and assist overs more often
+    than we said (67% and 70%, where we said 62% and 60%) and their unders far
+    less (rebounds-and-assists unders 8 of 24, where we said 56%), which is what
+    a projection set too low does. ``gap_by_market``: {market: {"games", "gap",
+    "over", "under"}}, each player's game in a market once (whatever its line
+    or side, in whichever books), ``gap`` the average of what happened less our
+    number (above zero, ours ran low), ``over`` and ``under`` the share of games
+    above and below it. A measurement: nothing reads it to move a number."""
     q = ("SELECT sport, date, player, market, UPPER(COALESCE(side, '')), line, COALESCE(leg, 1), projection, actual "
          "FROM bets WHERE status IN ('won', 'lost', 'push') AND projection IS NOT NULL AND line IS NOT NULL "
          "AND actual IS NOT NULL AND player IS NOT NULL AND player != '' "
@@ -8135,11 +8146,26 @@ def number_vs_line(conn, sport: str | None = None, since: str | None = None) -> 
         q += " AND date >= ?"
         args.append(since)
     seen: set = set()
-    out = {"picks": 0, "closer": 0, "farther": 0, "level": 0, "by_market": {}}
+    once: set = set()
+    out = {"picks": 0, "closer": 0, "farther": 0, "level": 0, "by_market": {}, "gap_by_market": {}}
     markets: dict = {}
+    gaps: dict = {}             # market -> [games, sum of (what happened - ours), games above ours, games below]
     for sp, day, player, market, side, line, leg, proj, actual in conn.execute(q, args).fetchall():
         if str(market or "") in NUMBER_SKIP_MARKETS:
             continue
+        game = (str(sp).lower(), day, player, market, leg)
+        if game not in once:
+            try:
+                miss = float(actual) - float(proj)
+            except (TypeError, ValueError):
+                miss = None
+            if miss is not None:
+                once.add(game)
+                g = gaps.setdefault(str(market), [0, 0.0, 0, 0])
+                g[0] += 1
+                g[1] += miss
+                g[2] += miss > 0
+                g[3] += miss < 0
         k = (str(sp).lower(), day, player, market, side, line, leg)
         if k in seen:
             continue
@@ -8160,6 +8186,9 @@ def number_vs_line(conn, sport: str | None = None, since: str | None = None) -> 
             out["level"] += 1
     out["by_market"] = {k: v for k, v in sorted(markets.items(), key=lambda kv: -kv[1][1])
                         if v[1] >= NUMBER_MARKET_MIN}
+    out["gap_by_market"] = {k: {"games": v[0], "gap": round(v[1] / v[0], 2), "over": round(v[2] / v[0], 3),
+                                "under": round(v[3] / v[0], 3)}
+                            for k, v in sorted(gaps.items(), key=lambda kv: -kv[1][0]) if v[0] >= NUMBER_MARKET_MIN}
     return out
 
 
