@@ -153,17 +153,26 @@ function bpCardHTML(row, n, kind, sport) {
 
 /* SGPX ON THE RANKED PAGE (engine/sgpx, steps ACI and ACM; Ethan, 22 November: "make sure the spgx are layed out on
    the same page with the game report picks"): every posted SGPX ticket, a window's and the day's, as the cards
-   above, each leg with its game; one book that has every leg first, then our chance. */
-function bpSgpxRows(d) {
+   above, each leg with its game; one book that has every leg first, then our chance.
+
+   TWO-LEG AND THREE-LEG, EACH RANKED ON ITS OWN (step AIP; Ethan, 27 November: "It should also be ranking the best
+   2 leg parlays and best 3 leg parlays. And also sgx parlays should also have 2 leg versions as well"): the SGPX
+   tab has the player-prop tab's size switch, its two-leg tickets (engine/sgpx "props2", "tds2") and its
+   three-leg ones each ranked best to worst. */
+const BP_SGPX_KINDS = { twos: ["props2", "tds2"], threes: ["props", "tds"] };
+const BP_SGPX_WORD = { props: "parlay", tds: "touchdown parlay", props2: "two-leg parlay",
+                       tds2: "two-leg touchdown parlay" };
+let _bpSgpxSize = "twos";
+function bpSgpxRows(d, size) {
   const rows = [];
-  (((d || {}).sgpx || {}).slots || []).filter((e) => e && e.posted_at).forEach((e) => ["props", "tds"].forEach((k) =>
+  (((d || {}).sgpx || {}).slots || []).filter((e) => e && e.posted_at).forEach((e) => (BP_SGPX_KINDS[size] || []).forEach((k) =>
     (e[k] || []).forEach((t, i) => { if ((t.legs || []).length >= 2) rows.push({ e, k, t, n: i + 1 }); })));
   const whole = (r) => ((r.t.one_book || {}).book ? 0 : 1);
   return rows.sort((a, b) => whole(a) - whole(b) || Number(b.t.joint) - Number(a.t.joint));
 }
 function bpSgpxCardHTML(row, n) {
   const { e, k, t } = row;
-  const title = `SGPX ${e.day ? "day " : ""}${k === "tds" ? "touchdown parlay" : "parlay"} ${row.n}`;
+  const title = `SGPX ${e.day ? "day " : ""}${BP_SGPX_WORD[k] || "parlay"} ${row.n}`;
   const where = e.day ? `${e.label}’s games` : `Kickoff ${e.label}`;
   const ob = t.one_book || {};
   return `<article class="bp-card">
@@ -263,9 +272,16 @@ async function renderBestParlays() {
                 left.gone ? `${plural(left.gone, "ticket")} with a leg no book lists now ${left.gone === 1 ? "is" : "are"} left off` : ""]
     .filter(Boolean).join(" · ");
   if (sub) sub.textContent = "— every report parlay, ranked best to worst";
-  const sg = bpSgpxRows(d);
+  // The SGPX tickets, two-leg and three-leg each ranked on its own, behind the same switch as the props (step AIP).
+  const sg2 = bpSgpxRows(d, "twos"), sg3 = bpSgpxRows(d, "threes");
+  const sgSize = _bpSgpxSize === "threes" || !sg2.length ? (sg3.length ? "threes" : "twos") : "twos";
+  const sg = sgSize === "twos" ? sg2 : sg3;
+  const sgChips = [["twos", "Two-leg", sg2.length], ["threes", "Three-leg", sg3.length]].filter(([, , n]) => n)
+    .map(([k, label, n]) => `<button type="button" class="bp-size${k === sgSize ? " on" : ""}" data-bp-sgpx-size="${k}" aria-pressed="${
+      k === sgSize}">${escapeHtml(label)} <span>${n}</span></button>`).join("");
   const sgpx = sg.length
-    ? `<p class="bp-lead">Our strongest picks from different games, combined: a kickoff window’s tickets post once its games have posted their picks, the day’s with its first games. One book that has every leg first, then our chance of the whole ticket.</p>
+    ? `<div class="bp-size-row" role="group" aria-label="SGPX parlay size">${sgChips}</div>
+       <p class="bp-lead">Our strongest picks from different games, combined, the two-leg and the three-leg tickets each ranked on their own: a kickoff window’s tickets post once its games have posted their picks, the day’s with its first games. One book that has every leg first, then our chance of the whole ticket.</p>
        ${sg.map((r, i) => bpSgpxCardHTML(r, i + 1)).join("")}`
     : "";
   const body = subtabbedHTML("bestparlays", [
@@ -294,6 +310,10 @@ async function renderBestParlays() {
   });
   host.querySelectorAll("[data-bp-size]").forEach((b) => b.addEventListener("click", () => {
     _bpSize = b.dataset.bpSize;
+    renderBestParlays();
+  }));
+  host.querySelectorAll("[data-bp-sgpx-size]").forEach((b) => b.addEventListener("click", () => {
+    _bpSgpxSize = b.dataset.bpSgpxSize;
     renderBestParlays();
   }));
   host.querySelectorAll("[data-bp-tier]").forEach((b) => b.addEventListener("click", () => {

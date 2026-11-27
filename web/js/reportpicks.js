@@ -202,14 +202,17 @@ function rpTopHTML(items) {
 /* SGPX ON THE DAY'S PAGE (Ethan, 22 November: "make sure the spgx are layed out on the same page with the game
    report picks"): every posted SGPX ticket, the day's first, in a row like the likeliest tickets above it, its
    legs, our chance and the price to take it at; a tap opens the SGPX tab, where each is drawn whole. */
+//: Each SGPX kind's name (engine/sgpx TITLES; the two-leg kinds since step AIP).
+const RP_SGPX_WORD = { props: "parlay", tds: "touchdown parlay", props2: "two-leg parlay",
+                       tds2: "two-leg touchdown parlay" };
 function rpSgpxTitle(e, kind, n) {
-  return `SGPX ${e.day ? "day " : ""}${kind === "tds" ? "touchdown parlay" : "parlay"} ${n}`;
+  return `SGPX ${e.day ? "day " : ""}${RP_SGPX_WORD[kind] || "parlay"} ${n}`;
 }
 function rpSgpxTodayHTML(d) {
   // The likeliest of each kind a window (the day's first): a phone's screen, not every ticket; the tab has them all.
   const rows = [];
   let all = 0;
-  ((d.sgpx || {}).slots || []).filter((e) => e && e.posted_at).forEach((e) => ["props", "tds"].forEach((k) => {
+  ((d.sgpx || {}).slots || []).filter((e) => e && e.posted_at).forEach((e) => ["props", "props2", "tds", "tds2"].forEach((k) => {
     all += (e[k] || []).length;
     if ((e[k] || [])[0]) rows.push({ e, k, t: e[k][0], n: 1 });
   }));

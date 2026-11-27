@@ -223,11 +223,12 @@ def test_a_report_and_report_picks_show_them():
         sec = reports[0]["sections"][2]
         assert sec["title"] == "SGPX parlays"
         cards = [b for b in sec["blocks"] if b.get("type") == "parlays"]
-        assert [b["kind"] for b in cards] == ["sgpx"] * 4, "the day's two kinds, then the window's"
+        assert [b["kind"] for b in cards] == ["sgpx"] * 8, "the day's four kinds, then the window's"
         titles = [b["items"][0]["title"] for b in cards]
-        assert titles == ["SGPX day parlay 1", "SGPX day touchdown parlay 1", "SGPX parlay 1",
-                          "SGPX touchdown parlay 1"], titles
-        first = cards[2]["items"][0]
+        assert titles == ["SGPX day parlay 1", "SGPX day two-leg parlay 1", "SGPX day touchdown parlay 1",
+                          "SGPX day two-leg touchdown parlay 1", "SGPX parlay 1", "SGPX two-leg parlay 1",
+                          "SGPX touchdown parlay 1", "SGPX two-leg touchdown parlay 1"], titles
+        first = cards[4]["items"][0]
         assert all(l["game"] for l in first["legs"])
         assert first["price_line"].startswith(f"{first['joint']:.0%} by our numbers · fair ")
         early = next(e for e in r["sgpx"]["slots"] if e.get("posted") and not e.get("day"))
@@ -265,7 +266,9 @@ def test_the_heartbeat_counts_them():
         early = next(e for e in r["sgpx"]["slots"] if e["key"] == "2030-11-24T18:00Z")
         day = next(e for e in r["sgpx"]["slots"] if e.get("day"))
         assert got == {"posted": 1, "waiting": 1, "props": 3, "tds": len(early["tds"]),
-                       "day": {"posted": 1, "waiting": 0, "props": len(day["props"]), "tds": len(day["tds"])}}, got
+                       "props2": len(early["props2"]), "tds2": len(early["tds2"]),
+                       "day": {"posted": 1, "waiting": 0, "props": len(day["props"]), "tds": len(day["tds"]),
+                               "props2": len(day["props2"]), "tds2": len(day["tds2"])}}, got
     finally:
         GP.ticket = was
 
@@ -284,9 +287,11 @@ def test_the_record_journals_and_counts_them():
         assert n == sum(made.values()) and made[("props", False)] == 3 and made[("tds", False)] >= 1, (n, made)
         assert PL.log_sgpx(conn, r["sgpx"], "nfl", r["date"], r["games"]) == 0, "journaled once"
         rows = conn.execute("SELECT source, parlay_type, at_start, n_legs, grade FROM parlays").fetchall()
-        assert sorted({x[0] for x in rows}) == ["sgpx_day_props", "sgpx_day_td", "sgpx_props", "sgpx_td"]
+        assert sorted({x[0] for x in rows}) == ["sgpx2_props", "sgpx2_td", "sgpx_day2_props", "sgpx_day2_td",
+                                                "sgpx_day_props", "sgpx_day_td", "sgpx_props", "sgpx_td"]
         assert {x[1] for x in rows} == {"sgpx"}
-        assert {x[2] for x in rows} == {1} and {x[3] for x in rows} == {3}
+        assert {x[2] for x in rows} == {1} and {x[3] for x in rows} == {2, 3}
+        assert {x[3] for x in rows if "2_" in x[0]} == {2}, "the two-leg kinds journal two legs, under their own sources"
         assert all(x[4].startswith("SGPX ") for x in rows)
         rec = PL.game_parlay_record(conn, sources=PL.SGPX_SOURCES)
         assert rec["nfl"]["sgpx_props"]["open"] == 3 and rec["nfl"]["sgpx_td"]["open"] == made[("tds", False)]
@@ -389,7 +394,11 @@ def test_one_book_first_and_its_price_on_the_card():
     c = S.card(dict(made[1], fair_words="+200", take_words="+215", games=["A@B", "C@D"]), 1, "props")
     assert c["one_book"] == "One book has every leg: DraftKings"
     rj = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
-    assert 'sgpx_day_props: "SGPX day parlays", sgpx_day_td: "SGPX day touchdown parlays" };' in rj
+    assert 'sgpx_day_props: "SGPX day parlays", sgpx_day_td: "SGPX day touchdown parlays",' in rj
+    assert 'sgpx_day2_props: "SGPX day two-leg parlays", sgpx_day2_td: "SGPX day two-leg touchdown parlays" };' in rj
+    from engine import parlayledger as PL
+    for src in PL.SGPX_SOURCES:
+        assert f"{src}: " in rj and f'"{src}"' in rj[rj.index("const GP_KINDS = ["):], f"the Record names and orders {src}"
 
 
 #: A college Saturday still to come (step ACO).
@@ -487,6 +496,39 @@ def test_a_long_window_counts_its_games():
     e["games"] = e["games"][:3]
     assert "(A0 at B0, A1 at B1, A2 at B2)" in S.section([e])["blocks"][0]["text"], "as each leg names its game"
 
+
+def test_two_leg_tickets_too():
+    """Step AIP (27 November 2026; Ethan: "sgx parlays should also have 2 leg versions as well"): each window and day
+    posts two-leg tickets of each kind beside its three-leg ones, two legs from two games, chosen the same way, each
+    under its own name and journal source."""
+    was = _stub_pairs()
+    try:
+        r = _result()
+        S.attach(r, "nfl", None, now=dt.datetime(2030, 11, 24, 16, 50, tzinfo=UTC))
+        early = next(e for e in r["sgpx"]["slots"] if e["key"] == "2030-11-24T18:00Z")
+        day = next(e for e in r["sgpx"]["slots"] if e.get("day"))
+        for e in (early, day):
+            for kind in ("props2", "tds2"):
+                tickets = e[kind]
+                assert 1 <= len(tickets) <= S.PER_KIND, (kind, len(tickets))
+                for t in tickets:
+                    assert len(t["legs"]) == 2 and len(set(t["games"])) == 2, "two legs, two games"
+                    assert t["joint"] > 0 and t["take_words"], t
+        assert all(len(t["legs"]) == 3 for k in ("props", "tds") for t in early[k]), "the three-leg ones as they were"
+        # Two-leg day tickets span two kickoff windows, as the three-leg ones do.
+        window = {g: i for i, s in enumerate(S.days(S.slots(r["game_parlays"]["games"]))[0]["slots"]) for g in
+                  [S._label(x) for x in s["games"]]}
+        assert all(len({window[g] for g in t["games"]}) == 2 for t in day["props2"])
+        assert [x for x in S.KINDS] == ["props", "props2", "tds", "tds2"]
+        assert S.SOURCES["props2"] == "sgpx2_props" and S.DAY_SOURCES["tds2"] == "sgpx_day2_td"
+        c = S.card(early["props2"][0], 1, "props2")
+        assert c["title"] == "SGPX two-leg parlay 1" and len(c["legs"]) == 2
+        assert S.card(day["tds2"][0], 2, "tds2", day=True)["title"] == "SGPX day two-leg touchdown parlay 2"
+        heads = [b["text"] for b in S.section([early])["blocks"] if b.get("type") == "h"]
+        assert heads == ["Player props from different games", "Two-leg player props from different games",
+                         "Touchdown scorers from different games", "Two touchdown scorers from different games"], heads
+    finally:
+        GP.ticket = was
 
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]

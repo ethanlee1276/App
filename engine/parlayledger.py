@@ -594,7 +594,10 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
 #: kind's source (sgpx.SOURCES) and counted on the Record beside each game's own parlays (`game_parlay_record`).
 SGPX_SOURCES = {"sgpx_props": "sgpx_props", "sgpx_td": "sgpx_td",
                 # The day's tickets (step ACM), whose later legs were picked before their games' inactives.
-                "sgpx_day_props": "sgpx_day_props", "sgpx_day_td": "sgpx_day_td"}
+                "sgpx_day_props": "sgpx_day_props", "sgpx_day_td": "sgpx_day_td",
+                # The two-leg tickets (step AIP), each size on its own record.
+                "sgpx2_props": "sgpx2_props", "sgpx2_td": "sgpx2_td",
+                "sgpx_day2_props": "sgpx_day2_props", "sgpx_day2_td": "sgpx_day2_td"}
 
 
 def _leg_row(l: dict) -> dict:

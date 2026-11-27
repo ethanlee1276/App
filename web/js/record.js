@@ -1058,9 +1058,13 @@ const GP_KIND = { three: "Three-leg parlays", two: "Two-leg parlays",
   // The SGPX parlays (engine/sgpx, step ACI): our strongest picks from different games, combined.
   sgpx_props: "SGPX parlays", sgpx_td: "SGPX touchdown parlays",
   // …and the day's (step ACM), whose later legs were picked before their games' inactives.
-  sgpx_day_props: "SGPX day parlays", sgpx_day_td: "SGPX day touchdown parlays" };
+  sgpx_day_props: "SGPX day parlays", sgpx_day_td: "SGPX day touchdown parlays",
+  // …and their two-leg tickets (step AIP), each size on its own record.
+  sgpx2_props: "SGPX two-leg parlays", sgpx2_td: "SGPX two-leg touchdown parlays",
+  sgpx_day2_props: "SGPX day two-leg parlays", sgpx_day2_td: "SGPX day two-leg touchdown parlays" };
 //: A league's kinds in the page's order: the three-leg tickets, the two-leg ones, the scorer pairs, then SGPX.
-const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx_td", "sgpx_day_props", "sgpx_day_td"];
+const GP_KINDS = ["three", "two", "scorers", "sgpx_props", "sgpx2_props", "sgpx_td", "sgpx2_td",
+                  "sgpx_day_props", "sgpx_day2_props", "sgpx_day_td", "sgpx_day2_td"];
 // How a game's ticket was made up (engine/gameparlays.FILL_KINDS; "report": its own picks), in words, by kind.
 //: A ticket's class in the page's order (engine/gameparlays.CLASSES).
 const GP_CLASSES = [["safe", "Safe"], ["balanced", "Balanced"], ["pop", "Pop"], ["long", "Long shots"]];

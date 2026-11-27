@@ -4,6 +4,12 @@
     {
       "date": "2026-11-27",
       "kind": "ship",
+      "title": "Two-leg SGPX tickets, and each size ranked on Best Parlays",
+      "body": "Every kickoff window and every day now posts two-leg SGPX tickets beside its three-leg ones: two of our strongest picks from two different games, for player props and for touchdown scorers, chosen the same way. On Best Parlays the SGPX tab has a Two-leg and Three-leg switch, each size ranked best to worst on its own, as the player-prop tab already does. The Record keeps the two-leg tickets on their own lines, so each size's record reads apart."
+    },
+    {
+      "date": "2026-11-27",
+      "kind": "ship",
       "title": "Bad weather shows in red at the top of the game",
       "body": "An outdoor game whose forecast is bad now says so in red, right under its date on the game page and first thing in its game report: rain or snow at a 60% chance or more, or in football a wind of 13 mph or more at kickoff. It names the game (a windy game, a rainy game, a snowy game), gives the forecast, and says what that weather has done to player numbers in NFL games from 2016 to 2025, which our numbers for the game already include. Indoor games, closed roofs and games without a forecast show nothing, and it comes off once the game is final."
     },

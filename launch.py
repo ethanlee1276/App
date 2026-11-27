@@ -923,14 +923,19 @@ def _board_counts(path: str) -> dict:
                        "waiting": sum(1 for e in sg["slots"] if isinstance(e, dict) and e.get("post_note")
                                       and not e.get("day")),
                        "props": sum(len(e.get("props") or []) for e in posted),
-                       "tds": sum(len(e.get("tds") or []) for e in posted)}
+                       "tds": sum(len(e.get("tds") or []) for e in posted),
+                       # The two-leg tickets (step AIP).
+                       "props2": sum(len(e.get("props2") or []) for e in posted),
+                       "tds2": sum(len(e.get("tds2") or []) for e in posted)}
         # …and the day's tickets apart (step ACM).
         day = [e for e in sg["slots"] if isinstance(e, dict) and e.get("day")]
         if day:
             out["sgpx"]["day"] = {"posted": sum(1 for e in day if e.get("posted_at")),
                                   "waiting": sum(1 for e in day if e.get("post_note")),
                                   "props": sum(len(e.get("props") or []) for e in day if e.get("posted_at")),
-                                  "tds": sum(len(e.get("tds") or []) for e in day if e.get("posted_at"))}
+                                  "tds": sum(len(e.get("tds") or []) for e in day if e.get("posted_at")),
+                                  "props2": sum(len(e.get("props2") or []) for e in day if e.get("posted_at")),
+                                  "tds2": sum(len(e.get("tds2") or []) for e in day if e.get("posted_at"))}
         if not sg["slots"] and str(sg.get("note") or "").startswith("the SGPX parlays did not build"):
             out["sgpx"]["error"] = str(sg["note"]).split(":")[1].strip()[:80] if ":" in sg["note"] else "failed"
     return out

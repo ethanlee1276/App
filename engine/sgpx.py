@@ -39,6 +39,11 @@ ONE BOOK FIRST (step ACM). An SGPX is one bet at one sportsbook, so among the ti
 those one book prices at every leg's number rank first (gameparlays.book_ranker, as each game's own parlays rank),
 and the card says the book and its prices (gameparlays.one_book).
 
+TWO-LEG TICKETS TOO (step AIP, 27 November; Ethan, on the Best Parlays page's three-leg SGPX day parlays: "sgx
+parlays should also have 2 leg versions as well"). Each window and day posts PER_KIND two-leg tickets of each kind
+beside its three-leg ones ("props2", "tds2": SIZES), two legs from two games, chosen and kept the same way, and
+journaled under their own sources, so the record says how each size does.
+
 COLLEGE FOOTBALL TOO (step ACO, 22 November). Ethan wants every league run the way the NFL runs, and a college
 Saturday is the NFL's Sunday many times over: a noon window, a 3:30 one, a night one, a late one. College's games
 post their picks 90 minutes before kickoff with no inactives to wait for (gameparlays.INACTIVES_SPORTS is the
@@ -71,18 +76,25 @@ MAX_USES = 2
 MAX_SHARED = 1
 #: The likeliest legs of each kind a slot's tickets are made from.
 MAX_POOL = 14
-KINDS = ("props", "tds")
+#: The kinds, in the order a report says them: three-leg and two-leg player props, then touchdown scorers (step
+#: AIP); each kind's legs come from its pool (``legs_of``) and SIZES of them make a ticket.
+KINDS = ("props", "props2", "tds", "tds2")
+POOLS = {"props": "props", "props2": "props", "tds": "tds", "tds2": "tds"}
+SIZES = {"props": SIZE, "props2": 2, "tds": SIZE, "tds2": 2}
 #: Each kind's journal source (engine/parlayledger.log_sgpx) and its card's name.
-SOURCES = {"props": "sgpx_props", "tds": "sgpx_td"}
+SOURCES = {"props": "sgpx_props", "tds": "sgpx_td", "props2": "sgpx2_props", "tds2": "sgpx2_td"}
 #: The day's tickets (step ACM), each kind under its own source and name.
-DAY_SOURCES = {"props": "sgpx_day_props", "tds": "sgpx_day_td"}
-TITLES = {"props": "SGPX parlay", "tds": "SGPX touchdown parlay"}
-DAY_TITLES = {"props": "SGPX day parlay", "tds": "SGPX day touchdown parlay"}
+DAY_SOURCES = {"props": "sgpx_day_props", "tds": "sgpx_day_td", "props2": "sgpx_day2_props", "tds2": "sgpx_day2_td"}
+TITLES = {"props": "SGPX parlay", "tds": "SGPX touchdown parlay",
+          "props2": "SGPX two-leg parlay", "tds2": "SGPX two-leg touchdown parlay"}
+DAY_TITLES = {"props": "SGPX day parlay", "tds": "SGPX day touchdown parlay",
+              "props2": "SGPX day two-leg parlay", "tds2": "SGPX day two-leg touchdown parlay"}
 #: A window's or a day's opening line names its games up to this many, and counts them past it (step ACO).
 LEAD_GAMES = 6
 #: A day ticket's legs span this many kickoff windows or more.
 DAY_MIN_WINDOWS = 2
-HEADS = {"props": "Player props from different games", "tds": "Touchdown scorers from different games"}
+HEADS = {"props": "Player props from different games", "tds": "Touchdown scorers from different games",
+         "props2": "Two-leg player props from different games", "tds2": "Two touchdown scorers from different games"}
 KEEP_DAYS = 14
 #: A day ticket's leg from a game that had not posted yet, in words (step ACO): an NFL game posts after both clubs'
 #: inactives, a college game 90 minutes before kickoff with none to wait for.
@@ -291,9 +303,10 @@ def build_slot(sport: str, s: dict, board_games: list, memo: dict | None = None,
     rank = (books or (None, None, None))[2]
     out = {"key": s["key"], "label": s["label"], "games": [_label(x) for x in s["games"]]}
     for kind in KINDS:
-        pool = [leg for x in s["games"] for leg in legs_of(x, kind, sport)]
+        pool = [leg for x in s["games"] for leg in legs_of(x, POOLS[kind], sport)]
         pool = sorted(pool, key=lambda leg: -float(leg["p"]))[:MAX_POOL]
-        made = [t for c in itertools.combinations(pool, SIZE) if (t := ticket(sport, list(c), by_game, memo))]
+        made = [t for c in itertools.combinations(pool, SIZES[kind])
+                if (t := ticket(sport, list(c), by_game, memo))]
         out[kind] = choose(made, rank=rank)
         _price_books(out[kind], books)
     return out
@@ -339,7 +352,7 @@ def build_day(sport: str, d: dict, result: dict, memo: dict | None = None, books
         for x in d["games"]:
             game = _label(x)
             src = x if _posted(x) else (held.get(game) or {})
-            for leg in legs_of(src, kind, sport, game=game):
+            for leg in legs_of(src, POOLS[kind], sport, game=game):
                 if window.get(game, 0) > 0:
                     leg["sgpx_early"] = not _posted(x)
                     if leg["sgpx_early"]:
@@ -347,7 +360,7 @@ def build_day(sport: str, d: dict, result: dict, memo: dict | None = None, books
                 pool.append(leg)
         pool = sorted(pool, key=lambda leg: -float(leg["p"]))[:MAX_POOL]
         made = []
-        for c in itertools.combinations(pool, SIZE):
+        for c in itertools.combinations(pool, SIZES[kind]):
             if len({window.get(leg["sgpx_game"], 0) for leg in c}) < DAY_MIN_WINDOWS:
                 continue
             t = ticket(sport, list(c), by_game, memo)
@@ -472,7 +485,8 @@ def attach(result: dict, sport: str, out=None, now=None) -> str:
                 e["blocks"] = sec["blocks"]
         result[KEY] = {"sport": sp, "slots": entries, "note": NOTE, "early_words": early_words(sp)}
         n = {k: sum(len(e.get(k) or []) for e in entries) for k in KINDS}
-        return (f"SGPX parlays: {n['props']} player-prop and {n['tds']} touchdown ticket(s) across "
+        return (f"SGPX parlays: {n['props']} three-leg and {n['props2']} two-leg player-prop, {n['tds']} three-leg "
+                f"and {n['tds2']} two-leg touchdown ticket(s) across "
                 f"{sum(1 for e in entries if e.get('posted') and not e.get('day'))} kickoff slot(s)"
                 + (" and the day" if any(e.get("posted") and e.get("day") for e in entries) else "")
                 + (f", {made} posted now" if made else "")

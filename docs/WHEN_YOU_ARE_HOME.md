@@ -9883,6 +9883,17 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIP. SGPX tickets come in two legs too, and Best Parlays ranks each size** (step 1034; 27 November; nothing to
+run). You asked for the best two-leg and three-leg parlays ranked, and two-leg SGPX tickets. Every kickoff window
+and every day now posts three two-leg SGPX tickets of each kind (player props, touchdown scorers) beside its
+three-leg ones: two legs from two different games, chosen the same way (the likeliest first, one book that has both
+legs first, each leg on two tickets at most), and the day's two legs from two different kickoff windows. On Best
+Parlays the SGPX tab now has the same Two-leg / Three-leg switch the player-prop tab has, each size ranked best to
+worst on its own; the player-prop tab already ranked its two-leg and three-leg parlays apart. The two-leg tickets
+show in the game reports' SGPX section, on Report Picks and on the Live tab, and the Record keeps them under their
+own names (SGPX two-leg parlays, SGPX day two-leg parlays and the touchdown ones), so each size's record reads on
+its own. Windows that posted before this change keep what they posted; the next windows carry both sizes.
+
 **AIO. Bad weather is said first, in red** (step 1033; 27 November; nothing to run). You asked for bad weather to
 show at the top of the game page and the game report, in red, so people know at once it is a rainy, snowy or windy
 game. An outdoor game now gets a red line right under its date, above the lines, and the same line first thing in

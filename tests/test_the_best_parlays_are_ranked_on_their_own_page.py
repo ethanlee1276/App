@@ -223,6 +223,55 @@ def test_the_page_is_its_own_with_two_sections_and_most_likelys_tiers():
         assert sel in CSS, sel
 
 
+def test_sgpx_ranks_its_two_leg_and_three_leg_tickets_each_on_its_own():
+    """Step AIP (27 November 2026; Ethan, on this page's SGPX tab: "It should also be ranking the best 2 leg parlays
+    and best 3 leg parlays. And also sgx parlays should also have 2 leg versions as well"): the SGPX tab has the
+    props tab's size switch, each size ranked one book whole first, then our chance, and each card named for its
+    size."""
+    import json as _json
+    import shutil
+    import subprocess
+    import tempfile
+    node = shutil.which("node")
+    if not node:
+        print("  SKIP node not installed"); return
+
+    def piece(name, end):
+        i = PAGE.index(name)
+        return PAGE[i:PAGE.index(end, i) + len(end)]
+    lib = "\n".join([piece("const BP_SGPX_KINDS = ", "};"), piece("const BP_SGPX_WORD = ", "};"),
+                     piece("function bpSgpxRows(d, size) {", "\n}")])
+    leg = lambda p: {"player": "X", "p": p}                                         # noqa: E731
+    t = lambda joint, n, book=None: {"joint": joint, "legs": [leg(0.7)] * n,        # noqa: E731
+                                     **({"one_book": {"book": book}} if book else {})}
+    sg = {"slots": [{"posted_at": "x", "day": True, "label": "Friday",
+                     "props": [t(0.30, 3)], "tds": [t(0.12, 3, "FanDuel")],
+                     "props2": [t(0.45, 2), t(0.41, 2, "Caesars")], "tds2": [t(0.20, 2)]},
+                    {"posted_at": "x", "label": "7:30 PM", "props2": [t(0.50, 2)], "props": [t(0.33, 3)]},
+                    {"label": "10:30 PM", "post_note": "later", "props2": [t(0.9, 2)]}]}
+    prog = f"""{lib}
+      const d = {{sgpx: {_json.dumps(sg)}}};
+      const brief = (rows) => rows.map((r) => [r.k, r.t.joint, r.n]);
+      console.log(JSON.stringify({{twos: brief(bpSgpxRows(d, "twos")), threes: brief(bpSgpxRows(d, "threes")),
+        words: BP_SGPX_WORD}}));"""
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(prog)
+        path = fh.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+    finally:
+        os.unlink(path)
+    assert out.returncode == 0, out.stderr
+    got = _json.loads(out.stdout)
+    assert got["twos"] == [["props2", 0.41, 2], ["props2", 0.5, 1], ["props2", 0.45, 1], ["tds2", 0.2, 1]], got["twos"]
+    assert got["threes"] == [["tds", 0.12, 1], ["props", 0.33, 1], ["props", 0.3, 1]], got["threes"]
+    assert got["words"]["props2"] == "two-leg parlay" and got["words"]["tds2"] == "two-leg touchdown parlay"
+    assert 'const title = `SGPX ${e.day ? "day " : ""}${BP_SGPX_WORD[k] || "parlay"} ${row.n}`;' in PAGE
+    assert 'data-bp-sgpx-size="${k}"' in PAGE and "_bpSgpxSize = b.dataset.bpSgpxSize;" in PAGE
+    assert '[["twos", "Two-leg", sg2.length], ["threes", "Three-leg", sg3.length]]' in PAGE
+    rp = (ROOT / "web" / "js" / "reportpicks.js").read_text(encoding="utf-8")
+    assert '["props", "props2", "tds", "tds2"].forEach((k) => {' in rp and 'props2: "two-leg parlay"' in rp
+
 def test_each_card_wears_the_reports_bet_it_button():
     # Ethan, 2026-11-15: "add bet it buttons that adds the whole parlay too your sports book. Both td parlays
     # and player prop parlays". The card's button is the report's own (js/report.js parlayBet), so the sheet,
