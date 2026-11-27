@@ -107,6 +107,12 @@ def test_without_a_moneyline_the_spread_then_our_simulation_then_nothing():
     assert any("the spread, on the league's own win curve" in s for s in _text(spread))
     sim = R.sec_verdict(_ctx(sim={"p_home_win": 0.41, "trials": 4000}))
     assert sim["blocks"][0]["source"] == "sim" and sim["blocks"][0]["team"] == "GB"
+    # With no price posted, nothing says the call follows one (step AIJ).
+    said = _text(sim)
+    assert not any("the price" in x for x in said), said
+    assert "Nothing in the matchup, the records or the injury report tilts this one past our simulation's " \
+        "number." in said and said[-1] == "No price was posted for this game, so the chance to win is our " \
+        "simulation's, not the books'.", said
     assert abs(sim["blocks"][0]["chance"] - 0.59) < 1e-9 and sim["blocks"][0]["word"] == "A lean"
     assert R.sec_verdict(_ctx()) is None, "no number on the board, no call"
     coin = R.sec_verdict(_ctx(home_ml=-105, away_ml=-115))
@@ -141,8 +147,7 @@ def test_the_other_leagues_say_their_own_facts():
     rep, _ = LEAGUES._attach(board, "nba", meta=meta)
     nba = _verdict(rep)
     assert nba["blocks"][0]["team"] == "BOS" and nba["blocks"][0]["word"] == "A clear favorite"
-    assert _text(nba)[-1] == ("The chance to win comes from the betting price, the sharpest number on the board "
-                              "for who wins."), \
+    assert _text(nba)[-1] == "The chance to win comes from the betting price, not from a number of ours.", \
         "no reasons, so the note does not point at any"
 
 

@@ -9883,6 +9883,15 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIJ. With no price posted, "Who we think wins" no longer says the call follows one** (step 1028; 27 November;
+nothing to run). For a game with no moneyline and no spread, the chance to win is our simulation's, and the section
+said so ("a 59% chance by our simulation of the game (no price was posted)"), then went on: "Nothing ... tilts this
+one past the price" and "so the call follows the price". Now those lines say our simulation's number, and the note
+says no price was posted, so the chance is ours, not the books'. With a price, the note no longer repeats "the
+sharpest number on the board", which the line above it already says. And so a slip like step AIH's record can't
+come back unseen, a test now builds every league's sample report (the NFL's with a starting corner out) and reads
+every line for text a reader should never see; run on the code before step AIH, it fails on that line.
+
 **AII. The blowout watch is said once** (step 1027; 27 November; nothing to run). A basketball report with a spread
 of 10 or more said "Blowout watch: with a spread of 10 or more, the starters' minutes are the first thing a coach
 takes back if it turns lopsided" twice, word for word: in the short version and again in the game facts five lines

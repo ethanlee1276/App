@@ -5496,8 +5496,12 @@ VERDICT_RATINGS_WHY = {
 }
 #: The note under a call that shows the ratings beside it: why the call is
 #: the price's is said on the ratings' own line, so the note does not repeat it.
-VERDICT_NOTE_RATED = ("The call follows the price, the sharpest number on the board for who wins. "
+VERDICT_NOTE_RATED = ("The call follows the price. "
                       "The reasons above are this report's own data, for each side.")
+#: The note under a call with no price to follow (step AIJ, 27 November 2026): the chance is our simulation's, and
+#: until then the note said "the call follows the price" under "(no price was posted)".
+VERDICT_NOTE_SIM = ("No price was posted for this game, so the chance to win is our simulation's, not the books'. "
+                    "The reasons above are this report's own data, for each side.")
 
 
 #: What a league's ratings were measured on before any closing line graded
@@ -5635,12 +5639,15 @@ def sec_verdict(c: Ctx) -> dict | None:
         blocks += [_h(f"Why {team_np(c, fav)}"), _list(why)]
     if case:
         blocks += [_h(f"The case for {team_np(c, dog)}"), _list(case)]
+    # What the call follows (step AIJ): the price, or with none posted, our simulation's number.
+    past = "our simulation's number" if src == "sim" else "the price"
     if len(ev[dog]) > len(ev[fav]):
         blocks.append(_p(f"More of this report points to {team_np(c, dog)} than to {team_np(c, fav)} "
-                         f"({len(ev[dog])} reasons to {len(ev[fav])}): the case for an upset, against the price"))
+                         f"({len(ev[dog])} reasons to {len(ev[fav])}): the case for an upset, against {past}"))
     elif not why and not case:
-        blocks.append(_p("Nothing in the matchup, the records or the injury report tilts this one past the price"))
-    note = VERDICT_NOTE_RATED if "ratings" in blocks[0] else VERDICT_NOTE.get(c.sport, VERDICT_NOTE[""])
+        blocks.append(_p(f"Nothing in the matchup, the records or the injury report tilts this one past {past}"))
+    note = (VERDICT_NOTE_SIM if src == "sim" else VERDICT_NOTE_RATED if "ratings" in blocks[0]
+            else VERDICT_NOTE.get(c.sport, VERDICT_NOTE[""]))
     # A NOTE ENDS AS A SENTENCE (step AHY): the short one read "... so the call follows the price" with no stop.
     blocks.append({"type": "note", "text": note if (why or case) else _sentence(note.split(". The reasons above")[0])})
     return _section("verdict", "Who we think wins", blocks)
@@ -5657,8 +5664,9 @@ VERDICT_NOTE = {
     "mlb": ("The chance to win comes from the betting price, not from our team ratings: bets on our baseball "
             "ratings alone against the price lost 12.4%, so the call follows the price. The reasons above are this "
             "report's own data, for each side."),
-    "": ("The chance to win comes from the betting price, the sharpest number on the board for who wins. The "
-         "reasons above are this report's own data, for each side."),
+    # Not "the sharpest number on the board" again (step AIJ): the line above the note says so already.
+    "": ("The chance to win comes from the betting price, not from a number of ours. The reasons above are this "
+         "report's own data, for each side."),
 }
 
 
