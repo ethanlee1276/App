@@ -9912,6 +9912,11 @@ league's board, the Record, the report record) for the slips a visitor sees, and
   Richardson's own numbers say. The lookup now matches names the way the rest of the site does (case,
   punctuation, Jr./Sr./III), and the chart's name is still the one the page says. Two passers under one loose name
   are never guessed between. The Colts play the Giants on Sunday; the next board build reads it.
+- **A passer who moved says whose starts they were.** The Vikings' change read "in 11 starts this season the team
+  threw on 59% of its plays (Kyler Murray's starts: 52%)", in an 11-game season with Murray starting for Minnesota
+  too, so some of those starts were for another club and "the team" was two teams. The sentence names the other
+  club now ("in 11 starts this season, some of them for ATL, the teams threw on ..."), as does the targets line.
+  I could not see Cousins's game log from here, so which club it is comes from the stats on the box.
 - **How data is used: the weekly brief said hockey, college basketball, the WNBA and UFC had "Nothing journaled
   yet"**, beside a Record page grading their picks, and in a brief whose own overview said a WNBA market had closed
   itself (which takes graded picks). The brief counted three of the Record page's books (Edge, Long Shots,

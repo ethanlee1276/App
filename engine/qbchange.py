@@ -239,6 +239,10 @@ def quarterbacks(specs, stats: list[dict], prior_stats: list[dict], upto_week: i
         plays = [team_plays[k] for k in starts if k in team_plays]
         att, car = sum(p[0] for p in plays), sum(p[1] for p in plays)
         pr["starts"] = len(starts)
+        # WHOSE STARTS. A passer who moved this season started for another team too, and the shape below is of
+        # the offences he started for, said beside the starter's own team's (27 November 2026: the Vikings'
+        # change compared Kirk Cousins's 11 starts this season with Kyler Murray's, in an 11-game season).
+        pr["start_teams"] = sorted({t for t, _w in starts})
         pr["pass_rate"] = round(att / (att + car), 3) if att + car > 0 else None
         pr["air_per_att"] = round(pr["air_yards"] / pr["attempts"], 1) if pr["air_yards"] > 0 else None
         pr["carries_pg"] = round(pr["carries"] / pr["games"], 1)
@@ -350,8 +354,18 @@ def shape_words(ch: dict) -> str:
         return ""
     bits = []
     if rp.get("pass_rate") is not None and rp.get("starts"):
-        s = (f"in {rp['starts']} start{'s' if rp['starts'] != 1 else ''} this season the team threw on "
-             f"{rp['pass_rate']:.0%} of its plays")
+        n, teams = rp["starts"], rp.get("start_teams") or []
+        others = [t for t in teams if t != ch.get("team")]
+        clubs = " and ".join(others)
+        if others and len(others) == len(teams):            # every start this season for another team
+            s = (f"in {n} start{'s' if n != 1 else ''} this season, {'all ' if n != 1 else ''}for {clubs}, "
+                 f"{clubs} threw on {rp['pass_rate']:.0%} of {'its' if len(others) == 1 else 'their'} plays")
+        elif others:
+            s = (f"in {n} starts this season, some of them for {clubs}, the teams threw on "
+                 f"{rp['pass_rate']:.0%} of their plays")
+        else:
+            s = (f"in {n} start{'s' if n != 1 else ''} this season the team threw on "
+                 f"{rp['pass_rate']:.0%} of its plays")
         if sp.get("pass_rate") is not None and sp.get("starts"):
             s += f" ({ch['starter']}’s starts: {sp['pass_rate']:.0%})"
         bits.append(s)
@@ -366,7 +380,9 @@ def shape_words(ch: dict) -> str:
     # Where the ball goes under him (engine/sources/nflunits, 2026-10-08):
     # the team's short and deep shares of its targets in his starts.
     if rp.get("short_share") is not None:
-        s = (f"in {ch['replacement']}’s starts {rp['short_share']:.0%} of the team’s targets were short throws (under 10 air "
+        moved = [t for t in (rp.get("start_teams") or []) if t != ch.get("team")]
+        s = (f"in {ch['replacement']}’s starts {rp['short_share']:.0%} of {'the' if moved else 'the team’s'} "
+             f"targets were short throws (under 10 air "
              f"yards) and {rp.get('deep_share') or 0:.0%} deep (20+)")
         if sp.get("short_share") is not None:
             s += f" — {ch['starter']}’s starts: {sp['short_share']:.0%} short, {sp.get('deep_share') or 0:.0%} deep"

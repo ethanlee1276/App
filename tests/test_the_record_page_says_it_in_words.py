@@ -179,6 +179,36 @@ def test_a_quarterback_change_finds_the_passer_under_another_spelling():
     assert qbchange.changes(two, [], {"IND": "Anthony Richardson Sr."})["IND"]["replacement_attempts"] == 0
 
 
+def test_a_passer_who_moved_says_whose_starts_they_were():
+    """The Vikings' change: "in 11 starts this season the team threw on 59% of its plays (Kyler Murray’s starts:
+    52%)", in an 11-game season with Murray starting for Minnesota too. A passer's starts this season can include
+    another team's, and the sentence said "the team" of them all."""
+    from types import SimpleNamespace as NS
+
+    def row(name, team, week, att):
+        return {"player_display_name": name, "recent_team": team, "position": "QB", "season_type": "REG",
+                "week": week, "attempts": att, "passing_yards": att * 7, "carries": 2, "rushing_yards": 5}
+    specs = [NS(player="Kyler Murray", position="QB", usage_role="starter")]
+    now = ([row("Kirk Cousins", "ATL", w, 34) for w in (1, 2, 3)] + [row("Kirk Cousins", "MIN", 5, 30)]
+           + [row("Kyler Murray", "MIN", w, 31) for w in (1, 2, 3, 4)])
+    qb = qbchange.quarterbacks(specs, now, [], 6, lambda p: "MIN")
+    assert qb["profile"]["Kirk Cousins"]["start_teams"] == ["ATL", "MIN"], qb["profile"]["Kirk Cousins"]
+    assert qb["profile"]["Kyler Murray"]["start_teams"] == ["MIN"]
+    ch = qbchange.changes(qb, [], {"MIN": "Kirk Cousins"})["MIN"]
+    words = qbchange.shape_words(ch)
+    assert words.startswith("in 4 starts this season, some of them for ATL, the teams threw on "), words
+    # Every start for another club, and one start only.
+    one = {"team": "MIN", "starter": "Kyler Murray", "replacement": "Kirk Cousins",
+           "replacement_profile": {"starts": 1, "start_teams": ["ATL"], "pass_rate": 0.59, "games": 1,
+                                   "carries_pg": 2.0, "rush_yds_pg": 5.0}}
+    assert qbchange.shape_words(one).startswith("in 1 start this season, for ATL, ATL threw on 59% of its plays")
+    # His own team's starts only, or a profile from before this step: as it read.
+    own = dict(one, replacement_profile=dict(one["replacement_profile"], starts=3, start_teams=["MIN"]))
+    assert qbchange.shape_words(own).startswith("in 3 starts this season the team threw on 59% of its plays")
+    old = dict(one, replacement_profile={k: v for k, v in one["replacement_profile"].items() if k != "start_teams"})
+    assert qbchange.shape_words(old).startswith("in 1 start this season the team threw on 59% of its plays")
+
+
 def test_a_quarterback_who_barely_runs_runs_for_1_yard():
     ch = {"starter": "A Starter", "replacement": "B Backup",
           "replacement_profile": {"games": 3, "carries_pg": 1.0, "rush_yds_pg": 1.2}}

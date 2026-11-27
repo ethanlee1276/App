@@ -5,7 +5,7 @@
       "date": "2026-11-27",
       "kind": "fix",
       "title": "A quarterback change finds its passer under any spelling",
-      "body": "The Colts' change read \"Anthony Richardson Sr. has 0 pass attempts in our data — too few to rate\". ESPN's depth chart adds the \"Sr.\" and the weekly stats do not, and the lookup wanted the exact name, so a passer with hundreds of attempts was rated as if he had never thrown. With no sample a change counts as a downgrade, so the Colts' receivers were also cut by the measured downgrade amount. Names now match the way the rest of the site matches them (case, punctuation, Jr. and Sr.), and his real numbers decide."
+      "body": "The Colts' change read \"Anthony Richardson Sr. has 0 pass attempts in our data — too few to rate\". ESPN's depth chart adds the \"Sr.\" and the weekly stats do not, and the lookup wanted the exact name, so a passer with hundreds of attempts was rated as if he had never thrown. With no sample a change counts as a downgrade, so the Colts' receivers were also cut by the measured downgrade amount. Names now match the way the rest of the site matches them (case, punctuation, Jr. and Sr.), and his real numbers decide. A passer whose starts this season include another club's now says so, instead of calling them all \"the team\"."
     },
     {
       "date": "2026-11-27",
