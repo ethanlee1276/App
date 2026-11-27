@@ -150,7 +150,7 @@ def test_fewer_pairs_say_why_in_the_research_words():
     g = GP.build(_board(reads, scorers), "nfl")["games"][0]
     assert len(g["scorers"]) == 1
     note = g["scorers_note"]
-    assert note.startswith("1 of 3: 2 of the 3 priced scorer(s)") and "research case" in note, note
+    assert note.startswith("1 of 3: 2 of the 3 priced scorers in this game") and "carry a research case" in note, note
 
 
 def test_hockey_ranks_on_the_chance_as_before():

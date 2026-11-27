@@ -9896,6 +9896,10 @@ Record page as a visitor (the free pages; everything else needs an account, and 
   what was posted (it lost); the card now says it as 99.9%, not "100%", since we never gave 100%.
 - **"Simulation right · Script C"** on each finished game meant nothing off the report. It now reads "Script C: the
   favorite by 1 to 7" (the same words the finished report uses).
+- **The angles' record line says the ordinary game too** (football): 43% beside an ordinary game's 42%, so a member
+  can see the angles show no lift yet, as the notes under AIB said.
+- **No count said with "(s)".** A game short of touchdown pairs read "2 of the 3 priced scorer(s)", and the memes
+  page "call(s) filed"; they count like a person now ("2 of the 3 priced scorers ... carry", "1 call").
 - Left alone: a settled pick's team logos are read twice by a screen reader ("CHI CHI"); the fix touches a shared
   mark used on every page, so I am noting it rather than changing it tonight.
 

@@ -3043,18 +3043,22 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
         if len(out["scorers"]) < SCORER_PER_GAME:
             floor = f"{SCORER_FLOOR.get(sport, 0.25):.0%}"
             fill_floor = f"{SCORER_FILL_FLOOR.get(sport, SCORER_FLOOR.get(sport, 0.25)):.0%}"
+            # Said as a reader counts, never "scorer(s)" (step AIC): "touchdown scorers", "goal scorers".
+            word = {"touchdown": "touchdown scorer"}.get(SCORER_WORDS.get(sport, "scorer"),
+                                                         SCORER_WORDS.get(sport, "scorer"))
             if researched:
                 n_priced = out["scorers_priced"]
                 out["scorers_note"] = (
                     f"{len(out['scorers'])} of {SCORER_PER_GAME}: {len(sc)} of the {n_priced} priced "
-                    f"scorer(s) in this game at {floor} or better carry a research case — a red-zone role "
+                    f"{'scorer' if n_priced == 1 else 'scorers'} in this game at {floor} or better "
+                    f"{'carries' if len(sc) == 1 else 'carry'} a research case — a red-zone role "
                     f"and {RESEARCH_MIN} or more of the {RESEARCH_MAX} research points (the team's expected "
                     f"points, the defense faced, usage and red-zone work, the matchup read and the "
                     f"game script) — and {len(spare or [])} more with a red-zone role down to {fill_floor} "
                     f"could fill")
             else:
                 out["scorers_note"] = (f"{len(out['scorers'])} of {SCORER_PER_GAME}: {len(sc)} priced "
-                                       f"{SCORER_WORDS.get(sport, 'scorer')}(s) in this game at "
+                                       f"{word if len(sc) == 1 else word + 's'} in this game at "
                                        f"{floor} or better, and {len(spare or [])} more down to {fill_floor}")
     else:
         out["scorers"] = []

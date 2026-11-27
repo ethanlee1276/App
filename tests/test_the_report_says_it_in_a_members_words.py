@@ -184,6 +184,14 @@ def test_a_basketball_report_says_only_its_own_games_matchups():
     assert "Edge LAM: LAM's offensive rebounding (6th)" in R.to_text(lam), "its own still is"
 
 
+def test_no_count_is_said_with_an_s_in_brackets():
+    """ "2 of the 3 priced scorer(s)", "call(s) filed": a programmer's shrug printed at a reader (step AIC)."""
+    gp = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
+    assert "(s) in this game" not in gp and "scorer(s) in this game" not in gp
+    memes = (ROOT / "web" / "js" / "memes.js").read_text(encoding="utf-8")
+    assert "call(s)" not in memes and 'plural(ch.calls, "call")' in memes and 'plural(p.n, "call")' in memes
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     fails = 0

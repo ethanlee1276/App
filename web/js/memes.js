@@ -297,13 +297,13 @@ function memeChannelHTML(name, label, ch, horizons) {
   }).join("");
   return `<div class="card">
     <div class="section-title">${escapeHtml(label)}
-      <span class="sub">— ${ch.calls} call(s) filed. Median, not mean: one
+      <span class="sub">— ${plural(ch.calls, "call")} filed. Median, not mean: one
       50x would drag an average of fifty losers into the green.</span></div>
     <div class="tbl-wrap"><table class="agate mr-tbl">
       <thead><tr><th>After</th><th>Calls</th><th>Median</th><th>Up</th>
         <th>Best</th><th>Worst</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <p class="mr-path">Over the ${p.n} call(s) at least an hour old — the
+    <p class="mr-path">Over the ${plural(p.n, "call")} at least an hour old — the
       same set the table above measures — the median peaked
       ${memePct(p.median_peak)}, bottomed ${memePct(p.median_trough)} and
       sits at ${memePct(p.median_last)}${p.gone ? ` · no pool was quoting
