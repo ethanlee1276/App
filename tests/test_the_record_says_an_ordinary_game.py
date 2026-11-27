@@ -37,6 +37,16 @@ def test_the_football_record_says_an_ordinary_game_beside_ours():
                     "(measured over the 2017–2025 seasons)."), line
 
 
+def test_the_angles_say_it_too():
+    t = dict(TOTALS, groups={"angles": (50, 117), "matchups": (93, 169)})
+    lines = RR.track_lines(t, "nfl")
+    assert lines["angles"] == ("Our angles so far: 50 of 117 right (43%), on 28 finished NFL games since Nov 12. For "
+                               "comparison, a key player in an ordinary game beats that average 42% of the time and "
+                               "falls short of it 57% (measured over the 2017–2025 seasons)."), lines["angles"]
+    assert "ordinary game" not in lines["matchups"], "the matchup reads mix both ways; their line is unchanged"
+    assert "ordinary game" not in RR.track_lines(t, "nba")["angles"]
+
+
 def test_a_league_not_measured_says_nothing_of_the_kind():
     for sport in ("nba", "cfb", "nhl", "mlb", "cbb", "wnba"):
         line = RR.track_lines(TOTALS, sport)["watch"]

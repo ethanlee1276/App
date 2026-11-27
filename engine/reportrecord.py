@@ -446,6 +446,10 @@ def track_lines(t: dict, sport: str) -> dict:
         x = got(kinds[0])
         if x:
             out[key] = f"Our {KIND_WORDS[kinds[0]]} so far: {x[0]} of {x[1]} right ({_pct(*x)}){tail}."
+            # The angles are graded the same way as the breakout candidates (a player's stat against the player's
+            # own average), so they say the same ordinary game beside them (step AIC): 43% beside 42%.
+            if kinds[0] == "angles" and base_words(sport):
+                out[key] += f" {base_words(sport)}."
     call, rat = t.get("call") or (0, 0), t.get("ratings") or (0, 0)
     if int(call[1]) >= TRACK_MIN_GAMES:
         out["verdict"] = (f"Who we think wins has been right in {call[0]} of {call[1]} ({_pct(*call)})"
