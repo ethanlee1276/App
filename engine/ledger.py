@@ -9086,7 +9086,8 @@ def settled_on(conn, date: str, sport: str | None = None,
     Likely half (LIKELY_HALF), whose board picks the Most Likely list also
     holds are one row each, as in its record (`books_sql`). Left out, it is
     BOOK, the same default `pnl_curve` has, so the ledger's own readouts
-    keep counting one book.
+    keep counting one book. A third since 27 November 2026: the game
+    reports' picks (REPORT_BOOK, `report_calendar`).
     """
     # THE CELL'S OWN DAY. The cells are `pnl_curve`'s days, and it groups
     # by `day_expr()` — the game day, falling back to `date`. This matched
@@ -9108,6 +9109,12 @@ def settled_on(conn, date: str, sport: str | None = None,
     if sport:
         q += " AND sport=?"
         args.append(sport)
+    else:
+        # ALL BETS' CELL LEAVES A BENCHED LEAGUE OUT (`pnl_curve`), so its list does too, or the cell and the
+        # rows behind it disagree (step AIM, 27 November 2026).
+        _b, _ba = off_record_sql()
+        q += _b
+        args += list(_ba)
     rows = conn.execute(q + " ORDER BY id", args).fetchall()
     out = []
     for r in rows:
@@ -12234,6 +12241,8 @@ RECORD_PAGE_ONLY = (
     "edge_now", "edge_trend", "self_tuning", "board_learning", "regrades",
     "prereg", "audit_log", "forecast_heads", "likely_by_sport",
     "clv_leadtime", "market_words", "likely_calendar",
+    # The game report picks' calendar beside it (report_calendar, step AIM).
+    "report_calendar",
     # Our number against the line, on the Record page's Calibration room only.
     "number_vs_line", "number_vs_line_by_sport",
     # Each league's game parlays and their legs, on the Record page only.
@@ -12244,6 +12253,25 @@ RECORD_PAGE_ONLY = (
 #: The fields a calendar cell and its month line read; the curve's running
 #: totals and windows are the edge record's, not the calendar's.
 CALENDAR_FIELDS = ("date", "day_u", "n", "w", "l")
+
+
+def _book_calendar(conn, cats: tuple, since: str | None = None, every: bool = True) -> dict:
+    """``{"all": {"days", "state"}, sport: {...}}`` for the book ``cats``: its settled days through `pnl_curve`, so
+    a calendar's days, stake rule, benched rule and window are the edge calendar's exactly, and the same three facts
+    past its last settled day (`edge_state`). Every league with a record scope, and All bets; with ``every`` false,
+    a scope whose book has no row at all (no settled day, nothing placed) is left out."""
+    def one(sport):
+        days = [{k: p[k] for k in CALENDAR_FIELDS}
+                for p in pnl_curve(conn, sport, since=since, category=cats)]
+        return {"days": days, "state": edge_state(conn, sport, since=since, category=cats)}
+    out = {}
+    for sp in (None, *TRACKED_SPORTS):
+        if sp is not None and is_benched(sp):
+            continue
+        cal = one(sp)
+        if every or cal["days"] or cal["state"]["last_placed"]:
+            out[sp or "all"] = cal
+    return out
 
 
 def likely_calendar(conn, since: str | None = None) -> dict:
@@ -12257,16 +12285,25 @@ def likely_calendar(conn, since: str | None = None) -> dict:
 
     Page-only (RECORD_PAGE_ONLY): only the Record page draws a calendar,
     and the slim copy every other page reads stays as it was."""
-    def one(sport):
-        days = [{k: p[k] for k in CALENDAR_FIELDS}
-                for p in pnl_curve(conn, sport, since=since, category=LIKELY_HALF)]
-        return {"days": days,
-                "state": edge_state(conn, sport, since=since, category=LIKELY_HALF)}
-    out = {"all": one(None)}
-    for sp in TRACKED_SPORTS:
-        if not is_benched(sp):
-            out[sp] = one(sp)
-    return out
+    return _book_calendar(conn, LIKELY_HALF, since)
+
+
+#: The game reports' book as a calendar reads it: `pnl_curve`, `edge_state` and `settled_on` take a tuple of books.
+REPORT_BOOK = (REPORT_CATEGORY,)
+
+
+def report_calendar(conn, since: str | None = None) -> dict:
+    """THE GAME REPORT PICKS' PROFIT CALENDAR (Ethan, 27 November 2026, on the Record page's calendar: "Also we
+    should have a calander for game report picks too"). The report book (REPORT_CATEGORY: every pick a game report
+    posts, 0.1 unit each, the numbers "The Game Report Picks and Parlays" prints) by slate day, drawn the way
+    `likely_calendar` draws the Most Likely half (`_book_calendar`). A scope whose reports have posted no pick
+    (baseball and UFC on 27 November) is left out, so its Record page offers no switch to an empty calendar.
+
+    The parlays are not in it: a ticket counts one unit, ten times a pick, so one ticket would outweigh a day of
+    picks; they keep their own table under the picks.
+
+    Page-only (RECORD_PAGE_ONLY), like the Most Likely calendar."""
+    return _book_calendar(conn, REPORT_BOOK, since, every=False)
 
 
 def export_json(conn, path) -> None:
@@ -12368,6 +12405,8 @@ def export_json(conn, path) -> None:
         "edge_state": edge_state(conn, since=since),
         # The Most Likely calendar, every scope (likely_calendar).
         "likely_calendar": likely_calendar(conn, since=since),
+        # The game report picks' calendar, every scope with a pick (report_calendar).
+        "report_calendar": report_calendar(conn, since=since),
         "recent": recent_settled(conn, RECENT_LIMIT, since=since),
         "model_eras": era_report(conn),
         "longshots": longshot_report(conn, since=since),

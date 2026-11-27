@@ -7071,7 +7071,9 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         `book` is the calendar tapped (2026-10-13, Ethan: "There should be a
         profit calendar for both edge bets and most likely bets for all
         sports"): `edge` (or nothing) for the edge picks, `likely` for the
-        Most Likely half, each pick once; anything else is a 400.
+        Most Likely half, each pick once, `report` for the game reports' picks
+        (27 November 2026, Ethan: "Also we should have a calander for game
+        report picks too"); anything else is a 400.
         """
         import re as _re
         date = (q.get("date") or [""])[0][:10]
@@ -7081,17 +7083,16 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             return self._send(400, b'{"error":"date must be YYYY-MM-DD"}', ".json")
         if sport and not _re.fullmatch(r"[a-z]{2,5}", sport):
             return self._send(400, b'{"error":"unknown sport"}', ".json")
-        if book not in ("", "edge", "likely"):
-            return self._send(400, b'{"error":"book is edge or likely"}', ".json")
+        if book not in ("", "edge", "likely", "report"):
+            return self._send(400, b'{"error":"book is edge, likely or report"}', ".json")
         try:
             from engine import ledger as L
             conn = L.connect()
             try:
                 # A league with a book of its own (UFC's fight picks) taps
                 # that book, the one its calendar draws (ledger.edge_books_for).
-                rows = L.settled_on(conn, date, sport=sport or None,
-                                    categories=L.LIKELY_HALF if book == "likely"
-                                    else L.edge_books_for(sport))
+                cats = {"likely": L.LIKELY_HALF, "report": L.REPORT_BOOK}.get(book) or L.edge_books_for(sport)
+                rows = L.settled_on(conn, date, sport=sport or None, categories=cats)
             finally:
                 conn.close()
         except Exception:                                    # noqa: BLE001

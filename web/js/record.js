@@ -868,11 +868,11 @@ async function recCalDayOpen(date, curve, recent, book) {
   const extra = (p.n || 0) - (p.w || 0) - (p.l || 0);
   const head = `<b>${escapeHtml(formatGameDate(date) || date)}</b> · ${p.w || 0}-${p.l || 0}${
     extra > 0 ? `-${extra}` : ""} · <b class="${toneOf(p.day_u || 0)}">${recCalU(p.day_u || 0)}u</b>`;
-  host.innerHTML = `<p class="rc-dayhead">${head}</p><p class="rail-quiet">Loading the day’s bets…</p>`;
+  host.innerHTML = `<p class="rc-dayhead">${head}</p><p class="rail-quiet">Loading the day’s ${recCalBook(book).tap}…</p>`;
   let rows = null, note = "";
   try {
     const sport = _recCalScope === "all" ? "" : _recCalScope;
-    const r = await fetch(`/api/record/day?date=${encodeURIComponent(date)}&sport=${encodeURIComponent(sport)}&book=${book === "likely" ? "likely" : "edge"}`);
+    const r = await fetch(`/api/record/day?date=${encodeURIComponent(date)}&sport=${encodeURIComponent(sport)}&book=${["likely", "report"].includes(book) ? book : "edge"}`);
     if (r.ok) rows = ((await r.json()) || {}).rows || [];
   } catch (e) { rows = null; }
   if (_recCalDay !== date) return;                         // another day was tapped
@@ -880,7 +880,7 @@ async function recCalDayOpen(date, curve, recent, book) {
     rows = (recent || []).filter((b) => b.date === date);
     note = `<p class="rail-quiet">The day’s full list could not be fetched — these are the rows this page already holds.</p>`;
   }
-  host.innerHTML = `<p class="rc-dayhead">${head}</p>${note}${recCalDayBodyHTML(rows)}`;
+  host.innerHTML = `<p class="rc-dayhead">${head}</p>${note}${recCalDayBodyHTML(rows, book)}`;
 }
 
 /* A DAY OF 216 BETS IS NOT A PAGE (Ethan, 2026-09-28: "have a little pull
@@ -889,8 +889,9 @@ async function recCalDayOpen(date, curve, recent, book) {
    biggest swing first — and the bets themselves fold under it, a tap
    away. A day of a handful shows them as they are. */
 const REC_DAY_OPEN_MAX = 6;
-function recCalDayBodyHTML(rows) {
-  if (!rows.length) return panelEmpty("No settled bets on this day in this scope.");
+function recCalDayBodyHTML(rows, book) {
+  const what = recCalBook(book).tap;
+  if (!rows.length) return panelEmpty(`No settled ${what} on this day in this scope.`);
   const list = rows.map(recSettledRow);
   if (rows.length <= REC_DAY_OPEN_MAX) return `<div class="rec-list">${list.join("")}</div>`;
   const groups = new Map();
@@ -907,7 +908,7 @@ function recCalDayBodyHTML(rows) {
       <span class="rc-sum-wl">${g.w}-${g.l}${g.p ? `-${g.p}` : ""}</span>
       <b class="rc-sum-u ${toneOf(g.u)}">${recCalU(g.u)}u</b></div>`).join("")}</div>
     <details class="row-fold rc-bets">
-      <summary><span class="row-fold-more">Show the day’s ${rows.length} bets</span><span class="row-fold-less">Hide the bets</span>
+      <summary><span class="row-fold-more">Show the day’s ${rows.length} ${what}</span><span class="row-fold-less">Hide the ${what}</span>
         <span class="row-fold-chev" aria-hidden="true"></span></summary>
       <div class="row-fold-body rec-list">${list.join("")}</div></details>`;
 }
@@ -3794,7 +3795,8 @@ async function renderRecord() {
      still lead a sport's numbers (09-01, 09-05) — they sit under the
      verdict on every scope, pooled on "All bets". */
   const likelyCal = (d.likely_calendar || {})[scope];
-  const calendar = recCalendarsHTML(src, likelyCal);
+  const reportCal = (d.report_calendar || {})[scope];
+  const calendar = recCalendarsHTML(src, likelyCal, reportCal);
   /* Open / Settled, the way every book's My Bets splits it (research in
      docs/VISUAL_REDESIGN.md). This page is the settled half; the open
      half lives on the Live tab with its progress, and the count here is
@@ -3981,12 +3983,13 @@ async function renderRecord() {
   recBetsMount(host, src.recent || [], o.settled, scope, from);
   // The calendar's days are doors to their bets; a day left open on the
   // last render (a range chip, a month arrow) is reopened.
-  // The Most Likely calendar's taps ask for its own book; the rows this
-  // page holds (`src.recent`) are the edge picks, so it has no fallback.
-  const onLikely = recCalBookIn(src, likelyCal) === "likely";
-  const calCurve = onLikely ? likelyCal.days : src.curve;
-  const calRecent = onLikely ? [] : src.recent || [];
-  const calBook = onLikely ? "likely" : "edge";
+  // Each calendar's taps ask for its own book. The rows this page holds are
+  // the edge picks (`src.recent`) and the report book's newest
+  // (`d.report_recent`); the Most Likely calendar has none to fall back on.
+  const calBook = recCalBookIn(src, likelyCal, reportCal);
+  const calCurve = recCalBooks(src, likelyCal, reportCal)[calBook][0];
+  const calRecent = calBook === "likely" ? [] : calBook === "report"
+    ? (d.report_recent || []).filter((r) => !scoped || r.sport === scope) : src.recent || [];
   host.querySelectorAll(".rc-day[data-date]").forEach((el) =>
     el.addEventListener("click", () => recCalDayOpen(el.dataset.date, calCurve, calRecent, calBook)));
   if (_recCalDay && host.querySelector(`.rc-day[data-date="${_recCalDay}"]`))
@@ -4724,16 +4727,25 @@ function verdictBooksHTML(edge, lk, chart, lines, o, opts) {
    (In js/record.js since 2026-11-18, walk 14: the Record page is the only page that draws it.)
    Ethan, 2026-09-05: "a profit calendar on record page". A month grid
    with the units won or lost each day — green or red by sign, deeper by
-   size — and a tap on a day for the bets behind it. THE EDGE BOOK ONLY:
-   the cells are the curve's own days (`pnl_curve`: main + paper, with a
-   stake), and the Most Likely book keeps its own record above. The two
-   never share a cell, for the reason they never share a headline. */
+   size — and a tap on a day for the bets behind it. ONE BOOK A CALENDAR:
+   the edge calendar's cells are the curve's own days (`pnl_curve`: main +
+   paper, with a stake), and the Most Likely picks (2026-10-13) and the game
+   report picks (2026-11-27) each have a calendar of their own behind the
+   switch. No two books share a cell, for the reason they never share a
+   headline. */
 /* Its state is declared in app.js (`_recCalMonth`, `_recCalDay`, `_recCalBook`): a `let` declared again here would
    stop this file loading beside an app.js from before the move. */
 window._recCalSetMonth = (ym) => { _recCalMonth = ym; _recCalDay = null; renderRecord(); };
 window._recCalSetBook = (b) => {
-  _recCalBook = b === "likely" ? "likely" : "edge"; _recCalMonth = null; _recCalDay = null; renderRecord();
+  _recCalBook = ["likely", "report"].includes(b) ? b : "edge"; _recCalMonth = null; _recCalDay = null; renderRecord();
 };
+
+/* What each book's calendar says: its switch, what its cells are, one of its picks, and what a tap opens. */
+function recCalBook(book) {
+  if (book === "likely") return { word: "Most Likely", sub: "Most Likely picks, each counted once", one: "Most Likely pick", tap: "bets" };
+  if (book === "report") return { word: "Report picks", sub: "every pick our game reports posted, 0.1 unit each", one: "report pick", tap: "picks" };
+  return { word: "Edge bets", sub: "edge book only", one: "edge bet", tap: "bets" };
+}
 
 /* The months the curve has a settled day in, oldest first. */
 function recCalMonths(curve) {
@@ -4799,7 +4811,7 @@ function recCalMonthHTML(curve, ym, empty) {
    one was placed. `now` is for the tests; the page passes nothing. */
 function recCalendarHTML(curve, state, now, opts) {
   const o = opts || {};
-  const ml = o.book === "likely";
+  const said = recCalBook(o.book);
   const months = recCalMonths(curve);
   if (!months.length) return "";
   const at = now || new Date();
@@ -4811,7 +4823,7 @@ function recCalendarHTML(curve, state, now, opts) {
   const st = state || {};
   const open = Number(st.open) || 0;
   const empty = ym === cur && !settledHere
-    ? `No ${ml ? "Most Likely pick" : "edge bet"} has settled in ${at.toLocaleDateString(undefined, { month: "long" })} yet.${open
+    ? `No ${said.one} has settled in ${at.toLocaleDateString(undefined, { month: "long" })} yet.${open
       ? ` ${open} ${open === 1 ? "is" : "are"} still waiting on a result${st.oldest_open ? `, the oldest from ${short(st.oldest_open)}` : ""}.`
       : st.last_placed ? ` The last one was placed ${short(st.last_placed)}.` : ""}`
     : "";
@@ -4823,35 +4835,49 @@ function recCalendarHTML(curve, state, now, opts) {
     arrow(i < months.length - 1 ? months[i + 1] : null, "›", "Later month")}</span>` : "";
   return `
     <div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar
-      <span class="sub">— units by day, ${ml ? "Most Likely picks, each counted once" : "edge book only"}; tap a day for its bets</span>${nav}</div>${o.extra || ""}
+      <span class="sub">— units by day, ${said.sub}; tap a day for its ${said.tap}</span>${nav}</div>${o.extra || ""}
     <div class="card rc-card">${recCalMonthHTML(curve, ym, empty)}<div id="rc-day"></div></div>`;
 }
 
-/* BOTH BOOKS, ONE CALENDAR. Ethan, 2026-10-13: "There should be a profit
-   calendar for both edge bets and most likely bets for all sports". A
-   switch picks the book; each keeps its own days, its own month line and
+/* EVERY BOOK, ONE CALENDAR. Ethan, 2026-10-13: "There should be a profit
+   calendar for both edge bets and most likely bets for all sports", and
+   2026-11-27: "Also we should have a calander for game report picks too".
+   A switch picks the book; each keeps its own days, its own month line and
    its own day list. `likely` is this scope's Most Likely calendar
    (ledger.likely_calendar: the Most Likely half, each pick once, the
-   numbers its record prints); a record without one keeps the edge
-   calendar alone. Nothing when neither book has a settled day. */
-/* The book the calendar shows: the reader's pick, else the edge book unless it has no settled day and the Most
-   Likely book has (walk 14, 2026-11-18: college's Record page opened on "No edge bet has settled here yet" above a
-   Most Likely calendar with days in it, behind a switch). The page's taps ask the same question. */
-function recCalBookIn(src, likely) {
-  if (!(likely && Array.isArray(likely.days))) return "edge";
-  if (_recCalBook) return _recCalBook;
-  return !recCalMonths(src.curve).length && recCalMonths(likely.days).length ? "likely" : "edge";
+   numbers its record prints) and `report` its game report picks'
+   (ledger.report_calendar: every pick the reports posted, 0.1 unit each,
+   the numbers "The Game Report Picks and Parlays" prints; a scope whose
+   reports posted none has none). A record without either keeps the edge
+   calendar alone. Nothing when no book has a settled day. */
+/* The calendars this scope has, in the switch's order: {book: [days, state]}. */
+function recCalBooks(src, likely, report) {
+  const has = (c) => !!(c && Array.isArray(c.days));
+  const out = { edge: [src.curve, src.edge_state] };
+  if (has(likely)) out.likely = [likely.days, likely.state];
+  if (has(report)) out.report = [report.days, report.state];
+  return out;
+}
+/* The book the calendar shows: the reader's pick where this scope has it, else the first book with a settled day
+   (walk 14, 2026-11-18: college's Record page opened on "No edge bet has settled here yet" above a Most Likely
+   calendar with days in it, behind a switch). The page's taps ask the same question. */
+function recCalBookIn(src, likely, report) {
+  const cals = recCalBooks(src, likely, report);
+  const keys = Object.keys(cals);
+  if (keys.length < 2) return "edge";
+  if (keys.includes(_recCalBook)) return _recCalBook;
+  return keys.find((k) => recCalMonths(cals[k][0]).length) || "edge";
 }
 
-function recCalendarsHTML(src, likely) {
-  const both = !!(likely && Array.isArray(likely.days));
-  const book = recCalBookIn(src, likely);
-  if (!recCalMonths(src.curve).length && !(both && recCalMonths(likely.days).length)) return "";
-  const extra = both ? `<div class="rc-books" role="group" aria-label="Which picks">${
-    [["edge", "Edge bets"], ["likely", "Most Likely"]].map(([k, w]) => `<button type="button" class="ra-range${
-      k === book ? " active" : ""}" data-act="recCalSetBook" data-arg="${k}" aria-pressed="${k === book}">${w}</button>`).join("")}</div>` : "";
-  const html = book === "likely" ? recCalendarHTML(likely.days, likely.state, null, { book, extra })
-    : recCalendarHTML(src.curve, src.edge_state, null, { book, extra });
+function recCalendarsHTML(src, likely, report) {
+  const cals = recCalBooks(src, likely, report);
+  const keys = Object.keys(cals);
+  const book = recCalBookIn(src, likely, report);
+  if (!keys.some((k) => recCalMonths(cals[k][0]).length)) return "";
+  const extra = keys.length > 1 ? `<div class="rc-books" role="group" aria-label="Which picks">${
+    keys.map((k) => `<button type="button" class="ra-range${
+      k === book ? " active" : ""}" data-act="recCalSetBook" data-arg="${k}" aria-pressed="${k === book}">${recCalBook(k).word}</button>`).join("")}</div>` : "";
+  const html = recCalendarHTML(cals[book][0], cals[book][1], null, { book, extra });
   return html || `<div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar</div>${extra}
-    <div class="card rc-card"><p class="rc-foot">No ${book === "likely" ? "Most Likely pick" : "edge bet"} has settled here yet.</p></div>`;
+    <div class="card rc-card"><p class="rc-foot">No ${recCalBook(book).one} has settled here yet.</p></div>`;
 }

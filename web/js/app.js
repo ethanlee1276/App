@@ -15695,7 +15695,7 @@ function marketWord(k) {
 let _recAllPicks = false;
 window._recShowPicks = () => { _recAllPicks = true; renderRecord(); };
 /* The profit calendar's state; the calendar is js/record.js's. The month in view ("YYYY-MM", null = this one), the
-   day open, and the book a reader picked ("edge" or "likely", null = not yet: recCalBookIn). */
+   day open, and the book a reader picked ("edge", "likely" or "report", null = not yet: recCalBookIn). */
 let _recCalMonth = null, _recCalDay = null, _recCalBook = null;
 /* Which record you are looking at. The combined page answers "is the
    system making money", which is the owner's question. A per-sport page

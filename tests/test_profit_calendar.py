@@ -115,7 +115,7 @@ def test_a_busy_day_reads_as_a_summary_with_its_bets_folded():
     assert "if (rows.length <= REC_DAY_OPEN_MAX) return" in body, "a handful shows as they are"
     assert "${recLg(r.sport)} · ${marketWord(r.market)}" in body, "the league as the strip names it (NCAAB)"
     assert "sort((a, b) => Math.abs(b.u) - Math.abs(a.u))" in body, "the biggest swing first"
-    assert '<details class="row-fold rc-bets">' in body and "Show the day’s ${rows.length} bets" in body
+    assert '<details class="row-fold rc-bets">' in body and "Show the day’s ${rows.length} ${what}" in body
     for sel in (".rc-sum-row", ".rc-sum-u", ".rc-bets"):
         assert sel in CSS, sel
 
@@ -137,14 +137,14 @@ def test_the_endpoint_is_routed_validated_and_ungated():
     i = SERVER.index("def _record_day(")
     body = SERVER[i:SERVER.index("\n    def ", i + 10)]
     assert 'r"\\d{4}-\\d{2}-\\d{2}"' in body and "400" in body, "a bad date is refused, not queried"
-    assert "L.settled_on(conn, date, sport=sport or None," in body
-    assert ('categories=L.LIKELY_HALF if book == "likely"\n'
-            '                                    else L.edge_books_for(sport)') in body, "each calendar names its book"
+    assert "L.settled_on(conn, date, sport=sport or None, categories=cats)" in body
+    assert ('cats = {"likely": L.LIKELY_HALF, "report": L.REPORT_BOOK}.get(book) or L.edge_books_for(sport)'
+            in body), "each calendar names its book"
     # The edge calendar's book is the edge picks, or a league's own (UFC's fights).
     from engine import ledger as _L
     assert _L.edge_books_for("") == _L.EDGE_BOOKS == _L.edge_books_for("nfl")
     assert _L.edge_books_for("ufc") == ("ufc",)
-    assert 'if book not in ("", "edge", "likely"):' in body, "an unknown book is refused, not guessed"
+    assert 'if book not in ("", "edge", "likely", "report"):' in body, "an unknown book is refused, not guessed"
     assert "_entitled" not in body, "settled rows are the evidence the subscription is sold on"
     assert '"net_units"' in body and '"rows"' in body
     assert "conn.close()" in body
@@ -155,8 +155,8 @@ def _node(js):
     node = shutil.which("node")
     if not node:
         return None
-    src = "\n".join(_fn(n) for n in ("escapeHtml", "recCalMonths", "recCalU", "recCalMonthHTML", "recCalendarHTML",
-                                       "recCalBookIn", "recCalendarsHTML"))
+    src = "\n".join(_fn(n) for n in ("escapeHtml", "recCalBook", "recCalMonths", "recCalU", "recCalMonthHTML",
+                                       "recCalendarHTML", "recCalBooks", "recCalBookIn", "recCalendarsHTML"))
     prog = f"""
       const toneOf = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
       const icon = (n) => `<i data-icon="${{n}}"></i>`;
@@ -372,7 +372,7 @@ def test_a_tapped_day_lists_the_book_its_calendar_draws():
     assert abs(day["day_u"] - sum(r["pnl_units"] for r in ml)) < 1e-9 and day["n"] == len(ml)
 
 
-def test_the_endpoint_serves_either_book_and_refuses_a_third():
+def test_the_endpoint_serves_each_book_and_refuses_another():
     import server
     from engine import ledger as LL
     real = LL.connect
@@ -471,7 +471,7 @@ def test_an_unchosen_calendar_opens_on_the_book_with_days():
     assert not any(f"let {v}" in rec for v in ("_recCalMonth", "_recCalDay", "_recCalBook")), "declared once"
     i = APP.index("async function renderRecord()")
     body = APP[i:APP.index("\nfunction _recordRooms(", i)]
-    assert 'const onLikely = recCalBookIn(src, likelyCal) === "likely";' in body
+    assert "const calBook = recCalBookIn(src, likelyCal, reportCal);" in body
     app = (ROOT / "web" / "js" / "app.js").read_text()
     assert "function recCalendarHTML(" not in app and "function recCalendarHTML(" in \
         (ROOT / "web" / "js" / "record.js").read_text(), "the calendar lives with the only page that draws it"
@@ -484,19 +484,21 @@ def test_the_record_page_draws_it_first_and_scopes_the_tap():
     i = APP.index("async function renderRecord()")
     body = APP[i:APP.index("\nfunction _recordRooms(", i)]
     assert "_recCalScope = scope;" in body
-    assert "const calendar = recCalendarsHTML(src, likelyCal);" in body
+    assert "const calendar = recCalendarsHTML(src, likelyCal, reportCal);" in body
     assert "const likelyCal = (d.likely_calendar || {})[scope];" in body
     assert "const receipts = calendar\n" in body, "the calendar no longer leads the room"
     assert 'host.querySelectorAll(".rc-day[data-date]")' in body
     assert "recCalDayOpen(el.dataset.date, calCurve, calRecent, calBook)" in body
-    assert "const calRecent = onLikely ? [] : src.recent || [];" in body, "the page holds edge rows only"
+    assert ('const calRecent = calBook === "likely" ? [] : calBook === "report"\n'
+            '    ? (d.report_recent || []).filter((r) => !scoped || r.sport === scope) : src.recent || [];') in body, \
+        "the page holds edge rows and the report book's newest, no Most Likely rows"
     day = _fn("recCalDayOpen")
     assert 'const sport = _recCalScope === "all" ? "" : _recCalScope;' in day
     assert "/api/record/day?date=${encodeURIComponent(date)}&sport=${encodeURIComponent(sport)}" in day
-    assert '&book=${book === "likely" ? "likely" : "edge"}' in day, "a tap asks for the book its calendar draws"
+    assert '&book=${["likely", "report"].includes(book) ? book : "edge"}' in day, "a tap asks for the book its calendar draws"
     assert "if (_recCalDay !== date) return;" in day, "a slower fetch never overwrites a later tap"
     assert "rows = (recent || []).filter((b) => b.date === date);" in day, "a static host still shows what it holds"
-    assert "${recCalDayBodyHTML(rows)}" in day
+    assert "${recCalDayBodyHTML(rows, book)}" in day
     body = _fn("recCalDayBodyHTML")
     assert "rows.map(recSettledRow)" in body, "the same row the receipts draw"
     assert "these are the rows this page already holds" in day

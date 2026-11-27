@@ -55,7 +55,7 @@ def test_the_room_reads_in_one_order_on_every_scope():
     body = _receipts()
     at = [body.index(m) for m in ORDER]
     assert at == sorted(at), [m for m, a in zip(ORDER, at)]
-    assert "const calendar = recCalendarsHTML(src, likelyCal);" in APP
+    assert "const calendar = recCalendarsHTML(src, likelyCal, reportCal);" in APP
 
 
 def test_the_calendar_is_the_first_thing_in_the_room():
