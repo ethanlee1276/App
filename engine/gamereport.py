@@ -4938,7 +4938,7 @@ def shared_leg_notes(tickets: list, heads: list) -> list:
         for leg in (t or {}).get("legs") or []:
             on.setdefault(_leg_key(leg), []).append((i, leg))
     notes = []
-    for key, seats in sorted(on.items(), key=lambda kv: -len(kv[1])):
+    for _key, seats in sorted(on.items(), key=lambda kv: -len(kv[1])):
         if len(seats) < 2 or len(notes) >= SHARED_NOTES:
             continue
         idx = [i for i, _l in seats]
