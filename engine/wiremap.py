@@ -141,6 +141,8 @@ FITS = (
     ("engine.nflfit", "report", (), "a fitted projection against the blend we ship; the blend kept"),
     ("engine.ripplefit", "report", (), "the usage ripple did not beat the close; the lineup step reads matefit instead"),
     ("engine.scriptfit", "report", (), "the spread's effect sits in the team total already (engine/tdfeatures)"),
+    ("engine.basefit", "report", ("engine.reportrecord",),
+     "each league's ordinary game beside its reads' record (step AIL), measured weekly; never a number"),
     ("engine.proplivefit", "report", (), "is the live prop chance honest? the Live tab's own check"),
     ("engine.slipreadfit", "report", (), "is the parlay checker's off-board read honest? replayed on past seasons"),
     ("engine.nfl.prefit", "report", (), "preseason usage and results; the preseason board is shown, not priced"),
