@@ -367,7 +367,10 @@ def shape_words(ch: dict) -> str:
             s = (f"in {n} start{'s' if n != 1 else ''} this season the team threw on "
                  f"{rp['pass_rate']:.0%} of its plays")
         if sp.get("pass_rate") is not None and sp.get("starts"):
-            s += f" ({ch['starter']}’s starts: {sp['pass_rate']:.0%})"
+            away = [t for t in (sp.get("start_teams") or []) if t != ch.get("team")]
+            s += (f" ({ch['starter']}’s starts{', some for ' if len(away) < len(sp.get('start_teams') or []) else ', for '}"
+                  f"{' and '.join(away)}: {sp['pass_rate']:.0%})" if away
+                  else f" ({ch['starter']}’s starts: {sp['pass_rate']:.0%})")
         bits.append(s)
     if rp.get("games"):
         yds = f"{float(rp['rush_yds_pg']):.0f}"

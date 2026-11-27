@@ -207,6 +207,13 @@ def test_a_passer_who_moved_says_whose_starts_they_were():
     assert qbchange.shape_words(own).startswith("in 3 starts this season the team threw on 59% of its plays")
     old = dict(one, replacement_profile={k: v for k, v in one["replacement_profile"].items() if k != "start_teams"})
     assert qbchange.shape_words(old).startswith("in 1 start this season the team threw on 59% of its plays")
+    # The starter's figure can be another club's too.
+    moved = dict(own, starter_profile={"starts": 6, "start_teams": ["ARI"], "pass_rate": 0.52})
+    assert "(Kyler Murray’s starts, for ARI: 52%)" in qbchange.shape_words(moved), qbchange.shape_words(moved)
+    both = dict(own, starter_profile={"starts": 6, "start_teams": ["ARI", "MIN"], "pass_rate": 0.52})
+    assert "(Kyler Murray’s starts, some for ARI: 52%)" in qbchange.shape_words(both), qbchange.shape_words(both)
+    home = dict(own, starter_profile={"starts": 6, "start_teams": ["MIN"], "pass_rate": 0.52})
+    assert "(Kyler Murray’s starts: 52%)" in qbchange.shape_words(home)
 
 
 def test_a_quarterback_who_barely_runs_runs_for_1_yard():
