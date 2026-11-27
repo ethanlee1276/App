@@ -191,6 +191,19 @@ def test_the_new_starters_lean_finds_the_passer_under_another_spelling_too():
     assert qblean._norm("Ja'Marr Chase") == qblean._norm("Ja’Marr Chase") == "jamarr chase"
 
 
+def test_a_questionable_starter_is_found_under_another_spelling():
+    """The "if he plays, if he sits" reports start from a questionable starter: the stats' name, looked up in the
+    injury report's. ESPN's carries the "Sr."; the file's own key kept it."""
+    from types import SimpleNamespace as NS
+    from engine import qbscenario
+    inj = [NS(team="IND", player="Anthony Richardson Sr.", status="QUESTIONABLE"),
+           NS(team="DET", player="Amon-Ra St. Brown", status="QUESTIONABLE")]
+    got = qbscenario.unsure_starters({"IND": "Anthony Richardson", "DET": "Amon Ra St Brown", "NYG": "J.J. McCarthy"},
+                                     inj)
+    assert got == {"IND": {"starter": "Anthony Richardson", "status": "QUESTIONABLE"},
+                   "DET": {"starter": "Amon Ra St Brown", "status": "QUESTIONABLE"}}, got
+
+
 def test_a_passer_who_moved_says_whose_starts_they_were():
     """The Vikings' change: "in 11 starts this season the team threw on 59% of its plays (Kyler Murray’s starts:
     52%)", in an 11-game season with Murray starting for Minnesota too. A passer's starts this season can include

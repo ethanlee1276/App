@@ -9913,7 +9913,9 @@ league's board, the Record, the report record) for the slips a visitor sees, and
   punctuation, Jr./Sr./III), and the chart's name is still the one the page says. Two passers under one loose name
   are never guessed between. The Colts play the Giants on Sunday; the next board build reads it. The same change
   also carried no lean (the new starter's own split of targets between receivers, tight ends and backs): that file
-  matched names with its own key, which kept the "Sr." too. It uses the site's matcher now.
+  matched names with its own key, which kept the "Sr." too. It uses the site's matcher now, and so do the "if the
+  quarterback plays, if he sits" reports, whose own key would have missed a questionable starter the injury report
+  spells with a suffix or a hyphen.
 - **A passer who moved says whose starts they were.** The Vikings' change read "in 11 starts this season the team
   threw on 59% of its plays (Kyler Murray's starts: 52%)". The Vikings have played at most 11 games, so 11 Cousins
   starts and Murray's own cannot all be Minnesota's: a passer's starts this season are counted whichever club they

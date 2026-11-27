@@ -29,7 +29,11 @@ UNSURE = ("QUESTIONABLE", "GTD")
 
 
 def _norm(name) -> str:
-    return " ".join(str(name or "").lower().replace(".", " ").replace("'", "").split())
+    """The site's one loose key for a name (engine/sources/oddsapi.normalize_name: case, punctuation, hyphens,
+    accents and Jr./Sr./III). This file's own kept the suffix and the hyphen, so a starter the injury report names
+    "Anthony Richardson Sr." and the stats "Anthony Richardson" was never found questionable (27 November 2026)."""
+    from .sources.oddsapi import normalize_name
+    return normalize_name(str(name or ""))
 
 
 def unsure_starters(starters: dict, injuries: list) -> dict:
