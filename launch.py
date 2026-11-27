@@ -874,6 +874,13 @@ def _board_counts(path: str) -> dict:
         for r in b.get(key) or []:
             if isinstance(r, dict) and isinstance(r.get("partner_back"), dict) and r.get("player"):
                 partners[(r.get("team"), r["player"])] = r["partner_back"]
+    # …and every scorer the scan stamped (gamescan.stamp_touchdowns): by the time the board is written the lists above
+    # are cut to the page's five, so most of the reads are only on the games' scan reads.
+    for game in (b.get("scan_reads") or {}).values():
+        for x in (game.get("players") or []) if isinstance(game, dict) else []:
+            pb = ((x.get("td") or {}).get("partner")) if isinstance(x, dict) else None
+            if isinstance(pb, dict) and x.get("player"):
+                partners[(x.get("team"), x["player"])] = pb
     if partners:
         out["td_partner"] = {"back": sum(1 for x in partners.values() if x.get("kind") != "out"),
                              "out": sum(1 for x in partners.values() if x.get("kind") == "out")}

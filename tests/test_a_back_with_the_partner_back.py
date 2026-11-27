@@ -215,13 +215,18 @@ def test_the_heartbeat_counts_the_partner_reads_each_player_once():
     board = {"long_shots": [{"player": MATE, "team": "CHI", "partner_back": {"kind": "out", "partner": LEAD}}],
              "longshot_watch": [{"player": MATE, "team": "CHI", "partner_back": {"kind": "out", "partner": LEAD}},
                                 {"player": LEAD, "team": "DET", "partner_back": {"partner": MATE, "games": 5}},
-                                {"player": "Someone Else", "team": "DET"}]}
+                                {"player": "Someone Else", "team": "DET"}],
+             # A scorer cut from the lists above but stamped on the scan reads still counts (the lists are sliced).
+             "scan_reads": {"CHI@DET": {"players": [
+                 {"player": "Third Back", "team": "DET", "td": {"model_prob": 0.3, "partner": {"partner": LEAD}}},
+                 {"player": MATE, "team": "CHI", "td": {"model_prob": 0.3, "partner": {"kind": "out"}}},
+                 {"player": "No Partner", "team": "DET", "td": {"model_prob": 0.2}}]}}}
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, "board.json")
         with open(path, "w") as fh:
             _json.dump(board, fh)
         got = launch._board_counts(path)
-    assert got.get("td_partner") == {"back": 1, "out": 1}, got
+    assert got.get("td_partner") == {"back": 2, "out": 1}, got
 
 
 if __name__ == "__main__":
