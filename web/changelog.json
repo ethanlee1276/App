@@ -4,6 +4,12 @@
     {
       "date": "2026-11-27",
       "kind": "fix",
+      "title": "The angles say what they are worth, and only on their own side",
+      "body": "Rebuilt over the 2022-2025 seasons, the game report's angles (where each defense gives up the most to a team's top receiver, tight end and quarterback) have not predicted a player's game: 40% beat their own average, about what any player in the same role does (43%). The report now says so under them. A pick's reasons also stopped opening on an angle that argued the other way: an angle is said only on a pick that goes its way."
+    },
+    {
+      "date": "2026-11-27",
+      "kind": "fix",
       "title": "With no price posted, the call says it is our simulation's",
       "body": "For a game with no moneyline or spread, \"Who we think wins\" gives our simulation's chance, but its closing lines still said the call followed the price. They now say no price was posted, so the chance is ours, not the books'."
     },

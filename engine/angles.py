@@ -40,6 +40,28 @@ position step the model prices with is engine/defensevs, measured; these
 are the sentences that say why a pick makes sense, and why a matchup is one
 to avoid.
 
+MEASURED (step AIK, 27 November 2026). Live, from 12 November, the report's
+angles were right 51 of 123 times (41%), graded as engine/reportgrade grades
+them: the player's stat that game against the average of the player's last
+games, at most 10. Replayed over 2022-2025 on nflverse's weekly stats, each
+week's tables built from the games before it, as nfl_tables builds them:
+
+  * WR1, "where to look" (the 8 defenses giving the top receiver the most
+    yards): 42.2% of 393, against 42.6% for every team's WR1 in every game;
+    "where to be careful" (the 8 stingiest): fell short 54.8% of 392,
+    against 57.4%.
+  * TE: 46.2% of 377 against 44.2%; careful 60.1% of 376 against 55.8%,
+    above it in two seasons of four.
+  * QB legs (the quarterback-rushing-yards half; the blitz half needs
+    charting the replay does not have): 30.8% of 104 against 38.8%.
+  * The red-zone man: every team's has one, so it is no matchup at all;
+    38.4% of 1,557 scored more than their own average.
+
+All "where to look" angles: 39.9% of 2,431, against 42.8% for every player
+in those roles. None of them predicts a player's game, so the report says
+so under them (gamereport.ANGLES_NOTE), and a pick card says an angle only
+on a pick that goes its way in a market it points to (gamereport.card_why).
+
 Standard library only. Never raises out of ``nfl_tables`` or ``for_game``.
 """
 from __future__ import annotations

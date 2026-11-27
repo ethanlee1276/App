@@ -9883,6 +9883,38 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIK. The angles, measured: they don't predict a player's game, and the report now says so** (step 1029; 27
+November; nothing to run; one question for you at the end). Learning from our own reports' record: since 12
+November our NFL reports' reads are right 300 of 557 times, and one group lags, the angles at the top of each
+report ("Where to look" / "Where to be careful": where each defense gives up the most to a team's top receiver, its
+tight end, its quarterback's legs, and the red-zone man). They were right 51 of 123 times (41%), and an ordinary
+game is 42%: a key player beats their own average 42% of the time, so an angle that said nothing would score about
+the same. Fades are 71% (against 57%) and breakout candidates 51% (against 42%), so those do add something.
+
+- **Measured.** I rebuilt the angles for 2022-2025, each week from only the games before it, and graded them the
+  way the record does (the player's game against their average over their last games, at most 10):
+
+  | Angle | Right | Every player in that role |
+  | --- | --- | --- |
+  | Top receiver, where to look | 42.2% of 393 | 42.6% |
+  | Top receiver, where to be careful | 54.8% of 392 | 57.4% |
+  | Tight end, where to look | 46.2% of 377 | 44.2% |
+  | Tight end, where to be careful | 60.1% of 376 | 55.8% (above it in 2 seasons of 4) |
+  | Quarterback's legs | 30.8% of 104 | 38.8% |
+  | All "where to look" | 39.9% of 2,431 | 42.8% |
+
+  The quarterback line is the half I could replay (quarterbacks who ran on that defense); the blitz half needs
+  charting the replay doesn't have. The red-zone line points every team's red-zone man at a touchdown, so it isn't
+  a matchup at all.
+- **Changed.** Under the angles, the note now says that, with those numbers: they say where a defense has given up
+  the most, not who will have a big game, and none of them moves our numbers (none ever did). And a slip: a pick
+  card put the player's angle first in its reasons on any pick of the player's, so an under could open on "this
+  defense gives up the most yards to top receivers". An angle is now said only on an over (or a yes) in a market it
+  points to.
+- **Your call.** They sit first in every NFL report, from your Commanders at Giants research. Measured, they're
+  context, not a signal. Keep them first, move them below the matchups, or drop them? I'd move them below "Who's
+  guarding who", where the matchup reads that do carry signal come first. Until you say, nothing moves.
+
 **AIJ. With no price posted, "Who we think wins" no longer says the call follows one** (step 1028; 27 November;
 nothing to run). For a game with no moneyline and no spread, the chance to win is our simulation's, and the section
 said so ("a 59% chance by our simulation of the game (no price was posted)"), then went on: "Nothing ... tilts this

@@ -4798,15 +4798,25 @@ def card_form(c: Ctx, r: dict) -> str:
 _NO_LEAN = ("anytime_td", "pass_td", "pass_int")
 
 
+#: The markets each angle's "points to" names (engine/angles): a card says an angle only on a pick in one of them.
+ANGLE_MARKETS = {"catches and yards": ("receptions", "rec_yds"),
+                 "catches, yards and a touchdown": ("receptions", "rec_yds", "anytime_td"),
+                 "rushing yards": ("rush_yds",), "a touchdown": ("anytime_td",)}
+
+
 def card_why(c: Ctx, r: dict, angles: dict) -> list:
     """The matchup and the role behind the pick, as the research said them:
-    the defence's leak to him (engine/angles), his read's reasons on this
-    pick's side, his share of the work, and what capped the pick if
+    the defence's leak to the player (engine/angles), the read's reasons on
+    this pick's side, the share of the work, and what capped the pick if
     anything did."""
     out = []
     a = angles.get(r.get("player"))
-    if a:
-        out.append(a)
+    # AN ANGLE ONLY ON ITS OWN SIDE (step AIK, 27 November 2026): the card put the player's angle first on any pick
+    # of the player's, so an under could open on "this defense leaks yards to top receivers". An angle is said on an
+    # over (or a yes) in a market it points to; a bare text, as before, still reads on an over.
+    text, points = (a if isinstance(a, tuple) else (a, None)) if a else (None, None)
+    if text and _card_side(r) == "OVER" and (points is None or r.get("market") in ANGLE_MARKETS.get(points, ())):
+        out.append(text)
     side = _card_side(r)
     rd = next((x for x in c.reads if x.get("player") == r.get("player")), None)
     if rd:
@@ -4913,7 +4923,7 @@ def sec_card(c: Ctx, built: dict) -> dict | None:
         from .angles import for_game
         for a in for_game(c, c.angle_tables) if c.angle_tables else []:
             if a.get("tone") == "up" and a.get("player") not in angles:
-                angles[a["player"]] = _sentence(a["text"])[:-1]
+                angles[a["player"]] = (_sentence(a["text"])[:-1], a.get("points_to"))
     except Exception:                                        # noqa: BLE001
         angles = {}
     items = []
@@ -4988,10 +4998,17 @@ def sec_angles(c: Ctx) -> dict | None:
     if down:
         blocks += [_h("Where to be careful"),
                    _claimed_list((f"{_sentence(r['text'])[:-1]} → {r['points_to']}", claim(r)) for r in down)]
-    blocks.append({"type": "note", "text": ("This season's games, from the box scores and the charting. Shown, not "
-                                            "counted: the board's numbers price each defense against each position "
-                                            "on their own measured scale.")})
+    # WHAT THEY ARE WORTH, MEASURED (step AIK): rebuilt week by week over 2022-2025 (engine/angles' MEASURED).
+    blocks.append({"type": "note", "text": ANGLES_NOTE})
     return _section("angles", "The angles", blocks)
+
+
+#: The angles' note (step AIK, 27 November 2026), from the replay in engine/angles' MEASURED.
+ANGLES_NOTE = ("This season's games, from the box scores and the charting. Measured over the 2022–2025 seasons, "
+               "rebuilt week by week from the games before each, these spots have not predicted a player's game: a "
+               "player in a \"where to look\" spot beat their own average 40% of the time, about what any player in "
+               "the same role does (43%). So they say where a defense has given up the most, not who will have a big "
+               "game, and none of them moves our numbers.")
 
 
 def _game_parlays(c: Ctx) -> dict | None:
