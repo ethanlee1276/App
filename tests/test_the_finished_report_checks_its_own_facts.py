@@ -380,8 +380,12 @@ def test_the_reports_write_what_a_finished_game_checks():
     script = _sec(rep, "script")["blocks"][0]
     assert [c["kind"] for c in script["claims"] if c] == ["pace", "scoring", "close"], script["claims"]
     assert script["claims"][-3]["read"] == "fast" and script["claims"][-2]["read"] == "high"
+    # The blowout watch is the short version's to say, with its claim (step AII): the facts no longer repeat it.
+    short = next(b for b in _sec(rep, "short")["blocks"] if b.get("type") == "list")
+    i = next(i for i, t in enumerate(short["items"]) if t.startswith("Blowout watch"))
+    assert short["claims"][i] == {"kind": "blowout"}, short
     facts = _sec(rep, "facts")["blocks"][0]
-    assert facts["claims"][-1] == {"kind": "blowout"} and facts["items"][-1].startswith("Blowout watch"), facts
+    assert not any(str(t).startswith("Blowout watch") for t in facts["items"]), facts
     inj = _sec(rep, "injuries")["blocks"][0]
     assert inj["claims"] == [{"kind": "injury", "player": "Tyler Herro", "team": "MIA", "status": "out"}], inj
     assert "claim" in R.PLAIN_SKIP and "expect" in R._NOT_TEXT, "what a final is checked by is never a sentence"
