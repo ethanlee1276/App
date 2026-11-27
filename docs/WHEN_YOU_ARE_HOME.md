@@ -9927,6 +9927,10 @@ league's board, the Record, the report record) for the slips a visitor sees, and
   with picks only in the other books reads "No Edge, Long Shots or parlay picks graded yet; the Record page grades
   N of its other picks." A league with nothing anywhere still says nothing is journaled. The next brief is the
   first to read it.
+- **A settled pick's clubs are read once by a screen reader.** The "CHI CHI" I left alone under AIC: each finished
+  game on a settled pick printed the club's code beside its mark, and the mark's own label is the code. The fix is
+  in the settled card (settled.js, outside the first visit's budget), not the shared mark: beside its mark the
+  printed code is hidden from a screen reader, and with no mark (no final yet) it is still read.
 - Left alone: the Status page's feed readouts ("1 of 1 eligible game(s) priced ... 14 credit(s) each", "1.6 hour(s)
   old") are diagnostics, and ten tests pin their wording; a preregistration's stored reason still says "his
   offence" because a registration's record is kept as it was written, not edited; and the injury blurbs and news

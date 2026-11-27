@@ -107,8 +107,9 @@ def test_one_drawing_says_each_leg_and_the_ticket():
     assert '<li class="st-leg won" data-open="player:joe-burrow">' in won
     assert '<b class="st-leg-bet">Over 249.5 · Joe Burrow Passing Yards</b>' in won
     assert ('<span class="st-did">409</span><span class="st-game"><span class="st-dot" aria-hidden="true">·</span>'
-            '<span class="st-club">PIT</span><i class="tm">PIT</i><b class="st-score">18 – 38</b><i class="tm">CIN</i>'
-            '<span class="st-club">CIN</span></span><span class="st-when"><span class="st-dot" aria-hidden="true">·</span>'
+            '<span class="st-club" aria-hidden="true">PIT</span><i class="tm">PIT</i><b class="st-score">18 – 38</b>'
+            '<i class="tm">CIN</i><span class="st-club" aria-hidden="true">CIN</span></span><span class="st-when">'
+            '<span class="st-dot" aria-hidden="true">·</span>'
             'Final 11/15</span>') in won, won
     assert "Under 4.5 · DK Metcalf Receptions" in won and "Over 59.5 · Chase Brown Rush + Rec Yards" in won
     assert won.count('<span class="st-leg-mark won"><span class="st-sr">Won</span>[check]</span>') == 3
@@ -124,6 +125,8 @@ def test_one_drawing_says_each_leg_and_the_ticket():
     assert '<span class="st-tix-verdict">Waiting</span> · 1 void, 1 waiting' in wait
     assert '<span class="st-tix-pay"><span>+310</span></span>' in wait
     assert "Didn’t play" in wait and "Waiting on the box score" in wait and wait.count("[dash]") == 2
+    # Beside its mark a club's code is the mark's own label, so it is not read twice ("CHI CHI"); with no mark
+    # (no final) the code is the only name and stays read.
     # No final on hand: the clubs and the day alone.
     assert unscored == ('<span class="st-game"><span class="st-club">IND</span><span>at</span><span class="st-club">HOU'
                         '</span></span><span class="st-when"><span class="st-dot" aria-hidden="true">·</span>11/16</span>')
@@ -166,7 +169,7 @@ def test_the_finished_report_draws_its_tickets_settled():
     assert "<b>−1.00u</b><span>+150</span>" in t, "at the price the card said to take it at"
     # A leg the report wrote names its market in the reader's words, off its own words.
     assert "Over 1.5 · Kentavious Caldwell-Pope Rebounds" in t and "Over 2.5 · Jaylen Brown Assists" in t
-    assert '<span class="st-club">IND</span><i class="tm">IND</i><b class="st-score">124 – 131</b>' in t
+    assert '<span class="st-club" aria-hidden="true">IND</span><i class="tm">IND</i><b class="st-score">124 – 131</b>' in t
     assert '<span class="st-dot" aria-hidden="true">·</span>Final 11/16</span>' in t
     # What the card said before the game, one tap under it.
     more = t[t.index('<details class="st-tix-more"><summary>How we built it</summary>'):]
@@ -196,7 +199,7 @@ def test_report_picks_draws_its_finished_games_so():
     assert ticket.startswith('<li class="rpk-st"><div class="st-tix won">') and "<b>+1.75u</b><span>+175</span>" in ticket
     assert "Over 74.5 · Jahmyr Gibbs rush_yds" in ticket and "Over 5.5 · Amon-Ra St. Brown Receptions" in ticket, \
         "the record's word for the market when the answer brings it"
-    assert '<span class="st-club">NE</span><i class="tm">NE</i><b class="st-score">17 – 31</b>' in ticket
+    assert '<span class="st-club" aria-hidden="true">NE</span><i class="tm">NE</i><b class="st-score">17 – 31</b>' in ticket
     assert spread.startswith('<li class="st-leg lost">') and '<b class="st-leg-bet">DET −3.5</b>' in spread, \
         "a game pick in the page's own words for it (rpBetWords), its final under it"
     for src in ("if (slot && x) slot.innerHTML = rpBetsHTML(x, sport, first && i === 0, rows[i]);",

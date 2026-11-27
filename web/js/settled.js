@@ -54,9 +54,12 @@ function settledGameHTML(g, lead) {
   const fin = f.home != null && f.away != null && Number.isFinite(Number(f.home)) && Number.isFinite(Number(f.away));
   const m = /^\d{4}-(\d{2})-(\d{2})/.exec(String(g.date || ""));
   const day = m ? `${Number(m[1])}/${Number(m[2])}` : "";
-  const club = (t) => `<span class="st-club">${escapeHtml(t)}</span>`;
+  // Beside its mark a club's code is the mark's own label ("CHI"), so a screen reader heard each one twice,
+  // "CHI CHI 39 – 35 DET DET": the printed code steps aside for it there. With no mark it is the only name.
+  const club = (t, marked) => `<span class="st-club"${marked ? ' aria-hidden="true"' : ""}>${escapeHtml(t)}</span>`;
+  const am = fin ? mark(g.away) : "", hm = fin ? mark(g.home) : "";
   const game = fin
-    ? `${club(g.away)}${mark(g.away)}<b class="st-score">${settledNum(f.away)} – ${settledNum(f.home)}</b>${mark(g.home)}${club(g.home)}`
+    ? `${club(g.away, !!am)}${am}<b class="st-score">${settledNum(f.away)} – ${settledNum(f.home)}</b>${hm}${club(g.home, !!hm)}`
     : `${club(g.away)}<span>at</span>${club(g.home)}`;
   const when = [fin ? "Final" : "", day].filter(Boolean).join(" ");
   // The day keeps its dot: on a phone it wraps whole onto the next line, never leaving a dot behind.
