@@ -810,10 +810,7 @@ def nba_facts(c: Ctx) -> dict | None:
     if teams_only:
         items.append(teams_only)
     claims = [None] * len(items)
-    if any("blowout" in (_spot(c, t).get("flags") or []) for t in c.teams):
-        items.append(BLOWOUT_WATCH)
-        # What a finished game checks it by (engine/reportfacts): the margin.
-        claims.append({"kind": "blowout"})
+    # The blowout watch is the short version's to say (step AII): the facts said the same sentence again below it.
     block = _claimed_list(list(zip(items, claims)))
     if block and marks:
         block["marks"] = marks
@@ -1084,12 +1081,17 @@ def nba_short(c: Ctx, built: dict) -> dict | None:
         items.append(_sentence("On breakout watch: " + ". ".join(player_clause(c, r, "up", tag=False)
                                                                   for r in brk[:3])))
     items += _shine_short(c, [r for r in c.reads if r.get("read") != "breakout"])
+    claims = [None] * len(items)
     if any("blowout" in (_spot(c, t).get("flags") or []) for t in c.teams):
+        # Said once, here, with what a finished game checks it by (engine/reportfacts): the margin (step AII; the
+        # game facts said the same sentence again, word for word, until then).
         items.append(BLOWOUT_WATCH + ".")
+        claims.append({"kind": "blowout"})
     par = parlay_sentence(c)
     if par:
         items.append(par)
-    return _section("short", "The short version", [_list(items)])
+        claims.append(None)
+    return _section("short", "The short version", [_claimed_list(list(zip(items, claims)))])
 
 
 

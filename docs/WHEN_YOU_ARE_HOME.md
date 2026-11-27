@@ -9883,6 +9883,13 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AII. The blowout watch is said once** (step 1027; 27 November; nothing to run). A basketball report with a spread
+of 10 or more said "Blowout watch: with a spread of 10 or more, the starters' minutes are the first thing a coach
+takes back if it turns lopsided" twice, word for word: in the short version and again in the game facts five lines
+below. Now the short version says it, and a finished game still checks it by the final margin, as before. I also
+read every league's sample report for text a reader should never see (a stored record, "None", long decimals, a
+corner's code, "a 80" for "an 80"): after step AIH, none.
+
 **AIH. A corner is said one way, and a missing starter reads as a sentence** (step 1026; 27 November; nothing to
 run). Reading the sample report again beside your Bears at Lions research:
 
