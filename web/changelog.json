@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-27",
+      "kind": "ship",
+      "title": "A game report's touchdown board puts every book side by side",
+      "body": "Each game report's Red zone section now ends with the touchdown board: the scorers we price for both teams, up to 10, ranked by our chance, with that chance as a fair price, the best price posted and where, and FanDuel's and DraftKings' prices beside it (a dash where that book posts none). A best price past −250 says so, the limit our picks keep. And when two or more of a game's tickets share a leg, the Parlays section says how often all of them cash, how often at least one does, and that a game without that leg loses every one."
+    },
+    {
+      "date": "2026-11-27",
       "kind": "fix",
       "title": "A quarterback change finds its passer under any spelling",
       "body": "The Colts' change read \"Anthony Richardson Sr. has 0 pass attempts in our data — too few to rate\". ESPN's depth chart adds the \"Sr.\" and the weekly stats do not, and the lookup wanted the exact name, so none of his numbers were read. Names now match the way the rest of the site matches them (case, punctuation, Jr. and Sr.), and the card says what we hold: 6 attempts over last season and this one, still too few to rate, with this season's runs and air yards. A starter we cannot rate yet counts as a downgrade, as before. A passer whose starts this season include another club's now says so, instead of calling them all \"the team\"."

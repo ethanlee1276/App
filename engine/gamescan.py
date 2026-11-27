@@ -2588,6 +2588,31 @@ def td_rows_by_player(result: dict) -> dict:
     return out
 
 
+def _decimal(odds: int) -> float:
+    return 1.0 + (odds / 100.0 if odds > 0 else 100.0 / -odds)
+
+
+def td_books(row: dict) -> dict:
+    """{book: his anytime-touchdown price} off a scorer row's own quotes (`touchdowns.prop_depth` ``all_lines``),
+    the better one where a book quotes twice. Step AIE (27 November 2026), from Ethan's own Bears at Lions research,
+    which read "Gibbs is −270 at FanDuel and DraftKings, −250 at BetMGM" off the books side by side; the report kept
+    one price and one book."""
+    out: dict = {}
+    for ln in (row or {}).get("all_lines") or []:
+        if not isinstance(ln, dict):
+            continue
+        book = str(ln.get("book") or "").strip()
+        try:
+            o = int(float(ln.get("over_odds")))
+        except (TypeError, ValueError):
+            continue
+        if not book or book.lower() in ("proxy", "best", "?") or -100 < o < 100:
+            continue
+        if book not in out or _decimal(o) > _decimal(out[book]):
+            out[book] = o
+    return out
+
+
 def stamp_touchdowns(scan_reads: dict, result: dict) -> int:
     """Each read gets his touchdown chance and price (``td``). Ethan,
     2026-09-25: "I'm seeing a lot of good candidates and breakout
@@ -2604,6 +2629,8 @@ def stamp_touchdowns(scan_reads: dict, result: dict) -> int:
                 continue
             x["td"] = {"model_prob": round(float(r["model_prob"]), 4), "odds": r.get("odds"),
                        "book": r.get("book") or "",
+                       # EVERY BOOK'S PRICE ON HIM (step AIE): the report's touchdown board sets them side by side.
+                       **({"books": td_books(r)} if td_books(r) else {}),
                        "implied_total": r.get("implied_total"), "rz_chances": r.get("rz_chances"),
                        "rz_before": r.get("rz_before"), "rz_then_implied": r.get("rz_then_implied"),
                        # HIS RED-ZONE WORK AS COUNTS and his real share of his

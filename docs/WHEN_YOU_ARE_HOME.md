@@ -9883,6 +9883,33 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIE. The game report learns from your Bears at Lions research** (step 1023; 27 November; nothing to run). You
+sent the research you bet Thanksgiving on, which won, and said: "learn from these reports and structure better and
+research better for these games". I read it beside our CHI@DET report, section by section.
+
+- **Most of it the report already does.** The market and each team's implied points, who is out and who plays
+  instead (the corner who steps in), the units, who covers whom, the red-zone counts, the game scripts with what
+  each ticket needs, and the parlay cards with their joint chance, fair price, take-at price and backups. Our
+  CHI@DET report went 5 of 6 on its picks and 3 of 3 on its two-leg parlays.
+- **New: the touchdown board as one table.** Your board put every scorer on one row: the chance, the fair price,
+  the price to take, and the books side by side ("Gibbs −270 at FD/DK, −250 at BetMGM"). The report said each
+  scorer in a sentence with one price and one book, so the books could not be compared at a glance. The Red zone
+  section now ends with a table of both teams' scorers (up to 10), ranked by our chance: our chance, that chance as
+  a fair price, the best price any book posts and where, then FanDuel's and DraftKings' prices (a dash where that
+  book posts none). A best price shorter than −250 says "(past −250)", the limit our picks keep. The prices are the
+  ones the books had up when the build read them. The sentences above the table stay: they say why, and a finished
+  game grades them.
+- **New: how tickets that share a leg play together.** Your research: "Swift is on both tickets, so they win
+  together. Both win 11% of the time, at least one wins 37%". When two or more of a game's two-leg, three-leg or
+  touchdown-pair tickets share one leg, the Parlays section now says how often all of them cash, how often at least
+  one does, and that a game without the shared leg loses every one. It treats each ticket's other legs as unrelated
+  once the shared leg is in, as the cards' own chances do. Tickets that share two or more legs get no line: that
+  arithmetic is different, and a wrong number is worse than none.
+- **Being measured first: the backfield-partner split** ("Swift scored in only 2 of the 5 games both were active").
+  Our number for a back counts its recent games, including ones its partner missed, so when the partner returns the
+  share can read too high. That would change our numbers, not just the words, so it goes the way every model change
+  does: measured on past seasons, held out, and shipped only if it beats what we have. I'll say what it found here.
+
 **AID. The Record page and the boards say their counts and markets in words** (step 1022; 27 November; nothing
 to run). Still on "wording on the site and how data is used": I read every sentence in the site's public files (each
 league's board, the Record, the report record) for the slips a visitor sees, and fixed the ones the pages show:

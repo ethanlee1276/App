@@ -2323,6 +2323,70 @@ def td_chance_pairs(c: Ctx, off: str) -> list:
     return [(t, cl) for _p, t, cl in rows[:TD_LIST]]
 
 
+#: The touchdown board's books beside the best price (step AIE): the two Ethan's own rules read ("your FD/DK rule").
+TD_BOARD_BOOKS = ("FanDuel", "DraftKings")
+#: Scorers on the board, both teams together: Ethan's research ranks nine for a game.
+TD_BOARD_ROWS = 10
+#: Book names that are our own placeholders, never a book a price was posted at.
+NOT_A_BOOK = ("proxy", "best", "?")
+TD_BOARD_NOTE = ("Ours is our chance the player scores; fair is that chance as a price, so a price shorter than "
+                 "fair asks for more than our number. The best price is the best any book posts, with the book; "
+                 "FanDuel's and DraftKings' are beside it, and a dash means that book posts no price. Our picks "
+                 "take no price past −250.")
+
+
+def _better_price(a, b) -> bool:
+    """American price ``a`` pays more than ``b``."""
+    dec = lambda o: 1.0 + (o / 100.0 if o > 0 else 100.0 / -o)                       # noqa: E731
+    return dec(a) > dec(b)
+
+
+def td_board_table(c: Ctx) -> dict | None:
+    """THE TOUCHDOWN BOARD, AS A TABLE (step AIE, 27 November 2026). Ethan, sending his own Bears at Lions research,
+    which won: "U need to be doing shit like this for our game reports ... learn from these reports and structure
+    better". Its board ranks every scorer on one row each: our number, the fair price, the best price and where,
+    and FanDuel's and DraftKings' beside it, which is how it read "Gibbs is −270 at FanDuel and DraftKings, −250 at
+    BetMGM" at a glance. The report said each scorer in a sentence with one price. Both teams, by our chance; None
+    with fewer than two priced. The sentences above it stay: they say why, and a finished game grades them."""
+    from .twoleg import american
+    rows = []
+    for off in c.teams:
+        for r in c.reads_for(off):
+            td = r.get("td") or {}
+            p = _f(td.get("model_prob"))
+            if p is None or not 0 < p < 1 or not r.get("player"):
+                continue
+            books = {}
+            for b, o in (td.get("books") or {}).items():
+                try:
+                    books[str(b)] = int(o)
+                except (TypeError, ValueError):
+                    continue
+            best_book, best = str(td.get("book") or ""), _f(td.get("odds"))
+            if best_book.lower() in NOT_A_BOOK:
+                # Our own placeholder: a proxy line is no price at all; "best" names no one book.
+                best_book, best = "", (None if best_book.lower() == "proxy" else best)
+            if best is not None and -100 < best < 100:
+                best = None
+            for b, o in books.items():
+                if best is None or _better_price(o, best):
+                    best_book, best = b, o
+            if best is None:
+                continue
+            low = {b.lower().replace(" ", ""): o for b, o in books.items()}
+            each = [_odds(low.get(b.lower())) or "—" for b in TD_BOARD_BOOKS]
+            pos = str(r.get("pos") or "").upper()
+            rows.append((p, [f"{r['player']} ({off}{' ' + pos if pos else ''})", _pct(p), _odds(american(1.0 / p)),
+                             f"{_odds(best)}{' ' + best_book if best_book else ''}"
+                             + (" (past −250)" if best < TAKE_CAP else ""), *each]))
+    if len(rows) < 2:
+        return None
+    rows.sort(key=lambda x: -x[0])
+    return {"type": "table", "title": "The touchdown board", "head": ["Scorer", "Ours", "Fair", "Best price",
+                                                                     *TD_BOARD_BOOKS],
+            "rows": [cells for _p, cells in rows[:TD_BOARD_ROWS]], "note": TD_BOARD_NOTE}
+
+
 #: Players listed under "Who gets the ball inside the 20".
 RZ_LIST = 4
 #: How far a defence's red-zone plays allowed may move his chances this game
@@ -2477,6 +2541,9 @@ def sec_redzone(c: Ctx) -> dict | None:
         scorers = td_chance_pairs(c, off)
         if scorers:
             blocks += [_h(f"Who can score for {team_np(c, off)}"), _claimed_list(scorers)]
+    board = td_board_table(c)
+    if board:
+        blocks.append(board)
     if not blocks:
         return None
     return _section("redzone", "Red zone", blocks)
@@ -4849,6 +4916,54 @@ def _game_parlays(c: Ctx) -> dict | None:
     return for_game(c.result, c.home, c.away)
 
 
+#: How many shared-leg sentences one kind of ticket gets (step AIE): the most-shared legs first.
+SHARED_NOTES = 2
+
+
+def _leg_key(leg: dict) -> tuple:
+    return (str(leg.get("player") or ""), str(leg.get("market") or ""), str(leg.get("side") or "").lower(),
+            str(leg.get("line")))
+
+
+def shared_leg_notes(tickets: list, heads: list) -> list:
+    """HOW THE TICKETS PLAY TOGETHER (step AIE, 27 November 2026; Ethan's own Bears at Lions research: "Swift is on
+    both tickets, so they win together. Both win 11% of the time, at least one wins 37%, and neither wins 63%").
+    For each leg on two or more of one kind's tickets that share nothing else: how often all of them cash and how
+    often at least one does, off each ticket's own chance and the shared leg's, taking the other legs as unrelated
+    once the shared one is in (given it, each ticket's rest comes in at its chance over the shared leg's), and that
+    the shared leg missing loses every one. ``heads``: the tickets' names, in order."""
+    from .gameparlays import pick_words
+    on: dict = {}
+    for i, t in enumerate(tickets or []):
+        for leg in (t or {}).get("legs") or []:
+            on.setdefault(_leg_key(leg), []).append((i, leg))
+    notes = []
+    for key, seats in sorted(on.items(), key=lambda kv: -len(kv[1])):
+        if len(seats) < 2 or len(notes) >= SHARED_NOTES:
+            continue
+        idx = [i for i, _l in seats]
+        legs_of = [{_leg_key(l) for l in tickets[i].get("legs") or []} for i in idx]
+        if any(len(a & b) > 1 for n, a in enumerate(legs_of) for b in legs_of[n + 1:]):
+            continue                                   # they share more than this leg: the arithmetic is not this
+        p = _f(seats[0][1].get("p"))
+        joints = [_f(tickets[i].get("joint")) for i in idx]
+        if not p or p <= 0 or any(j is None or j <= 0 for j in joints):
+            continue
+        rest = [min(1.0, j / p) for j in joints]
+        every = p
+        none_of_rest = 1.0
+        for q in rest:
+            every *= q
+            none_of_rest *= 1.0 - q
+        some = p * (1.0 - none_of_rest)
+        n = len(idx)
+        who = _join([heads[i] for i in idx])
+        notes.append(f"{who} {'both' if n == 2 else 'all'} need {pick_words(seats[0][1])} ({p:.0%}): "
+                     f"{'both' if n == 2 else f'all {n}'} cash about {every:.0%} of the time and at least one "
+                     f"about {some:.0%}, and a game without it loses {'both' if n == 2 else 'every one'}")
+    return notes
+
+
 def sec_parlays(c: Ctx) -> dict | None:
     """THE PARLAYS FOR THIS GAME (engine/gameparlays; Ethan, 2026-11-14:
     "for each game ... make 4 3-leg parlays ... and 3 2-leg touchdown
@@ -4876,6 +4991,8 @@ def sec_parlays(c: Ctx) -> dict | None:
     threes = [card(t, i, "three", c.sport) for i, t in enumerate(gp.get("threes") or [], 1)]
     if threes:
         blocks += [_h("Three-leg parlays"), {"type": "parlays", "kind": "three", "items": threes}]
+        # HOW THEY PLAY TOGETHER (step AIE): a leg on two or more of them.
+        blocks += [_p(n) for n in shared_leg_notes(gp.get("threes") or [], [x["title"] for x in threes])]
         if gp.get("threes_note"):
             # Fewer than three: why, under the ones it made (gameparlays._report_note).
             blocks.append(_p(gp["threes_note"]))
@@ -4888,6 +5005,7 @@ def sec_parlays(c: Ctx) -> dict | None:
     twos = [card(t, i, "two", c.sport) for i, t in enumerate(gp.get("twos") or [], 1)]
     if twos:
         blocks += [_h("Two-leg parlays"), {"type": "parlays", "kind": "two", "items": twos}]
+        blocks += [_p(n) for n in shared_leg_notes(gp.get("twos") or [], [x["title"] for x in twos])]
         if gp.get("twos_note"):
             blocks.append(_p(gp["twos_note"]))
     elif gp.get("twos_note"):
@@ -4896,6 +5014,7 @@ def sec_parlays(c: Ctx) -> dict | None:
     if pairs:
         blocks += [_h("Touchdown pairs" if c.sport in ("nfl", "cfb") else "Scorer pairs"),
                    {"type": "parlays", "kind": "scorers", "items": pairs}]
+        blocks += [_p(n) for n in shared_leg_notes(gp.get("scorers") or [], [x["title"] for x in pairs])]
         if gp.get("scorers_note"):
             # Fewer than three: why, under the ones it made.
             blocks.append(_p(gp["scorers_note"]))
