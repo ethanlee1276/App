@@ -474,6 +474,8 @@ class Ctx:
         self.units = self.scan.get("units") or {}
         reads = (self.result.get("scan_reads") or {}).get(f"{self.away}@{self.home}") or {}
         self.reads = [r for r in reads.get("players") or [] if isinstance(r, dict)]
+        # Our pass-or-run read of each side (engine/passrun), the paid half's.
+        self.passrun_reads = reads.get("passrun") if isinstance(reads.get("passrun"), dict) else {}
         self.plan = next((p for p in self.result.get("game_plans") or []
                           if isinstance(p, dict) and p.get("away") == self.away
                           and p.get("home") == self.home), None) or {}
@@ -1606,6 +1608,122 @@ def sec_identity(c: Ctx) -> dict | None:
         if lines:
             blocks += [_h(c.name(t)), _list(lines)]
     return _section("identity", "How each team plays", blocks)
+
+
+# --- pass or run (step AIQ, 27 November 2026) -----------------------------------------------------------------------
+#: Ethan: "we need to make sure we are judging and recording and playing off the % of times teams pass vs run ...
+#: also go deeper on that on who they run and pass More against and what style of defense". Each team's pass rate,
+#: the games it threw most and least, the lean of the defense it meets, and our read of how often it throws here,
+#: which a finished game checks (engine/reportfacts.passrun_check). engine/passrun holds what was measured.
+def _score_words(w: dict) -> str:
+    """"a 24–31 loss", "a 27–10 win", "a 20–20 tie" from a week's row; "" without its score."""
+    mine, theirs = _f(w.get("for")), _f(w.get("against"))
+    if mine is None or theirs is None:
+        return ""
+    how = "win" if mine > theirs else "loss" if mine < theirs else "tie"
+    return f"a {_num(mine, 0)}–{_num(theirs, 0)} {how}"
+
+
+def passrun_history(c: Ctx, t: str, row: dict) -> str:
+    """"DEN threw most against KC (68%, a 17–31 loss) and least against LV (45%, a 31–10 win)": who a team threw
+    and ran most against this season, each game with its score, since the score sets much of it."""
+    weeks = [w for w in row.get("weeks") or [] if _f(w.get("rate")) is not None]
+    if len(weeks) < 3:
+        return ""
+    k = 2 if len(weeks) >= 6 else 1
+    hi = sorted(weeks, key=lambda w: -w["rate"])[:k]
+    lo = sorted(weeks, key=lambda w: w["rate"])[:k]
+
+    def said(w):
+        sc = _score_words(w)
+        return f"{w['opp']} ({_pct(w['rate'])}" + (f", {sc})" if sc else ")")
+    return f"{t} threw most against {_join([said(w) for w in hi])}, and least against {_join([said(w) for w in lo])}"
+
+
+def passrun_read(c: Ctx, t: str, row: dict) -> dict | None:
+    """Our read of how often ``t`` throws here: the paid half's (`scan_reads`), else the row's own."""
+    r = (getattr(c, "passrun_reads", None) or {}).get(t) or (row or {}).get("read")
+    return r if isinstance(r, dict) and r.get("said") else None
+
+
+def passrun_read_words(c: Ctx, t: str, row: dict, them: dict, league) -> str:
+    """The paragraph for one offense: its rate, our read here and why."""
+    from . import passrun as PR
+    rate = _f(row.get("rate"))
+    if rate is None:
+        return ""
+    o = c.opp[t]
+    head = f"{t} throws on {_pct(rate)} of its plays" + (
+        f" ({_rank_word(row, 'most', 'fewest')} in the league)" if row.get("rank") and row.get("of") else "")
+    lean, lg = _f(them.get("lean")), _f(league)
+    lean_words = ""
+    if lean is not None:
+        pts = abs(lean) * 100
+        cell = {"rank": them.get("lean_rank"), "of": them.get("lean_of")}
+        where = _rank_word(cell, "most toward the pass", "most toward the run") if cell["rank"] and cell["of"] else ""
+        lean_words = (f"offenses have thrown about as often as usual against {o}" if round(pts) == 0 else
+                      f"offenses have thrown {_num(pts, 0)} {'point' if round(pts) == 1 else 'points'} "
+                      f"{'more' if lean > 0 else 'less'} often than usual against {o}") + \
+            f" ({_plural(them.get('lean_games') or 0, 'game')}" + (f", {where} of any defense)" if where else ")")
+    r = passrun_read(c, t, row)
+    if not r:
+        return _sentence(head) + (" " + _sentence(lean_words[0].upper() + lean_words[1:]) if lean_words else "")
+    said = {"more": "more than its usual", "less": "less than its usual", "usual": "close to its usual"}[r["said"]]
+    # Why: a rate far from the league's comes part of the way back, and the defense's lean; "and" when the two pull
+    # the same way, "but" when they pull apart.
+    back = lg is not None and abs((1 - PR.OWN) * (rate - lg)) >= 0.01
+    why = (f"a rate {'above' if rate > lg else 'below'} the league's {_pct(lg)} tends to come back part of the way"
+           if back else "")
+    if lean_words:
+        same = not back or ((lg - rate) > 0) == (lean > 0)
+        why = f"{why}{', and ' if same else ', but '}{lean_words}" if why else lean_words
+    return (_sentence(head) + " " + _sentence(f"Our read for this game: about {_pct(r['expect'])}, {said}")
+            + (" " + _sentence(why[0].upper() + why[1:]) if why else ""))
+
+
+def passrun_note(c: Ctx, any_read: bool, week) -> str:
+    from . import passrun as PR
+    m = PR.MEASURED
+    lo, hi = m["side_share"]
+    if not any_read:
+        return (f"Our read of how often each team throws starts at week {PR.FROM_WEEK}: before that, a defense's "
+                f"lean did not pass our test (three of the five seasons before 2022 disagreed).")
+    return (f"How this is read: a team's own pass rate this season, pulled part of the way toward the league's, plus "
+            f"about {_num(PR.LEAN, 1)} of the lean of the defense it meets (how much more or less often offenses "
+            f"have thrown against it than they do elsewhere). Held out a season at a time from week {PR.FROM_WEEK} "
+            f"on, the lean made the read closer in every season {m['seasons']} and in {m['older_agree'][0]} of the "
+            f"{m['older_agree'][1]} seasons before. When the read sat 2 points or more from a team's own rate, the "
+            f"game landed on that side {_pct(lo)} to {_pct(hi)} of the time. A game's pass rate swings with the "
+            f"score (a team behind throws more), which is why each game above carries its score. A defense's "
+            f"style (its blitz rate and "
+            f"how many it puts in the box) added nothing beyond the lean, and a team's own split against a style "
+            f"did not carry to its next game. None of it moves a player's number: those already read what each "
+            f"defense allows to each position, and the lean on top did not pass our test in any market.")
+
+
+def sec_passrun(c: Ctx) -> dict | None:
+    pr = c.scan.get("passrun") or {}
+    teams = pr.get("teams") or {}
+    if c.sport not in ("nfl", "", None) or not teams:
+        return None
+    from . import passrun as PR
+    blocks, hist, any_read = [], [], False
+    for t in c.teams:
+        row = teams.get(t) or {}
+        text = passrun_read_words(c, t, row, teams.get(c.opp[t]) or {}, pr.get("league"))
+        para = _p(text)
+        r = passrun_read(c, t, row)
+        if para and r:
+            claim = PR.claim(c.season, pr.get("week"), t, r)
+            if claim:
+                para["claim"] = claim
+            any_read = True
+        blocks.append(para)
+        hist.append(passrun_history(c, t, row))
+    blocks.append(_list(hist))
+    if any(b for b in blocks):
+        blocks.append({"type": "note", "text": passrun_note(c, any_read, pr.get("week"))})
+    return _section("passrun", "Pass or run", blocks)
 
 
 def injury_claim(player, team, status, pos=None) -> dict | None:
@@ -5151,8 +5269,8 @@ def parlay_sentence(c: Ctx) -> str:
     return _sentence(". ".join(bits)) if bits else ""
 
 
-SECTIONS = (sec_swing, sec_angles, sec_facts, sec_meetings, sec_market, sec_rankings, sec_identity, sec_injuries,
-            sec_matchups, sec_trenches, sec_redzone, sec_context, sec_scripts, sec_watch,
+SECTIONS = (sec_swing, sec_angles, sec_facts, sec_meetings, sec_market, sec_rankings, sec_identity, sec_passrun,
+            sec_injuries, sec_matchups, sec_trenches, sec_redzone, sec_context, sec_scripts, sec_watch,
             sec_parlays, sec_weather, sec_before)
 
 
@@ -5817,6 +5935,17 @@ def section_hint(c: Ctx, s: dict) -> str:
         said = {CANDIDATES_HEAD: "breakout", SPOTS_HEAD: "good spot", FADES_HEAD: "fade"}
         return ", ".join(_plural(len(b.get("items") or []), said[h["text"]]) for h, b in zip(blocks, blocks[1:])
                          if h.get("type") == "h" and h.get("text") in said and b.get("type") == "verdicts" and b.get("items"))
+    if key == "passrun":
+        # Our read of each side's pass rate, else its rate: "DEN throws about 59%, PIT about 64%".
+        teams = (c.scan.get("passrun") or {}).get("teams") or {}
+        bits = []
+        for t in c.teams:
+            row = teams.get(t) or {}
+            r = passrun_read(c, t, row)
+            v = (r or {}).get("expect") if r else row.get("rate")
+            if _f(v) is not None:
+                bits.append(f"{t} {'throws ' if not bits else ''}{'about ' if r else ''}{_pct(v)}")
+        return ", ".join(bits)
     if key == "weather":
         w = c.g.get("weather") or {}
         return "Indoors" if _indoors(c.g) else ", ".join(_air_words(w, where=False)) if w.get("forecast") else ""
@@ -6300,7 +6429,7 @@ def _grade_finals(result: dict, reports: list, sport: str, conn, out=None) -> st
             g = games.get(f"{r.get('away')}@{r.get('home')}|{str(r.get('date') or '')[:10]}")
             if not g:
                 continue
-            if out and _graded_from_archive(r, g, sport, out):
+            if out and _graded_from_archive(r, g, sport, out, conn):
                 n += 1
                 continue
             if reportgrade.grade(r, g, conn, sport, str((result or {}).get("date") or "")):
@@ -6310,7 +6439,7 @@ def _grade_finals(result: dict, reports: list, sport: str, conn, out=None) -> st
     return f"; {n} finished report{'' if n == 1 else 's'} graded" if n else ""
 
 
-def _graded_from_archive(r: dict, g: dict, sport: str, out) -> bool:
+def _graded_from_archive(r: dict, g: dict, sport: str, out, conn=None) -> bool:
     """A finished game's report, as graded and archived (engine/reportarchive),
     in place of ``r`` — its bets kept, for the board's Report Picks list — when
     the archive holds one graded on the box score at this grading's version."""
@@ -6323,6 +6452,10 @@ def _graded_from_archive(r: dict, g: dict, sport: str, out) -> bool:
     rep = (doc or {}).get("report")
     graded = (rep or {}).get("graded") or {}
     if graded.get("status") != "graded" or graded.get("version") != reportgrade.GRADE_VERSION:
+        return False
+    # A pass-or-run read waits on the play-by-play, which lands after the box score: graded again once it is in.
+    from .reportfacts import passrun_due
+    if conn is not None and passrun_due(rep, conn):
         return False
     bets = r.get("_bets")
     r.clear()

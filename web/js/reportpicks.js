@@ -296,7 +296,7 @@ function rpShare(pair) {
 const RP_KINDS = [["matchups", "Matchup reads"], ["candidates", "Breakout candidates"], ["spots", "Good spots"],
   ["fades", "Fades"],
   ["starters", "Starters"], ["angles", "The angles"], ["units", "Offense against defense"],
-  ["stepup", "Who steps up"], ["script", "How the game would go"]];
+  ["stepup", "Who steps up"], ["script", "How the game would go"], ["passrun", "Pass or run"]];
 //: [right, of] for the players a report listed: the record's pair less the regulars who sat off it.
 function rpListed(x) {
   const inj = (x || {}).injuries;

@@ -49,7 +49,7 @@ RUN_SLATE_PARTS = ["price props", "game bets", "correlations + exposure caps", "
                    "matchup scan", "most likely board", "touchdown scenarios", "matchup picks",
                    "census + player stats + shelves + market scan", "incentives + milestones",
                    "playoff picture", "fatigue", "comps", "parlay screen"]
-MATCHUP_SCAN_PARTS = ["unit ratings", "season numbers", "red zone", "depth + defenders", "scheme",
+MATCHUP_SCAN_PARTS = ["unit ratings", "season numbers", "pass or run", "red zone", "depth + defenders", "scheme",
                       "charting + tracking", "snaps + weekly usage", "depth mix + pocket", "contact",
                       "headshots", "the games", "touchdown stamps"]
 NFL_STAGE_PARTS = {

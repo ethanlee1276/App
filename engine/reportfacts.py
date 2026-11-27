@@ -437,6 +437,43 @@ def _pace(claim: dict, bx, g: dict, nm: dict, sport: str = "") -> dict | None:
             "words": f"It played at {said} ({its} is {sd(lp):.1f})."}
 
 
+# --- pass or run (step AIQ) --------------------------------------------------------------------------------------
+def passrun_check(claim: dict, conn) -> dict | None:
+    """Our read of how often a team would throw (engine/passrun.claim), against what it did: its dropbacks over
+    its plays in that game, off the play-by-play (team_units), which lands a day or so after the final; None until
+    then. A read of more (or less) than usual is right when the game landed on that side of the team's own rate;
+    one of about its usual only says what happened."""
+    from . import passrun as PR
+    team, own, expect, said = claim.get("team"), _f(claim.get("own")), _f(claim.get("expect")), claim.get("said")
+    if not team or own is None or expect is None or said not in ("more", "less", "usual"):
+        return None
+    got = PR.actual(conn, claim.get("season"), claim.get("week"), team)
+    if not got:
+        return None
+    db, plays = got
+    rate = db / plays
+    did = (f"{team} threw on {_pct(rate)} of its plays ({db} of {plays}), "
+           + ("more than" if rate > own else "less than" if rate < own else "exactly") + f" its usual {_pct(own)}")
+    if said == "usual":
+        return {"status": "info", "actual": round(rate, 4), "words": f"{did}; our read was about {_pct(expect)}."}
+    ok = rate > own if said == "more" else rate < own
+    return {"status": "right" if ok else "wrong", "actual": round(rate, 4),
+            "words": f"{'Right' if ok else 'Wrong'}: {did}; we read {said} than usual (about {_pct(expect)})."}
+
+
+def passrun_due(report: dict, conn) -> bool:
+    """True when a report's pass-or-run read is ungraded and its game's play-by-play has come in since: a final is
+    graded once (engine/gamereport._graded_from_archive), and the play-by-play lands after the box score."""
+    from . import passrun as PR
+    for s in (report or {}).get("sections") or []:
+        for b in s.get("blocks") or []:
+            cl = b.get("claim") if isinstance(b, dict) else None
+            if isinstance(cl, dict) and cl.get("kind") == "passrun" and not b.get("grade") \
+                    and PR.actual(conn, cl.get("season"), cl.get("week"), cl.get("team")):
+                return True
+    return False
+
+
 # --- touchdowns and the injury report ------------------------------------------------------------
 def td_check(claim: dict, bx) -> dict | None:
     """Whether a man we gave a touchdown chance scored: "hit" or "miss", never

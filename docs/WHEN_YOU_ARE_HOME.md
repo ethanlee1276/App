@@ -9883,6 +9883,27 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIQ. Pass or run: measured, said in every NFL report, and checked after the game** (step 1035; 27 November;
+nothing to run). You asked us to judge, record and play off how often teams pass and run, and to go deeper on who
+they throw and run more against and what style of defense. I measured it on 2017-2025 play-by-play and FTN's
+2022-2025 charting, holding out one season at a time. What held: a defense's lean (how much more or less often
+offenses throw against it than they do in their other games) makes our read of how often a team throws closer from
+week 9 on, in every season 2022-2025 and in three of the five before. About 0.4 of a defense's lean carries into its
+next game. Before week 9 it failed (three older seasons disagreed), so the read starts at week 9. What did not hold:
+a defense's style (its blitz rate, how many it puts in the box) added nothing beyond the lean, and a team's own
+split against a style (throwing more against blitzing defenses, say) did not carry to its next game. Nor does the
+lean make player picks better. Our player numbers already read each team's own volume and what each defense allows
+to each position, and adding the lean on top passed the test in none of eleven markets (receivers' targets and
+catches came out a little better in 2022-2025 and worse in the older seasons), so no pick number moves on it. Every
+NFL report now has a "Pass or run" section after "How each team plays". It gives each team's pass rate and rank, the
+lean of the defense it meets, our read for this game, and the two games each team threw most and least in, with
+their scores (a team behind throws more). From this season's play-by-play: Buffalo throws on 53%, the fewest in the
+league, and offenses have thrown 8 points more often than usual against Detroit, the most of any defense. Each read
+is checked once the play-by-play is in, a day or so after the game: right when the team threw more (or less) than
+its usual as read. A read close to a team's usual only says what happened. In 2022-2025, when the read sat 2 points
+or more from a team's own rate, the game landed on that side 58% to 66% of the time. The reports' record now counts
+"Pass or run" as its own kind of read, and the section opens with its record once ten are graded.
+
 **AIP. SGPX tickets come in two legs too, and Best Parlays ranks each size** (step 1034; 27 November; nothing to
 run). You asked for the best two-leg and three-leg parlays ranked, and two-leg SGPX tickets. Every kickoff window
 and every day now posts three two-leg SGPX tickets of each kind (player props, touchdown scorers) beside its

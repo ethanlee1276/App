@@ -100,7 +100,7 @@ UNIT_WORDS = {
 GROUPS = (("matchups", "Matchup reads"), ("candidates", "Breakout candidates"), ("spots", "Good spots"),
           ("fades", "Fades"),
           ("starters", "Starters"), ("angles", "The angles"), ("units", "Offense against defense"),
-          ("stepup", "Who steps up"), ("script", "How the game would go"))
+          ("stepup", "Who steps up"), ("script", "How the game would go"), ("passrun", "Pass or run"))
 #: How each group's right answer is said.
 RIGHT_WORDS = {"candidates": "beat their average", "spots": "beat their average", "fades": "fell short of it",
                "stepup": "beat their average"}
@@ -622,10 +622,12 @@ def _grade(report: dict, g: dict, conn, sport: str, label: str) -> dict | None:
             b.pop("grades", None)
     for _key, b in paras:
         b.pop("grade", None)
-        gr = F.claim_grade(sport, b["claim"], bx, g, report)
+        # PASS OR RUN (engine/passrun, step AIQ) is graded off the play-by-play, which lands after the box score.
+        passrun = b["claim"].get("kind") == "passrun"
+        gr = F.passrun_check(b["claim"], conn) if passrun else F.claim_grade(sport, b["claim"], bx, g, report)
         if gr:
             b["grade"] = gr
-            count("script", gr)
+            count("passrun" if passrun else "script", gr)
     call = call_line(report, g)
     pending = bx is None or not bx.teams
     summary = {"version": GRADE_VERSION, "status": "pending" if pending else "graded",

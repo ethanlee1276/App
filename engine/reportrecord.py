@@ -371,11 +371,13 @@ def _record(where, sport: str, day: _dt.date) -> dict:
 #: (engine/reportgrade.GROUPS).
 SECTION_KINDS = {"matchups": ("matchups",), "watch": ("candidates", "spots", "fades"), "angles": ("angles",),
                  "trenches": ("units",), "defense": ("units",), "tape": ("units",),
-                 "scripts": ("script",), "script": ("script",), "pitching": ("starters",), "goalies": ("starters",)}
+                 "scripts": ("script",), "script": ("script",), "pitching": ("starters",), "goalies": ("starters",),
+                 "passrun": ("passrun",)}
 #: How a kind of read is said in a sentence.
 KIND_WORDS = {"matchups": "matchup reads", "angles": "angles", "units": "offense-against-defense reads",
               "stepup": "step-up reads",
-              "script": "reads on how the game would go", "starters": "starter reads"}
+              "script": "reads on how the game would go", "starters": "starter reads",
+              "passrun": "pass-or-run reads"}
 #: A kind's record is said once this many of its reads are graded; the call's
 #: and the injury report's once this many games and listings are.
 TRACK_MIN, TRACK_MIN_GAMES = 10, 5

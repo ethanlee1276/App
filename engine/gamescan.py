@@ -2806,6 +2806,35 @@ def nfl_usage(season: int, week: int, stats=None, last_season=None) -> tuple:
     return recent, usage
 
 
+def passrun_scan(tab: dict, home: str, away: str, points: dict | None = None) -> dict | None:
+    """One game's pass or run (engine/passrun): {"league", "week", "teams": {team: its row and its "read"}}, the
+    read off the points the lines expect each side to score; None when the table has neither team."""
+    teams = (tab or {}).get("teams") or {}
+    if not (teams.get(home) or teams.get(away)):
+        return None
+    from . import passrun
+    pts = points or {}
+    out = {}
+    for t, o in ((away, home), (home, away)):
+        row = dict(teams.get(t) or {})
+        if not row:
+            continue
+        margin = (pts[t] - pts[o]) if pts.get(t) is not None and pts.get(o) is not None else None
+        r = passrun.read(tab, t, o, margin)
+        if r:
+            row["read"] = r
+        out[t] = row
+    return {"league": tab.get("league"), "week": tab.get("week"), "teams": out}
+
+
+def passrun_split(pr: dict) -> dict:
+    """Takes our read off each team's row of a game's pass or run, in place, and returns {team: read}: the rates
+    and leans are facts anyone can count and ride on the game; the read is ours and rides `scan_reads`, the
+    paid half (engine/gate.PAID_KEYS)."""
+    return {t: row.pop("read") for t, row in ((pr or {}).get("teams") or {}).items()
+            if isinstance(row, dict) and row.get("read")}
+
+
 def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                conn=None, usage_now=None) -> int:
     """Hang a ``scan`` on every game of an NFL board. Reads only what is
@@ -2837,6 +2866,14 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
     _t = _clock.lap("matchup scan", "unit ratings", _t)
     numbers = season_numbers(conn, season, before_week=week)
     _t = _clock.lap("matchup scan", "season numbers", _t)
+    # PASS OR RUN (engine/passrun, step AIQ): each team's pass rate, each
+    # defense's lean, and the report's read of how often each side throws.
+    try:
+        from . import passrun as _passrun
+        pass_run = _passrun.tables(conn, season, week)
+    except Exception:                                        # noqa: BLE001
+        pass_run = {}
+    _t = _clock.lap("matchup scan", "pass or run", _t)
     # RED-ZONE TRIPS, offence and defence (engine/redzone), for the
     # touchdown scenarios' fifth reading.
     try:
@@ -2932,6 +2969,13 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                                    "microscope": scan.pop("microscope")}
         scan["redzone"] = {t: rz_teams[t] for t in (home, away) if t in rz_teams}
         scan["numbers"] = {t: numbers[t] for t in (home, away) if t in numbers}
+        pr = passrun_scan(pass_run, home, away, pts)
+        if pr:
+            # The rates and leans are the season's facts, on the game; our read rides the paid half.
+            mine = passrun_split(pr)
+            if mine:
+                reads[f"{away}@{home}"]["passrun"] = mine
+            scan["passrun"] = pr
         gd["scan"] = scan
         n += 1
     _t = _clock.lap("matchup scan", "the games", _t)

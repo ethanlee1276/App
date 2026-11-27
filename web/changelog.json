@@ -4,6 +4,12 @@
     {
       "date": "2026-11-27",
       "kind": "ship",
+      "title": "Pass or run, in every NFL game report",
+      "body": "Every NFL game report now has a Pass or run section: how often each team throws (passes, sacks and scrambles against designed runs) and where it ranks, how much more or less often offenses have thrown against the defense it meets than they do elsewhere, the games each team threw most and least in with their scores, and our read of how often each team throws in this game. We tested it on the 2017-2025 seasons, holding out one season at a time: from week 9 on, the defense's lean made the read closer in every season 2022-2025, and when the read sat 2 points or more from a team's usual rate, the game landed on that side 58% to 66% of the time. A defense's style (its blitz rate and box counts) added nothing beyond that, and a team's own split against a style did not carry from game to game, so neither is used. Player picks do not move on it: they already read each team's volume and what each defense allows to each position, and the lean on top did not pass our test in any market. Each read is checked after the game, once the play-by-play is in, and the reports' record counts how often it was right."
+    },
+    {
+      "date": "2026-11-27",
+      "kind": "ship",
       "title": "Two-leg SGPX tickets, and each size ranked on Best Parlays",
       "body": "Every kickoff window and every day now posts two-leg SGPX tickets beside its three-leg ones: two of our strongest picks from two different games, for player props and for touchdown scorers, chosen the same way. On Best Parlays the SGPX tab has a Two-leg and Three-leg switch, each size ranked best to worst on its own, as the player-prop tab already does. The Record keeps the two-leg tickets on their own lines, so each size's record reads apart."
     },
