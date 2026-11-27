@@ -9894,7 +9894,14 @@ a projection set too low does. Nothing measured it, so the Record's "Our number 
 for each league and market, how far what happened landed from our number on average (each player's game once) and
 how often it landed above. Nothing on the page changes and no number moves; I read it off the record after the next
 settle, and if the NBA's rebounds and assists run low by a margin that holds in both halves of the games, the fix is
-measured before it ships.
+measured before it ships. The first reading (27 November, every book, each player's game once): the NBA's rebounds
+land +0.04 from our number on average over 1,080 games (47% above it), assists 0.00 over 735 (48%), and rebounds and
+assists +0.48 over 564 (50%). So our NBA rebound and assist numbers are not low; the report picks' lean is the picks
+themselves (a pick is made where our number and the line disagree) and chance, and nothing changes. Rebounds and
+assists, half a unit low, is the one to keep watching. Two larger gaps, read with care because they are only the
+games we picked: NBA points ran 3.1 high (255 games, 42% above) and NFL passing yards 7.7 low (230 games, 56%
+above). Splitting each by the side we took would tell our number's own lean from the picking; that is the next step,
+after tonight's game.
 
 **AIM. The game report picks have a profit calendar** (step 1031; 27 November; nothing to run). You asked for a
 calendar for the game report picks too. The Record page's profit calendar now has a third switch beside Edge bets
