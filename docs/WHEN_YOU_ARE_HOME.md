@@ -9888,11 +9888,11 @@ calendar for the game report picks too. The Record page's profit calendar now ha
 and Most Likely: Report picks. It shows every pick our game reports posted (0.1 unit each, the same picks and
 numbers as "The Game Report Picks and Parlays" under it) as units won or lost by day, and a tap on a day lists that
 day's picks. It is on All bets and on every league whose reports have posted picks (NFL, college football, NBA, NHL
-and college basketball today); baseball and UFC have none, so their pages show no switch. The parlays stay in their
-own table: a ticket counts one unit, ten times a pick, so one ticket would outweigh a whole day of picks. One fix
-came with it: on All bets, a tapped day could list a benched league's picks (WNBA) that the day's number leaves out;
-the list now matches the number. For scale, the report book stood at 855-493 (63%), −3.02 units over 1,348 picks
-this morning.
+and college basketball today); baseball and UFC have none, so their calendars have no Report picks button. The
+parlays stay in their own table: a ticket counts one unit, ten times a pick, so one ticket would outweigh a whole
+day of picks. One fix came with it: on All bets, a tapped day could list a benched league's picks (WNBA) that the
+day's number leaves out; the list now matches the number. For scale, the report book stood at 855-493 (63%), −3.02
+units over 1,348 picks this morning.
 
 **AIL. Every league's record will say what an ordinary game does** (step 1030; 27 November; nothing to run). The
 reads are graded on "beat the player's own average", which is not a coin flip: stats are skewed, so an ordinary
