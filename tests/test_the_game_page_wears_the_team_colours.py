@@ -314,7 +314,9 @@ def test_the_odds_card_reads_the_live_quote_the_pregame_line_and_the_open():
       LIVE = null;
       const pre = gpOddsHTML({ ...d, live: { state: "pre" } }, "nfl", g);
       const fin = gpOddsHTML({ ...d, live: { state: "final" } }, "nfl", g);
-      return { live, pre, fin, none: gpOddsHTML(d, "nfl", null) };
+      const closed = gpOddsHTML({ ...d, live: { state: "final" } }, "nfl",
+        { ...g, line_open: { ...g.line_open, close: { spread_home: -2.5, total: 46.5, home_ml: -140, away_ml: 120 } } });
+      return { live, pre, fin, closed, none: gpOddsHTML(d, "nfl", null) };
     """)
     if got is None:
         return
@@ -323,6 +325,11 @@ def test_the_odds_card_reads_the_live_quote_the_pregame_line_and_the_open():
     assert "+228" in live and "−233" in live and "Opened DET −3.0 · total 45.5" in live
     assert "Pregame" in got["pre"] and "−3.0" in got["pre"], "the favourite lays the points"
     assert "Opening line" in got["fin"] and "Opened" not in got["fin"].split("</table>")[1]
+    # A final with a kept close shows the close, the line the Record grades it against, and the opener under it.
+    closed = got["closed"]
+    assert "Closing line" in closed and "Opening line" not in closed, closed
+    assert "−2.5" in closed and "O 46.5" in closed and "−140" in closed, closed
+    assert "Opened DET −3.0 · total 45.5" in closed, closed
     assert got["none"] == ""
 
 

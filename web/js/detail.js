@@ -6208,7 +6208,8 @@ function gpStatsHTML(d, league, boardGame, faces, GC, kit) {
    them. Live, the newest in-game quote the live pull kept (app.js
    liveLineOf, the same reading as the game cards: every spread the home
    side's, signed); before the game, the board's pregame numbers; after it,
-   the line it opened at. The line track (opened → now) under it. */
+   the line it closed at (the opener when no close was kept). The line track
+   (opened → now) under it. */
 function gpOddsHTML(d, league, g) {
   if (!g) return "";
   const lv = d.live || {};
@@ -6226,6 +6227,12 @@ function gpOddsHTML(d, league, g) {
     total = g.total_posted === false ? null : price(g.total);
     aMl = price(g.away_ml); hMl = price(g.home_ml);
     tag = "Pregame";
+  } else if (lv.state === "final" && open && open.close) {
+    // A FINISHED GAME'S LINE IS ITS CLOSE (step ADT; on this card, step AIC): the line the Record grades it against,
+    // as the game cards show it (app.js closedLine), the opener under it.
+    const c = open.close;
+    sp = num(c.spread_home); total = price(c.total); aMl = price(c.away_ml); hMl = price(c.home_ml);
+    tag = "Closing line";
   } else if (open) {
     sp = num(open.spread_home); total = price(open.total); aMl = price(open.away_ml); hMl = price(open.home_ml);
     tag = "Opening line";

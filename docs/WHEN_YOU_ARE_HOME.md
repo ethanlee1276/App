@@ -9900,8 +9900,13 @@ Record page as a visitor (the free pages; everything else needs an account, and 
   can see the angles show no lift yet, as the notes under AIB said.
 - **No count said with "(s)".** A game short of touchdown pairs read "2 of the 3 priced scorer(s)", and the memes
   page "call(s) filed"; they count like a person now ("2 of the 3 priced scorers ... carry", "1 call").
+- **A finished game's odds card shows its closing line** (the line the Record grades it against, as the game cards
+  have since step ADT), with the opener under it. It showed the opening line, so a game that covered the close but
+  not the open read "covered" beside a line it did not cover.
 - Left alone: a settled pick's team logos are read twice by a screen reader ("CHI CHI"); the fix touches a shared
-  mark used on every page, so I am noting it rather than changing it tonight.
+  mark used on every page, so I am noting it rather than changing it tonight. And the Most Likely tile's
+  "needs 61.3% at -159" stays as it is: saying it plainly ("to break even at its average −159") put the first visit
+  6 bytes over its 384 KB budget.
 
 **AIB. Our reads' record says what an ordinary game does** (step 1020; 26 November; nothing to run). Your Bears at
 Lions screenshot read "breakout candidates beat their average 56 of 108 times (52%)". That looks like a coin flip,
