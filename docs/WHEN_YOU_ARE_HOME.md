@@ -11203,6 +11203,26 @@ did-not-play marks come early but are not a list: they went 4, 6, 5 for the Beng
 Commanders over the evening. One game is two teams, so nothing switches yet: Thanksgiving's three games give six more,
 and if the summary leads again the picks start reading it in the inactives window before Sunday.
 
+**ACH, measured on Thanksgiving** (27 November; nothing to run; the board read stays as it is). The same watcher,
+the six clubs of the three Thanksgiving games (UTC). "Summary against the board" is the middle player's lead: how
+much sooner (or later) the game summary showed each inactive player than ESPN's injury board did.
+
+| | Filed | ESPN board | Summary against the board | The summary's list against the board's |
+|---|---|---|---|---|
+| Bears | 16:36 | 16:49:51 | 11.3 min ahead | the same 5 |
+| Lions | 16:33 | 16:47:48 | 5.1 min ahead | the same 5 |
+| Eagles | 20:14 | 20:20:14 | 5.2 min behind | 5 names, the board's 4 among them |
+| Cowboys | 20:13 | 20:21:16 | 4.1 min behind | 6 names, the board's 3 among them |
+| Chiefs | 00:01 | 00:03:43 | 2.1 min behind | the same 5 |
+| Bills | 23:53 | 00:00:39 | 4.1 min behind | 5 of the board's 6 |
+
+The summary led only in the early game. In the other two the board had the lists first, and in three of the six
+clubs the summary's list was not the board's: names the board did not list (the watcher keeps no names, so I
+cannot say whose) or one missing. Over the eight clubs measured so far (Monday's two and these six) the
+summary led four, and reading it would have put wrong names on the list for three. So the picks keep waiting on the
+board. The gamecast was behind the board for five of the six clubs, and the game roster's did-not-play marks again
+cover the whole roster (56 to 60 players) long before the lists, so they cannot say who is inactive.
+
 **ACZ. A breakout candidate is never one our own pick bets against** (step 891; 23 November). Nothing to run. You
 also said the reports conflict with "the picks we're giving and the breakout candidates we're giving". One way they
 still could: a report listed a player under "Breakout candidates", or named him in the short version, and then his
