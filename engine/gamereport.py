@@ -1666,39 +1666,64 @@ def passrun_read_words(c: Ctx, t: str, row: dict, them: dict, league) -> str:
                       f"{'more' if lean > 0 else 'less'} often than usual against {o}") + \
             f" ({_plural(them.get('lean_games') or 0, 'game')}" + (f", {where} of any defense)" if where else ")")
     r = passrun_read(c, t, row)
+    lean_line = _sentence(lean_words[0].upper() + lean_words[1:]) if lean_words else ""
     if not r:
-        return _sentence(head) + (" " + _sentence(lean_words[0].upper() + lean_words[1:]) if lean_words else "")
+        return _sentence(head) + (" " + lean_line if lean_line else "")
     said = {"more": "more than its usual", "less": "less than its usual", "usual": "close to its usual"}[r["said"]]
-    # Why: a rate far from the league's comes part of the way back, and the defense's lean; "and" when the two pull
-    # the same way, "but" when they pull apart.
-    back = lg is not None and abs((1 - PR.OWN) * (rate - lg)) >= 0.01
-    why = (f"a rate {'above' if rate > lg else 'below'} the league's {_pct(lg)} tends to come back part of the way"
-           if back else "")
-    if lean_words:
-        same = not back or ((lg - rate) > 0) == (lean > 0)
-        why = f"{why}{', and ' if same else ', but '}{lean_words}" if why else lean_words
-    return (_sentence(head) + " " + _sentence(f"Our read for this game: about {_pct(r['expect'])}, {said}")
-            + (" " + _sentence(why[0].upper() + why[1:]) if why else ""))
+    # WHY, each part of the read that moves it a point or more (engine/passrun's model): the team's rate coming
+    # back toward the league's, its pass rate over expected, and from week 9 the defense's lean.
+    model = r.get("model") or "lean"
+    k = PR.EARLY if model == "early" else PR.LATE if model == "late" else {"own": PR.OWN, "lean": PR.LEAN}
+    why = []
+    if lg is not None and abs((1 - k["own"]) * (rate - lg)) >= 0.01:
+        why.append(f"a few games' rate is mostly the score, so its {_pct(rate)} counts for little this early"
+                   if model == "early" else
+                   f"a rate {'above' if rate > lg else 'below'} the league's {_pct(lg)} tends to come back part of "
+                   f"the way")
+    proe, rel = _f(r.get("proe")), _f(r.get("proe_rel"))
+    if proe is not None and rel is not None and abs(k.get("proe", 0.0) * rel) >= 0.01:
+        # Against the league's, as the read takes it: the tempo line's own figure is against the play-by-play's
+        # expectation, which the whole league sits under or over by a point or two in a season.
+        pts = abs(rel) * 100
+        why.append(f"it throws {_num(pts, 0)} {'point' if round(pts) == 1 else 'points'} "
+                   f"{'more' if rel > 0 else 'less'} than the league does on the same downs, distances and scores")
+    in_read = model in ("late", "lean") and lean_words
+    if in_read:
+        why.append(lean_words)
+    out = _sentence(head) + " " + _sentence(f"Our read for this game: about {_pct(r['expect'])}, {said}")
+    if why:
+        out += " " + _sentence("Why: " + "; ".join(why))
+    if lean_line and not in_read:
+        out += " " + lean_line
+    return out
 
 
 def passrun_note(c: Ctx, any_read: bool, week) -> str:
     from . import passrun as PR
     m = PR.MEASURED
-    lo, hi = m["side_share"]
     if not any_read:
-        return (f"Our read of how often each team throws starts at week {PR.FROM_WEEK}: before that, a defense's "
-                f"lean did not pass our test (three of the five seasons before 2022 disagreed).")
-    return (f"How this is read: a team's own pass rate this season, pulled part of the way toward the league's, plus "
-            f"about {_num(PR.LEAN, 1)} of the lean of the defense it meets (how much more or less often offenses "
-            f"have thrown against it than they do elsewhere). Held out a season at a time from week {PR.FROM_WEEK} "
-            f"on, the lean made the read closer in every season {m['seasons']} and in {m['older_agree'][0]} of the "
-            f"{m['older_agree'][1]} seasons before. When the read sat 2 points or more from a team's own rate, the "
-            f"game landed on that side {_pct(lo)} to {_pct(hi)} of the time. A game's pass rate swings with the "
-            f"score (a team behind throws more), which is why each game above carries its score. A defense's "
-            f"style (its blitz rate and "
-            f"how many it puts in the box) added nothing beyond the lean, and a team's own split against a style "
-            f"did not carry to its next game. None of it moves a player's number: those already read what each "
-            f"defense allows to each position, and the lean on top did not pass our test in any market.")
+        if int(_f(week) or 0) >= PR.FROM_WEEK:
+            return ("No read of how often each team throws for this game: it needs each team's pass rate over "
+                    "expected, which the play-by-play has not given us yet.")
+        return (f"Our read of how often each team throws starts at week {PR.FROM_WEEK}: before that a team has too "
+                f"few games for a rate.")
+    (e_lo, e_hi), (l_lo, l_hi) = m["side_early"], m["side_late"]
+    return (f"How this is read: a team's own pass rate this season and its pass rate over expected (how much more "
+            f"or less it throws than the down, distance and score call for, its tendency with the game script taken "
+            f"out), with the line; from week {PR.LEAN_FROM}, also about {_num(PR.LATE['lean'], 1)} of the lean of "
+            f"the defense it meets (how much more or less often offenses have thrown against it than they do "
+            f"elsewhere). Held out a season at a time, the read was closer than a team's own rate and the line in "
+            f"every season {m['seasons']}, before week {PR.LEAN_FROM} and after, and in {m['older_agree'][0]} of "
+            f"the {m['older_agree'][1]} seasons before. When it sat 2 points or more from a team's own rate, the "
+            f"game landed on that side {_pct(e_lo)} to {_pct(e_hi)} of the time in weeks {PR.FROM_WEEK} to "
+            f"{PR.LEAN_FROM - 1} and {_pct(l_lo)} to {_pct(l_hi)} from week {PR.LEAN_FROM}. A game's pass rate "
+            f"swings with the score (a team behind throws more), which is why each game above carries its score. "
+            f"A defense's style (its blitz rate and how many it puts in the box) and its run-against-pass strength "
+            f"added nothing beyond the lean, and a team's own red-zone rate and its split against a style did not "
+            f"carry to its next game. It does not move a player's number yet: against a player's own form, what "
+            f"the defense allows the position and the line, this read made completions, targets and catches closer "
+            f"in every season {m['seasons']} (not yards or carries), and it is being checked against our real picks "
+            f"first, because an earlier team-tendency layer made them worse by counting the team's habits twice.")
 
 
 def sec_passrun(c: Ctx) -> dict | None:

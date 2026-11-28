@@ -192,7 +192,8 @@ def test_the_proxies_stand_down_only_when_the_measured_layer_is_on():
 def test_both_modes_are_reachable_from_the_cli():
     src = open(os.path.join(ROOT, "backtest.py"), encoding="utf-8").read()
     assert '"--team-context"' in src
-    assert 'choices=("level", "drift")' in src
+    # Step AIS (28 November 2026) adds the pass-rate read (engine/passrun) as a third mode.
+    assert 'choices=("level", "drift", "read")' in src
 
 
 if __name__ == "__main__":

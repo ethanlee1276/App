@@ -161,6 +161,49 @@ def context_multiplier(profile: dict | None, league: dict,
     return clamp(mult, *TOTAL_CLAMP), reasons
 
 
+#: THE PASS-RATE READ AS A PRICE (step AIS, 28 November 2026; engine/passrun). Our read of how often a team throws in
+#: this game, as a change from its own rate this season (read / own - 1), shades the passing volume it moves: k is the
+#: share of that change that carried to the player, measured on 2017-2025 play-by-play on top of the player's own
+#: form, what the defense allowed the position and the line, a season held out at a time (the adoption rule held for
+#: these; not for yards, carries, tight ends' or backs' catches, and passing attempts missed by a hair). Unlike the
+#: level above it is a change, not the team's habit (which the player's own games already carry), and unlike drift it
+#: keeps the line's game script, which it was measured on top of. OFF until the backtest over real props says it helps:
+#: `python3 backtest.py SEASON --real-lines --team-context --context-mode read` against the same run without it.
+READ_K = {("pass_cmp", ""): 0.46, ("receptions", "WR"): 0.60}
+READ_CLAMP = (0.92, 1.08)
+
+
+def read_multiplier(rel, market: str, position: str = "") -> tuple[float, list[str]]:
+    """``rel``: the read's change from the team's own pass rate (engine/passrun.read: expect / own - 1)."""
+    k = READ_K.get((market, str(position or "").upper())) or READ_K.get((market, ""))
+    try:
+        rel = float(rel)
+    except (TypeError, ValueError):
+        return 1.0, []
+    if not k or rel != rel:
+        return 1.0, []
+    f = clamp(1.0 + k * rel, *READ_CLAMP)
+    reasons = []
+    if abs(f - 1) >= 0.02:
+        reasons.append(f"Our read has the team throwing {'more' if rel > 0 else 'less'} than its own rate "
+                       f"({rel:+.0%}; {f - 1:+.0%} for this market)")
+    return f, reasons
+
+
+def read_context(conn, season: int, week: int, opponents: dict, margins: dict | None = None) -> dict:
+    """The "read" mode's context for one week: {"mode": "read", "reads": {team: expect / own - 1}} off the history
+    database's team_units and team_weeks before ``week`` (engine/passrun.tables); ``opponents`` is {team: opponent}
+    for the week's games. {} when no team has a read."""
+    from . import passrun
+    tab = passrun.tables(conn, season, week)
+    reads = {}
+    for team, opp in (opponents or {}).items():
+        r = passrun.read(tab, team, opp, (margins or {}).get(team))
+        if r and r.get("own"):
+            reads[team] = round(float(r["expect"]) / float(r["own"]) - 1.0, 4)
+    return {"mode": "read", "reads": reads} if reads else {}
+
+
 def drift_multiplier(recent: dict | None, own_baseline: dict | None,
                      market: str) -> tuple[float, list[str]]:
     """Team tendency as CHANGE, not as level — the variant that can work.

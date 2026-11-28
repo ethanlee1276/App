@@ -9883,6 +9883,29 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIS. Pass or run, deeper: the read now sees game script, starts at week 4, and is lined up for the picks** (step
+1037; 28 November; one optional command, RUN_NEXT 00u). You asked me to go deeper. I tested every angle on 2017-2025
+play-by-play, holding out one season at a time against the same rule as before. Held: a team's pass rate over
+expected (how much more it throws than the down, distance and score call for, the play-by-play's own figure, taken
+against the league's) is its real tendency with the game script taken out, where its overall rate carries the script
+(a team that trails throws more). Added to the read it makes it closer again from week 9, and from week 4 the read
+can start: the team's rate, its pass rate over expected and the line pass the rule where the lean alone did not.
+Against a team's own rate and the line, the read's squared error is 4.5%, 8.9%, 7.4% and 6.1% lower in weeks 4 to 8
+of 2022-2025 and 4.9%, 3.9%, 5.8% and 2.0% lower from week 9; when it sat 2 points or more from a team's own rate,
+the game landed on that side 59% to 79% of the time early and 62% to 68% from week 9. A team's pass rate on early
+downs in a close game does the same job (either passes, neither adds to the other). Did not hold: a defense's
+run-against-pass strength (the EPA it allows a dropback against a run), a team's own red-zone pass rate beyond its
+overall rate, the share of its touchdowns it throws, and (as before) a defense's blitz and box style and a team's
+split against a style. The reports now say why in the read's own parts, for example Tampa Bay throws on 53%, the
+fewest, and 9 points less than the league does on the same downs, distances and scores, so the read keeps it low,
+while Buffalo throws on 54% but is level with the league in like situations (its low rate is leads), so the read
+comes up to 58%. The picks: against a player's own form, what the defense allows the position and the line, the full
+read made completions, wide receivers', tight ends' and backs' targets and wide receivers' catches closer in every
+season 2022-2025 (not yards, not carries; attempts a hair short). An earlier team-tendency layer made the live picks
+worse by counting the team's habits twice, so this one is built switched off (engine/teamcontext "read" mode, on
+completions and wide receivers' catches) and RUN_NEXT 00u compares it with today's picks over 2025's real props. If
+it helps there, I switch it on and say so; if not, it stays a report line.
+
 **AIR. How far our number runs, split by the side we picked** (step 1036; 27 November; nothing to run). The first
 reading of how far our number runs from what happened (AIN) left two gaps to look at again: the NBA's points, where
 what happened landed 3.1 below our number on average over 255 games, and the NFL's passing yards, 7.7 above it over

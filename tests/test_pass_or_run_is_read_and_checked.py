@@ -85,7 +85,7 @@ def test_a_defense_lean_is_each_offense_against_its_own_other_games():
 
 def test_the_read_is_the_measured_model_from_week_nine():
     tab = passrun.tables(_conn(), 2026, 5)
-    assert passrun.read(tab, "AAA", "BBB") is None, "weeks 4 to 8 failed the rule: no read before week 9"
+    assert passrun.read(tab, "AAA", "BBB") is None, "week 5 needs the pass rate over expected, not filed here"
     tab = dict(tab, week=10)
     r = passrun.read(tab, "AAA", "BBB", margin=3.0)
     own, lean, lg = tab["teams"]["AAA"]["rate"], tab["teams"]["BBB"]["lean"], tab["league"]
@@ -131,12 +131,15 @@ def test_the_report_says_each_side_its_read_and_who_it_threw_most_against():
                        "a 27–6 win)."), hist
     note = sec["blocks"][-1]
     assert note["type"] == "note" and "every season 2022–2025" in note["text"]
-    assert "added nothing beyond the lean" in note["text"] and "None of it moves a player's number" in note["text"]
+    assert "added nothing beyond the lean" in note["text"] and "does not move a player's number yet" in note["text"]
+    assert "attempts" not in note["text"], "passing attempts missed the rule by a hair: not claimed"
     assert GR.section_hint(c, sec).startswith("AAA throws about ")
-    # Before week 9 the rates and leans are said, no read and no claim, and the note says why.
+    # Week 6 without the teams' pass rate over expected: the rates and leans are said, no read and no claim, and
+    # the note says what is missing; before week 4, that the read starts there.
     early = GR.sec_passrun(_ctx(dict(tab, week=6)))
     assert not any(b.get("claim") for b in early["blocks"])
-    assert "starts at week 9" in early["blocks"][-1]["text"]
+    assert "it needs each team's pass rate over expected" in early["blocks"][-1]["text"]
+    assert "starts at week 4" in GR.sec_passrun(_ctx(dict(tab, week=3)))["blocks"][-1]["text"]
     # Only the NFL, and only with the table.
     assert GR.sec_passrun(_ctx({})) is None
     c.sport = "cfb"
@@ -198,6 +201,67 @@ def test_our_read_rides_the_paid_half_and_the_rates_ride_the_game():
     # A free reader's copy of the game, the paid half stripped, says the rates and leans and no read.
     free = GR.Ctx(g, {"date": "2026-W13"}, names={})
     assert not any(b.get("claim") for b in GR.sec_passrun(free)["blocks"])
+
+
+def _with_weeks(conn, proe_by_team, season=2026, weeks=(1, 2, 3, 4)):
+    """team_weeks rows (fixture numbers): each team's pass rate over expected, 60 plays a week."""
+    conn.execute("CREATE TABLE team_weeks (sport TEXT, season INTEGER, period TEXT, team TEXT, plays INTEGER, "
+                 "proe REAL)")
+    for t, oe in proe_by_team.items():
+        for wk in weeks:
+            conn.execute("INSERT INTO team_weeks VALUES ('nfl', ?, ?, ?, 60, ?)", (season, f"{wk:03d}", t, oe))
+    return conn
+
+
+def test_the_read_takes_the_pass_rate_over_expected_from_week_four():
+    """Step AIS (28 November 2026): a team's pass rate over expected, against the league's so far, joins the read;
+    weeks 4 to 8 read it with the team's rate and the line, week 9 on with the defense's lean too."""
+    oe = {"AAA": 0.05, "BBB": -0.03, "CCC": 0.0, "DDD": 0.02}
+    conn = _with_weeks(_conn(), oe)
+    tab = passrun.tables(conn, 2026, 5)
+    lg_oe = sum(oe.values()) / 4                          # every team 60 plays a week: the plays-weighted mean
+    assert abs(tab["league_proe"] - round(lg_oe, 4)) < 1e-9 and tab["teams"]["AAA"]["proe"] == 0.05
+    # Week 5: the early model.
+    r = passrun.read(tab, "AAA", "BBB", margin=3.0)
+    k = passrun.EARLY
+    own, lg = tab["teams"]["AAA"]["rate"], tab["league"]
+    want = lg + k["c0"] + k["own"] * (own - lg) + k["proe"] * (0.05 - tab["league_proe"]) + k["margin"] * 3.0
+    assert r["model"] == "early" and abs(r["expect"] - round(want, 4)) < 1e-9 and r["lean"] is None
+    assert r["proe_rel"] == round(0.05 - tab["league_proe"], 4)
+    # Week 10: the late model, with the defense's lean.
+    late = dict(tab, week=10)
+    r = passrun.read(late, "AAA", "BBB", margin=3.0)
+    k, lean = passrun.LATE, tab["teams"]["BBB"]["lean"]
+    want = (lg + k["c0"] + k["own"] * (own - lg) + k["proe"] * (0.05 - tab["league_proe"]) + k["lean"] * lean
+            + k["margin"] * 3.0)
+    assert r["model"] == "late" and abs(r["expect"] - round(want, 4)) < 1e-9 and r["lean"] == lean
+    # A team the box has no pass rate over expected for: week 10 falls back to the step AIQ read, week 5 has none.
+    del tab["teams"]["AAA"]["proe"]
+    assert passrun.read(dict(tab, week=10), "AAA", "BBB")["model"] == "lean"
+    assert passrun.read(tab, "AAA", "BBB") is None
+    # The scan carries the league's figure the read is taken against.
+    assert gamescan.passrun_scan(late, "BBB", "AAA")["league_proe"] == late["league_proe"]
+
+
+def test_the_report_says_why_in_the_reads_own_parts():
+    oe = {"AAA": 0.06, "BBB": -0.04, "CCC": 0.0, "DDD": 0.0}
+    tab = passrun.tables(_with_weeks(_conn(), oe), 2026, 5)
+    c = _ctx(dict(tab, week=6))
+    para = next(b for b in GR.sec_passrun(c)["blocks"] if b["type"] == "p")
+    # Early: the rate counts for little, the pass rate over expected is said against the league's, and the lean is a
+    # fact beside the read, not part of it.
+    rel = round(100 * (0.06 - tab["league_proe"]))
+    assert "a few games' rate is mostly the score" in para["text"], para["text"]
+    assert f"it throws {rel} points more than the league does on the same downs, distances and scores" in para["text"]
+    assert para["claim"]["kind"] == "passrun" and para["claim"]["week"] == 6
+    c = _ctx(dict(tab, week=13))
+    para = next(b for b in GR.sec_passrun(c)["blocks"] if b["type"] == "p")
+    assert "Why: " in para["text"] and "often than usual against BBB" in para["text"].split("Why: ")[1]
+    note = GR.sec_passrun(c)["blocks"][-1]["text"]
+    assert "its pass rate over expected" in note and "from week 9, also about 0.3 of the lean" in note
+    m = passrun.MEASURED
+    lo, hi = (round(100 * x) for x in m["side_early"])
+    assert f"{lo}% to {hi}% of the time in weeks 4 to 8" in note
 
 
 if __name__ == "__main__":

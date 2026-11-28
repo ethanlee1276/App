@@ -2824,7 +2824,7 @@ def passrun_scan(tab: dict, home: str, away: str, points: dict | None = None) ->
         if r:
             row["read"] = r
         out[t] = row
-    return {"league": tab.get("league"), "week": tab.get("week"), "teams": out}
+    return {"league": tab.get("league"), "week": tab.get("week"), "league_proe": tab.get("league_proe"), "teams": out}
 
 
 def passrun_split(pr: dict) -> dict:

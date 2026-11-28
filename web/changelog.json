@@ -2,6 +2,12 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-11-28",
+      "kind": "ship",
+      "title": "The pass-or-run read sees game script, and starts at week 4",
+      "body": "Each NFL report's Pass or run read now takes each team's pass rate over expected: how much more or less it throws than the league does on the same downs, distances and scores, its real tendency with the game script taken out. A team's overall rate carries the script, since a team that trails throws more. With it the read was closer again in every season 2022-2025 (from week 9), and it now starts at week 4: the team's rate, its pass rate over expected and the line passed our test where the defense's lean alone did not, which joins from week 9. When the read sat 2 points or more from a team's own rate, the game landed on that side 59% to 79% of the time in weeks 4 to 8 and 62% to 68% from week 9 (held out a season at a time). The report says why in the read's own parts. Tested and left out: a defense's run-against-pass strength, a team's red-zone pass rate beyond its overall rate, and the share of its touchdowns it throws. Our player numbers do not move on it yet: it is being checked against our real picks first."
+    },
+    {
       "date": "2026-11-27",
       "kind": "ship",
       "title": "Pass or run, in every NFL game report",

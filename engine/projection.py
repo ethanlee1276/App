@@ -128,7 +128,8 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                         prior_n=prop.form_prior_n, prior_games=prop.form_prior_games)
 
     matchup = evaluate_matchup(prop, opponent_team.defense, game,
-                               measured_context=bool(context), sport=sport)
+                               # The read was measured ON TOP of the line's game script, so the script stays.
+                               measured_context=bool(context) and context.get("mode") != "read", sport=sport)
     weather = evaluate_weather(game.weather, prop.position)
     injury = evaluate_injuries(prop, game.injuries)
     # WHO PLAYS AROUND HIM, measured (Ethan, 2026-09-23: "we also need our
@@ -187,6 +188,10 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
             ctx_mult, ctx_reasons = drift_multiplier(
                 (context.get("profiles") or {}).get(team),
                 (context.get("baseline") or {}).get(team), prop.market)
+        elif context.get("mode") == "read":
+            from .teamcontext import read_multiplier
+            ctx_mult, ctx_reasons = read_multiplier((context.get("reads") or {}).get(team), prop.market,
+                                                    getattr(prop, "position", ""))
         else:
             ctx_mult, ctx_reasons = context_multiplier(
                 (context.get("profiles") or {}).get(team),

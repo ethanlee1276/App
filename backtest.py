@@ -42,10 +42,12 @@ def main() -> None:
     ap.add_argument("--team-context", action="store_true",
                     help="NFL Phase 2: price with measured pace / PROE / "
                          "offensive EPA, rebuilt walk-forward for each week.")
-    ap.add_argument("--context-mode", default="level", choices=("level", "drift"),
+    ap.add_argument("--context-mode", default="level", choices=("level", "drift", "read"),
                     help="level = tendency vs the league; drift = the team vs "
                          "its OWN season, i.e. only what player form has not "
-                         "already absorbed.")
+                         "already absorbed; read = our pass-rate read for the "
+                         "game (engine/passrun) as a change from the team's own "
+                         "rate, on completions and wide receivers' catches.")
     ap.add_argument("--real-lines", action="store_true",
                     help="price against harvested closes from the history DB "
                          "instead of the recent-form proxy. Without this every "

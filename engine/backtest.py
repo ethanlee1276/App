@@ -776,7 +776,23 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
     # backtest would look excellent and none of it would survive contact
     # with a live Sunday, because in week 8 those games have not happened.
     ctx_by_week: dict[int, dict] = {}
-    if use_team_context:
+    if use_team_context and team_context_mode == "read":
+        # THE PASS-RATE READ (step AIS, engine/passrun): each week's read off the weeks before it, each team against
+        # the opponent the weekly feed names.
+        from . import db as _db
+        from .teamcontext import read_context
+        _hc = _db.connect()
+        opp_of: dict = {}
+        for row in stats or []:
+            t = _s(row, "team") or _s(row, "recent_team")
+            o = _s(row, "opponent_team")
+            if t and o:
+                opp_of.setdefault(int(_f(row, "week", default=0)), {})[t] = o
+        for w in weeks:
+            ctx = read_context(_hc, season, int(w), opp_of.get(int(w)) or {})
+            if ctx:
+                ctx_by_week[w] = ctx
+    elif use_team_context:
         from . import db as _db
         from .teamcontext import league_means, profiles_through
         _hc = _db.connect()
