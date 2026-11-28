@@ -66,6 +66,21 @@ function settledGameHTML(g, lead) {
   return `<span class="st-game">${lead ? '<span class="st-dot" aria-hidden="true">·</span>' : ""}${game}</span>${when
     ? `<span class="st-when"><span class="st-dot" aria-hidden="true">·</span>${when}</span>` : ""}`;
 }
+/* A LEG'S FACE (step AIT, 28 November 2026). Ethan, with a screenshot of a finished game's tickets on the Record,
+   each wearing drawn helmets with initials: "Also fix how there is no headshots on the game report record page
+   here". The record now hands each pick and leg its player's photo (engine/boardfaces.record_faces), and each box
+   wears it beside the bet, as the ticket's head and the card before the game wear theirs; a club's bet wears its
+   club's mark, and a player with no photo on file the helmet in his club's colours. */
+function settledFaceHTML(b, g, size) {
+  const sport = (g && g.sport) || state.sport;
+  const map = typeof teamsForSport === "function" ? teamsForSport(sport) : null;
+  if (settledGameBet(b) || !b.player) {
+    // A total is the game's, neither club's, though the journal files it under one (the line under it names both).
+    const own = b.team && String(b.market || "").toLowerCase() !== "total";
+    return own && typeof teamMark === "function" ? teamMark(b.team, size, map, sport) : "";
+  }
+  return typeof playerAvatar === "function" ? playerAvatar(b.player, b.team, { size, headshot: b.headshot, map }) : "";
+}
 //: One leg or one pick in its box: {bet, res (pickResult's verdict), words (a game bet's), open, note}.
 function settledLegHTML(l, g) {
   const b = l.bet || {}, res = l.res || null, st = (res && res.status) || "pending";
@@ -77,7 +92,10 @@ function settledLegHTML(l, g) {
                l.note ? `<span class="st-note">${dot}${escapeHtml(l.note)}</span>` : ""].filter(Boolean).join("");
   const mark = icon(st === "won" ? "check" : st === "lost" ? "cross" : "dash", 13);
   const door = l.open && b.player && !settledGameBet(b) ? ` data-open="player:${escapeAttr(slugify(b.player))}"` : "";
-  return `<li class="st-leg ${tone}"${door}><span class="st-leg-text"><b class="st-leg-bet">${
+  // The face is the bet's own name drawn, so a screen reader hears the name once, in the bet.
+  const face = settledFaceHTML(b, g, 30);
+  return `<li class="st-leg ${tone}"${door}>${face ? `<span class="st-leg-face" aria-hidden="true">${face}</span>` : ""
+    }<span class="st-leg-text"><b class="st-leg-bet">${
       escapeHtml(settledBetWords(b, l.words))}</b>${sub ? `<span class="st-leg-sub">${sub}</span>` : ""}</span>
     <span class="st-leg-mark ${tone}"><span class="st-sr">${SETTLED_WORD[st] || ""}</span>${mark}</span></li>`;
 }
@@ -102,14 +120,8 @@ function settledTicketHTML(t, g) {
   const dec = Number(t.dec);
   const price = dec > 1 ? (dec >= 2 ? `+${Math.round((dec - 1) * 100)}` : `${MINUS}${Math.round(100 / (dec - 1))}`) : "";
   const pay = settledUnits(st, dec, t.units);
-  const sport = (g && g.sport) || state.sport;
-  const map = typeof teamsForSport === "function" ? teamsForSport(sport) : null;
   // Up to three of its legs' faces, a club's mark for a game bet, as the screenshot's ticket wears them.
-  const faces = legs.slice(0, 3).map((l) => {
-    const b = l.bet || {};
-    if (settledGameBet(b) || !b.player) return b.team && typeof teamMark === "function" ? teamMark(b.team, 22, map, sport) : "";
-    return typeof playerAvatar === "function" ? playerAvatar(b.player, b.team, { size: 22, headshot: b.headshot, map }) : "";
-  }).filter(Boolean);
+  const faces = legs.slice(0, 3).map((l) => settledFaceHTML(l.bet || {}, g, 22)).filter(Boolean);
   const tally = settledTally(legs);
   return `<div class="st-tix ${tone}">
     <div class="st-tix-head">${faces.length ? `<span class="st-tix-faces n${faces.length}" aria-hidden="true">${

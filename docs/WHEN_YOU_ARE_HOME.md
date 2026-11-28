@@ -9883,6 +9883,18 @@ better. C, like u said not a problem."
   a game with no props bills less than the table says, more college games cost less than the numbers above, and the
   next step is sized from that. Nothing to run: I read it off the heartbeat.
 
+**AIT. The Record's finished picks and parlays show the players' faces** (step 1038; 28 November; nothing to run).
+You sent the Record's Cardinals at Chiefs entry: each three-leg parlay wore three drawn helmets with initials, and
+no pick or leg had a face. The cause: the Record and Report Picks read a finished game's picks and parlays back from
+our bet record, which keeps each leg's player, team, market and line but never a photo, so the page had none to
+draw. Now each pick and leg is given the photo the game's own report carried that day, and failing that the photo
+the box already stores for the player (the one the player search shows). For Cardinals at Chiefs the box has a photo
+for all five players on its tickets: Mahomes, Rice, Downs, Kelce and Emmett Johnson. The newest parlays at the top
+of each league's Record get theirs the same way. Each leg's box on a finished parlay or pick now shows the face
+beside the bet too, as the parlay's card does before the game; a moneyline or spread shows its team's logo, and a
+total shows neither (it belongs to the game, not one team). A player with no photo on file still shows a helmet in
+the team's colors.
+
 **AIS. Pass or run, deeper: the read now sees game script, starts at week 4, and is lined up for the picks** (step
 1037; 28 November; one optional command, RUN_NEXT 00u). You asked me to go deeper. I tested every angle on 2017-2025
 play-by-play, holding out one season at a time against the same rule as before. Held: a team's pass rate over

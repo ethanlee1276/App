@@ -117,8 +117,12 @@ def test_one_drawing_says_each_leg_and_the_ticket():
     assert lost.startswith('<div class="st-tix lost">')
     assert '<span class="st-tix-verdict">Lost</span> · 2 wins, 1 loss' in lost and "<b>−1.00u</b><span>+248</span>" in lost
     assert "Ja&#39;Marr Chase · To score a touchdown" in lost and '<span class="st-did">Scored 2</span>' in lost
-    assert '<li class="st-leg won"><span class="st-leg-text"><b class="st-leg-bet">Bengals to win</b>' in lost, \
-        "a game bet: its words, no player's page, and the final says what happened"
+    assert ('<li class="st-leg won"><span class="st-leg-face" aria-hidden="true"><i class="tm">CIN</i></span>'
+            '<span class="st-leg-text"><b class="st-leg-bet">Bengals to win</b>') in lost, \
+        "a game bet: its club's mark and its words, no player's page, and the final says what happened"
+    # Each player's leg wears his face beside the bet (step AIT; tests/test_the_record_wears_its_players_faces).
+    assert ('<li class="st-leg won" data-open="player:joe-burrow"><span class="st-leg-face" aria-hidden="true">'
+            '<i class="av"></i></span><span class="st-leg-text">') in won
     assert '<li class="st-leg lost">' in lost and '<span class="st-did">194</span>' in lost and "[cross]" in lost
     # Still waiting: plain, said in words, its price without units.
     assert wait.startswith('<div class="st-tix even">')

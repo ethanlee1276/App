@@ -11784,7 +11784,27 @@ def _game_parlay_record(conn) -> dict:
     except Exception as exc:                                  # noqa: BLE001
         # Said in the export's log, not in the record: every key of it is a league the page draws.
         print(f"  ⚠️ the SGPX parlays' record not read ({type(exc).__name__}: {exc})")
+    _recent_faces(rec)
     return rec
+
+
+def _recent_faces(rec: dict, stored: dict | None = None) -> int:
+    """EACH NEWEST TICKET'S LEGS WEAR THEIR FACES (step AIT, 28 November 2026). Ethan, with a screenshot of a
+    finished game's tickets on the Record, each wearing drawn helmets with initials: "Also fix how there is no
+    headshots on the game report record page here". The journal keeps no photo, so each leg of the newest
+    tickets, the SGPX ones too, is given its sport's stored photo (engine/boardfaces.record_faces, which never
+    raises and says when it fails). ``stored``: {sport: photos}, when the caller has them. How many got one."""
+    from . import boardfaces
+    n = 0
+    for sport, kinds in (rec or {}).items():
+        if not isinstance(kinds, dict):
+            continue
+        legs = [leg for block in kinds.values() if isinstance(block, dict)
+                for t in block.get("recent") or [] if isinstance(t, dict) for leg in t.get("legs") or []]
+        if legs:
+            n += boardfaces.record_faces([(legs, None)], sport,
+                                         stored=None if stored is None else stored.get(sport) or {})
+    return n
 
 
 _ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")

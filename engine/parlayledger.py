@@ -876,7 +876,7 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT, sources: dict | N
                 chunk = ids[i:i + 500]
                 legs += conn.execute(
                     # The book's chance at each leg's own line where the journal keeps it (step AAU).
-                    f"SELECT parlay_id, leg_no, player, market, side, line, odds, p_final, status, actual, pool, "
+                    f"SELECT parlay_id, leg_no, player, team, market, side, line, odds, p_final, status, actual, pool, "
                     f"COALESCE(fair_line, fair) AS fair "
                     f"FROM parlay_legs WHERE parlay_id IN ({','.join('?' * len(chunk))}) ORDER BY parlay_id, leg_no",
                     chunk).fetchall()
@@ -904,6 +904,8 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT, sources: dict | N
                 legs_of.setdefault(l["parlay_id"], []).append(
                     {"player": l["player"], "market": l["market"], "side": l["side"], "line": l["line"],
                      "odds": l["odds"], "status": l["status"],
+                     # Its club, so the leg's face (or the helmet drawn in its place) is its club's (step AIT).
+                     **({"team": l["team"]} if l["team"] else {}),
                      **({"actual": l["actual"]} if l["actual"] is not None else {})})
             news = []
             for t in sorted(graded, key=lambda t: (t["date"], t["id"]), reverse=True)[:recent]:

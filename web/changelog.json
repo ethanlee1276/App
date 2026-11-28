@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-28",
+      "kind": "fix",
+      "title": "Finished picks and parlays show the players' faces",
+      "body": "On the Record and Report Picks, a finished game's parlays showed drawn helmets with initials and no face on any pick or leg: those pages read a game's picks and parlays back from our bet record, which keeps each leg's player, team, market and line but not a photo. Each pick and leg now gets the photo its game report carried, or the player's stored photo, and each leg's box shows it beside the bet, as the parlay's card does before the game. A moneyline or spread shows its team's logo, and a total shows neither."
+    },
+    {
+      "date": "2026-11-28",
       "kind": "ship",
       "title": "The pass-or-run read sees game script, and starts at week 4",
       "body": "Each NFL report's Pass or run read now takes each team's pass rate over expected: how much more or less it throws than the league does on the same downs, distances and scores, its real tendency with the game script taken out. A team's overall rate carries the script, since a team that trails throws more. With it the read was closer again in every season 2022-2025 (from week 9), and it now starts at week 4: the team's rate, its pass rate over expected and the line passed our test where the defense's lean alone did not, which joins from week 9. When the read sat 2 points or more from a team's own rate, the game landed on that side 59% to 79% of the time in weeks 4 to 8 and 62% to 68% from week 9 (held out a season at a time). The report says why in the read's own parts. Tested and left out: a defense's run-against-pass strength, a team's red-zone pass rate beyond its overall rate, and the share of its touchdowns it throws. Our player numbers do not move on it yet: it is being checked against our real picks first."

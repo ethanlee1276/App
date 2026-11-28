@@ -37,6 +37,9 @@
 .st-leg.won { border-color: var(--good); }
 .st-leg.lost { border-color: var(--bad); }
 .st-leg[data-open] { cursor: pointer; }
+/* Each leg's face beside its bet (step AIT, js/settled.js settledFaceHTML): the player's photo, a club's mark for a
+   club's bet. */
+.st-leg-face { display: grid; flex: none; line-height: 0; }
 .st-leg-text { display: grid; gap: 3px; flex: 1; min-width: 0; }
 .st-leg-bet { color: var(--text); font-weight: 700; overflow-wrap: anywhere; }
 .st-leg-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: var(--fs-sm);

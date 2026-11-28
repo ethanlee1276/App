@@ -407,6 +407,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # (tests/test_long_shots_wear_their_faces). A photo must never
         # cost the build its board.
         "fill", "stored_faces",
+        # THE RECORD'S FACES (engine/boardfaces.record_faces, step AIT,
+        # 28 November 2026), caught by this sweep the hour they were written.
+        # Its 0 is also what a record whose rows all have faces answers, so a
+        # failure prints "record faces skipped (<sport>, <error>)"; a quiet
+        # record prints nothing (tests/test_the_record_wears_its_players_faces).
+        # A photo must never cost a page its record.
+        "record_faces",
         # engine/maintenance: a held deep refit or Lab run that cannot be
         # started prints "⚠️  held weekly jobs not started: <error>" in the
         # chores' log; a day with nothing held prints nothing

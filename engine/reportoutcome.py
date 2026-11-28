@@ -229,7 +229,7 @@ def of_game(conn, sport: str, date: str, g: dict, report: dict | None = None) ->
     return out
 
 
-def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> dict:
+def for_games(sport: str, keys, member: bool = True, path=None, where=None, faces: dict | None = None) -> dict:
     """EVERY FINISHED GAME'S PICKS AND PARLAYS, EACH WON OR LOST (2026-11-17).
 
     Ethan, on Report Picks' "How our reports did": "I wanna be able too see
@@ -259,8 +259,15 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     What has settled is public, as every settled row is (server._record_day:
     "the evidence the subscription is sold on"); a pick or ticket still
     waiting on its box score is a member's, and ``held`` tells the rest how
-    many there are."""
-    from . import reportarchive
+    many there are.
+
+    EACH WEARS ITS PLAYER'S FACE (step AIT, 28 November 2026). The journal
+    keeps no photo, so every pick and leg was drawn as a helmet with initials
+    (Ethan's screenshot of the Cardinals at Chiefs tickets). Each is given the
+    photo its own report carried, else the sport's stored one
+    (engine/boardfaces.record_faces; ``faces``: those stored photos, when the
+    caller has them)."""
+    from . import boardfaces, reportarchive
     want = []
     for k in list(keys or [])[:MAX_GAMES]:
         try:
@@ -276,6 +283,7 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     conn = _connect(path)
     if conn is None:
         return out
+    groups: list = []
     try:
         for key, day, away, home, doc in want:
             days = (doc.get("label"), day)
@@ -307,9 +315,20 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
                     game["earlier"] = {k: v for k, v in game["earlier"].items() if v}
                 game["held"] = held
             out[key] = {k: v for k, v in game.items() if v}
+            groups.append((_rows_of(out[key]), boardfaces.doc_faces(doc.get("report"), doc.get("parlays"))))
     finally:
         conn.close()
+    boardfaces.record_faces(groups, sport, stored=faces)
     return out
+
+
+def _rows_of(game: dict) -> list:
+    """Every pick and every ticket's leg of one game's answer (`for_games`): its own tickets, those on paper and
+    those posted earlier."""
+    tix = [t for kind in TICKETS for t in game.get(kind) or []]
+    for part in ("paper", "earlier"):
+        tix += [t for lst in (game.get(part) or {}).values() for t in lst or []]
+    return list(game.get("picks") or []) + [leg for t in tix if isinstance(t, dict) for leg in t.get("legs") or []]
 
 
 #: Where a kept set holds a kind its league had on paper (the holds of 17-20 November, since retired).
