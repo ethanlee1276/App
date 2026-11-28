@@ -195,6 +195,58 @@ def test_the_nfc_turns_right_to_left_only_where_the_whole_bracket_fits():
     assert "inset-inline-start" in sect and "inset-inline-end" in sect
 
 
+#: The two class names race.css styles that no source line spells out, because
+#: `rc-bk-${side}` builds them from SIDE above (AFC -> l, NFC -> r). Every other
+#: class in the stylesheet must appear literally in something that renders.
+RACE_CSS_BUILT_NAMES = ("rc-bk-l", "rc-bk-r")
+
+
+def test_every_class_the_race_stylesheet_styles_is_one_something_renders():
+    """Two rules in race.css outlived their elements: `.rc-side .rc-meta`, a
+    meta line on a bracket side that ncSlotSide never wrote, and `.rc-conf-k`,
+    a heading variant left behind when every caller settled on `.rc-conf-h`.
+    Found by the nightly sweep on 2026-11-28; neither had a symptom, because
+    dead CSS cannot report itself — it parses, it ships, and it waits to be
+    re-used for something else and hand it rules nobody remembers writing.
+
+    The lesson the stylesheets already taught twice (test_typography.py's
+    balance check, whose list of files may not name files) applies to the
+    other direction too, so this ENUMERATES: read every class back out of
+    race.css and require that something under web/ actually emits it. The
+    only names allowed to be absent are the ones built from a template, and
+    they are named above with the expression that builds them — a list that
+    stays short because a growing one means the check has stopped working.
+
+    Source-level and store-free: a dead-rule claim that needed a browser or
+    a built slate would pass on CI and rot on the laptop, or the reverse."""
+    classes = sorted(set(m.group(1) for m in re.finditer(
+        r"\.(-?[_a-zA-Z][\w-]*)", re.sub(r"/\*.*?\*/", "", CSS, flags=re.S))))
+    assert len(classes) > 60, "the class scan stopped reading the stylesheet"
+
+    rendered = "\n".join(
+        p.read_text(encoding="utf-8", errors="ignore")
+        for p in sorted((ROOT / "web").rglob("*"))
+        if p.suffix in (".js", ".html") and "vendor" not in p.parts)
+    assert "rcBkRoundsHTML" in rendered, "the renderers are not in the corpus"
+
+    for cls in classes:
+        if cls in RACE_CSS_BUILT_NAMES:
+            continue
+        # As a renderer would write it: the name ends where the attribute,
+        # a space or an interpolation ends it (`class="rc-bk-game${...}"` is
+        # the literal class with a template appending the next one). A bare
+        # substring search would call `.rc-conf-h` live off `rc-conf-held`.
+        assert re.search(r"[\"'`\s]" + re.escape(cls) + r"""[\"'`\s$]""", rendered), \
+            (f".{cls} in race.css matches no element anything under web/ "
+             f"renders — the rule is dead, so delete it or render it")
+
+    for built in RACE_CSS_BUILT_NAMES:
+        assert f".{built}" in CSS, f"{built} is allowed for a rule that is gone"
+        stem = built.rsplit("-", 1)[0]
+        assert stem + "-${" in rendered, \
+            f"{built} is no longer built from a template; it needs no exemption"
+
+
 # --- in a browser --------------------------------------------------------------------
 GEOMETRY = """() => {
   const mid = (el) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };

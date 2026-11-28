@@ -39,7 +39,6 @@
 .rc-col-h { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .rc-match { display: grid; gap: 2px; padding: 6px 0 8px; border-radius: var(--radius-sm); background: var(--panel); min-width: 0; }
 .rc-side { display: grid; grid-template-columns: 22px 20px minmax(0, 1fr); column-gap: 8px; align-items: center; padding: 4px 12px; }
-.rc-side .rc-meta { grid-column: 3; color: var(--text-mute); font-size: var(--fs-2xs); }
 .rc-seed { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
 .rc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--fs-sm); }
 .rc-empty { color: var(--text-mute); }
@@ -75,8 +74,6 @@
 .rc-won .rc-name, .rc-won .rc-score { color: var(--text); font-weight: 800; }
 .rc-lost .rc-name, .rc-lost .rc-score { color: var(--text-mute); font-weight: 600; }
 .rc-host b { color: var(--text); }
-.rc-conf-k { margin: 12px 0 6px; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
-  text-transform: uppercase; }
 .rc-champ { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; box-shadow: var(--glow-gold); }
 .rc-champ b { color: var(--text); font-size: var(--fs-lg); }
 /* The College Football Playoff's twelve (cfpPlayoffHTML): two columns where there is room. */
