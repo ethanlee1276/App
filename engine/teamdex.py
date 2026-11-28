@@ -1,0 +1,1412 @@
+"""A team, its record, and how it has actually gone against anybody.
+
+Ethan, 2026-09-09: *"we need to add a feature where you can look up an
+actual team and show the past stats versus another team. Example, I
+should be able to search for the Los Angeles Rams, and look at how
+they've played against any team in the past. And it should also show any
+other data and shit for teams that would be useful like offense rank and
+defense rank and past wins and loss and shit like that."*
+
+Every number here comes out of the `games` table — the finals this repo
+has already ingested — and nothing else. No feed is called, no model is
+consulted, and the only judgement in the file is which questions to ask
+of a scoreline.
+
+WHY NOT THE STANDINGS FEED. `web/data/standings_*.json` carries offence
+and defence ranks and would have been a shorter path. It is built from
+the CURRENT season, which on the day this was written held zero games —
+the NFL opener is tonight. A team page that says "no rankings" the day
+somebody looks up the Rams is a team page nobody opens twice. The finals
+go back to 2021 for the NFL and 2022 for college, so this reads them
+directly and STAMPS THE SEASON on every row: a rank is meaningless
+without the year it is a rank within.
+
+THE SPREAD SIGN, stated because it is the one thing here that is easy to
+get backwards and impossible to see. `games.spread` is the HOME team's
+number. Seattle home at -2.5 means Seattle laid two and a half; Carolina
+home at +10 means Carolina took ten. So the home side covers when
+``home_margin + spread > 0``, and exactly zero is a push, not a win.
+Every ATS record in this file runs through `_ats` for that reason.
+
+Read-only, and everything is handed a connection. No network, no clock.
+"""
+
+from __future__ import annotations
+
+import re
+import threading
+import time as _time
+
+#: WHERE A TEAM PAGE'S READS SPEND THEIR TIME (2026-11-18). The team endpoint's
+#: Server-Timing header said the squad took 25 of a cold college page's 30
+#: seconds, and the squad is three reads deep: this records each read's time
+#: and how it was answered (the team's own game keys, its game days, or the
+#: whole-season scan), per request thread, for the header to carry.
+_TRACE = threading.local()
+
+
+def trace_start() -> None:
+    """Start recording this thread's reads."""
+    _TRACE.rows = []
+
+
+def trace_take() -> list:
+    """``[(step, ms, how)]`` recorded since `trace_start`, and stop recording."""
+    rows = getattr(_TRACE, "rows", None) or []
+    _TRACE.rows = None
+    return rows
+
+
+def _note(step: str, t0: float, how: str = "") -> None:
+    rows = getattr(_TRACE, "rows", None)
+    if rows is not None:
+        rows.append((step, (_time.perf_counter() - t0) * 1000.0, how))
+
+
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _ats(home_margin: float, spread) -> str | None:
+    """"home", "away" or "push" — who covered. ``None`` with no line.
+
+    `spread` is the HOME number: negative means the home side is laying
+    it. Adding it to the home margin therefore asks the only question
+    that matters, "did the home team beat its own number", and zero is a
+    push rather than a cover.
+    """
+    s = _num(spread)
+    if s is None:
+        return None
+    edge = home_margin + s
+    if abs(edge) < 1e-9:
+        return "push"
+    return "home" if edge > 0 else "away"
+
+
+def _spread(g) -> float | None:
+    """The home side's number for a game, or ``None`` where no line is on file.
+
+    NO LINE, NOT A PICK'EM (TEAMFIX1, 2026-11-17). Every feed writes 0.0
+    where a spread would go (engine/sources/espnhoops, nbadata, nhldata; the
+    NFL schedule's blank spread_line), and only college football's and the
+    NFL's closes are ever written over it. Read as a line, that zero made
+    every other final "0 covered" or "0 missed" on a club's page and its
+    record against the spread its record: the Nuggets 6-5 against the spread
+    on eleven games no line was stored for, Duke 3-1 on four. A real pick'em
+    has a total beside it; a zero alone is nothing."""
+    s = _num(g["spread"])
+    if s is None or (s == 0 and _num(g["total"]) is None):
+        return None
+    return s
+
+
+def _ou(points: float, total) -> str | None:
+    t = _num(total)
+    if t is None:
+        return None
+    if abs(points - t) < 1e-9:
+        return "push"
+    return "over" if points > t else "under"
+
+
+def _finals(conn, sport: str, where: str = "", args=()) -> list[dict]:
+    """Every PLAYED game for a sport, newest first.
+
+    A row without both scores is not a final — it is tonight's fixture,
+    or a game we hold a line for and no result — and counting one as a
+    loss is the first thing a page like this gets wrong.
+
+    THE FILTER IS HERE AND NOT IN THE SQL, deliberately. `NOT NULL` would
+    catch the missing scores and not the malformed ones, and SQLite will
+    hold a string in a REAL column quite happily; `_num` catches both. One
+    filter that covers every way a score can fail to be a score beats a
+    fast one that covers most of them and a second guard at each caller
+    to cover the rest.
+    """
+    q = ("SELECT season, period, date, home, away, home_score, away_score, "
+         "spread, total, game_id FROM games WHERE sport=?"
+         + (" AND " + where if where else "")
+         + " ORDER BY season DESC, period DESC")
+    try:
+        rows = conn.execute(q, (sport,) + tuple(args)).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return []
+    out = []
+    for r in rows:
+        g = dict(r)
+        if _num(g.get("home_score")) is None or _num(g.get("away_score")) is None:
+            continue
+        out.append(g)
+    # A college football game filed more than once is one game (standings.once,
+    # as the standings count it).
+    from .standings import once
+    return once(sport, out)
+
+
+#: The league's teams, kept per database file and sport (`teams`): (when, the games' highest rowid, the list).
+_TEAMS: dict = {}
+#: How long a kept list of teams stands while no game has been added (`teams`).
+TEAMS_TTL = 600.0
+
+
+def teams(conn, sport: str) -> list[str]:
+    """Every team with a final in this sport, sorted.
+
+    Two names and the same check on the scores `_finals` makes, not `_finals`
+    itself: the team page asks this on every visit, and `_finals` builds the
+    sport's every game as a dict, sorts them and folds the duplicates — tens
+    of thousands of college games — to read two names off each (2026-11-18,
+    a college team page answering in 16 to 40 seconds).
+
+    ONE STEP, AND KEPT TEN MINUTES (step AHI, 25 November 2026). Still the sport's every game, row by row, on every
+    team page built: 191 to 557 ms of the live site's NHL, NBA and MLB pages ("teams"). The rows come in one step
+    (db.rows_at_once), and the list is kept ten minutes per database file while no game is added."""
+    path = ""
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str(row[2] or "") if row else ""
+        top = conn.execute("SELECT MAX(rowid) FROM games").fetchone()[0] if path else None
+    except Exception:                                         # noqa: BLE001
+        path, top = "", None
+    key = (path, sport)
+    hit = _TEAMS.get(key) if path else None
+    if hit and hit[1] == top and _time.time() - hit[0] < TEAMS_TTL:
+        return list(hit[2])
+    try:
+        from .db import rows_at_once
+        rows = rows_at_once(conn, "SELECT home, away, home_score, away_score FROM games WHERE sport=?", (sport,), n=4)
+    except Exception:                                         # noqa: BLE001
+        return []
+    seen = set()
+    for home, away, hs, as_ in rows:
+        if _num(hs) is None or _num(as_) is None:
+            continue
+        seen.add(home)
+        seen.add(away)
+    out = sorted(x for x in seen if x)
+    if path:
+        _TEAMS[key] = (_time.time(), top, out)
+    return list(out)
+
+
+# --------------------------------------------------------------- naming
+
+def name_map(sport: str) -> dict:
+    """``{full name: abbreviation}`` for a sport, from what already exists.
+
+    NOT A NEW TABLE. The book-facing maps in `engine.sources.oddsapi`
+    already turn "Los Angeles Rams" into "LA" because that is how every
+    price is keyed, and college's map is harvested by the builds
+    themselves (`engine.cfbteams`) rather than hand-written, because 134
+    schools in reshuffling conferences is the table that rots. A second
+    copy here would be a second thing to keep right.
+
+    Empty is a fine answer: the caller still resolves a bare abbreviation,
+    which is what a college id like ``espn:61`` will only ever be.
+    """
+    try:
+        from .sources import oddsapi
+    except Exception:                                         # noqa: BLE001
+        return {}
+    if sport == "nfl":
+        return dict(getattr(oddsapi, "TEAM_ABBR", {}) or {})
+    if sport == "mlb":
+        return dict(getattr(oddsapi, "MLB_TEAM_ABBR", {}) or {})
+    if sport == "nba":
+        return dict(getattr(oddsapi, "NBA_TEAM_ABBR", {}) or {})
+    if sport == "wnba":
+        return dict(getattr(oddsapi, "WNBA_TEAM_ABBR", {}) or {})
+    if sport == "nhl":
+        return dict(getattr(oddsapi, "NHL_TEAM_ABBR", {}) or {})
+    if sport == "cbb":
+        # College basketball's book spellings, harvested by its builds
+        # (`engine.cbbteams`), the way college football's are.
+        try:
+            from . import cbbteams
+            return dict(cbbteams.load() or {})
+        except Exception:                                     # noqa: BLE001
+            return {}
+    if sport == "cfb":
+        try:
+            from . import cfbteams
+            return dict(cfbteams.load() or {})
+        except Exception:                                     # noqa: BLE001
+            return {}
+    return {}
+
+
+def _norm(s) -> str:
+    return " ".join(str(s or "").lower().replace(".", " ")
+                    .replace("-", " ").split())
+
+
+#: THE LEAGUES WHOSE FEEDS SPELL A CLUB TWO WAYS (step ABX, 22 November 2026). The WNBA's stored games keep
+#: ESPN's codes (LV, GS, LA, NY, WSH) and its names, rosters and depth charts the league's (LVA, GSV, LAS, NYL,
+#: WAS): the Aces' page read "LV" with no name, roster or depth chart, and "LVA" found no team at all. The NBA's
+#: are stored in the league's codes, so "GS" found none there. engine/divisions knows every spelling of a club.
+CLUB_ALIAS_SPORTS = ("nba", "wnba")
+
+
+def club_code(sport: str, abbr: str) -> str:
+    """The league's own code for ``abbr`` (any of the feeds' spellings, engine/divisions.canonical) in a league
+    whose feeds spell a club two ways; ``abbr`` itself otherwise, or when it is no club."""
+    if sport not in CLUB_ALIAS_SPORTS or not abbr:
+        return abbr
+    from . import divisions
+    code = divisions.canonical(sport, str(abbr).strip().upper())
+    return code if code in divisions.MAPS.get(sport, {}) else abbr
+
+
+def resolve(query: str, sport: str, known=None) -> list[str]:
+    """Abbreviations a typed name could mean, best match first.
+
+    Ordered rather than single, because "LA" is a real answer and so is
+    "Los Angeles" — one of which is two teams. Handing the page the list
+    lets it ASK instead of picking, which is the difference between a
+    lookup and a guess.
+
+    Matching is: the abbreviation itself, then a whole full name, then a
+    full name that starts with what was typed, then one that contains it.
+    A one-character query matches nothing on the last two rules — "a"
+    would otherwise return half the league.
+    """
+    q = _norm(query)
+    if not q:
+        return []
+    names = name_map(sport)
+    pool = list(known) if known is not None else sorted(set(names.values()))
+    out: list[str] = []
+
+    def add(abbr):
+        if abbr and abbr not in pool and sport in CLUB_ALIAS_SPORTS:
+            # A club the stored games spell another way (step ABX): its stored spelling.
+            want = club_code(sport, abbr)
+            abbr = next((p for p in pool if club_code(sport, p) == want), abbr)
+        if abbr and abbr in pool and abbr not in out:
+            out.append(abbr)
+
+    for abbr in pool:
+        if _norm(abbr) == q:
+            add(abbr)
+    if sport in CLUB_ALIAS_SPORTS:
+        # A club's code in any of the feeds' spellings finds the club as the stored games spell it (step ABX).
+        from . import divisions
+        want = club_code(sport, query.strip().upper())
+        if want in divisions.MAPS.get(sport, {}):
+            for abbr in pool:
+                if club_code(sport, abbr) == want:
+                    add(abbr)
+    for full, abbr in sorted(names.items()):
+        if _norm(full) == q:
+            add(abbr)
+    if len(q) >= 2:
+        for full, abbr in sorted(names.items()):
+            if _norm(full).startswith(q):
+                add(abbr)
+        for full, abbr in sorted(names.items()):
+            # Word-boundary containment: "rams" must find the Rams and
+            # "ram" must not, or every query is a substring of something.
+            if q in _norm(full).split() or (" " + q + " ") in (
+                    " " + _norm(full) + " "):
+                add(abbr)
+    return out
+
+
+def label(abbr: str, sport: str) -> str:
+    """The longest full name that maps to this abbreviation, or the abbr.
+
+    Longest because "Los Angeles Rams" and "Rams" can both be stored and
+    the page wants the one that identifies the team without context.
+    """
+    best = ""
+    names = name_map(sport)
+    for full, a in names.items():
+        if a == abbr and len(full) > len(best):
+            best = full
+    if not best and sport in CLUB_ALIAS_SPORTS and club_code(sport, abbr) != abbr:
+        # The stored games' spelling of a club the name map keys by the league's code (step ABX).
+        code = club_code(sport, abbr)
+        for full, a in names.items():
+            if a == code and len(full) > len(best):
+                best = full
+    if not best and sport == "cbb":
+        best = _cbb_card_name(abbr)
+    return best or abbr
+
+
+#: College basketball's kept cards' names, read once per change of the file.
+_CBB_CARD_NAMES: dict = {}
+
+
+def _cbb_card_name(abbr: str) -> str:
+    """A school's name off its kept card (`cbbteams.cards`), for a school no book has
+    priced yet. 18 November 2026: Tennessee's page was headed "TENN", because the
+    names above are the books' spellings and only the schools they priced are in it."""
+    import os
+    try:
+        from . import cbbteams
+        path = cbbteams.CARDS_PATH
+        stamp = os.path.getmtime(path)
+    except Exception:                                         # noqa: BLE001
+        return ""
+    if _CBB_CARD_NAMES.get("stamp") != (str(path), stamp):
+        names = {k: str(v.get("name") or "") for k, v in cbbteams.cards(path).items()}
+        _CBB_CARD_NAMES.clear()
+        _CBB_CARD_NAMES.update(stamp=(str(path), stamp), names=names)
+    return _CBB_CARD_NAMES["names"].get(abbr, "")
+
+
+# --------------------------------------------------------------- record
+
+def _blank() -> dict:
+    return {"games": 0, "wins": 0, "losses": 0, "ties": 0,
+            "points_for": 0.0, "points_against": 0.0,
+            "ats_w": 0, "ats_l": 0, "ats_p": 0,
+            "over": 0, "under": 0, "ou_p": 0}
+
+
+def _add(acc: dict, mine: float, theirs: float, at_home: bool, g: dict):
+    acc["games"] += 1
+    acc["points_for"] += mine
+    acc["points_against"] += theirs
+    if mine > theirs:
+        acc["wins"] += 1
+    elif mine < theirs:
+        acc["losses"] += 1
+    else:
+        acc["ties"] += 1
+    cover = _ats(_num(g["home_score"]) - _num(g["away_score"]), _spread(g))
+    if cover == "push":
+        acc["ats_p"] += 1
+    elif cover is not None:
+        mine_covered = (cover == "home") == at_home
+        acc["ats_w" if mine_covered else "ats_l"] += 1
+    ou = _ou(_num(g["home_score"]) + _num(g["away_score"]), g["total"])
+    if ou == "over":
+        acc["over"] += 1
+    elif ou == "under":
+        acc["under"] += 1
+    elif ou == "push":
+        acc["ou_p"] += 1
+
+
+def _finish(acc: dict) -> dict:
+    n = acc["games"] or 1
+    acc["pf_per_game"] = round(acc["points_for"] / n, 1)
+    acc["pa_per_game"] = round(acc["points_against"] / n, 1)
+    acc["point_diff"] = round(acc["pf_per_game"] - acc["pa_per_game"], 1)
+    acc["record"] = (f"{acc['wins']}-{acc['losses']}"
+                     + (f"-{acc['ties']}" if acc["ties"] else ""))
+    return acc
+
+
+#: Each season's league table, kept per database file (`season_table`): (when, the season's games stamp, the table).
+_SEASON_TABLES: dict = {}
+#: How long a kept season table stands while its games stamp holds (`season_table`).
+SEASON_TABLE_TTL = 600.0
+
+
+def season_table(conn, sport: str, season: int) -> dict:
+    """``{team: record}`` for one season — the basis of every rank.
+
+    KEPT, THE SAME FOR EVERY CLUB (step AHI, 25 November 2026). A team page's profile built this for each season the
+    team played, each from every final of that season (a hockey team's, eleven seasons of the league's), and every
+    club's page built the same tables again. Kept ten minutes per database file while the season's games say the
+    same: how many there are, how many have a score, their scores' sum and the highest rowid, so a final landing (a
+    score written onto its game's row) builds it again. Readers treat it as read-only: it is shared."""
+    path = ""
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str(row[2] or "") if row else ""
+        stamp = tuple(conn.execute(
+            "SELECT COUNT(*), COUNT(home_score), TOTAL(home_score) + TOTAL(away_score), MAX(rowid) FROM games "
+            "WHERE sport=? AND season=?", (sport, season)).fetchone()) if path else None
+    except Exception:                                         # noqa: BLE001
+        path, stamp = "", None
+    key = (path, sport, season)
+    hit = _SEASON_TABLES.get(key) if path else None
+    if hit and hit[1] == stamp and _time.time() - hit[0] < SEASON_TABLE_TTL:
+        return hit[2]
+    out: dict = {}
+    for g in _finals(conn, sport, "season=?", (season,)):
+        h, a = _num(g["home_score"]), _num(g["away_score"])
+        for team, mine, theirs, at_home in ((g["home"], h, a, True),
+                                            (g["away"], a, h, False)):
+            if not team:
+                continue
+            _add(out.setdefault(team, _blank()), mine, theirs, at_home, g)
+    table = {t: _finish(v) for t, v in out.items()}
+    if path:
+        _SEASON_TABLES[key] = (_time.time(), stamp, table)
+    return table
+
+
+def _ranked(table: dict, key: str, ascending: bool) -> dict:
+    """``{team: rank}``, ties sharing the better rank.
+
+    Shared rather than broken alphabetically: two teams allowing 20.4 a
+    game are the same defence, and inventing an order between them puts
+    a number on the page that means nothing.
+    """
+    order = sorted(table, key=lambda t: (table[t][key] if ascending
+                                         else -table[t][key], t))
+    out, last, rank = {}, None, 0
+    for i, t in enumerate(order, 1):
+        v = table[t][key]
+        if last is None or abs(v - last) > 1e-9:
+            rank, last = i, v
+        out[t] = rank
+    return out
+
+
+def profile(conn, sport: str, team: str) -> dict:
+    """Season by season, with the league rank of each unit that season.
+
+    A rank is only ever reported ALONGSIDE the field it was taken from —
+    "7th of 32" — because 7th means one thing in the NFL and another in
+    a 137-team college season, and the reader cannot tell which he is
+    looking at from the number.
+    """
+    rows = []
+    # The team's finals read once for both uses below (step AHI): each read walks the sport's every game.
+    finals = _finals(conn, sport, "(home=? OR away=?)", (team, team))
+    for season in sorted({g["season"] for g in finals}, reverse=True):
+        table = season_table(conn, sport, season)
+        if team not in table:
+            continue
+        # COLLEGE RANKS AMONG DIVISION I (walk 13, 2026-11-18): Duke's page read
+        # "62nd of 564", every small school that played a Division I one counted
+        # in the field (step XZ did the same for the game page's scan). A small
+        # school keeps its own numbers, unranked.
+        field = table
+        if sport == "cbb":
+            from . import cbbteams
+            field = {t: v for t, v in table.items() if cbbteams.is_division_one(t)}
+        off = _ranked(field, "pf_per_game", False)
+        dfn = _ranked(field, "pa_per_game", True)
+        rows.append({**table[team], "season": season,
+                     "offense_rank": off.get(team),
+                     "defense_rank": dfn.get(team),
+                     "teams_ranked": len(field)})
+    career = _blank()
+    for g in finals:
+        h, a = _num(g["home_score"]), _num(g["away_score"])
+        at_home = g["home"] == team
+        _add(career, h if at_home else a, a if at_home else h, at_home, g)
+    return {"sport": sport, "team": team, "name": label(team, sport),
+            "seasons": rows, "career": _finish(career)}
+
+
+def opponents(conn, sport: str, team: str) -> list[dict]:
+    """Everyone this team has a final against, most-played first.
+
+    The picker's own list. Offering all 32 clubs when we hold games
+    against nineteen of them would advertise seventeen empty pages.
+    """
+    counts: dict = {}
+    for g in _finals(conn, sport, "(home=? OR away=?)", (team, team)):
+        other = g["away"] if g["home"] == team else g["home"]
+        if other and other != team:
+            counts[other] = counts.get(other, 0) + 1
+    return [{"team": t, "name": label(t, sport), "games": n}
+            for t, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+
+def _game_row(g: dict, team: str) -> dict:
+    """One final as ``team`` saw it: its score, its line, its cover."""
+    h, a = _num(g["home_score"]), _num(g["away_score"])
+    at_home = g["home"] == team
+    mine, theirs = (h, a) if at_home else (a, h)
+    line = _spread(g)
+    cover = _ats(h - a, line)
+    return {
+        "season": g["season"], "period": g["period"], "date": g["date"],
+        "home": g["home"], "away": g["away"],
+        # The game's own id: which leg of a doubleheader it was, when the
+        # page asks the feed for this game (engine/gamearchive).
+        "game_id": g.get("game_id"),
+        "home_score": h, "away_score": a,
+        "at_home": at_home, "points_for": mine, "points_against": theirs,
+        "margin": round(mine - theirs, 1),
+        "result": "W" if mine > theirs else "L" if mine < theirs else "T",
+        "spread": line, "total": _num(g["total"]),
+        # SIGNED FOR THE TEAM BEING LOOKED UP, not for the home side.
+        # A page that shows the Rams and prints Seattle's number is
+        # correct arithmetic answering somebody else's question.
+        "line": None if line is None else (line if at_home else -line) + 0.0,
+        "covered": (None if cover is None else "push" if cover == "push"
+                    else ((cover == "home") == at_home)),
+        "ou": _ou(h + a, g["total"]),
+    }
+
+
+def head_to_head(conn, sport: str, team: str, opp: str) -> dict:
+    """Every meeting, newest first, and what each one settled at."""
+    games, acc = [], _blank()
+    for g in _finals(conn, sport,
+                     "((home=? AND away=?) OR (home=? AND away=?))",
+                     (team, opp, opp, team)):
+        row = _game_row(g, team)
+        _add(acc, row["points_for"], row["points_against"], row["at_home"], g)
+        games.append(row)
+    return {"sport": sport, "team": team, "opponent": opp,
+            "name": label(team, sport), "opponent_name": label(opp, sport),
+            "games": games, "summary": _finish(acc)}
+
+
+def results(conn, sport: str, team: str, limit: int | None = None) -> list[dict]:
+    """A team's finals, newest first, each the way ``head_to_head``
+    prints a meeting, plus who it was against. Ask Qellys reads a
+    team's latest games from here (engine/askbot.py)."""
+    out = []
+    for g in _finals(conn, sport, "(home=? OR away=?)", (team, team)):
+        row = _game_row(g, team)
+        row["opponent"] = g["away"] if row["at_home"] else g["home"]
+        out.append(row)
+        if limit and len(out) >= limit:
+            break
+    return out
+
+
+def _period_key(p) -> tuple:
+    """A week "10" after a week "9": periods are stored as text."""
+    s = str(p or "")
+    return (0, int(s), "") if s.isdigit() else (1, 0, s)
+
+
+def season_schedule(conn, sport: str, team: str, season: int | None = None) -> dict:
+    """The team's whole season, played and to come, in date order.
+
+    Ethan, 2026-09-24, with ESPN's Packers page beside ours: a Schedule
+    tab. The finals are `_game_row`s — the same score, line and cover the
+    head-to-head prints — and a fixture with no score yet is that game
+    as the table holds it: when, where, and the line if one is stored.
+    The season is the newest one this team has any game in, so a
+    schedule loaded before Week 1 reads as this season rather than last.
+    """
+    # EVERY SEASON ON FILE (Ethan, 2026-09-28, on the Bears' schedule: "Since
+    # we have 2021-2026 stats, we should be able too cycle from 2021 - 2026
+    # here"). The page draws them as chips; newest first.
+    try:
+        seasons = [int(r[0]) for r in conn.execute(
+            "SELECT DISTINCT season FROM games WHERE sport=? AND (home=? OR away=?) "
+            "AND season IS NOT NULL ORDER BY season DESC", (sport, team, team)).fetchall()]
+    except Exception:                                         # noqa: BLE001
+        seasons = []
+    try:
+        if season is None:
+            season = seasons[0] if seasons else None
+        elif seasons and int(season) not in seasons:
+            return {"season": int(season), "seasons": seasons, "games": []}
+        if season is None:
+            return {"season": None, "seasons": seasons, "games": []}
+        rows = conn.execute(
+            "SELECT season, period, date, home, away, home_score, away_score, "
+            "spread, total, game_id FROM games WHERE sport=? AND season=? AND (home=? OR away=?)",
+            (sport, season, team, team)).fetchall()
+        from .standings import once
+        rows = once(sport, [dict(r) for r in rows])
+    except Exception:                                         # noqa: BLE001
+        return {"season": season, "seasons": seasons, "games": []}
+    games = []
+    for r in rows:
+        g = dict(r)
+        at_home = g["home"] == team
+        opp = g["away"] if at_home else g["home"]
+        if _num(g.get("home_score")) is not None and _num(g.get("away_score")) is not None:
+            row = _game_row(g, team)
+            row.update(opponent=opp, final=True)
+        else:
+            spread = _num(g.get("spread"))
+            # NO LINE YET, NOT A PICK'EM. The schedule ingest stores a blank
+            # spread_line as 0.0 (engine/ingest), so a week months away read
+            # "line 0" — three Bears games in a row, 2026-09-28. A real
+            # pick'em that far out is rarer than a missing line.
+            if spread == 0:
+                spread = None
+            row = {"season": g["season"], "period": g["period"], "date": g["date"],
+                   "game_id": g.get("game_id"),
+                   "home": g["home"], "away": g["away"], "at_home": at_home,
+                   "opponent": opp, "final": False,
+                   "line": None if spread is None else (spread if at_home else -spread),
+                   "total": _num(g.get("total"))}
+        games.append(row)
+    games.sort(key=lambda x: (x.get("date") or "", _period_key(x.get("period"))))
+    return {"season": season, "seasons": seasons, "games": games}
+
+
+#: WHICH LINE LEADS A POSITION. A quarterback's row is about passing
+#: yards and a receiver's is about catches, and a squad list that sorted
+#: every position on the same market would rank the whole offence by
+#: whichever stat the quarterback happens to dominate. Falls back to the
+#: player's own biggest total when a position is not here — a college
+#: roster carries positions this table has never seen, and guessing at
+#: them is worse than reading the numbers.
+LEAD_MARKET = {
+    "QB": "pass_yds", "RB": "rush_yds", "FB": "rush_yds",
+    "WR": "rec_yds", "TE": "rec_yds",
+    "C": "hits", "1B": "hits", "2B": "hits", "3B": "hits", "SS": "hits",
+    "LF": "hits", "CF": "hits", "RF": "hits", "DH": "hits", "OF": "hits",
+    "G": "pts", "F": "pts", "PG": "pts", "SG": "pts", "SF": "pts",
+    "PF": "pts",
+}
+
+#: How many players a position lists before the rest are folded away.
+#: A 90-man NFL roster is not a page.
+SQUAD_PER_POSITION = 6
+
+#: Markets whose value is a RATE, not a count, so summing them is
+#: meaningless. Ethan's Rams page, 2026-09-10, showed "Nick Vannett —
+#: Snap Pct 0/g · 0.3 total": seven games at a four-percent snap share
+#: added up to 0.3 of nothing, and the per-game number rounded to zero.
+#: A rate's honest summary is its mean, printed as a percentage.
+#:
+#: `snap_pct` is the only one this table holds today (`ingest.
+#: snap_count_rows` writes it 0-1). Kept as a set rather than a name
+#: check so the next one is a one-line change and not a new bug.
+RATE_MARKETS = {"snap_pct"}
+
+
+def _team_games(conn, sport: str, team: str, season: int | None = None) -> list:
+    """``[(season, period, game_id)]`` of the team's games, newest first, off the
+    games table (one season, or every season)."""
+    q = ("SELECT DISTINCT season, period, game_id FROM games WHERE sport=? AND (home=? OR away=?)"
+         + (" AND season=?" if season is not None else "") + " ORDER BY season DESC, period DESC")
+    args = (sport, team, team) + ((season,) if season is not None else ())
+    t0 = _time.perf_counter()
+    out = [(r[0], str(r[1]), str(r[2])) for r in conn.execute(q, args).fetchall()
+           if r[0] is not None and r[1] is not None and r[2] is not None]
+    _note("games", t0, f"{len(out)} games")
+    return out
+
+
+#: THE TEAM'S OWN GAMES, NOT THE SPORT'S EVERY ROW (2026-11-18: a college
+#: basketball team page answered in 16 to 40 seconds). `player_game_logs` is
+#: keyed (sport, season, period, game_id, player, market) and nothing on it
+#: leads with the team, so "this team's rows" read the sport's every season
+#: for the latest one and a whole season twice more for the squad and the
+#: stat page: millions of college rows to find a few hundred. A team's rows
+#: sit under its own games, which the games table lists, so the reads below
+#: go to those games through the key, one game at a time — and fall back to
+#: the old reads when the games table holds none (a team filed under another
+#: code there), so nothing that read before reads less now.
+#:
+#: …UNDER THE KEY EACH LEAGUE FILES THEM BY (2026-11-18, the same day: the
+#: live pages still took 22 to 50 seconds). Only basketball's ESPN rows and
+#: college football's carry the schedule's own id. The NFL files a team's
+#: week as "DET-010" (nflverse's rows, and the same-night box score's
+#: "DET-010-box"), never the schedule's "LAC@BAL", so the join found nothing
+#: and every NFL page fell back to the old scan; hockey, baseball and the
+#: NBA's own feed file a row per player and day ("Name-2026-11-17"), which
+#: shares only the day. So: the league's own key first (`_log_keys`), then
+#: the team's game days, one night's rows at a time, and the old read last.
+#: A same-night box score's copy of a game's rows (engine/boxsettle.BOX_SUFFIX).
+_BOX = "-box"
+#: Bound parameters a read takes at once, well under SQLite's oldest limit.
+_MAX_KEYS = 800
+#: Leagues whose period holds too many games for a read by day to be cheap:
+#: an NFL week is the league's, a college Saturday or winter night 60 to 150
+#: games. Their rows carry the key (`_log_keys`), so they are read by it only.
+_WIDE_PERIODS = frozenset({"nfl", "cfb", "cbb"})
+
+
+def _log_keys(sport: str, team: str, games: list) -> list:
+    """``[(period, game_id)]`` the team's rows are filed under for these
+    schedule games: the NFL's team week, everyone else's schedule id, each
+    with its box score copy."""
+    keys = []
+    for _s, p, gid in games:
+        base = f"{team}-{p}" if sport == "nfl" else gid
+        keys += [(p, base), (p, base + _BOX)]
+    return keys
+
+
+#: THE KEYS DRIVE THE READ (2026-11-18, XU's header, read live: Kansas's squad,
+#: 8 keys and 266 rows, took 28 seconds cold). With no planner statistics on
+#: the file, SQLite chose to walk `idx_logs_player` over the sport's every row
+#: and test each against the keys (a GROUP BY by player invites it), where the
+#: keys want one primary-key lookup each. A CROSS JOIN is SQLite's own way to
+#: fix the loop order: the key list outside, the logs looked up inside. 3.4
+#: million rows, no statistics: 289 ms the planner's way, 1.1 ms this way.
+def _by_keys_sql(head: str, n: int, tail: str = "") -> str:
+    """``head`` over the team's rows at ``n`` (period, game_id) keys."""
+    return (f"WITH g(period, game_id) AS (VALUES {','.join('(?,?)' for _ in range(n))}) {head} FROM g "
+            "CROSS JOIN player_game_logs l ON l.sport=? AND l.season=? AND l.period=g.period "
+            f"AND l.game_id=g.game_id WHERE l.team=?{tail}")
+
+
+def _by_days_sql(head: str, n: int, tail: str = "") -> str:
+    """``head`` over the team's rows on ``n`` game days."""
+    return (f"WITH g(period) AS (VALUES {','.join('(?)' for _ in range(n))}) {head} FROM g "
+            f"CROSS JOIN player_game_logs l ON l.sport=? AND l.season=? AND l.period=g.period WHERE l.team=?{tail}")
+
+
+def _keyed(conn, sport: str, team: str, season: int, games: list, head: str, tail: str = ""):
+    """``head`` over the team's rows through `_log_keys`, then through its
+    game days; the first read that answers, or None. ``head`` selects from
+    ``l``; ``tail`` follows the team's condition."""
+    t0 = _time.perf_counter()
+    keys = _log_keys(sport, team, games)
+    if keys and 2 * len(keys) + 3 <= _MAX_KEYS:
+        rows = conn.execute(_by_keys_sql(head, len(keys), tail),
+                            tuple(x for k in keys for x in k) + (sport, season, team)).fetchall()
+        if rows:
+            _note("keyed", t0, f"{season} keys {len(rows)}")
+            return rows
+    days = sorted({p for _s, p, _g in games})
+    if sport not in _WIDE_PERIODS and days and len(days) + 3 <= _MAX_KEYS:
+        rows = conn.execute(_by_days_sql(head, len(days), tail), tuple(days) + (sport, season, team)).fetchall()
+        if rows:
+            _note("keyed", t0, f"{season} days {len(rows)}")
+            return rows
+    _note("keyed", t0, f"{season} missed {len(keys)} keys")
+    return None
+
+
+#: Database files known to hold the logs' team index (db.TEAM_INDEX), and when each was last found without it.
+_TEAM_INDEXED: dict = {}
+#: How long a file found without the team index is believed (the night's chores build it, step AES).
+TEAM_INDEX_RECHECK_S = 600.0
+
+
+def _team_indexed(conn) -> bool:
+    """Whether this connection's file holds the logs' team index (db.TEAM_INDEX): kept for good once found, rechecked
+    every ten minutes while it is not."""
+    from .db import TEAM_INDEX
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str(row[2] or "") if row else ""
+        hit = _TEAM_INDEXED.get(path) if path else None
+        if hit is True or (hit is not None and _time.time() - hit < TEAM_INDEX_RECHECK_S):
+            return hit is True
+        found = conn.execute("SELECT 1 FROM sqlite_master WHERE type='index' AND name=?", (TEAM_INDEX,)).fetchone()
+    except Exception:                                         # noqa: BLE001
+        return False
+    if path:
+        _TEAM_INDEXED[path] = True if found else _time.time()
+    return bool(found)
+
+
+def _latest_season(conn, sport: str, team: str) -> int | None:
+    """The newest season the team has rows of its own in.
+
+    ONE LOOKUP ON THE TEAM INDEX WHERE THE FILE HAS IT (step AHI, 25 November 2026). Asked through the team's game
+    keys or days, a baseball row filed under its player and day, the first day's rows of every club were read to find
+    one of the team's: on the live site the Red Sox page's took 1.0 s and the Yankees' 2.6. The logs' team index
+    (db.TEAM_INDEX, built by the night's chores) answers it in one lookup, the same question the season scan below
+    asks (any row of the team's that season)."""
+    by_season: dict = {}
+    for g in _team_games(conn, sport, team):
+        by_season.setdefault(g[0], []).append(g)
+    indexed = bool(by_season) and _team_indexed(conn)
+    for season in sorted(by_season, reverse=True):
+        if indexed:
+            from .db import TEAM_INDEX
+            t0 = _time.perf_counter()
+            hit = conn.execute(f"SELECT 1 FROM player_game_logs INDEXED BY {TEAM_INDEX} "
+                               "WHERE sport=? AND team=? AND season=? LIMIT 1", (sport, team, season)).fetchone()
+            _note("indexed", t0, f"{season} {'found' if hit else 'none'}")
+            if hit:
+                return season
+            continue
+        if _keyed(conn, sport, team, season, by_season[season], "SELECT 1", " LIMIT 1"):
+            return season
+    t0 = _time.perf_counter()
+    row = conn.execute(
+        "SELECT MAX(season) FROM player_game_logs WHERE sport=? AND team=?",
+        (sport, team)).fetchone()
+    _note("season_scan", t0, "every season")
+    return row[0] if row and row[0] is not None else None
+
+
+_SUMS = ("SELECT l.player AS player, l.position AS position, l.market AS market, COUNT(*) n, "
+         "SUM(l.value) total, COUNT(DISTINCT l.game_id) games")
+
+#: BASEBALL'S SEASON, EVERY CLUB AT ONCE, KEPT (step ACD, 22 November 2026). Baseball's team pages never
+#: answered on the box: the Yankees' gave up at 90 seconds, the Dodgers' at 55 and the Mariners' at 90. A
+#: baseball row is filed under its player and day ("Name-2026-09-27"), so a club's rows are read through its
+#: game days (`_keyed`), and each of its ~160 days reads every club's rows of that day: about the league's
+#: whole season, for one club, twice a page (the squad and the stat page). One read of the season groups
+#: every club's sums at once from the same rows, and it is kept against the logs' own count of their changes
+#: (engine/logcache): read again only when a baseball row changes, and served from the copy otherwise (all
+#: winter). The night warms it (`warm`), so no reader waits on the first read. Hockey's and basketball's
+#: pages answer in one to four seconds their own way, and are read as before.
+SEASON_KEPT = frozenset({"mlb"})
+
+
+def _kept_season(conn, sport: str, season: int) -> dict:
+    """``{team: [(player, position, market, n, total, games)]}`` for every club in one season: one read,
+    kept (`SEASON_KEPT`)."""
+    def compute() -> dict:
+        t0 = _time.perf_counter()
+        out: dict = {}
+        for r in conn.execute(
+                "SELECT team, player, position, market, COUNT(*), SUM(value), COUNT(DISTINCT game_id) "
+                "FROM player_game_logs WHERE sport=? AND season=? AND player<>'' "
+                "GROUP BY team, player, position, market", (sport, season)):
+            out.setdefault(str(r[0] or ""), []).append(tuple(r[1:]))
+        _note("season_read", t0, f"{season} {len(out)} clubs")
+        return out
+    from . import logcache
+    return logcache.memo(conn, "team_season_rows", sport, (int(season),), compute, code=__file__)
+
+
+def warm(conn, sport: str) -> int:
+    """Read the newest season of a kept league (`SEASON_KEPT`) into the kept copy, for the night: the clubs it
+    holds, or 0 for a league read as before. Never raises."""
+    if sport not in SEASON_KEPT:
+        return 0
+    try:
+        row = conn.execute("SELECT MAX(season) FROM games WHERE sport=?", (sport,)).fetchone()
+        return len(_kept_season(conn, sport, int(row[0]))) if row and row[0] is not None else 0
+    except Exception:                                         # noqa: BLE001
+        return 0
+
+
+def _season_rows(conn, sport: str, team: str, season: int) -> list:
+    """The team's (player, position, market) sums for one season (`_keyed`; a kept league's off its kept
+    season, `_kept_season`)."""
+    if sport in SEASON_KEPT:
+        t0 = _time.perf_counter()
+        try:
+            kept = _kept_season(conn, sport, season).get(team)
+        except Exception:                                     # noqa: BLE001
+            kept = None
+        if kept:
+            _note("kept", t0, f"{season} {len(kept)} rows")
+            keys = ("player", "position", "market", "n", "total", "games")
+            return [dict(zip(keys, r)) for r in kept]
+    games = _team_games(conn, sport, team, season)
+    rows = _keyed(conn, sport, team, season, games, _SUMS,
+                  " AND l.player<>'' GROUP BY l.player, l.position, l.market") if games else None
+    if not rows:
+        t0 = _time.perf_counter()
+        rows = conn.execute(
+            "SELECT player, position, market, COUNT(*) n, SUM(value) total, "
+            "COUNT(DISTINCT game_id) games FROM player_game_logs "
+            "WHERE sport=? AND team=? AND season=? AND player<>'' "
+            "GROUP BY player, position, market", (sport, team, season)).fetchall()
+        _note("rows_scan", t0, f"{season} whole season")
+    return rows
+
+
+_ABBREV = re.compile(r"^[A-Za-z]\.")
+
+
+def _is_abbreviated(name: str) -> bool:
+    """"K.Williams" — a first initial, a dot, and no first name.
+
+    The one shape `sources.nflpbp` writes and the one shape that cannot
+    identify a person on its own. A full name never matches it.
+    """
+    return bool(_ABBREV.match(str(name or "").strip()))
+
+
+def _absorb(who: dict, r) -> None:
+    """Fold one (player, market) group row into a squad entry."""
+    name = str(r["player"])
+    who["games"] = max(who["games"], int(r["games"] or 0))
+    # A position can differ between a player's rows (a feed changing its
+    # mind mid-season); the first non-empty one wins rather than the
+    # last, so the list does not reshuffle on a re-ingest.
+    if not who["position"] and r["position"]:
+        who["position"] = str(r["position"])
+    # …and a full name always beats an abbreviation for the row's label.
+    if _is_abbreviated(who["player"]) and not _is_abbreviated(name):
+        who["player"] = name
+    market = str(r["market"])
+    games = int(r["games"] or 0)
+    total = float(r["total"] or 0.0)
+    rate = market in RATE_MARKETS
+    who["stats"][market] = {
+        "market": market,
+        # A RATE HAS NO TOTAL. See RATE_MARKETS: seven games of snap
+        # share do not add up to anything, and printing "0.3 total"
+        # beside a number that means 4% of snaps is worse than printing
+        # nothing at all.
+        "total": None if rate else round(total, 1),
+        "rate": rate,
+        "per_game": round(total / max(1, games), 3 if rate else 1),
+        "games": games}
+
+
+def _roster(conn, sport: str, team: str, season: int) -> dict:
+    """``{key: {player, position, games, stats}}`` for one team-season.
+
+    ONE PLAYER, ONE ROW, and one place that decides it — `squad` draws
+    the depth chart from this and `stat_tables` draws the stat page, so
+    a name cannot be Kyren Williams on one and K.Williams on the other.
+
+    `player_game_logs` holds two NFL feeds under one schema and they do
+    not spell a name the same way: the weekly box score writes "Kyren
+    Williams" with a position, `sources.nflpbp.xfp_player_rows` writes
+    "K.Williams" with an EMPTY one and says so in its own docstring.
+    Grouped on the raw string, every skill player came out twice — once
+    under his position and once in a nameless bucket at the bottom of
+    the page. Ethan's Rams screenshot, 2026-09-10: a "— 14 listed"
+    group holding K.Williams, B.Corum, P.Nacua, D.Adams, C.Parkinson
+    and D.Allen, every one of them already listed above.
+
+    THE FOLD RUNS ONE WAY ONLY, and that is the whole care in it. An
+    abbreviated row cannot name a person — "D.Moore" is Devin or Dennis
+    and the row does not know — so it JOINS a full name rather than
+    merging with one. Two full names that differ stay two people
+    however alike their initials are; `fantasy._short_key` is
+    deliberately loose (2025 logged two ('d','moore') and two
+    ('m','evans')) and loose is right for a lookup and wrong for an
+    identity.
+
+    An abbreviation that matches no full name, or matches two, is left
+    as its own row rather than guessed at — the same refusal
+    `sources.livescores.ingest_finals` makes about an ambiguous
+    fixture. Nothing is dropped, which is what a college feed with no
+    roster position needs.
+    """
+    from .fantasy import _fold, _short_key
+    from .rosters import shown_position           # a basketball log's starter flag is no position
+    rows = _season_rows(conn, sport, team, season)
+    by_player: dict = {}
+    short_rows: list = []
+    # The club's own row in the logs (its defence, "Detroit Lions") is the
+    # club, never one of its players (SEARCHDUP1).
+    from .playersearch import club_names, norm
+    clubs = club_names(sport)
+    for r in rows:
+        name = str(r["player"])
+        if clubs and norm(name) in clubs:
+            continue
+        if _is_abbreviated(name):
+            short_rows.append(r)
+            continue
+        key = (_short_key(name, team), _fold(name))
+        who = by_player.setdefault(
+            key, {"player": name, "position": str(r["position"] or ""),
+                  "games": 0, "stats": {}})
+        _absorb(who, r)
+    # …then the abbreviations, each onto its one full name or onto
+    # nobody. Built after the full names so the answer cannot depend on
+    # ingest order.
+    full_by_key: dict = {}
+    for (short, _full), who in by_player.items():
+        full_by_key.setdefault(short, []).append(who)
+    for r in short_rows:
+        name = str(r["player"])
+        hits = full_by_key.get(_short_key(name, team)) or []
+        who = hits[0] if len(hits) == 1 else by_player.setdefault(
+            (_short_key(name, team), _fold(name)),
+            {"player": name, "position": str(r["position"] or ""),
+             "games": 0, "stats": {}})
+        _absorb(who, r)
+    # A basketball log's "S" or "B" is the box score's starter flag, not a
+    # position: nothing is printed for it (engine/rosters.shown_position).
+    for who in by_player.values():
+        who["position"] = shown_position(sport, who["position"])
+    return by_player
+
+
+def squad(conn, sport: str, team: str, season: int | None = None,
+          per_position: int = SQUAD_PER_POSITION) -> dict:
+    """Who plays for this team, by position, and what they have done.
+
+    Ethan, 2026-09-10, looking at the Rams page: "We should be showing
+    more info too when you look up a team on the search page. We should
+    show a depth chart and player stats and all that shit."
+
+    THIS IS A DEPTH CHART MEASURED RATHER THAN PUBLISHED, and the
+    difference is worth stating because it cuts both ways. nflverse
+    publishes a real one — `engine/sources/depthcharts` reads it — and it
+    is what a coach filed, which is the right answer to "who is listed
+    first" and is NFL-only. This orders each position by what the players
+    actually did: games first, then the position's leading market. It
+    covers every league this repo ingests, it cannot go stale against a
+    depth chart nobody refiled, and it answers the question a bettor is
+    really asking — who gets the ball. What it cannot do is call a Week 1
+    starter who has not played yet, and the row count says so.
+
+    Everything comes out of `player_game_logs`, the same table the props
+    grade against, so a name here is a name the rest of the site can
+    price. No feed is called and no roster file is read: a player who has
+    not taken a snap for this team is not on this list, which is honest
+    rather than complete.
+    """
+    season = season if season is not None else _latest_season(conn, sport, team)
+    if season is None:
+        return {"season": None, "positions": [], "players": 0}
+    by_player = _roster(conn, sport, team, season)
+    hockey = sport == "nhl"
+    groups: dict = {}
+    for who in by_player.values():
+        if hockey:
+            who["position"] = HOCKEY_POSITION_NAME.get(who["position"], who["position"])
+        lead = (("saves" if who["position"] == "G" else "points") if hockey
+                else LEAD_MARKET.get(who["position"]))
+        stats = who["stats"]
+        if lead not in stats:
+            # The player's own biggest number, which is what a reader
+            # reads him by when the table has never seen his position.
+            # COUNTS ONLY: a rate has no size to be biggest, and a snap
+            # share is not what anyone reads a tight end by. A man who
+            # has nothing else still leads on it — that is all he has.
+            counts = [m for m in stats if not stats[m]["rate"]]
+            lead = (max(counts, key=lambda m: stats[m]["total"]) if counts
+                    else (max(stats) if stats else ""))
+        who["lead_market"] = lead
+        who["stats"] = sorted(stats.values(),
+                              key=lambda st: (st["market"] != lead,
+                                              st["rate"], -(st["total"] or 0.0)))
+        groups.setdefault(who["position"], []).append(who)
+    out = []
+    for pos, players in groups.items():
+        if hockey:
+            # ICE TIME IS HOCKEY'S DEPTH CHART. No club publishes one;
+            # who the coach sends out most is the line he trusts, so a
+            # position reads by minutes a game, the first line first.
+            players.sort(key=lambda w: (-_toi_per_game(w), -w["games"], w["player"]))
+            out.append({"position": pos or "—", "players": players[:max(1, per_position)],
+                        "listed": len(players)})
+            continue
+        players.sort(key=lambda w: (-w["games"],
+                                    -((w["stats"][0]["total"] or 0.0)
+                                      if w["stats"] else 0.0),
+                                    w["player"]))
+        out.append({"position": pos or "—",
+                    "players": players[:max(1, per_position)],
+                    "listed": len(players)})
+    order = HOCKEY_POSITION_ORDER if hockey else _POSITION_ORDER
+    out.sort(key=lambda g: (order.get(g["position"], 99), g["position"]))
+    return {"season": season, "positions": out, "players": len(by_player)}
+
+
+#: Hockey's positions as a roster reads them, and the feed's wing codes.
+HOCKEY_POSITION_ORDER = {"C": 0, "LW": 1, "RW": 2, "D": 3, "G": 4}
+HOCKEY_POSITION_NAME = {"L": "LW", "R": "RW"}
+
+
+def _toi_per_game(who: dict) -> float:
+    for st in who.get("stats") or []:
+        if st.get("market") == "toi":
+            return float(st.get("per_game") or 0.0)
+    return 0.0
+
+
+def _position_order() -> dict:
+    """The roster page's own ordering, borrowed rather than restated.
+
+    `engine/rosters` already decides that a quarterback comes before a
+    linebacker and a starting pitcher before a catcher; two tables would
+    drift and the drift would show as two pages listing one squad in two
+    orders. Imported through a function so a change there cannot break
+    an import here.
+    """
+    try:
+        from .rosters import MLB_POSITION_ORDER, POSITION_ORDER
+    except Exception:                                       # noqa: BLE001
+        return {}
+    out = dict(POSITION_ORDER)
+    for pos, at in MLB_POSITION_ORDER.items():
+        out.setdefault(pos, 100 + at)
+    return out
+
+
+_POSITION_ORDER = _position_order()
+
+
+#: THE ESPN TEAM-STATS PAGE, built only from what this repo stores.
+#:
+#: Ethan, 2026-09-10, with an ESPN screenshot beside ours: "now the ESPN
+#: uses theirs as an example of how we should make ours work and the data
+#: we could show." Theirs runs Passing / Rushing / Receiving with a
+#: leaders strip on top, and every column below is one this site can
+#: actually compute out of `player_game_logs`.
+#:
+#: WHAT IS DELIBERATELY ABSENT: ESPN prints LNG (longest play) and BIG
+#: (plays over 20 yards) and CMP/CMP%. Those are play-level facts and a
+#: completion count, and this table holds neither — a game log has the
+#: yards, not the plays that made them. Inventing an AVG from yards over
+#: attempts is arithmetic; inventing a longest run is not, so those
+#: columns are not here rather than being estimated. AIR is the reverse
+#: case: ESPN has no such column and nflverse gives us air yards, so the
+#: receiving table shows one they do not.
+#:
+#: Each column is ``(label, kind, market, second market)``:
+#:   gp        games played (the section's own volume market decides)
+#:   sum       the season total for that market
+#:   ratio     first market divided by second — yards per carry
+#:   per_game  the season total over games played
+STAT_SECTIONS = {
+    "football": (
+        {"key": "passing", "title": "Passing", "sort": "pass_yds",
+         "columns": (("GP", "gp", None, None),
+                     ("ATT", "sum", "pass_att", None),
+                     ("YDS", "sum", "pass_yds", None),
+                     ("AVG", "ratio", "pass_yds", "pass_att"),
+                     ("TD", "sum", "pass_td", None),
+                     ("INT", "sum", "pass_int", None),
+                     ("YDS/G", "per_game", "pass_yds", None))},
+        {"key": "rushing", "title": "Rushing", "sort": "rush_yds",
+         "columns": (("GP", "gp", None, None),
+                     ("CAR", "sum", "carries", None),
+                     ("YDS", "sum", "rush_yds", None),
+                     ("AVG", "ratio", "rush_yds", "carries"),
+                     ("TD", "sum", "rush_td", None),
+                     ("YDS/G", "per_game", "rush_yds", None))},
+        {"key": "receiving", "title": "Receiving", "sort": "rec_yds",
+         "columns": (("GP", "gp", None, None),
+                     ("REC", "sum", "receptions", None),
+                     ("TGTS", "sum", "targets", None),
+                     ("YDS", "sum", "rec_yds", None),
+                     ("AVG", "ratio", "rec_yds", "receptions"),
+                     ("TD", "sum", "rec_td", None),
+                     ("AIR", "sum", "air_yards", None),
+                     ("YDS/G", "per_game", "rec_yds", None))},
+    ),
+}
+
+# EVERY LEAGUE GETS ITS OWN (Ethan, 2026-10-03: "I want every single sport
+# to have the same thing"). Each from the markets that league's ingest
+# actually writes — baseball's box score carries hits, total bases, home
+# runs and plate appearances for a hitter and strikeouts and outs for a
+# pitcher; basketball's minutes, points, rebounds, assists and threes;
+# hockey's goals, assists, points, shots, power-play goals, blocks, hits
+# and ice time for a skater and saves, shots against and goals against for
+# a goalie. No column is estimated from one the feed does not carry.
+STAT_SECTIONS["hockey"] = (
+    {"key": "skaters", "title": "Skaters", "sort": "points", "rows": 20,
+     "leaders": (("Most", "goals"), ("Most", "assists"), ("Most", "points")),
+     "columns": (("GP", "gp", None, None),
+                 ("G", "sum", "goals", None),
+                 ("A", "sum", "assists", None),
+                 ("PTS", "sum", "points", None),
+                 ("SOG", "sum", "sog", None),
+                 ("PPG", "sum", "ppg", None),
+                 ("BLK", "sum", "blocks", None),
+                 ("HIT", "sum", "hits", None),
+                 ("TOI/G", "per_game", "toi", None))},
+    {"key": "goalies", "title": "Goalies", "sort": "saves", "leaders": (("Most", "saves"),),
+     "columns": (("GP", "gp", None, None),
+                 ("GS", "sum", "started", None),
+                 ("SV", "sum", "saves", None),
+                 ("SA", "sum", "shots_against", None),
+                 ("GA", "sum", "goals_against", None),
+                 ("SV%", "pct3", "saves", "shots_against"),
+                 ("GAA", "per_game", "goals_against", None))},
+)
+STAT_SECTIONS["basketball"] = (
+    {"key": "scoring", "title": "Players", "sort": "pts", "rows": 15,
+     "leaders": (("Most", "pts"), ("Most", "reb"), ("Most", "ast")),
+     "columns": (("GP", "gp", None, None),
+                 ("MIN", "per_game", "min", None),
+                 ("PTS", "per_game", "pts", None),
+                 ("REB", "per_game", "reb", None),
+                 ("AST", "per_game", "ast", None),
+                 ("3PM", "per_game", "fg3m", None),
+                 ("TOTAL PTS", "sum", "pts", None))},
+)
+STAT_SECTIONS["baseball"] = (
+    {"key": "batting", "title": "Batting", "sort": "pa", "rows": 15,
+     "leaders": (("Most", "hits"), ("Most", "home_runs")),
+     "columns": (("GP", "gp", None, None),
+                 ("PA", "sum", "pa", None),
+                 ("H", "sum", "hits", None),
+                 ("TB", "sum", "total_bases", None),
+                 ("HR", "sum", "home_runs", None),
+                 ("H/G", "per_game", "hits", None))},
+    {"key": "pitching", "title": "Pitching", "sort": "outs", "rows": 15, "leaders": (("Most", "strikeouts"),),
+     "columns": (("GP", "gp", None, None),
+                 ("IP", "ip", "outs", None),
+                 ("K", "sum", "strikeouts", None),
+                 ("K/9", "per9", "strikeouts", "outs"))},
+)
+
+#: Which set of sections a sport gets.
+STAT_SPORTS = {"nfl": "football", "cfb": "football", "nhl": "hockey",
+               "nba": "basketball", "wnba": "basketball", "mlb": "baseball",
+               "cbb": "basketball"}
+
+#: How many rows a section prints. ESPN lists everyone who touched the
+#: ball; a page does not need the punter who took one snap.
+STAT_ROWS = 10
+
+
+def _cell(who: dict, kind: str, market, second):
+    """One table cell, or None when this player has nothing to put in it.
+
+    None rather than 0 throughout, because they are different claims: a
+    quarterback with no interceptions logged and a wide receiver who
+    cannot throw one are not the same row, and a column where nobody has
+    anything is dropped rather than filled with zeroes.
+    """
+    stats = who.get("stats") or {}
+    if kind == "gp":
+        return who.get("games") or None
+    st = stats.get(market)
+    if st is None or st.get("total") is None:
+        return None
+    if kind == "sum":
+        return st["total"]
+    if kind == "per_game":
+        return round(st["total"] / max(1, who.get("games") or 1), 1)
+    if kind == "ip":
+        # Innings the way a box score writes them: 6.2 is six and two outs.
+        outs = int(round(st["total"]))
+        return float(f"{outs // 3}.{outs % 3}")
+    if kind in ("ratio", "pct3", "per9"):
+        den = stats.get(second)
+        if den is None or not den.get("total"):
+            return None
+        if kind == "pct3":
+            return round(st["total"] / den["total"], 3)
+        if kind == "per9":
+            return round(st["total"] * 27 / den["total"], 1)
+        return round(st["total"] / den["total"], 1)
+    return None
+
+
+def stat_tables(conn, sport: str, team: str, season: int | None = None,
+                rows: int = STAT_ROWS) -> dict:
+    """``{"season", "sections": [...], "leaders": [...]}`` — the team's
+    own stat page, ESPN-shaped, from the logs this site already grades on.
+
+    Reads the SAME folded player map `squad` does, so a name cannot
+    appear here under one spelling and there under another (see `_roster`
+    for why that fold exists at all).
+
+    A section is dropped when nobody on the team has a number in its
+    sorting market, and a COLUMN is dropped when nobody in the section
+    has a number in it — which is how the college board gets the six
+    columns its feed writes without a second table to maintain: college
+    has no targets, no air yards and no interceptions, and the header
+    simply does not mention them.
+    """
+    shape = STAT_SPORTS.get(str(sport or "").lower())
+    if not shape:
+        return {"season": None, "sections": [], "leaders": []}
+    season = season if season is not None else _latest_season(conn, sport, team)
+    if season is None:
+        return {"season": None, "sections": [], "leaders": []}
+    people = _roster(conn, sport, team, season)
+    sections, leaders = [], []
+    for spec in STAT_SECTIONS[shape]:
+        here = [w for w in people.values()
+                if ((w.get("stats") or {}).get(spec["sort"]) or {}).get("total")]
+        if not here:
+            continue
+        here.sort(key=lambda w: -(w["stats"][spec["sort"]]["total"] or 0.0))
+        here = here[:max(1, spec.get("rows", rows))]
+        cells = [[_cell(w, kind, m, m2) for _lab, kind, m, m2
+                  in spec["columns"]] for w in here]
+        keep = [i for i, _c in enumerate(spec["columns"])
+                if any(row[i] is not None for row in cells)]
+        sections.append({
+            "key": spec["key"], "title": spec["title"],
+            "columns": [spec["columns"][i][0] for i in keep],
+            "rows": [{"player": w["player"], "position": w["position"],
+                      "cells": [cells[n][i] for i in keep]}
+                     for n, w in enumerate(here)]})
+        # A football section's leader is its sorting stat's ("Passing yards").
+        # A section that holds every kind of number names its own leaders
+        # (`leaders`): basketball's one table led the page with a single tile
+        # that read "PLAYERS PTS" (TEAMFIX1, 2026-11-17).
+        for title, market in spec.get("leaders") or ((spec["title"], spec["sort"]),):
+            got = [w for w in people.values() if ((w.get("stats") or {}).get(market) or {}).get("total")]
+            if not got:
+                continue
+            top = max(got, key=lambda w: (w["stats"][market]["total"], w["games"], w["player"]))
+            leaders.append({"title": title, "player": top["player"], "position": top["position"],
+                            "market": market, "value": top["stats"][market]["total"]})
+    return {"season": season, "sections": sections, "leaders": leaders}
+
+
+#: The market a league's playing time is logged under, for the measured
+#: depth chart.
+USAGE_MARKET = {"nhl": "toi", "nba": "min", "wnba": "min", "cbb": "min"}
+#: Each player's newest this-many games set his place.
+USAGE_WINDOW = 20
+
+
+_NAME_SUFFIX = re.compile(r",?\s+(jr|sr|ii|iii|iv|v)\.?$", re.I)
+
+
+def _name_prefixes(name: str) -> set:
+    """Where a name's rows start in the (sport, market, player) index: its
+    first word and its last word's first letter, as written, with accents
+    folded and with either apostrophe ("Nikola J" reaches Jokic and Jokić,
+    "Nolan S" reaches "Nolan Smith Jr.", "De'Aaron F" reaches "De’Aaron
+    Fox"). The caller keeps the rows whose shared name key matches."""
+    import unicodedata
+    words = _NAME_SUFFIX.sub("", (name or "").strip()).split()
+    if not words:
+        return set()
+    head = words[0] + (" " + words[-1][0] if len(words) > 1 else "")
+    out = set()
+    for h in (head, "".join(c for c in unicodedata.normalize("NFKD", head) if not unicodedata.combining(c))):
+        out |= {h, h.replace("'", "’"), h.replace("’", "'")}
+    return out
+
+
+def usage_depth(conn, sport: str, roster: list[dict], window: int = USAGE_WINDOW) -> dict | None:
+    """THE DEPTH CHART THE COACH ACTUALLY USES, for leagues with no
+    published one (Ethan, 2026-10-03: "make sure ... all the depth charts
+    is good ... I want every single sport to have the same thing").
+
+    Everyone on the club's CURRENT roster (the live feed — so a summer
+    signing is listed and a traded player is gone), grouped by roster
+    position and ordered by ice time / minutes a game over his own newest
+    ``window`` games, WHICHEVER TEAM he played them for. A newcomer is
+    placed by what he did last season elsewhere; a man with no logged
+    games sits at the bottom of his position, not off the chart.
+    """
+    market = USAGE_MARKET.get(sport)
+    if not market or not roster:
+        return None
+    from .rosters import _norm_key
+    top = conn.execute("SELECT MAX(season) FROM player_game_logs WHERE sport=?", (sport,)).fetchone()
+    if not top or top[0] is None:
+        top = (0,)
+    # This season and last: enough for a twenty-game window, and a page
+    # request should not read three seasons of minutes to draw one club.
+    # THE ROSTER'S OWN ROWS (2026-11-18). This read every player's minutes in
+    # the sport, two seasons of them in date order, to keep the fifteen on the
+    # roster: a college basketball page waited 25 to 50 seconds on it. Each
+    # name's rows sit together in the (sport, market, player) index, so the
+    # read starts where the name does (`_name_prefixes`) and keeps the rows
+    # whose shared name key is the roster's, as the whole-sport read did.
+    want = {_norm_key(p.get("player") or "") for p in roster} - {""}
+    rows = []
+    from .db import rows_at_once
+    for start in sorted({s for p in roster for s in _name_prefixes(p.get("player") or "")}):
+        # Each name's rows in one step of the database, so a busy thread beside the page cannot stretch them (step AHG).
+        rows += [r for r in rows_at_once(
+            conn, "SELECT player, period, value FROM player_game_logs WHERE sport=? AND market=? "
+            "AND player>=? AND player<? AND season>=?",
+            (sport, market, start, start + "￿", int(top[0]) - 1), n=3, real=(2,))
+            if _norm_key(r[0]) in want]
+    rows.sort(key=lambda r: str(r[1]), reverse=True)
+    per: dict = {}
+    for r in rows:
+        k = _norm_key(r[0])
+        got = per.setdefault(k, [])
+        if len(got) < window:
+            got.append(float(r[2] or 0.0))
+    order = HOCKEY_POSITION_ORDER if sport == "nhl" else {"Starters": 0, "Bench": 1}
+    groups: dict = {}
+    for p in roster:
+        name = p.get("player") or ""
+        if not name:
+            continue
+        vals = [v for v in per.get(_norm_key(name), []) if v > 0]
+        avg = sum(vals) / len(vals) if vals else 0.0
+        # A roster with no positions (college basketball's, built from who played) groups by its
+        # starter flag in words (engine/rosters.flag_group): Starters and Bench.
+        groups.setdefault(p.get("position") or p.get("depth_pos") or "—", []).append((avg, len(vals), name))
+    positions = []
+    for pos, people in groups.items():
+        people.sort(key=lambda x: (-x[0], -x[1], x[2]))
+        positions.append({"position": pos, "players": [n for _a, _g, n in people],
+                          "usage": [round(a, 1) for a, _g, _n in people]})
+    positions.sort(key=lambda g: (order.get(g["position"], 99), g["position"]))
+    return {"positions": positions, "source": "usage", "market": market, "window": window}

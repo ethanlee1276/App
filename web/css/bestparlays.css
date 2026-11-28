@@ -1,0 +1,70 @@
+/* Best Parlays (js/bestparlays.js), loaded with it: every parlay the game
+   reports posted, ranked best to worst in Most Likely's tiers, a section for
+   the player-prop parlays and one for the scorer pairs, each ticket a card.
+   No hard lines (styles.css THE BLEND): a chip is a filled pill and a chosen
+   one a tint; a card's tier is light from its left edge (--grad-tone), and
+   the legs' dividers are a whisper (--border-soft). */
+.bp-lead { margin: 4px 0 10px; color: var(--text-mute); font-size: var(--fs-sm); max-width: var(--measure-wide); }
+.bp-size-row, .bp-chips-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
+.bp-size, .bp-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 14px;
+  border-radius: 999px; border: var(--hairline) solid transparent;
+  background: var(--fill-subtle); color: var(--text-mute); font: inherit; font-weight: 600; cursor: pointer; }
+.bp-size span, .bp-chip span { color: var(--text-dim); font-weight: 500; }
+.bp-size.on, .bp-chip.on { color: var(--text); border-color: transparent;
+  background: color-mix(in oklab, var(--brand) 16%, transparent); }
+.bp-chip.tier-top.on { background: color-mix(in oklab, var(--good) 18%, transparent); }
+.bp-chip.tier-strong.on { background: color-mix(in oklab, var(--gold) 18%, transparent); }
+.bp-tier-sec { margin: 14px 0 6px; }
+.bp-tier-h { margin: 0; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-mute); }
+.bp-tier-h span { margin-left: 4px; color: var(--text-dim); }
+.bp-tier-sec.tier-top .bp-tier-h { color: var(--good); }
+.bp-tier-sec.tier-strong .bp-tier-h { color: var(--gold); }
+.bp-tier-words { margin: 2px 0 10px; color: var(--text-dim); font-size: var(--fs-sm); }
+.bp-card { margin: 0 0 10px; padding: 12px 14px; border-radius: var(--radius); background-color: var(--panel); }
+.bp-card.tier-top { --tone: var(--good); }
+.bp-card.tier-strong { --tone: var(--gold); }
+.bp-card.tier-top, .bp-card.tier-strong { border-left: 3px solid transparent;
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone); }
+.bp-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.bp-rank { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px; border-radius: 999px;
+  background: color-mix(in oklab, var(--text) 10%, transparent); color: var(--text); font-weight: 800;
+  font-variant-numeric: tabular-nums; }
+.bp-card.tier-top .bp-rank { background: color-mix(in oklab, var(--good) 22%, transparent); }
+.bp-game { min-width: 0; display: grid; gap: 1px; }
+.bp-game b { color: var(--text); font-size: var(--fs-md); overflow-wrap: anywhere; }
+.bp-game span { color: var(--text-mute); font-size: var(--fs-xs); }
+.bp-p { display: grid; justify-items: end; }
+.bp-p b { font-size: var(--fs-lg); color: var(--text); font-variant-numeric: tabular-nums; }
+.bp-p span { color: var(--text-dim); font-size: var(--fs-xs); }
+.bp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.bp-tier, .bp-class, .bp-research, .bp-fill { padding: 2px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 700;
+  background: color-mix(in oklab, var(--text) 9%, transparent); color: var(--text-mute); }
+.bp-tier.tier-top { background: color-mix(in oklab, var(--good) 20%, transparent); color: var(--good); }
+.bp-tier.tier-strong { background: color-mix(in oklab, var(--gold) 20%, transparent); color: var(--gold); }
+.bp-class.safe { color: var(--good); }
+.bp-class.balanced { color: var(--gold); }
+.bp-fill { font-weight: 600; }
+.bp-legs { list-style: none; margin: 8px 0 6px; padding: 0; display: grid; gap: 6px; }
+.bp-legs li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 10px;
+  padding-top: 6px; border-top: var(--hairline) solid var(--border-soft); }
+.bp-legs li:first-child { border-top: 0; padding-top: 0; }
+.bp-leg-what { min-width: 0; color: var(--text-dim); overflow-wrap: anywhere; }
+.bp-leg-what b { color: var(--text); }
+.bp-leg-price { color: var(--text-mute); font-size: var(--fs-sm); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* An SGPX leg's game, under the leg (js/bestparlays.js bpSgpxCardHTML). */
+.bp-leg-game { display: block; color: var(--text-mute); font-size: var(--fs-sm); }
+.bp-leg-p { color: var(--text); font-weight: 700; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.bp-line, .bp-book, .bp-why { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--text-mute); }
+.bp-line b { color: var(--text); }
+.bp-book.has { color: var(--good); }
+.bp-why { color: var(--text-dim); }
+.bp-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.bp-acts .betit-box { margin-top: 0; }
+.bp-more { margin: 2px 0 8px; }
+.bp-foot { margin-top: 14px; }
+@media (max-width: 420px) {
+  .bp-legs li { grid-template-columns: minmax(0, 1fr) auto; }
+  .bp-leg-price { grid-column: 1; grid-row: 2; }
+}

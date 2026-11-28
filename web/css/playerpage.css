@@ -1,0 +1,234 @@
+/* Player pages (js/playerpage.js), loaded with it: his header in his club's
+   colours, then six menus. The header is a band of the club's colour darkened
+   toward night in either theme, so its words are the night tokens' (as the
+   arenas' banners are), and the club's mark sits large and faint behind him. */
+/* The page is the whole of the Players board (#players-board), in place of the search's list. */
+.plr { display: block; min-width: 0; }
+/* The band is defined on its own property, as every gradient here is (test_newlook). */
+.plr-hero {
+  --plr-band: linear-gradient(118deg, color-mix(in oklab, var(--plr-c, var(--night-2)) 78%, var(--night-3)) 0%, color-mix(in oklab, var(--plr-c, var(--night-2)) 46%, var(--night-3)) 100%);
+  position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px;
+  padding: 20px 18px; border-radius: var(--radius-lg); color: var(--night-text); background: var(--plr-band); }
+.plr-mark { position: absolute; right: -18px; top: 50%; transform: translateY(-50%); opacity: .16; pointer-events: none; }
+.plr-face { position: relative; flex: none; }
+.plr-who { position: relative; min-width: 0; }
+.plr-name { margin: 0; font-size: var(--fs-3xl); line-height: var(--lh-tight); font-weight: 500; letter-spacing: -.01em; }
+.plr-name span { display: block; font-size: var(--fs-xl); font-weight: 500; opacity: .86; }
+.plr-name b { font-weight: 800; }
+.plr-club { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: var(--fs-md); font-weight: 600; }
+.plr-body { margin: 4px 0 0; font-size: var(--fs-sm); opacity: .86; }
+.plr-flag:empty { display: none; }
+.plr-flag { margin-top: 6px; }
+
+/* The menus: one row that scrolls sideways on a phone, the open one underlined in the brand's colour. */
+.plr-tabs { display: flex; gap: 4px; margin: 10px 0 14px; overflow-x: auto; scrollbar-width: none;
+  scroll-margin-top: 72px; }
+.plr-tabs::-webkit-scrollbar { display: none; }
+.plr-tab { flex: none; padding: 10px 12px; border: 0; border-radius: var(--radius-sm); background: none;
+  color: var(--text-mute); font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; }
+.plr-tab:hover { color: var(--text); }
+.plr-tab.on { color: var(--text); background: var(--panel-2); text-decoration: underline;
+  text-decoration-color: var(--brand); text-decoration-thickness: 2px; text-underline-offset: 7px; }
+.plr-panel { display: block; }
+.plr-panel[hidden] { display: none; }
+
+.plr-card { margin: 0 0 14px; padding: 16px; border-radius: var(--radius-lg); background: var(--panel); }
+.plr-card h3, .plr-h { margin: 0 0 12px; font-size: var(--fs-lg); font-weight: 700; }
+/* What sits between the cards lines up with the words inside them. */
+.plr-h, .plr-pick, .plr-panel > .plr-fine, .plr-panel > .plr-quiet, .plr-panel > .plr-wait,
+.plr-season > .plr-quiet { padding: 0 16px; }
+.plr-card h3 span { margin-left: 6px; color: var(--text-mute); font-size: var(--fs-sm); font-weight: 500; }
+.plr-wait, .plr-quiet { color: var(--text-mute); margin: 12px 0; }
+.plr-fine { color: var(--text-mute); font-size: var(--fs-xs); margin: 10px 0 0; }
+.plr-go { margin-top: 12px; }
+
+/* His season's four numbers, each with its place in the league. */
+.plr-nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.plr-num { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.plr-k { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.plr-num b { font-size: var(--fs-2xl); font-weight: 800; font-variant-numeric: tabular-nums; }
+.plr-rank { color: var(--text-dim); font-size: var(--fs-sm); }
+/* The season's other counts, small (playerpage.js plrSeasonPills). */
+.plr-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.plr-pill { padding: 4px 11px; border-radius: 999px; background: var(--panel-2); color: var(--text-dim);
+  font-size: var(--fs-xs); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* The previous game: his club, the result, the other club, then four of his numbers. */
+.plr-score { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }
+.plr-side { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.plr-side:last-child { flex-direction: row-reverse; text-align: right; }
+.plr-side div { display: flex; flex-direction: column; min-width: 0; }
+.plr-side b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plr-side small { color: var(--text-mute); font-size: var(--fs-xs); }
+.plr-pts { margin-left: auto; font-size: var(--fs-2xl); font-weight: 600; color: var(--text-mute);
+  font-variant-numeric: tabular-nums; }
+.plr-side:last-child .plr-pts { margin: 0 auto 0 0; }
+.plr-pts.plr-won { color: var(--text); font-weight: 800; }
+.plr-mid { color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600; text-align: center; white-space: nowrap; }
+.plr-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.plr-tile { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius); background: var(--panel-2); }
+.plr-tile b { font-size: var(--fs-xl); font-weight: 800; font-variant-numeric: tabular-nums; }
+.plr-dnp { color: var(--text-mute); font-style: italic; margin: 12px 0 0; }
+
+/* Tables: the split (or the season) held at the left, as the game log holds the game. */
+.plr-card .gl-scroll { margin: 0 -16px; padding: 0 16px; }
+.plr-table .gl-fix { font-weight: 600; }
+.plr-break td { padding-top: 14px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; }
+.plr-pick:empty { display: none; }
+/* The pick a tap opened the page on (plrTappedInto): the card is the pick page's own (detail.css). */
+.plr-tapped:empty { display: none; }
+.plr-tapped { margin: 0 0 18px; }
+.plr-tapped > .plr-quiet { padding: 0 16px; }
+.plr-tapped-go { margin: 10px 16px 0; }
+/* A fighter's page (plrFillUfc): a fight's result in its colour, the next bout, the chart door. */
+.plr-res { font-weight: 700; }
+.plr-w { color: var(--good); }
+.plr-l { color: var(--bad); }
+.plr-ufc-next { margin: 0 0 10px; font-size: var(--fs-md); }
+.plr-ufc-acts { margin-top: 12px; }
+.plr-pick { margin: 0 0 12px; }
+
+/* News: his note first, then the headlines that name him or his club. */
+.plr-note { padding: 10px 12px; margin: 0 0 10px; border-radius: var(--radius); background: var(--panel-2); }
+.plr-note b { display: block; }
+.plr-note p { margin: 4px 0 0; color: var(--text-dim); }
+.plr-note span { display: block; margin-top: 4px; color: var(--text-mute); font-size: var(--fs-xs); }
+.plr-heads { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.plr-heads a { color: var(--text); font-weight: 600; text-decoration: none; }
+.plr-heads a:hover { text-decoration: underline; }
+.plr-heads span { display: block; margin-top: 2px; color: var(--text-mute); font-size: var(--fs-xs); }
+
+/* Bio: a fact a line, the label in the quiet colour. */
+.plr-bio { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px 18px; margin: 0; }
+.plr-bio div { min-width: 0; }
+.plr-bio dt { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.plr-bio dd { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-weight: 600; }
+
+/* The market cards this page always drew, now his Overview's market section. */
+.plr-tonight:empty { display: none; }
+.plr-tonight { margin: 0 0 14px; }
+/* THE PAGE SAYS WHO ONCE (PLRDUP1, 2026-11-17). The market card was a page of its own before this one and
+   brought its header with it: a second name, club and position under the page's, with Copy link in the
+   middle of the page and doors to the charts and the game log the page already shows. Of its head only
+   the grade is kept; the club's door and the link are on the page's header (plrHeroHTML); the chart the
+   card's depth would draw again is the one in the Overview. */
+.plr-tonight .profile-head { display: flex; justify-content: flex-end; min-height: 0; padding: 0; margin: 0; }
+.plr-tonight .profile-head > :not(.grade) { display: none; }
+.plr-tonight .profile-head:has(.grade) { padding: 10px 14px 0; }
+.plr-tonight .prof-charts, .plr-tonight .prof-depth .cc-slot { display: none; }
+.plr-h span { margin-left: 6px; font-size: var(--fs-sm); font-weight: 500; opacity: .75; }
+.plr-share { margin-top: 8px; }
+.plr-share .btn { padding: 4px 10px; font-size: var(--fs-xs); }
+
+/* ==========================================================================
+   THE PLAYER'S PAGE IN THE CLUB'S COLOURS (PLRWASH1, 2026-11-17; Ethan, with
+   the Panthers @ Saints live page, its top circled: "the player page should be
+   colorful with there team colors like how the live page looks"). js/playerpage.js
+   plrFrameOn lights body.plr-on with the club's two colours on <body>: --pw-1 and
+   --pw-2 deepened until white type reads on them (app.js twWash, the whole-site
+   wash's own pair), --pw-1-paper and --pw-2-paper as they are. The page sits on
+   them as a live game's page sits on its clubs' (detail.css --gp-wash): the first
+   from the left, the second from the right, a shade falling to the page's own
+   ground further down. The bar and the strip under the clock paint the same
+   screen-sized picture pinned to the screen's corner (plrPin says where the bar
+   starts across it), so the top of the screen is one piece with no rule in it.
+   At night the header lies on the colours themselves and the cards are a dark
+   glass over them, as the live page's are; paper wears the colours thinned into
+   the paper and keeps the header's band, whose words are the night's. Static:
+   nothing moves on a scroll, and nothing is blurred (styles.css .topbar).
+   ========================================================================== */
+body.plr-on {
+  /* What the colours are until playerpage.js puts the club's own on <body> (an inline style, which wins). */
+  --pw-1: var(--night-2);
+  --pw-2: var(--night-3);
+  --pw-1-paper: var(--night-2);
+  --pw-2-paper: var(--night-3);
+  --pw-wash: linear-gradient(100deg, var(--pw-1) 6%, color-mix(in oklab, var(--pw-1) 50%, var(--pw-2)) 50%, var(--pw-2) 94%);
+  --pw-shade: linear-gradient(180deg, color-mix(in oklab, var(--bg) 6%, transparent) 0, color-mix(in oklab, var(--bg) 22%, transparent) 200px, color-mix(in oklab, var(--bg) 60%, transparent) 460px, var(--bg) 820px); }
+[data-theme="light"] body.plr-on {
+  --pw-wash: linear-gradient(100deg, color-mix(in oklab, var(--pw-1-paper) 34%, var(--bg)) 6%, color-mix(in oklab, color-mix(in oklab, var(--pw-1-paper) 50%, var(--pw-2-paper)) 34%, var(--bg)) 50%, color-mix(in oklab, var(--pw-2-paper) 34%, var(--bg)) 94%);
+  --pw-shade: linear-gradient(180deg, transparent 0, color-mix(in oklab, var(--bg) 28%, transparent) 180px, color-mix(in oklab, var(--bg) 70%, transparent) 400px, var(--bg) 640px); }
+/* Over the whole-site wash too (styles.css html.team-wash), as specific and later: the page is the club's. */
+html body.plr-on .ambient, html body.plr-on:not(.gp-on) .topbar,
+html.store-ios body.plr-on:not(.gp-on)::before, html.ios-home body.plr-on:not(.gp-on)::before {
+  background: var(--pw-shade), var(--pw-wash), var(--bg);
+  background-size: 100vw 100vh; background-repeat: no-repeat; background-position: 0 0; }
+html body.plr-on:not(.gp-on) .topbar {
+  --pw-x: 0px;
+  background-position: var(--pw-x) 0; border-bottom-color: transparent; animation: none; }
+html body.plr-on:not(.gp-on) .topbar::before, html body.plr-on:not(.gp-on) .topbar::after { display: none; }
+html body.plr-on:not(.gp-on) .sportbar { background: transparent; }
+body.plr-on .amb-club { display: none; }
+/* At night: the name on the club's colours, as the live page's score is, and glass for the cards. */
+html:not([data-theme="light"]) body.plr-on .plr-hero { background: none; padding-left: 2px; padding-right: 2px; }
+html:not([data-theme="light"]) body.plr-on #view-players {
+  --panel: rgba(12, 11, 14, .34);
+  --panel-2: rgba(12, 11, 14, .30);
+  --panel-3: rgba(255, 255, 255, .08);
+  --bg-2: rgba(12, 11, 14, .4);
+  --border: rgba(255, 255, 255, .08);
+  --border-soft: rgba(255, 255, 255, .05);
+  --grad-card: none;
+  --glow-card: none;
+  --glow-soft: none; }
+/* The pinned game column on the glass (gamelog.css .gl-fix, solid since 2026-11-17: the numbers scrolled under
+   it showed through). The wash behind the cards is fixed to the screen, so no one colour matches it as the page
+   scrolls; the column is the glass over the club's colour mixed into the ground, as the wash reads at the card's
+   left edge (gamelog.css lays a tapped row's tint over whatever ground this names). */
+html:not([data-theme="light"]) body.plr-on #view-players .gl-table .gl-fix {
+  --gl-fix-bg: linear-gradient(var(--panel), var(--panel)), color-mix(in oklab, var(--pw-1) 48%, var(--bg)); }
+/* Less transparency or more contrast asked for (styles.css's own rule for the bars): the cards keep the
+   theme's solid panels over the colours instead of the glass. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  html:not([data-theme="light"]) body.plr-on #view-players {
+    --panel: inherit; --panel-2: inherit; --panel-3: inherit; --bg-2: inherit; --border: inherit; --border-soft: inherit; }
+}
+/* The page is the player's, as a game's page is the game's: the search's own head waits behind the way back. */
+#view-players.plr-view > .section-title, #view-players.plr-view > .search-scope, #view-players.plr-view > .search-recent,
+#view-players.plr-view > .search-wrap, #view-players.plr-view > #team-hits { display: none; }
+
+@media (max-width: 640px) {
+  .plr-hero { padding: 16px 14px; gap: 12px; }
+  .plr-name { font-size: var(--fs-2xl); }
+  .plr-name span { font-size: var(--fs-lg); }
+  .plr-nums, .plr-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .plr-h, .plr-pick, .plr-panel > .plr-fine, .plr-panel > .plr-quiet, .plr-panel > .plr-wait,
+  .plr-season > .plr-quiet { padding: 0 14px; }
+  .plr-card { padding: 14px; }
+  .plr-card .gl-scroll { margin: 0 -14px; padding: 0 14px; }
+}
+/* A PHONE STACKS EACH SIDE (walk 11, 2026-11-18): crest, name, record, then the score, under one another.
+   Side by side the score and the crest left the name a few pixels, and the Thunder and the Kings read
+   "T…" and "Ki…" on a 390-wide screen. */
+@media (max-width: 480px) {
+  .plr-side, .plr-side:last-child { flex-direction: column; text-align: center; gap: 4px; }
+  .plr-side div { align-items: center; max-width: 100%; }
+  .plr-pts, .plr-side:last-child .plr-pts { margin: 0; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { .plr-mark { opacity: .08; } }
+
+/* THE LINE, MOVED (js/playerpage.js lineAdj; Ethan, 2026-11-25: "adjust the lines and numbers with a slide"). The
+   thumb is the dashed rule's colour, so the line the chart draws and the line in the hand read as one thing; the
+   steps and the side switch are a thumb's size. */
+.line-adj { display: grid; gap: 6px; padding: 2px 18px 12px; }
+.la-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.la-read { color: var(--text-dim); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; min-width: 0; }
+.la-read b { color: var(--text); font-weight: 800; }
+.la-side { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--fill-tone); }
+.la-sd { border: 0; background: transparent; color: var(--text-dim); font: inherit; font-size: var(--fs-2xs);
+  font-weight: 700; min-height: 32px; padding: 0 12px; border-radius: 999px; cursor: pointer; }
+.la-sd.on { background: var(--grad-chip); color: var(--text); }
+.la-price { font-size: var(--fs-2xs); color: var(--text-dim); line-height: var(--lh-snug); }
+.la-price b { color: var(--text); }
+.la-price[hidden] { display: none; }
+.la-row { display: flex; align-items: center; gap: 10px; }
+.la-step { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 0;
+  background: var(--fill-tone); color: var(--text); font: inherit; font-size: var(--fs-lg); font-weight: 800;
+  line-height: 1; cursor: pointer; }
+.la-step:hover { background: var(--panel-2); }
+.la-range { flex: 1 1 auto; min-width: 0; height: 40px; margin: 0; accent-color: var(--warn); cursor: pointer;
+  touch-action: pan-y; }
+.la-reset { justify-self: start; border: 0; background: none; padding: 4px 0; color: var(--brand-2); font: inherit;
+  font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; }
+.la-reset[hidden] { display: none; }

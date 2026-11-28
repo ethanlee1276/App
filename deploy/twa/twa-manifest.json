@@ -1,0 +1,27 @@
+{
+  "packageId": "com.qellysbook.app",
+  "host": "qellysbook.com",
+  "name": "Qellys Book",
+  "launcherName": "Qellys",
+  "display": "standalone",
+  "orientation": "any",
+  "themeColor": "#0C0B0A",
+  "navigationColor": "#0C0B0A",
+  "backgroundColor": "#0C0B0A",
+  "enableNotifications": true,
+  "startUrl": "/?app=play#recommended",
+  "iconUrl": "https://qellysbook.com/icon-512.png",
+  "maskableIconUrl": "https://qellysbook.com/icon-maskable-512.png",
+  "webManifestUrl": "https://qellysbook.com/manifest.webmanifest",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "minSdkVersion": 21,
+  "fallbackType": "customtabs",
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "signingKey": {
+    "path": "./qellys-upload.keystore",
+    "alias": "qellys"
+  },
+  "generatorApp": "bubblewrap-cli"
+}

@@ -1,0 +1,223 @@
+"""What the iPhone widget shows: the record, last night, and tonight's boards.
+
+    python3 -m engine.widgetfeed         # the widget's JSON, as the box would serve it
+
+Ethan, 2026-10-24: "build everything ... including all the ideas" — docs/
+IDEAS.md 11, Apple Sports' best thing: a Home Screen widget. The widget
+(deploy/ios/native/QellysWidget.swift) asks GET /api/widget every half hour
+and draws what this returns.
+
+PUBLIC BY DESIGN. A widget cannot sign in (it runs outside the app, on a
+schedule iOS picks), so it shows only what the site gives everybody: the
+record (free, engine/ledger), last night's line (the same one the email and
+the alerts read, engine/digest.last_night), and how many picks each league
+has up today — a count, as the "picks are up" alert says it, never a pick.
+
+YOUR PLAYERS ON THE WIDGET AND THE LOCK SCREEN (2026-10-25). The second
+widget (deploy/ios/native/Widget/YourPlayersWidget.swift) shows the account's
+followed players with their lines right now (engine/yourplayers). A widget
+still cannot sign in, so the app hands it a key: the member turns it on in
+Settings inside the iPhone app, the app asks POST /api/widget/key and puts
+the answer in the App Group the widget reads, and the widget asks
+GET /api/widget/mine?k=<key>. The key is calfeed's shape — ``<user>.<mac>``,
+an HMAC over this link's own salt under the box's link key, labelled apart
+— so nothing at rest opens anyone's widget, a new key stops the old one,
+and turning it off deletes the row. Signing out in the app clears it from
+the phone. What it carries is public box scores and the member's own
+follows; never a pick.
+
+Standard library only; reads the boards where the box writes them.
+"""
+from __future__ import annotations
+
+import base64
+import datetime as _dt
+import hashlib
+import hmac
+import json
+import re
+import secrets
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+WEB = ROOT / "web"
+_KEY = re.compile(r"(\d{1,12})\.([A-Za-z0-9_-]{24,64})")
+#: The most players one widget carries (the medium size shows four).
+WIDGET_PLAYERS = 6
+
+
+def _load(path: Path) -> dict:
+    try:
+        got = json.loads(Path(path).read_text(encoding="utf-8"))
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+#: A file read once a change (step AGS): the record's head is 885 KB, read on every rebuild of the first look.
+_KEPT_FILES: dict = {}
+
+
+def _load_kept(path: Path) -> dict:
+    """`_load`, kept until the file's time or size moves. Readers treat it as read-only."""
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return {}
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _KEPT_FILES.get(str(path))
+    if hit and hit[0] == stamp:
+        return hit[1]
+    got = _load(path)
+    _KEPT_FILES[str(path)] = (stamp, got)
+    return got
+
+
+#: TONIGHT'S COUNTS, A BOARD READ ONCE A CHANGE (step AGH, 25 November 2026; Ethan: "data on the player page takes a
+#: long time to load"). The sign-up screen's first look (engine/firstlook) counts tonight's picks league by league
+#: off each league's whole board, and was rebuilt about once a minute: 1.8 s of the server's own time each, in the
+#: one process that answers every page, so the routes and carries charts on Amon-Ra St. Brown's page waited 1.3 s
+#: behind one. A board is read again only when its file changed (each league's build, every few minutes).
+_COUNTS: dict = {}
+
+
+def _board_count(path: Path) -> tuple:
+    """(picks recommended, the board's date) of one board file, read again only once the file has changed."""
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return 0, ""
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _COUNTS.get(str(path))
+    if hit and hit[0] == stamp:
+        return hit[1]
+    # The build's own count beside its board, when written after it (engine/gate._write_picks_sidecar, step AGS):
+    # a few bytes, where the board is up to 18 MB.
+    from engine import gate
+    side = gate.picks_sidecar(path)
+    try:
+        if side.stat().st_mtime_ns >= st.st_mtime_ns:
+            doc = json.loads(side.read_text(encoding="utf-8"))
+            got = (int(doc.get("picks") or 0), str(doc.get("date") or ""))
+            _COUNTS[str(path)] = (stamp, got)
+            return got
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    from engine import pushalerts as PA
+    board = PA._load(path)
+    got = (PA._picks(board), str(board.get("date") or ""))
+    _COUNTS[str(path)] = (stamp, got)
+    return got
+
+
+def build(web: Path = WEB, today: _dt.date | None = None, took=None) -> dict:
+    """The widget's members' side. ``took``, a list, gets its parts' milliseconds as ``(part, ms)`` (step AGQ: the
+    first look's "counts", which is this, took 1.9 s and then 4.8 s of a rebuild on the live site, and nothing said
+    which of its reads)."""
+    from engine import digest, gate, pushalerts as PA
+    import time as _t
+    t0 = [_t.perf_counter()]
+
+    def mark(part):
+        if took is not None:
+            now = _t.perf_counter()
+            took.append((part, (now - t0[0]) * 1000.0))
+            t0[0] = now
+    web = Path(web)
+    today = today or _dt.date.today()
+    rec = _load_kept(web / "data" / "record_head.json") or _load_kept(web / "data" / "record.json")
+    mark("record")
+    # The picks we stake since 2026-10-31 (engine/stakeplan), as the site leads.
+    ov = (rec.get("staked") or {}).get("overall") or rec.get("overall") or {}
+    record = None
+    if ov.get("settled"):
+        record = {"w": int(ov.get("wins") or 0), "l": int(ov.get("losses") or 0), "p": int(ov.get("pushes") or 0),
+                  "units": round(float(ov.get("net_units") or 0), 1), "roi": round(float(ov.get("roi") or 0) * 100, 1)}
+    night = digest.last_night(web)
+    mark("night")
+    tonight = []
+    for sport, file, label in PA.LEAGUES:
+        n, date = _board_count(gate.board_source(web / "data" / file))
+        if n and date and not (len(date) == 10 and date < today.isoformat()):
+            tonight.append({"league": label, "sport": sport, "picks": n, "url": f"/?sport={sport}#recommended"})
+    mark("boards")
+    return {"record": record,
+            "last_night": ({"date": night["date"], "w": night["w"], "l": night["l"], "p": night["p"],
+                            "units": night["net_u"]} if night and (night["w"] or night["l"]) else None),
+            "tonight": tonight,
+            "updated": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+            "url": "/#recommended"}
+
+
+# --- the key and the account's own widget ------------------------------------
+def ensure_tables(conn) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS widget_links (user_id INTEGER PRIMARY KEY, salt TEXT NOT NULL, "
+                 "made REAL NOT NULL)")
+    conn.commit()
+
+
+def _mac(user_id: int, salt: str) -> str:
+    from engine import digest as DG
+    mac = hmac.new(DG._unsub_key(), f"widget:{int(user_id)}:{salt}".encode(), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(mac).decode().rstrip("=")[:32]
+
+
+def key_for(conn, user_id: int, new: bool = False) -> str:
+    """The account's widget key, made on first ask; ``new`` replaces it."""
+    ensure_tables(conn)
+    row = conn.execute("SELECT salt FROM widget_links WHERE user_id = ?", (int(user_id),)).fetchone()
+    if row is None or new:
+        salt = secrets.token_urlsafe(16)
+        conn.execute("INSERT INTO widget_links (user_id, salt, made) VALUES (?,?,?) "
+                     "ON CONFLICT(user_id) DO UPDATE SET salt = excluded.salt, made = excluded.made",
+                     (int(user_id), salt, time.time()))
+        conn.commit()
+    else:
+        salt = row[0]
+    return f"{int(user_id)}.{_mac(user_id, salt)}"
+
+
+def key_off(conn, user_id: int) -> None:
+    ensure_tables(conn)
+    conn.execute("DELETE FROM widget_links WHERE user_id = ?", (int(user_id),))
+    conn.commit()
+
+
+def user_for(conn, key: str) -> int | None:
+    """The account a widget key belongs to, or None."""
+    m = _KEY.fullmatch(str(key or "").strip())
+    if not m:
+        return None
+    ensure_tables(conn)
+    uid = int(m.group(1))
+    row = conn.execute("SELECT salt FROM widget_links WHERE user_id = ?", (uid,)).fetchone()
+    if row is None or not hmac.compare_digest(_mac(uid, row[0]), m.group(2)):
+        return None
+    return uid
+
+
+def mine(conn, key: str, idx: dict | None = None) -> dict | None:
+    """What the account's widget draws: its followed players with their
+    lines right now, live first, and how many it follows. None for a key
+    that is not one (or was replaced or turned off)."""
+    from engine import alerts as AL, yourplayers as YP
+    uid = user_for(conn, key)
+    if uid is None:
+        return None
+    watches = AL.list_watches(conn, uid)
+    lines = YP.mine(watches, idx)[:WIDGET_PLAYERS]
+    return {"players": [{"player": r["player"], "team": r["team"], "opp": r.get("opp") or "",
+                         "line": r["line"], "status": r["status"], "live": r["state"] == "live",
+                         "url": f"/#pbp/{r['league']}/{r['event_id']}"} for r in lines],
+            "following": sum(1 for w in watches if w.get("kind") == "player"),
+            "updated": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")}
+
+
+def main(argv=None) -> int:
+    print(json.dumps(build(), indent=1))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

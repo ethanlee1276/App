@@ -1,0 +1,498 @@
+"""Matchup picks: every game, broken down offence against defence, into the
+touchdowns and the yards-and-catches bets the matchup makes a case for.
+
+Ethan, 2026-09-26: "me and the AI went through each offense and defense of
+every team and figured out where the breakout candidates were, and who had
+a good matchup and who had a bad matchup ... and what we came back with"
+— Stevenson under 47.5 rushing, Walker and Rice to score, Adams 5 catches,
+Kyren Williams 60 and 60, Gibbs, St. Brown and Olave against New Orleans,
+LaPorta, Knox, Kincaid, Allen and Cook in Lions–Bills. The journal had
+none of them, on any board, in any market (probed on the box the same
+day): the site's shelves are built to show few touchdowns — Most Likely
+floors at 55% and seats the five likeliest scorers of the SLATE, the
+scenarios shelf takes eight, never a quarterback, and demands a soft
+defence; the value board wants an edge they said they do not care about.
+
+So this goes game by game, the way that conversation did:
+
+TOUCHDOWNS. Every priced scorer in the game who is not on the injury report
+or pulled by the books, scored on the matchup — his team's expected points
+(offence), the opponent's defence at his position (the pass defence for a
+receiver or tight end, the run defence for a back or a quarterback), his
+expected red-zone chances, and red-zone trips (his offence getting in, the
+opponent letting teams in; engine/redzone) — each 0–2, out of 8. A scorer
+is a pick when our chance clears TD_MIN_PROB and the matchup makes a case
+(TD_MATCHUP_MIN), or when our chance alone is TD_STRONG_PROB — the goal-
+line back or the running quarterback everybody expects to score. Ranked by
+our chance, TD_PER_GAME a game, TD_PER_TEAM a side. Quarterbacks count.
+
+YARDS AND CATCHES. The matchup scan already reads every key player — could
+shine (breakout / good matchup) or could struggle (tough / avoid) — and the
+markets that read points at. A pick is that market on the read's side
+(shine → over, struggle → under) at the posted line, where OUR number
+agrees at PROP_MIN_PROB or better. PROP_PER_GAME a game, PROP_PER_PLAYER a
+player. And every leaned read the Most Likely list carries nothing for on
+its side gets its one pick first, at READ_PICK_MIN (2026-11-14: "it would
+not make any sense to make players favoitable and breakout canidates and not
+give them props ... it doesnt make sense to not take the unders"), and the
+read carries it (`stamp_reads`).
+
+No edge requirement, no 55% floor, no slate-wide cap: these are the
+matchup's picks, and the chance shown is the model's. Journaled on paper
+(ledger categories matchup_td / matchup_prop), so the record — not an
+argument — says how they do against the other methods.
+
+Standard library only.
+"""
+from __future__ import annotations
+
+from .tdscenarios import OFFENSE_POINTS, DEFENSE_RANK, RED_ZONE_CHANCES, TRIPS_REL, _pts, _ord, rank32
+
+#: A scorer below this chance is not a pick, whatever the matchup.
+TD_MIN_PROB = 0.28
+#: At this chance he is a pick on the chance alone.
+TD_STRONG_PROB = 0.45
+#: Matchup points (of 8) that make the case for a scorer under TD_STRONG_PROB.
+TD_MATCHUP_MIN = 4
+TD_PER_GAME = 4
+TD_PER_TEAM = 3
+
+#: The markets a read can turn into a yards-or-catches pick.
+PROP_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds", "pass_att", "pass_cmp", "rush_att")
+#: Baseball's (engine/mlb/scan): a hitter's hits, total bases and home runs,
+#: a starter's strikeouts and outs. A hitter's role is a spot in tonight's
+#: posted lineup; a starter's is being tonight's starter.
+MLB_PROP_MARKETS = ("hits", "total_bases", "home_runs", "strikeouts", "outs")
+#: Basketball's (engine/nba/scan, 2026-10-20): the stats a read leans and
+#: their sums. A player's role is his minutes a game over his last ten.
+HOOPS_PROP_MARKETS = ("pts", "reb", "ast", "fg3m", "pra", "pts_reb", "pts_ast", "reb_ast")
+HOOPS_MIN_MINUTES = 20.0
+#: Our chance on the read's side at the posted line.
+PROP_MIN_PROB = 0.55
+#: EVERY READ GETS ITS PICK (2026-11-14). Ethan: "make sure the most likley
+#: picks are being adjusted on our game reports. it would not make any sense
+#: to make players favoitable and breakout canidates and not give them props
+#: and some for players we thinnk will do bad, it doesnt make sense to not
+#: take the unders." A leaned read whose side the Most Likely list does not
+#: carry was left with "No Most Likely pick" whenever our number on its side
+#: sat under the list's bar (55%, the NFL's props 60% — likely.LANE_MIN_PROB),
+#: and an under almost always does: the books hang few alternate unders, and
+#: a main-line under is priced near a coin. So each such read gets ONE pick
+#: here — the likeliest number on its side, the posted line or the rung the
+#: Most Likely board found (`no_pick.best`), at a real sportsbook at −250 or
+#: better — when our number there is at least even: the read and our number
+#: agree. Under that the model says the read's side loses more often than
+#: not, no pick is made, and the card says our number disagrees. The chance
+#: is the model's, unmoved; journaled on paper with the other matchup picks
+#: (matchup_prop), so the record says how a read's own side does.
+#:
+#: …BUT NEVER A FORCED PICK (the same night). Ethan, to "every favoriteable
+#: player gets an over": "we wanna make sure we are not forcing picks and
+#: bets and only making them have over bets or under bets based off all the
+#: data and shit backing those bets." Even money was a read with a coin flip
+#: behind it. A read's pick now needs what every matchup pick needs, our
+#: number at 55% on its side (PROP_MIN_PROB), and the books' price not
+#: arguing against it: a number MARKET_FAR above what the price implies is,
+#: as the one Most Likely board says of it, usually our error
+#: (engine/likelyboard.market_check). The one board then checks it against
+#: our record like every pick, and the tightened NFL board holds one under its
+#: 60% (Ethan: "hold them back"); the card says which (likelyboard.harmonize).
+#: A read the data does not back gets no pick, and its card says why
+#: (``read_no_pick``).
+READ_PICK_MIN = PROP_MIN_PROB
+#: The longest price a yards-or-catches pick is taken at. The box, 2026-09-26:
+#: "Terrance Ferguson UNDER 49.5 -380 ProphetX" was an exchange rung, not a
+#: market; a -380 under says nothing a reader can use.
+PROP_MAX_JUICE = -250
+#: A real role before a read's line means anything — targets a game for the
+#: receiving markets, carries a game for rushing. The same box run picked
+#: Brady Russell under 5 rushing yards and Dyami Brown under 1.5 catches.
+PROP_MIN_TARGETS = 3.0
+PROP_MIN_CARRIES = 6.0
+#: College logs catches, not targets: two a game is the receiving role
+#: (about three targets at a college catch rate).
+PROP_MIN_CATCHES = 2.0
+PROP_PER_GAME = 4
+PROP_PER_PLAYER = 2
+
+LEAN_SIDE = {"breakout": "over", "good": "over", "tough": "under", "avoid": "under"}
+_TD_GROUP = {"WR": "passing", "TE": "passing", "RB": "rushing", "FB": "rushing", "QB": "rushing"}
+_UNIT_WORD = {"passing": "pass", "rushing": "run"}
+
+
+def td_matchup(row: dict, opp_units: dict | None, rz_own: dict | None, rz_opp: dict | None,
+               n_teams: int = 32, usage: dict | None = None) -> dict:
+    """{"points": {...}, "score": 0-8, "lines": [...]} for one scorer row."""
+    pos = str(row.get("position") or "").upper()
+    unit = _TD_GROUP.get(pos, "passing")
+    implied = row.get("implied_total")
+    rank = (((opp_units or {}).get("def") or {}).get(unit) or {}).get("rank")
+    rz = row.get("rz_chances")
+    off_rel, def_rel = (rz_own or {}).get("off_rel"), (rz_opp or {}).get("def_rel")
+    trips = [v for v in (off_rel, def_rel) if v is not None]
+    trips_rel = sum(trips) / len(trips) if trips else None
+    pts = {"offense": _pts(implied, OFFENSE_POINTS), "defense": _pts(rank32(rank, n_teams), DEFENSE_RANK),
+           "red_zone": _pts(rz, RED_ZONE_CHANCES), "trips": _pts(trips_rel, TRIPS_REL)}
+    team, opp = row.get("team") or "", row.get("opponent") or ""
+    lines = []
+    if implied is not None:
+        lines.append(f"{team} expected to score {float(implied):.1f} by the lines")
+    if rank is not None:
+        lines.append(f"{opp}’s {_UNIT_WORD[unit]} defense ranks {_ord(rank)} of {n_teams}"
+                     + (" (the quarterback scores on the ground too)" if pos == "QB" else ""))
+    u = usage or {}
+    share = u.get("carry_share") if unit == "rushing" and pos != "QB" else u.get("tgt_share")
+    if share is not None and pos != "QB":
+        lines.append(f"{float(share):.0%} of the {'carries' if unit == 'rushing' else (u.get('share_of') or 'targets')}")
+    if row.get("goal_line_text"):
+        lines.append(row["goal_line_text"])
+    if rz is not None:
+        lines.append(f"{float(rz):.1f} expected red-zone chances")
+    if trips:
+        bits = []
+        what = ("scoring chances (drives to the 40)"
+                if (rz_own or rz_opp or {}).get("what") == "scoring chances" else "red-zone plays")
+        if off_rel is not None:
+            bits.append(f"{team} gets {float(rz_own.get('off')):.1f} {what} a game "
+                        f"({off_rel * 100:+.0f}% vs the league)")
+        if def_rel is not None:
+            bits.append(f"{opp} allows {float(rz_opp.get('def')):.1f} ({def_rel * 100:+.0f}%)")
+        lines.append(" · ".join(bits))
+    return {"points": pts, "score": sum(pts.values()), "lines": lines}
+
+
+def _label(score: int) -> str:
+    return "Strong matchup" if score >= 6 else "Good matchup" if score >= TD_MATCHUP_MIN else "Likely scorer"
+
+
+def td_picks(game: dict, watch: list, reads: list, pulled=(), positions: dict | None = None) -> list:
+    """This game's touchdown picks from every priced scorer in it. A scorer
+    row carries no position; ``positions`` ({player: pos}, from the prop
+    rows and the reads) supplies it, so a quarterback reads as one."""
+    home, away = game.get("home"), game.get("away")
+    scan = game.get("scan") or {}
+    units, rz = scan.get("units") or {}, scan.get("redzone") or {}
+    n_teams = int(scan.get("n_teams") or 32)
+    usage = {(x.get("player") or ""): x.get("usage") for x in reads or []}
+    out_players = {(x.get("player") or "") for x in reads or [] if x.get("own_status")}
+    pulled = set(pulled or ()) | set(scan.get("pulled") or ())
+    rows = []
+    for r in watch or []:
+        team, opp = r.get("team"), r.get("opponent")
+        if {team, opp} != {home, away} or r.get("model_prob") is None or not r.get("odds"):
+            continue
+        name = r.get("player") or ""
+        if str(r.get("injury_status") or "").strip() or name in out_players or name in pulled:
+            continue
+        prob = float(r["model_prob"])
+        if prob < TD_MIN_PROB:
+            continue
+        # THE -250 CAP, as the yards-and-catches picks below already had
+        # it (PROP_MAX_JUICE). Ethan, 2026-09-27, on Gibbs at -320 seated as
+        # a Top pick through the one board: "Yes cap at -250".
+        if int(r["odds"]) < PROP_MAX_JUICE:
+            continue
+        pos = str(r.get("position") or (positions or {}).get(name) or "").upper()
+        r = dict(r, position=pos)
+        m = td_matchup(r, units.get(opp), rz.get(team), rz.get(opp), n_teams, usage.get(name))
+        if m["score"] < TD_MATCHUP_MIN and prob < TD_STRONG_PROB:
+            continue
+        rows.append({
+            "kind": "td", "matchup_pick": True, "player": name, "team": team, "opponent": opp,
+            "position": str(r.get("position") or "").upper(), "headshot": r.get("headshot") or "",
+            "market": "anytime_td", "market_label": "Anytime TD", "side": "YES", "line": 0.5,
+            "odds": r.get("odds"), "book": r.get("book") or "", "model_prob": round(prob, 4),
+            "kickoff": r.get("kickoff") or game.get("kickoff") or "",
+            "game_date": r.get("game_date") or game.get("date") or "",
+            "matchup_score": m["score"], "matchup_points": m["points"], "matchup_lines": m["lines"],
+            "label": _label(m["score"]),
+        })
+    rows.sort(key=lambda x: (-x["model_prob"], -x["matchup_score"]))
+    picked, per_team = [], {}
+    for x in rows:
+        if per_team.get(x["team"], 0) >= TD_PER_TEAM:
+            continue
+        picked.append(x)
+        per_team[x["team"]] = per_team.get(x["team"], 0) + 1
+        if len(picked) >= TD_PER_GAME:
+            break
+    return picked
+
+
+def _side_price(row: dict, side: str):
+    """(odds, book) for ``side`` at the row's own line: the row's price when
+    it is on that side, else the best bettable quote at that line — an
+    exchange only when a sportsbook is close (odds.prefer_sportsbook)."""
+    from types import SimpleNamespace as NS
+    from .odds import bettable_lines, prefer_sportsbook
+    from .odds import is_exchange
+    key = "over_odds" if side == "over" else "under_odds"
+    # A REAL SPORTSBOOK QUOTE AT THIS LINE, OR NO PICK. A "proxy" row is a
+    # line the model hung itself (eight of eighteen picks on the box's first
+    # run, 2026-09-26); an exchange alone at a line is a rung of its ladder.
+    lines = [NS(book=ln.get("book") or "", line=ln.get("line"), over_odds=ln.get(key))
+             for ln in row.get("all_lines") or []
+             if ln.get("line") == row.get("line") and ln.get(key)
+             and (ln.get("book") or "").lower() != "proxy"]
+    lines = bettable_lines(lines) if lines else []
+    if not any(not is_exchange(ln.book) for ln in lines):
+        return None, ""
+    best = prefer_sportsbook(lines)
+    return (best.over_odds, best.book) if best else (None, "")
+
+
+def _best_number(x: dict, mk: str, side: str):
+    """The Most Likely board's likeliest number on the read's side for this
+    market (likely._lean_report's ``best``, stamped as ``no_pick.best``), as
+    (prob, line, odds, book) — None unless a real sportsbook prices it at
+    −250 or better."""
+    from .odds import is_exchange
+    b = ((x.get("no_pick") or {}).get("best")) or {}
+    if b.get("market") != mk or str(b.get("side") or "").lower() != side:
+        return None
+    book = str(b.get("book") or "")
+    try:
+        prob, odds, line = float(b["model_prob"]), int(float(b["odds"])), float(b["line"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not book or book.lower() == "proxy" or is_exchange(book) or odds < PROP_MAX_JUICE:
+        return None
+    return prob, line, odds, book
+
+
+def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list:
+    """This game's yards-and-catches picks (a baseball game's hits, bases,
+    homers, strikeouts and outs): each read's markets on its side, where
+    our number agrees — and every leaned read the Most Likely list carries
+    nothing for on its side gets its one pick at READ_PICK_MIN."""
+    from .calibrate import is_reliable
+    home, away = game.get("home"), game.get("away")
+    markets = (MLB_PROP_MARKETS if sport == "mlb" else HOOPS_PROP_MARKETS if sport in ("nba", "wnba", "cbb")
+               else PROP_MARKETS)
+    by_key: dict = {}
+    for r in props or []:
+        if r.get("market") in markets and r.get("line") is not None and r.get("hit_prob") is not None:
+            by_key.setdefault((r.get("player") or "", r.get("market")), r)
+    rows = []
+    unbacked: dict = {}
+    for x in reads or []:
+        x.pop("read_no_pick", None)
+        side = LEAN_SIDE.get(x.get("read"))
+        if not side or x.get("own_status") or {x.get("team"), x.get("opp")} != {home, away}:
+            continue
+        # THE MARKET THE LIST ALREADY CARRIES THE OTHER WAY gets no second,
+        # opposite pick here: the card says our number disagrees.
+        other = (x.get("pick_other_side") or {}).get("market")
+        for mk in x.get("lean") or []:
+            r = by_key.get((x.get("player") or "", mk))
+            if not r or str(r.get("injury_status") or "").strip() or mk == other:
+                continue
+            u = x.get("usage") or {}
+            if sport == "mlb":
+                # In tonight's posted lineup, or tonight's starter.
+                if (x.get("pos") or "") != "SP" and not u.get("lineup_spot"):
+                    continue
+                role, bar = 99, 0
+            elif sport in ("nba", "wnba", "cbb"):
+                # A rotation role, not a garbage-time line.
+                role, bar = u.get("mpg"), HOOPS_MIN_MINUTES
+            else:
+                role = (u.get("carries_pg") if mk in ("rush_yds", "rush_att")
+                        else 99 if mk in ("pass_yds", "pass_att", "pass_cmp") else u.get("targets_pg"))
+                bar = PROP_MIN_CARRIES if mk in ("rush_yds", "rush_att") else PROP_MIN_TARGETS
+            if role is None and mk in ("receptions", "rec_yds") and u.get("share_of") == "catches":
+                role, bar = u.get("rec_pg"), PROP_MIN_CATCHES
+            if role is None or float(role) < bar:
+                continue
+            hp = float(r["hit_prob"])
+            # The posted line on the read's side, and the Most Likely board's
+            # likeliest number there (its ladder), the likelier of the two.
+            cands = []
+            prob = hp if str(r.get("side") or "").lower() == side else 1.0 - hp
+            odds, book = _side_price(r, side)
+            if odds and int(odds) >= PROP_MAX_JUICE:
+                cands.append((prob, r.get("line"), odds, book))
+            best = _best_number(x, mk, side)
+            if best is not None:
+                cands.append(best)
+            if not cands:
+                continue
+            prob, line, odds, book = max(cands, key=lambda c: c[0])
+            why = not_backed(prob, odds, side)
+            if why:
+                # The likeliest number on his side that the data does not
+                # back, kept for the card (`read_no_pick`).
+                if not x.get("pick"):
+                    held = unbacked.get(id(x))
+                    if held is None or prob > held["model_prob"]:
+                        unbacked[id(x)] = {"read": x, "why": why, "model_prob": round(prob, 4),
+                                           "market": mk, "market_label": r.get("market_label") or mk,
+                                           "side": side.upper(), "line": line, "odds": odds, "book": book}
+                continue
+            rows.append({
+                "kind": "prop", "matchup_pick": True, "player": r.get("player"), "team": r.get("team"),
+                "opponent": r.get("opponent"), "position": r.get("position") or x.get("pos") or "",
+                "headshot": r.get("headshot") or x.get("headshot") or "",
+                "market": mk, "market_label": r.get("market_label") or mk,
+                "side": side.upper(), "line": line, "odds": odds, "book": book,
+                "model_prob": round(prob, 4), "projection": r.get("projection"),
+                # A MARKET WE CAN RANK BUT NOT PRICE (ZT, 20 November 2026): the Most Likely
+                # board's own flag (likely._row_from), which a matchup pick never carried, so an
+                # NFL receiving-yards matchup pick read as a bet. The report shows it as a read,
+                # not a bet, and the record passes it by (gamereport.READ_ONLY, reportbets.journal).
+                "bettable": bool(is_reliable(sport, mk)),
+                "kickoff": r.get("kickoff") or game.get("kickoff") or "",
+                "game_date": r.get("game_date") or game.get("date") or "",
+                "read": x.get("read"), "label": x.get("label"),
+                "matchup_lines": list(x.get("pro") or [])[:3] if side == "over" else list(x.get("con") or [])[:3],
+                "_needs_pick": not x.get("pick"),
+            })
+    rows.sort(key=lambda x: -x["model_prob"])
+    picked, per_player = [], {}
+    # EVERY READ ITS ONE PICK FIRST (READ_PICK_MIN): the likeliest number on
+    # its side for each read the Most Likely list carries nothing for on it.
+    for x in rows:
+        if x["_needs_pick"] and not per_player.get(x["player"]):
+            x["read_pick"] = True
+            picked.append(x)
+            per_player[x["player"]] = 1
+    # …THEN THE GAME'S OTHER MATCHUP PICKS, as before: PROP_MIN_PROB or
+    # better, PROP_PER_PLAYER a player, up to PROP_PER_GAME a game.
+    for x in rows:
+        if len(picked) >= PROP_PER_GAME:
+            break
+        if x in picked or x["model_prob"] < PROP_MIN_PROB or per_player.get(x["player"], 0) >= PROP_PER_PLAYER:
+            continue
+        picked.append(x)
+        per_player[x["player"]] = per_player.get(x["player"], 0) + 1
+    for x in picked:
+        x.pop("_needs_pick", None)
+    picked.sort(key=lambda x: -x["model_prob"])
+    # WHY A READ GOT NO PICK, on the read, when he has none on his side
+    # (`not_backed`): never a forced bet, never a silent card.
+    have = {(p.get("player") or "", p.get("team") or "") for p in picked}
+    for u in unbacked.values():
+        x = u.pop("read")
+        if (x.get("player") or "", x.get("team") or "") not in have:
+            x["read_no_pick"] = u
+    return picked
+
+
+def not_backed(prob: float, odds, side: str) -> str:
+    """"" when the data backs a read's number, else why not, in words: our
+    number under PROP_MIN_PROB on the read's side — "against" the read under
+    even — or MARKET_FAR above what the books' price implies (READ_PICK_MIN)."""
+    from .likelyboard import MARKET_FAR
+    from .odds import american_to_prob
+    word = "over" if side == "over" else "under"
+    if prob < 0.5:
+        return (f"our number disagrees with this read: the likeliest {word} is {prob:.0%}, "
+                f"so the {word} loses more often than not")
+    if prob < READ_PICK_MIN:
+        return (f"our number on the {word} is {prob:.0%}, close to a coin flip — a pick needs "
+                f"{READ_PICK_MIN:.0%}, so the read alone is not a bet")
+    try:
+        implied = american_to_prob(int(odds))
+    except (TypeError, ValueError):
+        implied = None
+    if implied is not None and prob - float(implied) >= MARKET_FAR:
+        return (f"the books' price implies {float(implied):.0%} against our {prob:.0%}; when we're that "
+                f"far from the books it is usually our error, not theirs")
+    return ""
+
+
+def positions_map(props: list, scan_reads: dict) -> dict:
+    """{player: position} from the prop rows, then the reads — a scorer row
+    carries none."""
+    positions = {r.get("player"): r.get("position") for r in props or [] if r.get("position")}
+    for game in (scan_reads or {}).values():
+        for x in (game or {}).get("players") or []:
+            if x.get("pos"):
+                positions.setdefault(x.get("player"), x.get("pos"))
+    return positions
+
+
+def build(games: list, scan_reads: dict, watch: list, props: list, sport: str = "nfl") -> list:
+    """[{"game", "home", "away", "kickoff", "td": [...], "props": [...]}] for
+    every game with a scan, in the board's game order."""
+    positions = positions_map(props, scan_reads)
+    out = []
+    for g in games or []:
+        home, away = g.get("home"), g.get("away")
+        key = f"{away}@{home}"
+        reads = ((scan_reads or {}).get(key) or {}).get("players") or []
+        if not g.get("scan") and not reads:
+            continue
+        td = (td_picks(g, watch, reads, g.get("pulled_players") or (), positions)
+              if sport in ("nfl", "cfb") else [])
+        pp = prop_picks(g, reads, props, sport=sport)
+        for r in td + pp:
+            r["game"] = key
+        stamp_reads(reads, pp)
+        settle_other_side(reads)
+        if td or pp:
+            out.append({"game": key, "home": home, "away": away,
+                        "kickoff": g.get("kickoff") or "", "td": td, "props": pp})
+    return out
+
+
+def settle_other_side(reads: list) -> int:
+    """OUR NUMBER THE OTHER WAY, NOT A CANDIDATE (step ACZ, 23 November 2026;
+    Ethan: "I'm still noticing like conflicting information in the game
+    reports compared to the picks we're giving and the breakout candidates
+    we're giving"). A read whose only pick from us goes the other way — the
+    Most Likely list has him on the opposite side (gamescan.stamp_picks's
+    ``pick_other_side``) and nothing sits on the read's side, neither the
+    list nor a matchup pick — read "breakout candidate" over a card saying
+    our pick on him is the under. Such a read is mixed now, as a verdict
+    against the defense's own number has been since step ACW: neutral, its
+    first reason and the pick said side by side (gamereport.mixed_line), off
+    the breakout and fade lists and the short version's names. The pick
+    stays as it was; the read it came with is kept as ``mixed_was``.
+    Returns the reads settled."""
+    n = 0
+    for x in reads or []:
+        side = LEAN_SIDE.get(x.get("read"))
+        other = x.get("pick_other_side")
+        if not side or not isinstance(other, dict) or x.get("pick") or x.get("matchup_pick") or x.get("mixed"):
+            continue
+        lead = [str(t) for t in (x.get("pro") if side == "over" else x.get("con")) or [] if t]
+        x["mixed"] = lead[0] if lead else f"the matchup read leans the {side}"
+        x["mixed_pick"] = other
+        x["mixed_was"] = x.get("read")
+        x["read"], x["label"] = "neutral", "Neutral"
+        x.pop("spot", None)
+        x["drivers"] = []
+        n += 1
+    return n
+
+
+def stamp_reads(reads: list, picks: list) -> int:
+    """Each read gets its matchup pick on its side (``matchup_pick``, the
+    likeliest), so the card that names the read names the pick — the Most
+    Likely list's own pick (``pick``, engine/gamescan.stamp_picks) first,
+    this when the list carries nothing on the read's side. Cleared first,
+    so a read never keeps another build's pick. Returns reads stamped."""
+    by_player: dict = {}
+    for p in picks or []:
+        by_player.setdefault((p.get("player") or "", p.get("team") or ""), []).append(p)
+    n = 0
+    for x in reads or []:
+        x.pop("matchup_pick", None)
+        side = LEAN_SIDE.get(x.get("read"))
+        mine = [p for p in by_player.get((x.get("player") or "", x.get("team") or ""), [])
+                if str(p.get("side") or "").lower() == side]
+        if not side or not mine:
+            continue
+        p = max(mine, key=lambda r: float(r.get("model_prob") or 0))
+        x["matchup_pick"] = {k: p.get(k) for k in ("player", "team", "market", "market_label", "side", "line",
+                                                   "odds", "book", "model_prob", "read_pick")
+                             if p.get(k) is not None}
+        x.pop("read_no_pick", None)
+        n += 1
+    return n
+
+
+def journal_rows(board: list, kind: str) -> list:
+    """The board's picks of one kind ("td" or "prop"), flat, for the ledger."""
+    return [r for g in board or [] for r in g.get("td" if kind == "td" else "props") or []]

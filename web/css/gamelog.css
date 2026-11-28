@@ -1,0 +1,94 @@
+/* Game logs (js/gamelog.js), loaded with it: a player's season a line a game in
+   a sheet over the page, as his charts are (carrychart.css #cc-overlay): the
+   day, the opponent and the result held at the left while the league's own
+   columns scroll beside them, the season's totals and averages under them. */
+#gl-overlay { position: fixed; inset: 0; z-index: 90; display: none; align-items: flex-start; justify-content: center;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto; overscroll-behavior: contain;
+  background: color-mix(in oklab, var(--bg) 78%, transparent); backdrop-filter: blur(6px); }
+#gl-overlay.open { display: flex; }
+/* ON HIS CLUB'S WASH (LOGLOOK1): the colour from the top of the screen, falling to the page's own
+   ground, as a live game's page sits on its clubs' (detail.css --gp-wash). */
+#gl-overlay {
+  --gl-c: var(--gold);
+  --gl-wash: linear-gradient(180deg, color-mix(in oklab, var(--gl-c) 46%, var(--bg)) 0, color-mix(in oklab, var(--gl-c) 20%, var(--bg)) 300px, color-mix(in oklab, var(--bg) 94%, transparent) 680px); }
+#gl-overlay.gl-club { background: var(--gl-wash); }
+.gl { position: relative; width: 100%; max-width: 1100px; padding: 18px 18px 20px; border-radius: var(--radius-lg);
+  background: var(--panel); color: var(--text); }
+/* It floats, so it is glass (styles.css "GLASS FOR WHAT FLOATS"); solid when less transparency is asked for. */
+.gl { background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth); }
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { .gl { background-image: none; } }
+.gl-x { position: sticky; top: 8px; z-index: 3; display: block; margin: -8px -8px -26px auto; width: 34px; height: 34px;
+  border-radius: 50%; border: 0; background: var(--panel-2); color: var(--text-dim); font-size: 20px; cursor: pointer; }
+.gl-head { margin: 0 40px 12px 0; }
+/* The header in his club's colours with his face (LOGLOOK1), as his page's is
+   (playerpage.css .plr-hero): a band of the colour toward night, the club's mark
+   large and faint behind him, the words the night's in either theme. */
+.gl-band {
+  --gl-band: linear-gradient(118deg, color-mix(in oklab, var(--gl-c, var(--night-2)) 78%, var(--night-3)) 0%, color-mix(in oklab, var(--gl-c, var(--night-2)) 46%, var(--night-3)) 100%);
+  position: relative; overflow: hidden; display: flex; align-items: center; gap: 14px;
+  margin: -18px -18px 14px; padding: 18px 54px 18px 18px; border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--gl-band); color: var(--night-text); }
+.gl-band-mark { position: absolute; right: -14px; top: 50%; transform: translateY(-50%); opacity: .16; pointer-events: none; }
+.gl-face { position: relative; flex: none; }
+.gl-who { position: relative; min-width: 0; }
+.gl-head.gl-band h3 span, .gl-head.gl-band p, .gl-head.gl-band .gl-season {
+  color: color-mix(in oklab, var(--night-text) 80%, transparent); }
+.gl-band p { display: flex; align-items: center; gap: 6px; }
+.gl-band .gl-season select { color: var(--night-text); background: color-mix(in oklab, var(--night-3) 55%, transparent); }
+.gl-head-in { margin-right: 0; }
+/* The band reaches the sheet's top edge: the body holds its own margins, so the close
+   button's pulled-up margin does not collapse into the band's and leave a strip above it. */
+.gl-body { display: flow-root; }
+.gl-head h3 { margin: 0; font-size: var(--fs-xl); }
+.gl-head h3 span { margin-left: 6px; color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; }
+.gl-head p { margin: 4px 0 0; color: var(--text-mute); font-size: var(--fs-sm); }
+.gl-season { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--text-mute);
+  font-size: var(--fs-sm); }
+.gl-season select { font: inherit; color: var(--text); background: var(--panel-2); border: 0;
+  border-radius: var(--radius-sm); padding: 6px 10px; }
+.gl-empty { margin: 12px 0; color: var(--text-mute); }
+.gl-scroll { overflow-x: auto; margin: 0 -18px; padding: 0 18px; }
+.gl-table { min-width: 100%; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.gl-table th, .gl-table td { white-space: nowrap; }
+.gl-groups th { text-align: center; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; }
+/* The game (the week or the day, the opponent and where) stays put while the
+   result and the stats scroll beside it, so a phone keeps its room for numbers.
+   SOLID, NOT GLASS (2026-11-17; Ethan, a screenshot of a player page's Recent
+   games: "fix this how it's transparent and u can see through it"). The cards
+   are glass at night on the player page (playerpage.css), and a tapped row's
+   tint is a wash of white: each let the numbers scrolled under the column show
+   through it. The column is the panel laid over the page's own ground, opaque
+   wherever it is drawn, and a tapped row lays its tint over that. */
+.gl-table .gl-fix {
+  --gl-fix-bg: linear-gradient(var(--panel), var(--panel)), var(--bg);
+  position: sticky; left: 0; z-index: 1; background: var(--gl-fix-bg); }
+.agate.gl-table tbody tr:hover td.gl-fix {
+  --gl-fix-tint: linear-gradient(var(--fill-subtle), var(--fill-subtle));
+  background: var(--gl-fix-tint), var(--gl-fix-bg); }
+.gl-day b { display: block; font-weight: 600; }
+.gl-day span { display: flex; align-items: center; gap: 4px; color: var(--text-mute); font-size: var(--fs-xs); }
+/* The other club's mark beside its name, as a schedule on ESPN draws it. */
+.gl-opp { display: inline-flex; font-style: normal; }
+.gl-res { font-weight: 600; }
+.gl-w { color: var(--good); }
+.gl-l { color: var(--bad); }
+.gl-t { color: var(--text-mute); }
+/* The result as a pill, tinted in its own colour (app.js .pr-won / .pr-lost). */
+.gl-pill { display: inline-grid; place-items: center; min-width: 22px; padding: 1px 6px; border-radius: 999px;
+  font-size: var(--fs-xs); font-weight: 800; background: color-mix(in oklab, currentColor 16%, transparent); }
+.gl-dnp { color: var(--text-mute); font-style: italic; }
+.gl-sum td { font-weight: 700; }
+.gl-gloss { margin-top: 16px; }
+.gl-gloss h4 { margin: 0 0 6px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-mute); }
+.gl-gloss ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px 18px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); font-size: var(--fs-sm); color: var(--text-dim); }
+.gl-gloss b { color: var(--text); margin-right: 4px; }
+.gl-gloss span { color: var(--text-mute); }
+@media (max-width: 640px) {
+  #gl-overlay { padding: env(safe-area-inset-top, 0px) 0 0; }
+  .gl { border-radius: 0; min-height: 100%; }
+}

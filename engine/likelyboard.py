@@ -1,0 +1,1893 @@
+"""One Most Likely board: every pick the site makes, in one pool, each put
+through four checks and given a tier.
+
+Ethan, 2026-09-26: "maybe we should combine the matchup picks and most
+likely picks into one big, just most likely pick area ... filter through
+to see what works best with all of our data and matchup scripts ... I
+don't want to lose any picks, but I want to just be more confident in what
+we're selecting ... so we're not confusing the user and don't have a
+million different places for a million different picks." Then, to the plan
+below: "yeah do it".
+
+THE POOL. The Most Likely board as it stands (props, scorers, game lines —
+the rows the staked and paper books already journal), the matchup picks
+(engine/matchpicks) and the touchdown scenarios (engine/tdscenarios), one
+row per bet: the same player, market, side and line from two makers is one
+row that remembers both. Nothing is dropped here.
+
+THE FOUR CHECKS, each True (agrees), False (disagrees) or None (cannot
+say):
+
+  model    our chance clears its lane's bar (MODEL_BAR) — a touchdown is
+           its own lane, since a 45% scorer is a good scorer and not a
+           worse 60% prop;
+  matchup  the offence-against-defence breakdown backs this side: for a
+           prop, the scan's read leans the same way (engine/gamescan
+           leans); for a scorer, his matchup scores TD_CASE of 8 or better
+           (engine/matchpicks.td_matchup), and 1 or less says no;
+  market   the sportsbooks' price is near our chance — within MARKET_AGREE
+           it agrees; MARKET_FAR or more above the price, it disagrees
+           (when we are that far from every book, that is usually our
+           error, not free money);
+  record   picks of this market, side and chance band have hit at about
+           the rate we claimed in our own journal (RECORD_MIN_N settled
+           first) — the check that learns.
+
+THE TIERS. Top: our number, the matchup and the market agree and the
+record is not against it. Strong: the model passes and at most one check is against it with
+three for, or none against with two for. Worth a look: the rest.
+
+Nothing here moves a probability; the tier is how many independent reads
+back the number. Published as ``likely_board`` and journaled on paper per
+tier (ledger category ``board``), so the record says whether Top really
+hits more than Worth a look.
+
+Standard library only.
+"""
+from __future__ import annotations
+
+from . import bandcap as _bandcap
+
+#: Our chance a pick needs for the model check, by lane.
+MODEL_BAR = {"td": 0.40, "prop": 0.58, "game": 0.58}
+#: A league whose own model sets a different bar. Empty since 2026-10-03:
+#: the NHL's 65% went with its Most Likely floor (see likely.SPORT_MIN_PROB)
+#: and hockey's model check asks for the shared 58% like every league.
+SPORT_MODEL_BAR: dict = {}
+#: A corrected pick under this comes off the board unless the matchup read
+#: backs it (see `held_reason`). Ethan, 2026-10-07.
+DROP_FLOOR = 0.50
+#: The main Most Likely list's bar (likely.MIN_PROB) — a touchdown under it
+#: here is said as matchup-backed (see `build`).
+LIKELY_BAR = 0.55
+#: Our chance within this of the book's: the market agrees.
+MARKET_AGREE = 0.08
+#: Our chance this far ABOVE the book's: the market disagrees.
+MARKET_FAR = 0.15
+#: A scorer's matchup (of 8) that backs him, and the most that says no.
+TD_CASE = 4
+TD_AGAINST = 1
+#: Settled picks of a market-side-band before our record speaks.
+RECORD_MIN_N = 20
+#: How far under the claimed rate the record may run and still agree, and
+#: how far under it says no.
+RECORD_SLACK = 0.04
+RECORD_MISS = 0.08
+#: EVERY SPORT GETS THE BOARD (Ethan, 2026-09-26: "every other sport that
+#: has the Qellys' top picks is getting the same remodel"). What the
+#: matchup check reads differs by sport, and where a sport has no matchup
+#: read the check says so and its picks top out at Strong — a Top pick is
+#: one the matchup backs, in every sport:
+#:   nfl, cfb   the game scan's lean on this player and market, and for a
+#:              scorer his touchdown matchup of 8 (college's defence ranks
+#:              read as among 32 — tdscenarios.rank32); where the scan has
+#:              no lean on him, the projection's own Matchup step (the
+#:              measured defence-vs-position transfer, engine/defensevs),
+#:              when it moved the number at least MODEL_MATCHUP_STEP
+#:              toward this side — Ethan, 2026-10-14 ("do 1-11": the
+#:              football matchup check should count the model's own
+#:              matchup step when the scan has no lean). Until then a
+#:              quarterback's runs and most backup roles, which the scan
+#:              reads nothing on, topped out at Strong while the model had
+#:              read the defence. A lean, where the scan has one, still
+#:              decides; a market whose number the defence never moves (a
+#:              quarterback's carries: defensevs shows it and keeps it out)
+#:              has a flat step, "not enough to call";
+#:   mlb        the MLB scan's read (engine/mlb/scan — platoon split, the
+#:              starter's slugging allowed by hand, expected stats, park,
+#:              the opponent's strikeout rate…); where it has none, the
+#:              projection's own Matchup step, when it moved the number at
+#:              least MODEL_MATCHUP_STEP toward this side;
+#:   nba, wnba  the NBA scan's read (engine/nba/scan, 2026-10-20 — the
+#:              defence in his own stats, the game's expected points or pace,
+#:              his minutes, usage and a teammate's absence, rest, the
+#:              blowout); where it has none, the projection's own Matchup
+#:              step, read the same way: what tonight's defence allows in
+#:              this stat, at the share of its lean MEASURED to reach one
+#:              player (engine/hoopsdvp.TRANSFER, every league and market
+#:              past two standard errors, 2026-09-27), on the row's chain
+#:              since 2026-10-14.
+MATCHUP_SOURCE = {"nfl": "scan+model", "cfb": "scan+model", "mlb": "scan+model",
+                  # Hockey's read (engine/nhl/scan, 2026-10-03): the opposing
+                  # starter, shots allowed, expected goals, rest, ice time.
+                  "nhl": "scan", "nba": "scan+model", "wnba": "scan+model",
+                  # College basketball reads the NBA's scan (2026-11-13).
+                  "cbb": "scan+model"}
+MODEL_MATCHUP_STEP = 0.03
+#: The journal buckets whose settled rows make the record.
+RECORD_CATEGORIES = ("likely", "matchup_td", "matchup_prop", "td_scenario", "board", "bold")
+#: Chance bands the record is read in (ledger.LIKELY_BANDS).
+BANDS = ((0.30, 0.45), (0.45, 0.60), (0.60, 0.75), (0.75, 1.01))
+
+#: TRUST THE PRICE WHERE WE RUN ABOVE IT (pricetrust.py, step 109; Ethan,
+#: 2026-10-17: "yes nfl board"). Where our chance runs above the books'
+#: de-vigged price, the board shows
+#:
+#:     ours - w * max(0, ours - market - T)
+#:
+#: with the (w, T) the held-out weeks chose for that league's board. For
+#: the NFL that is w = 1, T = 0: never above the market's number. Tried
+#: week by week on settled board picks the choice never saw, it cut log
+#: loss from 0.6966 to 0.6852 over 199 picks, and every held-out week
+#: improved; the picks 15+ points above the market had hit 37.5% where
+#: they claimed 75.3% (24 picks). The market's chance is the one pricetrust
+#: scored: each book's quote at the bet's own line, both sides, de-vigged,
+#: the median of three books or more (`engine.odds.consensus_fair`). A pick
+#: with no such field keeps its chance, as it was left out of the test. A
+#: league joins only when pricetrust passes on its board and Ethan says yes
+#: (MLB's Most Likely paper passed narrowly; Edge failed in both leagues).
+PRICE_TRUST = {"nfl": (1.0, 0.0)}
+#: The off switch, without a deploy: ``sudo ./deploy/setenv.sh
+#: QB_PRICE_TRUST off`` then ``sudo systemctl restart qellys``.
+PRICE_TRUST_ENV = "QB_PRICE_TRUST"
+
+TIERS = (("top", "Top pick"), ("strong", "Strong"), ("look", "Worth a look"))
+#: The paper bucket for picks the board held back (see `held_reason`).
+HELD_CATEGORY, HELD_LABEL = "held", "Held back"
+
+
+def certain_reason(prob) -> str | None:
+    """Why a chance this near certain is held (boldcheck.CERTAIN: no prop is certain), or None."""
+    from .boldcheck import CERTAIN
+    try:
+        p = float(prob)
+    except (TypeError, ValueError):
+        return None
+    if p < CERTAIN:
+        return None
+    return (f"held back: our number says {p:.1%}, and no prop is that certain — a spread that narrow is the "
+            f"model's arithmetic, not a find")
+
+
+def held_reason(r: dict, checks: dict) -> str | None:
+    """Why this pick comes OFF the board, or None — it stays.
+
+    Ethan, 2026-10-04: "the point of most likely is to give picks to what
+    we think is going to happen based off all data we collect ... offense
+    and defense and game script and past picks wins and losses ... I don't
+    wanna take picks off because they are going bad, only if they also
+    don't link to what we are trying to achieve."
+
+    So a losing record ALONE never takes a pick off; the record's
+    correction lowers its chance and its tier, and it stays. It comes off
+    only when TWO of our own reads say no and only the model says yes:
+
+      * the record has PROVEN that picks like it over-claim — likelycal
+        (its maker on its side) or likelyctx (a football flag) lowered
+        its chance on games the fit never saw; and
+      * the offence-against-defence read leans the OTHER way (the matchup
+        check says no — not "cannot say", which keeps it).
+
+    UNDER EVEN, OFF — UNLESS THE MATCHUP BACKS IT (Ethan, 2026-10-07: "take
+    picks off once they drop under 50% unless we have data to back the
+    other side even tho its less confident. we cant stop a bet from posting
+    bc its bellow 55%"). A pick the record's correction pulled under
+    DROP_FLOOR is one our own honest number says is more likely to lose,
+    so it comes off — unless the offence-against-defence read says yes
+    (the matchup check True), the data backing it though the number is
+    thin. Between 50% and 55% it stays, Worth a look, as before.
+    Touchdown picks live under 50% by nature (their bar is 40%) and are
+    not judged on it.
+
+    A pick already posted (``locked``) is never taken off; it keeps its
+    seat until its game, as every posted pick does.
+
+    ON PAPER (engine/paperhold, 2026-11-15): a kind the record says we
+    oversell by ten points or more comes off whatever else says, recorded
+    and graded here until its paper picks run honest — Ethan: "if any bets
+    is like that we should switch them to paper and stop posting them till
+    we learn and get them better"."""
+    if r.get("locked"):
+        return None
+    # NO PROP IS CERTAIN, ON EVERY ROW (step AIC, 27 November 2026). The week's record read "Toughest miss: Jake
+    # Elliott under 10.5 Kicking Points (−170) at 100%": the one board journaled it at 99.9%. boldcheck.CERTAIN
+    # has held such a number since 18 November (Emmett Johnson's carries at 100%), but only inside the bold check,
+    # which runs only where the book's de-vigged chance is known; a row without one was asked nothing. A chance
+    # this near certain is the model's spread collapsing, never a find, so it comes off whatever built it.
+    certain = certain_reason(r.get("model_prob"))
+    if certain:
+        return certain
+    if r.get("paper_hold"):
+        return r["paper_hold"]
+    if r.get("idea_hold"):
+        return r["idea_hold"]
+    # A RAISE IS NOT AN OVER-CLAIM (decision 19, 23 November). In the NBA and
+    # hockey the record may raise a chance (likelycal: toward its price, or
+    # above both numbers where the two agree), and that note says picks like
+    # it win MORE than we said. Read as "proven to over-claim" it held an
+    # NBA pick the record had just raised, whenever the matchup leaned away.
+    proven = r.get("ctx_note") or (None if r.get("cal_raised") else r.get("cal_note"))
+    prob = r.get("model_prob")
+    if (proven and lane_of(r) != "td" and prob is not None and float(prob) < DROP_FLOOR
+            and checks.get("matchup") is not True):
+        return (f"held back: our chance is {float(prob):.0%} after the record's correction "
+                f"({proven}) — under {DROP_FLOOR:.0%}, and no matchup read backs it")
+    # THE PRICE'S NUMBER UNDER EVEN (`trust_price`) is a correction the record
+    # proved too — on held-out weeks — so the same floor holds it.
+    if (r.get("trust_note") and lane_of(r) != "td" and prob is not None
+            and float(prob) < DROP_FLOOR and checks.get("matchup") is not True):
+        return (f"held back: the books' price gives it {float(prob):.0%} — under "
+                f"{DROP_FLOOR:.0%} — and no matchup read backs it")
+    if checks.get("matchup") is not False or not proven:
+        return None
+    return f"held back: {proven}, and our matchup read leans the other way"
+TIER_LABEL = dict(TIERS)
+
+#: THE NFL BOARD, TIGHTENED (Ethan, 2026-10-31: "our NFL most likely bets
+#: are not doing well. So we need to tighten that up"). Two holds, NFL only,
+#: each read off the graded record, both off with QB_NFL_TIGHT=off
+#: (likely.tightened):
+#:
+#:   * A PROP OR GAME LINE UNDER 60%, on the number the page shows — after
+#:     the record's corrections and the price (`trust_price` keeps an NFL
+#:     pick at or under the books' fair chance, so a pick here under 60%
+#:     is one the books ALSO put under 60%). The list asks the same of its
+#:     own rows (likely.LANE_MIN_PROB, where the bands are). A touchdown
+#:     keeps its own bar.
+#:   * AN UNDER THE SCOUT CAUTIONS AGAINST, where the graded board has
+#:     shown unders like it hit far less than we said (board_learning,
+#:     2026-10-30, 1,925 settled NFL board picks; z = wins against the
+#:     wins we claimed):
+#:
+#:         flag               n    said    hit     z
+#:         dog_pass_under    49   61.8%   38.8%  −3.39   trailing teams throw
+#:         long_trip_under   83   60.6%   43.4%  −3.30
+#:         body_clock_under  46   62.7%   43.5%  −2.78
+#:         new_coach_under   53   61.0%   45.3%  −2.37
+#:         shootout_under   110   59.5%   50.0%  −2.07   shootouts score
+#:
+#:     Each hit under the books' own price too (39% against 55%, 43%
+#:     against 53%…), which is why the record's correction — that pulls a
+#:     pick toward its price and no further — could not fix them and its
+#:     held-out test came out flat: the price was not low enough either.
+#:     The flags and their thresholds were written before any of this was
+#:     measured (engine/scout.py). This is the 10-04 rule's shape: not a
+#:     pick taken off for losing, but one the football read says the
+#:     game will go against.
+#:
+#:   * A TIGHT END'S UNDER (nflaudit.py on the box, Ethan's paste,
+#:     2026-10-31, the same 1,925 picks): tight-end unders hit 48% where we
+#:     said 60% over 100 picks, z −2.4, and over-claimed in both halves of
+#:     the season (46% against 64% to 2026-10-08, 49% against 57% after) —
+#:     the one position and side the audit marks HOLDS. The other way it
+#:     holds up better (tight-end overs 55% against 61%, WATCH, no hold).
+#:     A tight end's line is low and his targets come in bunches, so one
+#:     busy afternoon beats the under; and the audit's projection check
+#:     has receptions landing 9–12% above our projection all season.
+#:
+#: A posted pick (`locked`) keeps its seat, as every posted pick does, and
+#: a reserve row (labelled, never staked) is the reserve's to show.
+NFL_TIGHT_BAR = 0.60
+#: College football's, the same (Ethan, 21 November; likely.LANE_MIN_PROB).
+CFB_TIGHT_BAR = 0.60
+NFL_UNDER_CAUTIONS = ("dog_pass_under", "long_trip_under", "body_clock_under",
+                      "new_coach_under", "shootout_under")
+#: Positions whose unders the board holds, and the reason each pick says.
+NFL_UNDER_POSITIONS = {
+    "TE": "a tight end's under — on our graded board, tight-end unders have hit 48% where we said 60% "
+          "(100 picks, short in both halves of the season)",
+}
+
+
+#: MARKETS WHOSE UNDERS THE BOARD HOLDS, per league (Ethan, 2026-10-31: "keep
+#: diving deeper into our NFL edge and most likely bets and the college edge
+#: and most likely bets ... to find better picks"). Read off every graded
+#: Most Likely pick in the public receipts (the board, the list, the bold and
+#: held books), split at the middle of each league's season so a rule has to
+#: hold in both halves:
+#:
+#:     league  market · side       first half          second half
+#:     NFL     rec_yds · under     73   48% vs 65%     96   48% vs 53%
+#:     CFB     rec_yds · under     34   50% vs 70%    115   50% vs 62%
+#:
+#: Short of the claim in both halves in both leagues — the same shape as the
+#: NFL's tight-end unders, the position most of these belong to: a low line
+#: and targets that come in bunches, so one busy afternoon beats the under.
+#: Receiving-yards overs hold up (NFL 63-64% against 64-68%, college 64-71%
+#: against 62-69%), so only the under is held. Off with QB_NFL_TIGHT=off for
+#: the NFL and QB_CFB_TIGHT=off for college.
+UNDER_MARKETS_HELD = {
+    "nfl": {"rec_yds": "a receiving-yards under — on our graded board these have hit 48% where we "
+                       "said 58% (169 picks, short in both halves of the season)"},
+    "cfb": {"rec_yds": "a receiving-yards under — on our graded board these have hit 50% where we "
+                       "said 64% (149 picks, short in both halves of the season)"},
+}
+CFB_TIGHT_ENV = "QB_CFB_TIGHT"
+
+
+#: ETHAN'S NFL BET CHECKING METHOD ON THE BOARD (Ethan, 2026-11-15: "implementing
+#: that too the game reports and the website and how the most likely bets are
+#: selected like how we talked about"). His project's master instructions and
+#: slate log name the props to stay off (docs/NFL_BET_CHECKING_METHOD.md); the
+#: scout already raises each as a flag (engine/scout.FLAGS). A pick breaking
+#: one stays on the board, tracked like every pick, but tops out at Worth a
+#: look and says which rule — so the tiers follow his method while the record
+#: keeps measuring it (engine/likelyctx moves a chance only once a flag is
+#: proven). He also said "I care more about what genuinely will hit not my
+#: rules" (2026-10-22): a rule the record shows costs hits comes off here.
+METHOD_SPORTS = ("nfl", "cfb")
+METHOD_AVOID = {
+    "thin_target_over": "our rule: a reception over outside a team's top two targets needs 15% of the "
+                        "targets or 5 a game",
+    "qb_rush_under": "our rule: quarterback rushing unders stay off the main card",
+    "rb_route_over": "our rule: no running back receiving over without a locked route role",
+    "dog_run_over": "our rule: no rushing over on a team likely to trail",
+    "blowout_over": "our rule: no receiving or passing over when a blowout could take the fourth "
+                    "quarter away",
+    "wind_pass_over": "our rule: 15+ mph wind is a major downgrade for the passing game",
+    "fav_pass_over": "our rule: on a favorite of 10 or more, pass attempts drop when the game gets out of hand",
+    "boom_bust": "our rule: no yardage over that needs one or two big plays",
+    "role_down_over": "our rule: no over on a role that has been shrinking",
+    "role_up_under": "our rule: no under on a role that has been growing",
+}
+#: The markets a rule speaks to where it is narrower than the flag: his
+#: blowout rule is about receiving and passing volume (a big favourite's back
+#: gets the clock-killing carries), and "needs a bomb" is a yardage over.
+METHOD_MARKETS = {"blowout_over": ("receptions", "rec_yds", "pass_att", "pass_cmp", "pass_yds"),
+                  "boom_bust": ("rush_yds", "rec_yds", "pass_yds"),
+                  # v3.1 §4 (2026-11-20): "Team wins by 14+: QB attempts fall to 0.87x ... Big
+                  # favorites' QB floors are otherwise normal; do not fade them for being
+                  # favorites." The rule was capping a big favorite's completions and yards too.
+                  "fav_pass_over": ("pass_att",)}
+#: THEIR INSTRUCTIONS, v3.1 (2026-11-20; "used alongside ... should not be
+#: replacing anything"), §8: "A new starting quarterback with too few attempts
+#: to rate: no pass-catcher legs on that team." The quarterback card says so
+#: (qbchange.card ``unrated``: a replacement with under GREEN_ATTEMPTS passes
+#: this season and last); a catch or receiving-yards pick behind one tops out
+#: at Worth a look, either side, and is no parlay leg (gameparlays.off_parlays).
+METHOD_NEW_QB = "our rule: no pass-catcher pick behind a new starting quarterback with too few passes to rate"
+METHOD_NEW_QB_MARKETS = ("receptions", "rec_yds")
+#: HIS TOUCHDOWN RULE (the TD module; decision 1 under RUN_NEXT 00f): an
+#: anytime touchdown at 45%, or at 40% with "undeniable usage" — 30% of his
+#: team's red-zone chances.
+TD_RULE_PROB, TD_RULE_FALLBACK, TD_RULE_RZ_SHARE = 0.45, 0.40, 0.30
+#: THE FALLBACK, AS v3.1 WRITES IT (§11, 2026-11-20): "40%+ at plus money with
+#: EV of 6%+ and undeniable usage." The plus price and the 6% are new. On the
+#: public receipts the NFL's touchdown picks at 40-45% (63 of them, priced at
+#: 49.4% on average, most at minus money) hit 36.5%, and the board's rule was
+#: passing the ones with a red-zone role at any price. A pick with no price is
+#: not passed by the fallback. The 45% clause stays as it was: v3.1 also asks
+#: that the pick sit at or above its price's break-even, and here the 127 NFL
+#: picks at 45%+ under their price hit 57.5%, while the 6 above theirs hit 2,
+#: so that clause is said on the card and caps nothing.
+TD_RULE_FALLBACK_EV = 0.06
+#: The rule's red-zone share is the play-by-play's measured one where it counted
+#: one (Ethan, 2026-11-15: "switch"), from after Sunday night's kickoff (01:20
+#: UTC on 16 November) and not before, so no Sunday pick moved mid-slate. Off,
+#: the rule reads the estimate and words it as it always has. Switched on
+#: 16 November, after that kickoff: Monday night's board is the first it reads.
+TD_RULE_MEASURED = True
+
+
+def method_fails(r: dict, sport: str) -> list:
+    """The method's avoid rules this prop breaks, each as the card says it."""
+    if sport not in METHOD_SPORTS or lane_of(r) != "prop":
+        return []
+    out = []
+    for code in r.get("scout_flags") or ():
+        why = METHOD_AVOID.get(code)
+        if not why or why in out:
+            continue
+        markets = METHOD_MARKETS.get(code)
+        if markets and r.get("market") not in markets:
+            continue
+        if code == "boom_bust" and _side(r) != "over":
+            continue
+        out.append(why)
+    if ((r.get("qb_card") or {}).get("unrated") and r.get("market") in METHOD_NEW_QB_MARKETS
+            and str(r.get("position") or "").upper() != "QB"):
+        out.append(METHOD_NEW_QB)
+    return out
+
+
+def td_rule(r: dict) -> dict:
+    """{"meets": bool, "why": str} — this touchdown pick against their rule:
+    45%, or 40% with 30% of the red-zone work (``rz_share``: his measured
+    share of his team's red-zone touches where the play-by-play counted it,
+    ``rz_share_measured``; else the estimate, his expected chances against
+    his team's red-zone plays)."""
+    prob = float(r.get("model_prob") or 0.0)
+    share = r.get("rz_share")
+    what = "red-zone touches" if r.get("rz_share_measured") else "red-zone chances"
+    has = f", {float(share):.0%} of the team's {what}" if share is not None else ""
+    if prob >= TD_RULE_PROB:
+        return {"meets": True, "why": f"{prob:.0%}{has} — meets our touchdown rule (45%)"}
+    role = share is not None and float(share) >= TD_RULE_RZ_SHARE
+    if prob >= TD_RULE_FALLBACK and role and _plus_price_pays(prob, r.get("odds")):
+        return {"meets": True, "why": f"{prob:.0%}{has} — meets our touchdown rule (40% with a red-zone "
+                                      f"role, at a plus price that pays for it)"}
+    return {"meets": False, "why": f"{prob:.0%}{has} — our touchdown rule asks 45%, or 40% with "
+                                   f"{TD_RULE_RZ_SHARE:.0%} of the red-zone {'work' if TD_RULE_MEASURED else 'chances'}"
+                                   f" at a plus-money price paying {TD_RULE_FALLBACK_EV:.0%} over our number"}
+
+
+def _plus_price_pays(prob: float, odds) -> bool:
+    """A plus-money price whose expected value at ``prob`` is TD_RULE_FALLBACK_EV
+    or better: the touchdown rule's fallback (v3.1 §11)."""
+    try:
+        o = int(float(odds))
+    except (TypeError, ValueError):
+        return False
+    if o < 100:
+        return False
+    return prob * (o / 100.0) - (1.0 - prob) >= TD_RULE_FALLBACK_EV - 1e-9
+
+
+def _cfb_tight() -> bool:
+    import os
+    return os.environ.get(CFB_TIGHT_ENV, "").strip().lower() not in ("off", "0", "no", "false")
+
+
+def _below(prob: float, bar: float) -> str:
+    """``prob`` as a percentage that reads below ``bar``. Rounded, 59.7%
+    printed as 60%, and the page said "our chance is 60% — the NFL board
+    asks 60%" (three moneylines on 7 November); one decimal, cut down,
+    where the whole number would meet the bar."""
+    import math
+    if round(prob * 100) < round(bar * 100):
+        return f"{prob:.0%}"
+    return f"{math.floor(prob * 1000) / 10:.1f}%"
+
+
+def tightened_reason(r: dict, sport: str) -> str | None:
+    """Why the tightened board holds this pick back, or None. The NFL's whole
+    tightening (QB_NFL_TIGHT); college's held-under markets (QB_CFB_TIGHT)."""
+    from .likely import tightened
+    if r.get("locked") or r.get("reserve"):
+        return None
+    if sport == "cfb":
+        if not _cfb_tight():
+            return None
+        # The 60% bar (likely.LANE_MIN_PROB, 21 November), on every college pick but a touchdown.
+        prob = r.get("model_prob")
+        if lane_of(r) != "td" and prob is not None and float(prob) < CFB_TIGHT_BAR:
+            return (f"held back: our chance is {_below(float(prob), CFB_TIGHT_BAR)} — the college board asks "
+                    f"{CFB_TIGHT_BAR:.0%} of a prop or a game line")
+        held = UNDER_MARKETS_HELD["cfb"].get(str(r.get("market") or ""))
+        if held and _side(r) == "under" and lane_of(r) == "prop":
+            return f"held back: {held}"
+        return None
+    if sport != "nfl" or not tightened(sport):
+        return None
+    prob = r.get("model_prob")
+    if lane_of(r) != "td" and prob is not None and float(prob) < NFL_TIGHT_BAR:
+        return (f"held back: our chance is {_below(float(prob), NFL_TIGHT_BAR)} — the NFL board asks "
+                f"{NFL_TIGHT_BAR:.0%} of a prop or a game line")
+    if _side(r) == "under":
+        hit = [c for c in (r.get("scout_flags") or ()) if c in NFL_UNDER_CAUTIONS]
+        if hit:
+            from . import scout as _sc
+            return (f"held back: {_sc.note(hit[0], sport)} — on our graded board, unders like "
+                    "this have hit far less often than we said")
+        pos = str(r.get("position") or "").strip().upper()
+        if lane_of(r) == "prop" and pos in NFL_UNDER_POSITIONS:
+            return f"held back: {NFL_UNDER_POSITIONS[pos]}"
+        held = UNDER_MARKETS_HELD["nfl"].get(str(r.get("market") or ""))
+        if lane_of(r) == "prop" and held:
+            return f"held back: {held}"
+    return None
+
+
+def lane_of(r: dict) -> str:
+    if r.get("kind") == "game":
+        return "game"
+    return "td" if r.get("market") == "anytime_td" else "prop"
+
+
+def _side(r: dict) -> str:
+    s = str(r.get("side") or "").lower()
+    return {"yes": "over", "no": "under"}.get(s, s)
+
+
+def key_of(r: dict) -> tuple:
+    lane = lane_of(r)
+    who = r.get("player") or r.get("matchup") or f"{r.get('away', '')}@{r.get('home', '')}"
+    line = None if lane == "td" else r.get("line")
+    try:
+        line = None if line is None else round(float(line), 1)
+    except (TypeError, ValueError):
+        pass
+    return tuple(_hashable(x) for x in (who, r.get("market"), _side(r), line))
+
+
+def _hashable(x):
+    """A key part the pool can hash. THE NHL BOARD, 2026-10-06: every build
+    skipped with "unhashable type: 'dict'" at `k not in pool` — a hockey row
+    carried a dict where the key expected a plain value. Any such part
+    becomes stable text, so one odd field never costs the whole board."""
+    if x is None or isinstance(x, (str, int, float, bool)):
+        return x
+    import json
+    try:
+        return json.dumps(x, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        return repr(x)
+
+
+def _band(p: float):
+    for lo, hi in BANDS:
+        if lo <= p < hi:
+            return lo
+    return None
+
+
+def record_table(conn, sport: str = "nfl") -> dict:
+    """{(market, side, band): {"n", "hits", "claimed"}} from the journal's
+    settled picks in RECORD_CATEGORIES, one per bet across buckets."""
+    marks = ",".join("?" * len(RECORD_CATEGORIES))
+    rows = conn.execute(
+        f"SELECT date, player, market, side, line, hit_prob, status FROM bets "
+        f"WHERE sport=? AND category IN ({marks}) AND status IN ('won','lost') "
+        f"AND hit_prob IS NOT NULL", (sport, *RECORD_CATEGORIES)).fetchall()
+    seen, out = set(), {}
+    for r in rows:
+        k = (r[0], r[1], r[2], str(r[3] or "").lower(), r[4])
+        if k in seen:
+            continue
+        seen.add(k)
+        p = float(r[5])
+        band = _band(p)
+        if band is None:
+            continue
+        cell = out.setdefault((r[2], str(r[3] or "").lower(), band), {"n": 0, "hits": 0, "claimed": 0.0})
+        cell["n"] += 1
+        cell["hits"] += 1 if r[6] == "won" else 0
+        cell["claimed"] += p
+    return out
+
+
+#: THE TIERS WHOSE CARDS SHOW THEIR TIER'S REAL HIT RATE instead of our
+#: chance. Ethan, 2026-09-29, told "Worth a look" claims 59% and hits 48%
+#: (123-132 on the one board): "show the real hit rate". Top pick and
+#: Strong hit about what they claim (62% each), so they keep our number.
+REAL_RATE_TIERS = ("look",)
+
+
+def tier_record(conn, sport: str = "nfl") -> dict:
+    """``{tier key: {"n", "hits"}}`` — the one board's settled picks by
+    tier (journal book ``board``, the tier label as the grade)."""
+    label_to_key = {label: key for key, label in TIERS}
+    out: dict = {}
+    for grade, status in conn.execute(
+            "SELECT grade, status FROM bets WHERE sport=? AND category='board' "
+            "AND status IN ('won','lost')", (sport,)).fetchall():
+        key = label_to_key.get(str(grade or ""))
+        if not key:
+            continue
+        cell = out.setdefault(key, {"n": 0, "hits": 0})
+        cell["n"] += 1
+        cell["hits"] += 1 if status == "won" else 0
+    return out
+
+
+def real_rate(tiers_seen: dict | None, tier: str):
+    """``(rate, n)`` for a tier in REAL_RATE_TIERS with RECORD_MIN_N settled,
+    else ``(None, n)``."""
+    cell = (tiers_seen or {}).get(tier) or {}
+    n = int(cell.get("n") or 0)
+    if tier not in REAL_RATE_TIERS or n < RECORD_MIN_N:
+        return None, n
+    return round(cell["hits"] / n, 4), n
+
+
+def record_check(table: dict | None, market: str, side: str, prob: float):
+    """(True/False/None, a sentence) from the record table."""
+    band = _band(prob)
+    cell = (table or {}).get((market, side, band)) if band is not None else None
+    if not cell or cell["n"] < RECORD_MIN_N:
+        n = cell["n"] if cell else 0
+        return None, f"our record on these is too short to say ({n} settled)"
+    rate, claimed = cell["hits"] / cell["n"], cell["claimed"] / cell["n"]
+    words = f"picks like this hit {rate:.0%} of {cell['n']} when we said {claimed:.0%}"
+    if rate >= claimed - RECORD_SLACK:
+        return True, words
+    if rate < claimed - RECORD_MISS:
+        return False, words
+    return None, words
+
+
+def record_seen(table: dict | None, market: str, side: str, prob: float) -> dict:
+    """What the record check read, for the card to say it in numbers:
+    settled picks like this one, how many it needs before it speaks, and
+    (once it does) the rate they hit against the rate we claimed."""
+    band = _band(prob)
+    cell = (table or {}).get((market, side, band)) if band is not None else None
+    n = cell["n"] if cell else 0
+    out = {"n": n, "need": RECORD_MIN_N}
+    if n >= RECORD_MIN_N:
+        out.update(rate=round(cell["hits"] / n, 4), claimed=round(cell["claimed"] / n, 4))
+    return out
+
+
+def market_check(r: dict):
+    from .odds import american_to_prob
+    p = r.get("model_prob")
+    if r.get("market_fair") is not None:
+        # The market's fair chance counted one vote per opinion (engine/
+        # ideagate, once engine/bookclusters' held-out test holds).
+        gap = float(p) - float(r["market_fair"])
+        words = f"the market's fair chance, one vote per opinion, is {float(r['market_fair']):.0%}; we say {float(p):.0%}"
+        if abs(gap) <= MARKET_AGREE:
+            return True, words
+        if gap >= MARKET_FAR:
+            return False, words + " — far above the market"
+        return None, words
+    implied = r.get("implied_prob")
+    if implied is None and r.get("odds"):
+        try:
+            implied = american_to_prob(int(r["odds"]))
+        except (TypeError, ValueError):
+            implied = None
+    if p is None or implied is None:
+        return None, "no book price to compare"
+    gap = float(p) - float(implied)
+    words = f"books imply {float(implied):.0%}, we say {float(p):.0%}"
+    if abs(gap) <= MARKET_AGREE:
+        return True, words
+    if gap >= MARKET_FAR:
+        return False, words + " — far above every book"
+    return None, words
+
+
+#: A LEAGUE JOINS ON ONE COMMAND once pricetrust.py passes on its board
+#: (2026-10-31: the college board's "bolder than the books" picks claimed 69%
+#: and hit 53% over 283 unders, z −6.0, and its 75%-plus claims hit 59%): the
+#: runbook runs the test, and on a PASS ``sudo ./deploy/setenv.sh
+#: QB_PRICE_TRUST_ADD cfb`` puts college at the NFL's rule (w = 1, T = 0) —
+#: the yes stays Ethan's, as the doctrine above says. A comma list for more.
+PRICE_TRUST_ADD_ENV = "QB_PRICE_TRUST_ADD"
+PRICE_TRUST_ADD_RULE = (1.0, 0.0)
+
+
+def price_trust_rule(sport: str):
+    """``(w, T)`` for this league's board, or None — not a league the test
+    passed on, or switched off (PRICE_TRUST_ENV). A league named in
+    PRICE_TRUST_ADD_ENV joins at PRICE_TRUST_ADD_RULE."""
+    import os
+    if os.environ.get(PRICE_TRUST_ENV, "").strip().lower() in ("off", "0", "no", "false"):
+        return None
+    sp = str(sport or "").lower()
+    added = {x.strip().lower() for x in os.environ.get(PRICE_TRUST_ADD_ENV, "").split(",") if x.strip()}
+    if sp and sp in added and sp not in PRICE_TRUST:
+        return PRICE_TRUST_ADD_RULE
+    return PRICE_TRUST.get(sp)
+
+
+#: A COLLEGE PROP IS NEVER SHOWN ABOVE ITS OWN PRICE (step ZX, 2026-11-20;
+#: Ethan: "I really want the best picks ... for NBA and for college
+#: football"). The NFL's rule above reads three books' fair price at the
+#: pick's line, and college props rarely have three: pricetrust found a
+#: market chance on 8 of 2,087 college picks (2026-10-31), so college could
+#: never join it. A prop always has its own price, though — the best any book
+#: offered — and a bet at that price needs a known chance to break even (the
+#: books' cut left in: no hold is assumed off it). Every graded prop the
+#: college board posted, 26 September to 19 November, from the public
+#: receipts (1,525 props):
+#:
+#:     shown above its own price    617   said 66.9%   hit 55.1%   the price said 57.1%
+#:     shown at or under it         908   said 57.7%   hit 58.5%
+#:
+#: Held to the price, the board's log loss fell from 0.6992 to 0.6781, better
+#: in eight of its nine weeks (one rule, nothing fitted, so every week is a
+#: week it never saw), and each day's five likeliest props hit 66.9% where
+#: the same five by our own number hit 61.1% while claiming 74.0% (175
+#: picks). So the card and the tiers read a number the record backs.
+#: Props only: 16 game lines and 9 touchdowns sat above their price, too few
+#: to judge. The NBA's and the NHL's boards hit at or above what they claim
+#: (the same test moved neither), so they keep their own numbers.
+#: A pick on paper (engine/paperhold) is left as it is: the paper record goes
+#: on measuring our own claim, which is what it releases a kind on.
+#: Off without a deploy: ``sudo ./deploy/setenv.sh QB_PRICE_CEILING off``.
+PRICE_CEILING = ("cfb",)
+PRICE_CEILING_ENV = "QB_PRICE_CEILING"
+
+
+def price_ceiling_on(sport: str) -> bool:
+    import os
+    if os.environ.get(PRICE_CEILING_ENV, "").strip().lower() in ("off", "0", "no", "false"):
+        return False
+    return str(sport or "").lower() in PRICE_CEILING
+
+
+def own_price_chance(r: dict):
+    """The chance a bet at this pick's own price needs to break even (the
+    books' cut left in), or None where it has no real price."""
+    from .odds import american_to_prob
+    try:
+        o = int(float(r.get("odds")))
+    except (TypeError, ValueError):
+        return None
+    if abs(o) < 100 or r.get("has_market") is False or str(r.get("book") or "").lower() == "proxy":
+        return None
+    return float(american_to_prob(o))
+
+
+def ceiling_back(r: dict) -> bool:
+    """Show a prop at its own price's number where ours runs above it
+    (``price_ceiling``, set by `hold_to_own_price`); True when it moved. The
+    chance before rides along as ``ceiling_from`` and ``trust_from`` (the
+    journal keeps the second, so the rule can be re-tested on what it was
+    applied to) and the first claim as ``board_raw_prob``."""
+    cap = r.get("price_ceiling")
+    if cap is None or r.get("model_prob") is None:
+        return False
+    ours, cap = float(r["model_prob"]), float(cap)
+    if cap >= ours - 1e-9:
+        return False
+    r["ceiling_from"] = r["trust_from"] = round(ours, 4)
+    r.setdefault("board_raw_prob", ours)
+    r["model_prob"] = round(cap, 4)
+    r["trust_note"] = (f"we said {ours:.0%}; a bet at its best price needs {cap:.0%} to break even, and college "
+                       f"props we rated above their price have hit what the price said, so we show the "
+                       f"price's number")
+    restate_lock(r)
+    return True
+
+
+def hold_to_own_price(rows: list, sport: str, stats: dict | None = None) -> int:
+    """PRICE_CEILING on a league's props; returns how many moved. ``stats``
+    takes the counts the board carries: props read, props with a real price,
+    props above it, props moved, and how many of those were already posted."""
+    on = price_ceiling_on(sport)
+    if stats is not None:
+        stats.update(on=on, rows=0, priced=0, above=0, moved=0, posted=0)
+    if not on:
+        return 0
+    moved = 0
+    for r in rows:
+        if lane_of(r) != "prop" or r.get("model_prob") is None or r.get("paper_hold"):
+            continue
+        if stats is not None:
+            stats["rows"] += 1
+        # One rule a pick: a prop the books' field already holds keeps that number.
+        cap = None if r.get("trust_rule") else own_price_chance(r)
+        if cap is None:
+            r.pop("price_ceiling", None)
+            continue
+        r["price_ceiling"] = round(cap, 4)
+        if stats is not None:
+            stats["priced"] += 1
+            stats["above"] += float(r["model_prob"]) > cap + 1e-9
+        if ceiling_back(r):
+            moved += 1
+            if stats is not None:
+                stats["moved"] += 1
+                stats["posted"] += bool(r.get("locked"))
+    return moved
+
+
+#: THE NFL'S PICKS FAR ABOVE THEIR PRICE, CAPPED (step AAV, 21 November 2026;
+#: Ethan's answer to decision 17: "cap them"). On the public record of every
+#: settled NFL Most Likely pick, those shown more than NFL_CAP_ROOM over their
+#: own price's chance with the book's cut taken out hit 65 of 137 (47%) where
+#: we said 79%, and 23 of 42 since 1 November where we said 89%; every other
+#: NFL pick hit 60% where we said 62% (2,159). The books' field (`trust_price`)
+#: holds only a pick whose number at least three books quote on both sides, so
+#: these, mostly alternate numbers one book prices, kept their own. Now an NFL
+#: prop is shown at no more than its own price's chance less the book's cut
+#: (likelycal.price_chance) plus NFL_CAP_ROOM: it slides down the board and its
+#: tier, and stays on it. A prop the books' field holds keeps that number; a pick
+#: on paper is left as it is, as the college ceiling leaves them.
+#: Off without a deploy: ``sudo ./deploy/setenv.sh QB_NFL_CAP off``.
+NFL_CAP_SPORTS = ("nfl",)
+NFL_CAP_ROOM = 0.10
+NFL_CAP_ENV = "QB_NFL_CAP"
+
+
+def nfl_cap_on(sport: str) -> bool:
+    import os
+    if os.environ.get(NFL_CAP_ENV, "").strip().lower() in ("off", "0", "no", "false"):
+        return False
+    return str(sport or "").lower() in NFL_CAP_SPORTS
+
+
+def cap_far_over(rows: list, sport: str, stats: dict | None = None) -> int:
+    """NFL_CAP_ROOM on a league's props; returns how many moved. ``stats`` takes
+    ``capped`` (props moved) and ``capped_posted`` (of those, already posted)."""
+    if not nfl_cap_on(sport):
+        return 0
+    from .likelycal import price_chance
+    moved = 0
+    for r in rows:
+        if lane_of(r) != "prop" or r.get("model_prob") is None or r.get("paper_hold") or r.get("trust_rule"):
+            continue
+        if r.get("has_market") is False or str(r.get("book") or "").lower() == "proxy":
+            continue
+        fair = price_chance(r.get("odds"))
+        if fair is None:
+            continue
+        cap = round(fair + NFL_CAP_ROOM, 4)
+        ours = float(r["model_prob"])
+        if ours <= cap + 1e-9:
+            continue
+        r["nfl_cap"] = cap
+        r["ceiling_from"] = r["trust_from"] = round(ours, 4)
+        r.setdefault("board_raw_prob", ours)
+        r["model_prob"] = cap
+        r["trust_note"] = (f"we said {ours:.0%}; its price says {fair:.0%} once the book's cut is out, and NFL picks "
+                           f"this far above their price hit 47% on our record where we said 79%, so we show at most "
+                           f"{NFL_CAP_ROOM:.0%} over the price: {cap:.0%}")
+        restate_lock(r)
+        moved += 1
+        if stats is not None:
+            stats["capped"] = int(stats.get("capped") or 0) + 1
+            stats["capped_posted"] = int(stats.get("capped_posted") or 0) + bool(r.get("locked"))
+    return moved
+
+
+def one_sided_price(r: dict, quotes: dict):
+    """True where books quote this pick's number and none of them quotes both
+    sides (an over-only market: the book's whole cut sits on the side we
+    take, and nobody can say how big it is); False where one does; None
+    where no quote at its number was kept, so there is nothing to tell."""
+    from .odds import pair_is_sane
+    from .sources.oddsapi import normalize_name
+    try:
+        line = round(float(r.get("line")), 1)
+    except (TypeError, ValueError):
+        return None
+    seen = None
+    for q in quotes.get((normalize_name(r.get("player") or ""), r.get("market")), ()):
+        try:
+            if round(float(q.get("line")), 1) != line:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if str(q.get("book") or "").lower() in ("", "proxy"):
+            continue
+        if pair_is_sane(q.get("over_odds"), q.get("under_odds")):
+            return False
+        seen = True
+    return seen
+
+
+def mark_one_sided(rows: list, result: dict, sport: str, stats: dict | None = None) -> int:
+    """A PRICE WITH ONE SIDE QUOTED IS NOT A SECOND OPINION (step ZY,
+    2026-11-20), on the leagues PRICE_CEILING holds. On the public receipts
+    the college props whose best price was DraftKings' — 136 of them, every
+    one an over — hit 54.4% where we said 64.3% and the price said 67.6%,
+    short in both halves of the season (57%, then 52%). The 119 of them at
+    -180 or steeper hit 53.8% where FanDuel's 220 at those prices hit 65.0%,
+    both having said 64.9%. The receipts do not keep whether a quote
+    had one side, so that those are the over-only ones is an inference; the
+    board now counts them (``one_sided``) and the next slates will say. The
+    rule stands on its own either way: the market check reads
+    such a price with an assumed cut taken off it (odds.ONE_SIDED_HOLD), a
+    guess, and agreeing with a guess can lift a pick to Strong. So a prop
+    whose number no book quotes both sides of is marked (``price_one_sided``)
+    and `build` lets its market check say nothing either way: the pick stays,
+    on our number, the matchup and the record. Returns how many were marked."""
+    if not price_ceiling_on(sport):
+        return 0
+    quotes = book_quotes(result, rows)
+    n = 0
+    for r in rows:
+        if lane_of(r) != "prop":
+            continue
+        if one_sided_price(r, quotes) is True:
+            r["price_one_sided"] = True
+            n += 1
+        else:
+            r.pop("price_one_sided", None)
+    if stats is not None:
+        stats["one_sided"] = n
+    return n
+
+
+def book_quotes(result: dict, rows=()) -> dict:
+    """``{(player, market): [quote, ...]}`` — every book's number on each
+    prop the build priced (`all_lines`, then the alternate ladder), off the
+    build's prop rows and any pick row that carries its own."""
+    from .sources.oddsapi import normalize_name
+    out: dict = {}
+    for r in list(result.get("recommendations") or []) + list(rows or []):
+        if not isinstance(r, dict) or not r.get("player") or not r.get("market"):
+            continue
+        qs = [q for q in (r.get("all_lines") or []) + (r.get("alt_lines") or []) if isinstance(q, dict)]
+        if qs:
+            out.setdefault((normalize_name(r["player"]), r["market"]), []).extend(qs)
+    return out
+
+
+def market_chance(r: dict, quotes: dict):
+    """``(the market's chance for this pick's side, books)`` or None: each
+    book's first quote at the pick's own line, both sides sane, never the
+    proxy, de-vigged and the median taken with the three-book floor — the
+    number pricetrust's snapshots rebuilt (`pricetrust.snapshot_fairs`)."""
+    from .models import SportsbookLine
+    from .odds import consensus_fair, pair_is_sane
+    from .sources.oddsapi import normalize_name
+    try:
+        line = round(float(r.get("line")), 1)
+    except (TypeError, ValueError):
+        return None
+    seen, lines = set(), []
+    for q in quotes.get((normalize_name(r.get("player") or ""), r.get("market")), ()):
+        book = str(q.get("book") or "").lower()
+        try:
+            if round(float(q.get("line")), 1) != line:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if not book or book == "proxy" or book in seen or not pair_is_sane(q.get("over_odds"), q.get("under_odds")):
+            continue
+        seen.add(book)
+        lines.append(SportsbookLine(book=book, line=line, over_odds=int(q["over_odds"]),
+                                    under_odds=int(q["under_odds"])))
+    got = consensus_fair(lines, line)
+    if not got:
+        return None
+    fair_over, books = got
+    under = str(r.get("side") or "").upper() in ("UNDER", "NO")
+    return (1.0 - fair_over if under else fair_over), books
+
+
+def give_back(r: dict) -> bool:
+    """Apply the row's rule (``trust_rule``, set by `trust_price` where the
+    books' field was found) to its chance as it stands; True when it moved.
+    The chance before rides along as ``trust_from`` (journaled, so the rule
+    can be re-tested on picks made after it went live) and the first claim
+    as ``board_raw_prob``, as every correction here keeps it."""
+    rule, market = r.get("trust_rule"), r.get("market_prob")
+    if not rule or market is None or r.get("model_prob") is None:
+        return False
+    w, t = rule
+    ours, market = float(r["model_prob"]), float(market)
+    shown = ours - w * max(0.0, ours - market - t)
+    if shown >= ours - 1e-9:
+        return False
+    r["trust_from"] = round(ours, 4)
+    r.setdefault("board_raw_prob", ours)
+    r["model_prob"] = round(shown, 4)
+    r["trust_note"] = (f"we said {ours:.0%}; {r.get('market_books') or 3} books' fair price (their cut taken out) says "
+                       f"{market:.0%}, and on this board the price has been closer whenever we ran above it, "
+                       f"so we show the price's number")
+    restate_lock(r)
+    return True
+
+
+def restate_lock(r: dict) -> None:
+    """A posted pick's note gives its chance today ("now 53%",
+    likely.lock_note), written when the pick was carried forward. The price
+    rule moves that chance afterwards, here and in `harmonize`, and the
+    note kept the number from before: the board's own self-check
+    (engine/boardtruth, LOCK NOTE) found a tile at the price's number beside
+    a note still giving ours (the 2026-10-30 audit). Written again from the
+    chance the tile shows, the reason unchanged."""
+    if r.get("locked") and r.get("lock_note") is not None:
+        from .likely import lock_note
+        r["lock_note"] = lock_note(r.get("lock_why"), now=r.get("model_prob"),
+                                   then=r.get("first_prob"))
+
+
+def trust_bigger(r: dict, rule, quotes: dict) -> int:
+    """THE SAME RULE ON THE PICK'S BIGGER LINES (likely.bigger_lines). On
+    the box, 2026-10-24, the NFL board marked 196 of them "priced better
+    than its chance": their chances were our curve's, above the market's,
+    on the board where pricetrust had already shown that ours runs high
+    whenever it runs above (15+ points above: we said 76%, they hit 36%).
+    Each line's chance is held to the market's at its own number — the
+    books' field where three or more quote both sides, else its own book
+    de-vigged (one side at the assumed hold where that is all it quotes:
+    the box's second run kept 161 marks, nearly all on over-only rungs) —
+    then its worth-it price and its mark are read again, and a line listed
+    only for its mark goes when the mark does. In place, so the
+    shelf card and the board's card read the same lines. Returns the marks
+    the rule took away."""
+    lines = r.get("bigger_lines")
+    if not rule or not isinstance(lines, list):
+        return 0
+    from .likely import _worth_at
+    from .odds import expected_value
+    from .potd import MIN_EV
+    w, t = rule
+    lost = 0
+    for c in lines:
+        got = market_chance(dict(r, line=c.get("line"), side=c.get("side")), quotes)
+        market = got[0] if got else c.get("fair")
+        if market is None or c.get("prob") is None:
+            continue
+        p = float(c.get("raw_prob", c["prob"]))
+        shown = p - w * max(0.0, p - float(market) - t)
+        c["market_prob"] = round(float(market), 4)
+        if shown < p - 1e-9:
+            c["raw_prob"], c["prob"], c["worth_at"] = round(p, 4), round(shown, 4), _worth_at(shown)
+        was = bool(c.get("better"))
+        c["better"] = expected_value(float(c["prob"]), int(c["odds"])) >= MIN_EV
+        lost += was and not c["better"]
+    lines[:] = [c for c in lines if c.get("better") or not c.get("extra")]
+    return lost
+
+
+def trust_price(rows: list, result: dict, sport: str, stats: dict | None = None) -> int:
+    """Give the price back the part of our chance above it (PRICE_TRUST);
+    returns how many moved. ``stats`` (optional) is filled with what the
+    build log prints: picks checked, picks with no book quote at all, picks
+    whose line has under three two-sided books, picks with a books' field,
+    picks above it, picks moved, and how many of those were already posted.
+
+    A POSTED PICK TOO. A posted pick (``locked``) keeps its number, price
+    and book, and its chance is today's on every build (likely._locked) —
+    so today's chance is what the price judges. Skipping posted picks, as
+    the first cut did, left the rule touching a pick on its first build
+    only: on the box's first board after it shipped, 247 picks and none at
+    the price (Ethan's paste, 2026-10-17). `harmonize` applies it again
+    after the board takes a posted pick's number back from the list."""
+    rule = price_trust_rule(sport)
+    if stats is not None:
+        stats.update(on=bool(rule), rows=0, no_quotes=0, thin=0, fielded=0, above=0, moved=0, posted=0,
+                     bigger_unmarked=0)
+    if not rule:
+        return 0
+    from .sources.oddsapi import normalize_name
+    quotes = book_quotes(result, rows)
+    moved = 0
+    for r in rows:
+        if r.get("kind") == "game" or r.get("model_prob") is None:
+            continue
+        if stats is not None:
+            stats["rows"] += 1
+        unmarked = trust_bigger(r, rule, quotes)
+        if stats is not None:
+            stats["bigger_unmarked"] += unmarked
+        got = market_chance(r, quotes)
+        if got is None:
+            if stats is not None:
+                # No book quote for this player and market at all, or quotes
+                # but under three books pricing both sides at this line.
+                key = (normalize_name(r.get("player") or ""), r.get("market"))
+                stats["thin" if key in quotes else "no_quotes"] += 1
+            continue
+        market, books = got
+        r["market_prob"], r["market_books"], r["trust_rule"] = round(market, 4), books, list(rule)
+        if stats is not None:
+            stats["fielded"] += 1
+            stats["above"] += float(r["model_prob"]) > market + 1e-9
+        if give_back(r):
+            moved += 1
+            if stats is not None:
+                stats["moved"] += 1
+                stats["posted"] += bool(r.get("locked"))
+    return moved
+
+
+def model_matchups(recs: list) -> dict:
+    """{(player, market): (multiplier, why)} — each pick's Matchup step,
+    off the projection chain the pipeline publishes (engine/chain)."""
+    out = {}
+    for rec in recs or []:
+        for st in ((rec or {}).get("chain") or {}).get("steps") or []:
+            if st.get("key") == "matchup" and st.get("mult") is not None:
+                out[(rec.get("player") or "", rec.get("market"))] = (float(st["mult"]), st.get("why") or "")
+                break
+    return out
+
+
+def _model_matchup(r: dict, steps: dict):
+    got = steps.get((r.get("player") or "", r.get("market")))
+    if not got:
+        return None, "the model has no matchup step for this market"
+    mult, why = got
+    pct = f"{(mult - 1) * 100:+.0f}%"
+    toward = mult - 1 if _side(r) == "over" else 1 - mult
+    words = f"matchup moved our number {pct}" + (f" ({why})" if why else "")
+    if toward >= MODEL_MATCHUP_STEP:
+        return True, words
+    if toward <= -MODEL_MATCHUP_STEP:
+        return False, words + " — against this side"
+    return None, words + " — not enough to call"
+
+
+#: A COVERAGE READ EXPLAINS A RECEIVER'S PICK AND ADDS NOTHING (Ethan, 21
+#: November, decision 5 of v3.1's list: "Yes only shit that actually hold").
+#: v3.1 §5 gives a receiver's cornerback matchup no points, and its testing
+#: found none. The scan's read on a pass catcher (good, breakout, tough,
+#: avoid) is a coverage read, so in football it no longer backs his catches or
+#: his receiving yards toward Top. What counts there is the projection's own
+#: matchup step, the defence-vs-position transfer measured to hold
+#: (engine/defensevs), when it moved his number MODEL_MATCHUP_STEP toward this
+#: side. The read still shows on the card and the report: it explains the
+#: pick. `QB_COVERAGE_READ=on` puts it back.
+COVERAGE_READ_SPORTS = ("nfl", "cfb")
+COVERAGE_READ_MARKETS = ("receptions", "rec_yds", "targets")
+
+
+def coverage_read_counts() -> bool:
+    import os
+    return os.environ.get("QB_COVERAGE_READ", "").strip().lower() == "on"
+
+
+def matchup_check(r: dict, leans: dict, td_scores: dict, steps: dict | None = None,
+                  source: str = "scan", sport: str = ""):
+    lane = lane_of(r)
+    if source == "none" and lane != "game":
+        return None, "no matchup read for this sport yet"
+    if source == "model" and lane == "prop":
+        return _model_matchup(r, steps or {})
+    if (sport in COVERAGE_READ_SPORTS and lane == "prop" and r.get("market") in COVERAGE_READ_MARKETS
+            and not coverage_read_counts()):
+        backed, words = _model_matchup(r, steps or {})
+        lean = leans.get((r.get("player") or "", r.get("team") or "", r.get("market")))
+        if lean:
+            words += f" (the coverage read, {lean.get('label') or lean.get('read')}, explains the pick and is not counted)"
+        return backed, words
+    if source == "scan+model" and lane == "prop" \
+            and not leans.get((r.get("player") or "", r.get("team") or "", r.get("market"))):
+        return _model_matchup(r, steps or {})
+    if lane == "td":
+        s = td_scores.get(r.get("player") or "")
+        if s is None:
+            return None, "no matchup read for the player"
+        if s >= TD_CASE:
+            return True, f"matchup {s} of 8 for a touchdown"
+        if s <= TD_AGAINST:
+            return False, f"matchup only {s} of 8 for a touchdown"
+        return None, f"matchup {s} of 8 for a touchdown"
+    if lane == "prop":
+        lean = leans.get((r.get("player") or "", r.get("team") or "", r.get("market")))
+        if not lean:
+            return None, "the matchup scan has no read on this market"
+        if lean["side"] == _side(r):
+            return True, f"matchup read: {lean.get('label') or lean.get('read')}"
+        return False, f"matchup read leans the other way ({lean.get('label') or lean.get('read')})"
+    return None, ""
+
+
+#: HOW HARD THE MATCHUP BACKS A PICK, for the order inside a tier. Ethan,
+#: 2026-09-26, the NFL board: Kincaid (a Good matchup) sat #1 of the Top
+#: picks "with the breakout candidates below him". The tier used the
+#: matchup, but the order inside it was our chance alone, so the read never
+#: touched the ranking. Now a pick the matchup backs strongly — a breakout
+#: or avoid read, a touchdown matchup of STRONG_TD or better — ranks ahead
+#: of one it merely backs (a good or tough read, a scorer at TD_CASE, the
+#: model's own matchup step), and only then by our chance. The same rule in
+#: every sport; a sport with no matchup read ranks by chance as before.
+STRONG_READS = ("breakout", "avoid")
+STRONG_TD = 6
+
+
+def matchup_strength(r: dict, leans: dict, td_scores: dict, backed, sport: str = "") -> int:
+    """2 strongly backed, 1 backed, 0 not (or no read). A pass catcher's
+    coverage read in football ranks nothing (COVERAGE_READ_SPORTS)."""
+    if backed is not True:
+        return 0
+    lane = lane_of(r)
+    if lane == "td":
+        return 2 if (td_scores.get(r.get("player") or "") or 0) >= STRONG_TD else 1
+    if sport in COVERAGE_READ_SPORTS and r.get("market") in COVERAGE_READ_MARKETS and not coverage_read_counts():
+        return 1
+    lean = leans.get((r.get("player") or "", r.get("team") or "", r.get("market")))
+    return 2 if lean and lean.get("read") in STRONG_READS else 1
+
+
+def tier_of(checks: dict) -> str:
+    """Top: our number, the MATCHUP and the market all agree, and our record
+    is not against it. The box's first board (2026-09-26) had 42 Top picks,
+    most of them receiving-yards overs the matchup had no read on — the
+    model, the market and the record agreeing without the one check Ethan
+    built this board around. A pick with no matchup read tops out at
+    Strong. Strong: the model passes and at most one check is against it
+    with three for, or none against with two for."""
+    vals = list(checks.values())
+    pos, neg = vals.count(True), vals.count(False)
+    if not checks.get("model"):
+        return "look"
+    if checks.get("matchup") is True and checks.get("market") is True and checks.get("record") is not False:
+        return "top"
+    if (neg == 0 and pos >= 2) or (neg <= 1 and pos >= 3):
+        return "strong"
+    return "look"
+
+
+def _game_of(r: dict, games: list) -> str:
+    if r.get("game"):
+        return r["game"]
+    teams = {r.get("team"), r.get("opponent"), r.get("home"), r.get("away")} - {None, ""}
+    for g in games or []:
+        if {g.get("home"), g.get("away")} <= teams or (teams and teams <= {g.get("home"), g.get("away")}):
+            return f"{g.get('away')}@{g.get('home')}"
+    return ""
+
+
+def build(result: dict, record: dict | None = None, sport: str = "nfl",
+          tiers_seen: dict | None = None, calibration: dict | None = None,
+          band_verdict: dict | None | str = "saved") -> dict:
+    """{"rows": [...], "tiers": {tier: n}, "lanes": {lane: n},
+    "matchup_source": ...} — the pool, checked and tiered, ranked Top
+    first, then by how hard the matchup backs it (`matchup_strength`),
+    then by our chance."""
+    if band_verdict == "saved":
+        band_verdict = _bandcap.verdict()
+    source = MATCHUP_SOURCE.get(sport, "none")
+    steps = model_matchups(result.get("recommendations") or []) if source in ("model", "scan+model") else {}
+    from .gamescan import leans_from_reads
+    from .matchpicks import td_matchup, positions_map
+    games = result.get("games") or []
+    reads = result.get("scan_reads") or {}
+    leans = leans_from_reads(reads)
+    positions = positions_map(result.get("recommendations") or [], reads)
+    usage = {x.get("player"): x.get("usage") for g in reads.values() for x in (g or {}).get("players") or []}
+
+    pool: dict = {}
+    order = []
+    capped: list = []
+    from .likely import HEAVIEST_PRICE
+
+    def add(r: dict, source: str, lines=()):
+        if not isinstance(r, dict) or r.get("model_prob") is None or (not r.get("player") and r.get("kind") != "game"):
+            return
+        # THE MAIN LIST'S -250 CAP ON EVERYTHING POOLED IN. Ethan,
+        # 2026-09-27: Gibbs at -320 was a Top pick through the matchup
+        # picks while the main list would never post him — "Yes cap at
+        # -250". The main list's own rows are left to it: a pick it posted
+        # and then held after the price moved (likely's hold) stays.
+        if source != "likely" and _past(r.get("odds"), HEAVIEST_PRICE):
+            capped.append({"player": r.get("player"), "market": r.get("market"),
+                           "odds": r.get("odds"), "source": source})
+            return
+        k = key_of(r)
+        if k not in pool:
+            row = dict(r)
+            row["sources"] = [source]
+            row["case_lines"] = list(lines or [])
+            pool[k] = row
+            order.append(k)
+            return
+        row = pool[k]
+        if source not in row["sources"]:
+            row["sources"].append(source)
+        # What the other maker already worked out, where this row lacks it.
+        for f in ("matchup_score", "matchup_points", "label", "read", "game", "headshot", "position"):
+            if row.get(f) in (None, "") and r.get(f) not in (None, ""):
+                row[f] = r[f]
+        for t in lines or []:
+            if t not in row["case_lines"]:
+                row["case_lines"].append(t)
+
+    for r in result.get("most_likely") or []:
+        add(r, "likely", r.get("bold_why"))
+    for g in result.get("matchup_picks") or []:
+        for r in (g.get("td") or []) + (g.get("props") or []):
+            add(r, "matchup", r.get("matchup_lines"))
+    for r in result.get("td_scenarios") or []:
+        add(r, "scenario", r.get("scenario_lines"))
+
+    # Every scorer's matchup, off his game's scan.
+    by_game = {f"{g.get('away')}@{g.get('home')}": g for g in games}
+    td_scores: dict = {}
+    for k in order:
+        r = pool[k]
+        r["game"] = _game_of(r, games)
+        if lane_of(r) != "td":
+            continue
+        if r.get("matchup_score") is not None:
+            td_scores[r["player"]] = int(r["matchup_score"])
+            continue
+        g = by_game.get(r["game"])
+        if not g or not g.get("scan"):
+            continue
+        scan = g["scan"]
+        opp, team = r.get("opponent"), r.get("team")
+        row = dict(r, position=str(r.get("position") or positions.get(r["player"]) or "").upper())
+        m = td_matchup(row, (scan.get("units") or {}).get(opp), (scan.get("redzone") or {}).get(team),
+                       (scan.get("redzone") or {}).get(opp), n_teams=int(scan.get("n_teams") or 32),
+                       usage=usage.get(r["player"]))
+        td_scores[r["player"]] = m["score"]
+        for t in m["lines"]:
+            if t not in r["case_lines"]:
+                r["case_lines"].append(t)
+
+    # HIS SHARE OF THE RED-ZONE WORK (the touchdown rule). MEASURED FIRST
+    # (Ethan, 2026-11-15, choosing between the estimate and the play-by-play's
+    # own share: "switch"): his share of his team's red-zone touches over his
+    # last games, counted from the play-by-play (engine/nflusage
+    # .red_zone_usage), riding his read's touchdown row (gamescan
+    # .stamp_touchdowns). Only where none was counted, the estimate: his
+    # expected red-zone chances this week against his team's plays there.
+    # Read only once the switch is on (TD_RULE_MEASURED).
+    measured = {}
+    for g in reads.values() if TD_RULE_MEASURED else ():
+        for x in (g or {}).get("players") or []:
+            got = ((x or {}).get("td") or {}).get("rz_share")
+            if got is not None and x.get("player"):
+                try:
+                    measured[(x["player"], x.get("team"))] = float(got)
+                except (TypeError, ValueError):
+                    pass
+    for k in order:
+        r = pool[k]
+        if lane_of(r) != "td":
+            continue
+        m = measured.get((r.get("player"), r.get("team")))
+        if m is not None:
+            r["rz_share"], r["rz_share_measured"] = round(min(1.0, m), 3), True
+            continue
+        if r.get("rz_share") is not None or not r.get("rz_chances"):
+            continue
+        ro = (((by_game.get(r.get("game")) or {}).get("scan") or {}).get("redzone") or {}).get(r.get("team")) or {}
+        try:
+            if float(ro.get("off") or 0) > 0:
+                r["rz_share"] = round(min(1.0, float(r["rz_chances"]) / float(ro["off"])), 3)
+        except (TypeError, ValueError):
+            pass
+
+    # THE RECORD'S CORRECTION, BEFORE A SINGLE CHECK (engine/likelycal;
+    # Ethan, 2026-10-03: "make the picks better ... I don't want to really
+    # get rid of any most likely bets"). Each pick's chance is pulled
+    # toward its price by as much as picks from the same maker on the same
+    # side have earned in the journal, so the checks, the tier and the
+    # order all read the honest number. Nothing leaves the pool. No store
+    # (or a correction that failed its held-out test) changes nothing.
+    # In the NBA (and hockey, once its own record proves it) a pick where our
+    # number and the price agree shows what agreeing picks like it have won,
+    # above both where the record says so (likelycal.fit_agree, decision 19).
+    try:
+        from .likelycal import apply as _calibrate
+        _calibrate([pool[k] for k in order], sport, calibration)
+    except Exception:                                        # noqa: BLE001
+        pass
+    # THE SCOUT'S READ (engine/likelyctx; Ethan, 2026-10-03: "think like a
+    # human ... general football knowledge"). Every football row gets the
+    # flags a football person would raise — an under in a projected
+    # shootout, a rushing over on a team expected to trail, his first game
+    # back — written on the card. A flag lowers a chance only where the
+    # graded record has proven, out of sample, that picks carrying it
+    # over-claim; until that store exists the flags are notes and nothing
+    # moves.
+    try:
+        from . import likelyctx as _ctx
+        if sport in _ctx.SPORTS:
+            _rows = [pool[k] for k in order]
+            _ctx.annotate(_rows, result, sport)
+            _ctx.apply(_rows, sport)
+    except Exception:                                        # noqa: BLE001
+        pass
+    # THE NBA SCOUT'S READ (engine/nba/scout; Ethan, 2026-11-04: "I don't
+    # know much about NBA ... make sure we're picking the right bets"): the
+    # basketball spots two seasons measured to still go wrong after our
+    # number — an under while a regular teammate sits, an under in a
+    # projected shootout, a man whose games swing, a man barely into his
+    # season — on the side and line each row takes. A flag lowers a chance
+    # only where the NBA's own graded record has proven, on games the fit
+    # never saw, that picks carrying it over-claim (engine/likelyctx, each
+    # settled pick's situation rebuilt by engine/nba/scoutrecord); until
+    # that store holds an NBA entry the flags are notes and nothing moves.
+    # COLLEGE'S (2026-11-14) are its own five seasons' verdicts on its own
+    # cards (engine/nba/scout.VERDICT_CBB), and its own record learns them
+    # the same way (engine/likelyctx.LEARNS).
+    if sport in ("nba", "cbb"):                              # engine/nba/scout.LEAGUES
+        try:
+            from .nba import scout as _nsc
+            _nrows = [pool[k] for k in order]
+            _nsc.annotate(_nrows)
+            from . import likelyctx as _nctx
+            if sport in _nctx.LEARNS:
+                _nctx.apply(_nrows, sport)
+        except Exception:                                    # noqa: BLE001
+            pass
+    # THE INVENTIONS, ONCE PROVEN (engine/ideagate; Ethan, 2026-10-17: "make
+    # sure we are wrapping all the features into the most likely bets and
+    # edge bets where it makes sense"). A reading whose held-out bar holds
+    # moves the chance by what it measured, holds a pick it says will not
+    # stand, or gives the market check the fair chance by opinion. Before a
+    # verdict holds, nothing here moves.
+    try:
+        from . import ideagate as _gate
+        _gate.most_likely([pool[k] for k in order], sport)
+    except Exception:                                        # noqa: BLE001
+        pass
+    # THE PRICE, WHERE WE RUN ABOVE IT (`trust_price`; Ethan, 2026-10-17:
+    # "yes nfl board"). Last, so it judges the number every correction above
+    # has already set — the number pricetrust tested — and the checks, the
+    # tier and the order all read what the page shows.
+    trust_stats: dict = {}
+    try:
+        trust_price([pool[k] for k in order], result, sport, stats=trust_stats)
+    except Exception as exc:                                 # noqa: BLE001
+        trust_stats["error"] = f"{type(exc).__name__}: {exc}"
+    # ON PAPER, NOT POSTED (engine/paperhold; Ethan, 2026-11-15: "if any bets
+    # is like that we should switch them to paper and stop posting them till
+    # we learn and get them better"). A kind of pick the board's own record
+    # says it oversells — and every league's picks 15+ points above the
+    # market, the kind that said 76% and hit 36% — comes off the board as a
+    # held-back pick does (`held_reason`), journaled and graded, until its
+    # paper picks run honest. Read after the price, on the number the page
+    # would show.
+    paper_held, paper_error = 0, None
+    try:
+        from . import paperhold as _paper
+        paper_held = _paper.stamp([pool[k] for k in order], sport, result)
+    except Exception as exc:                                 # noqa: BLE001
+        paper_error = f"{type(exc).__name__}: {exc}"
+    # A PROP'S OWN PRICE IS ITS CEILING (PRICE_CEILING, college). After the
+    # paper holds, which judge our own claim and keep the picks they hold as
+    # they are; every row left reads the number the page will show.
+    ceiling_stats: dict = {}
+    try:
+        hold_to_own_price([pool[k] for k in order], sport, stats=ceiling_stats)
+        # …and the NFL's, at its own price's chance plus NFL_CAP_ROOM (step AAV, decision 17).
+        # It says it is on, moving none or some, so the heartbeat can count it (capped, capped_posted).
+        if nfl_cap_on(sport):
+            ceiling_stats["nfl_cap"] = True
+            cap_far_over([pool[k] for k in order], sport, stats=ceiling_stats)
+        mark_one_sided([pool[k] for k in order], result, sport, stats=ceiling_stats)
+    except Exception as exc:                                 # noqa: BLE001
+        ceiling_stats["error"] = f"{type(exc).__name__}: {exc}"
+    rows, tiers, lanes, held = [], {t: 0 for t, _ in TIERS}, {}, []
+    for k in order:
+        r = pool[k]
+        lane = lane_of(r)
+        prob = float(r["model_prob"])
+        checks, notes = {}, {}
+        bar = SPORT_MODEL_BAR.get(sport, MODEL_BAR)[lane]
+        checks["model"] = prob >= bar
+        notes["model"] = (f"our chance {prob:.0%} (the bar here is {bar:.0%})"
+                          + (f" — {r['cal_note']}" if r.get("cal_note") else "")
+                          + (f" — {r['ctx_note']}" if r.get("ctx_note") else "")
+                          + (f" — {r['idea_note']}" if r.get("idea_note") else "")
+                          + (f" — {r['trust_note']}" if r.get("trust_note") else ""))
+        checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores, steps, source, sport)
+        # NOT A SECOND OPINION ON ITSELF (Ethan, 2026-10-03, "yeah make the
+        # tier change"). A pick only the matchup picks or the touchdown
+        # scenarios made was made BY the matchup read, so that read agreeing
+        # with it is the same opinion counted twice — which is how the NFL
+        # matchup picks reached Top pick and went 4-14 there. Its matchup
+        # check says nothing either way; the pick stays on the board, and it
+        # can still be Strong on the model, the market and the record.
+        if checks["matchup"] is True and not ({"likely"} & set(r.get("sources") or ())):
+            checks["matchup"] = None
+            notes["matchup"] = (notes["matchup"] + " — but this pick came from the matchup read itself,"
+                                " so it does not count as a second opinion")
+        checks["market"], notes["market"] = market_check(r)
+        # NOT A SECOND OPINION ON ITSELF, AGAIN. A prop shown at its price's
+        # number (`ceiling_back`) agrees with its price because it IS the
+        # price: the market check says nothing either way, so a pick we rated
+        # above its price is never a Top pick on the price's say-so.
+        if r.get("ceiling_from") is not None and checks["market"] is True:
+            checks["market"] = None
+            notes["market"] += " — the number shown is the price's own, so this does not count as a second opinion"
+        # …NOR IS A PRICE WITH ONE SIDE QUOTED (`mark_one_sided`).
+        elif r.get("price_one_sided") and checks["market"] is True:
+            checks["market"] = None
+            notes["market"] += (" — but no book quotes both sides of this number, so the price carries the "
+                                "book's whole cut and does not count as a second opinion")
+        checks["record"], notes["record"] = record_check(record, r.get("market"), _side(r), prob)
+        why_held = held_reason(r, checks)
+        if not why_held:
+            # A scorer row carries no position; the props and the reads do.
+            if not r.get("position") and positions.get(r.get("player")):
+                r["position"] = str(positions[r["player"]]).upper()
+            why_held = tightened_reason(r, sport)
+            if why_held:
+                r["tight_hold"] = True
+        if why_held:
+            r.update({"lane": lane, "checks": checks, "check_notes": notes, "held_note": why_held,
+                      "tier": "held", "tier_label": HELD_LABEL})
+            held.append(r)
+            continue
+        tier = tier_of(checks)
+        # NEAR EVEN MONEY THE LABEL RAN BACKWARDS (engine/bandcap; Ethan,
+        # 2026-10-04: "lets do what we need to do"). Only once a saved
+        # verdict has proven it: the pick stays, marked Worth a look, and
+        # says why.
+        _cap = _bandcap.cap_note(band_verdict, r.get("odds")) if tier in ("top", "strong") else None
+        if _cap:
+            tier = "look"
+            r["band_note"] = _cap
+        else:
+            r.pop("band_note", None)
+        # ETHAN'S METHOD (METHOD_AVOID, td_rule): a pick breaking one of his
+        # rules stays, tops out at Worth a look, and says which rule.
+        fails = method_fails(r, sport)
+        rule = td_rule(r) if lane == "td" and sport in METHOD_SPORTS else None
+        if rule:
+            r["td_rule"] = rule
+        else:
+            r.pop("td_rule", None)
+        why_capped = fails[0] if fails else (rule["why"] if rule and not rule["meets"] else None)
+        if fails:
+            r["method_fails"] = fails
+        else:
+            r.pop("method_fails", None)
+        if why_capped and tier in ("top", "strong"):
+            tier = "look"
+            r["method_note"] = f"Worth a look, not higher — {why_capped}"
+        else:
+            r.pop("method_note", None)
+        # A TOUCHDOWN UNDER THE MAIN LIST'S BAR, BACKED BY THE MATCHUP.
+        # Ethan, 2026-09-27, on Breece Hall at 42% reading "Top pick" beside
+        # St. Brown at 52% reading "reserve — ranked, not recommended": he
+        # chose to keep the matchup picks' tiers and say what they are. So
+        # a pick the matchup picks or the scenarios put here under 55% says
+        # its chance and that the matchup backs it, and is not a reserve.
+        if lane == "td" and prob < LIKELY_BAR and {"matchup", "scenario"} & set(r.get("sources") or ()):
+            r["backed_note"] = f"{prob:.0%} — backed by the matchup"
+            r.pop("reserve", None)
+            r.pop("reserve_note", None)
+        r.update({"lane": lane, "tier": tier, "tier_label": TIER_LABEL[tier],
+                  "checks": checks, "check_notes": notes,
+                  "record_seen": record_seen(record, r.get("market"), _side(r), prob),
+                  "matchup_strength": matchup_strength(r, leans, td_scores, checks["matchup"], sport),
+                  "matchup_score": td_scores.get(r.get("player") or "") if lane == "td" else r.get("matchup_score")})
+        # THE TIER'S REAL HIT RATE, on the tiers that claim more than they
+        # hit (REAL_RATE_TIERS): the card shows it in place of our chance.
+        rate, n_seen = real_rate(tiers_seen, tier)
+        if rate is not None:
+            r["tier_rate"], r["tier_n"] = rate, n_seen
+        else:
+            r.pop("tier_rate", None)
+            r.pop("tier_n", None)
+        rows.append(r)
+        tiers[tier] += 1
+        lanes[lane] = lanes.get(lane, 0) + 1
+    rank = {t: i for i, (t, _) in enumerate(TIERS)}
+    rows.sort(key=lambda r: (rank[r["tier"]], -r["matchup_strength"], -float(r["model_prob"])))
+    out = {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source,
+           "capped": capped, "held": held, "price_trust": trust_stats, "paper_held": paper_held}
+    if ceiling_stats.get("on") or ceiling_stats.get("error") or ceiling_stats.get("nfl_cap"):
+        out["price_ceiling"] = ceiling_stats
+    if paper_error:
+        out["paper_error"] = paper_error
+    return out
+
+
+def _past(odds, cap: int) -> bool:
+    """A price heavier than ``cap`` (e.g. -320 against -250)."""
+    try:
+        return int(odds) < cap
+    except (TypeError, ValueError):
+        return False
+
+
+def attach(result: dict, sport: str, conn=None) -> str:
+    """Build the board onto ``result["likely_board"]`` with this sport's
+    record; the line for the build log. Never raises — a board that fails
+    leaves the page on its older Most Likely shelves."""
+    try:
+        if conn is None:
+            from . import ledger
+            try:
+                conn = ledger.connect()
+            except Exception:                                # noqa: BLE001
+                conn = None
+        try:
+            rec = record_table(conn, sport) if conn is not None else {}
+        except Exception:                                    # noqa: BLE001
+            rec = {}
+        try:
+            seen = tier_record(conn, sport) if conn is not None else {}
+        except Exception:                                    # noqa: BLE001
+            seen = {}
+        board = build(result, record=rec, sport=sport, tiers_seen=seen)
+        result["likely_board"] = board
+        harmonize(result)
+        # THE PRICE GRADE (engine/pricegrade; Ethan, 2026-11-20: yes, on the NBA's
+        # and hockey's picks): each prop's price against our number, Green, Yellow
+        # or Red, with what picks like it have done on our record. After
+        # `harmonize`, so it grades the number the pick ends up showing. A label:
+        # no pick moves, and no tier reads it.
+        from . import pricegrade
+        graded = pricegrade.record(conn, sport) if conn is not None and pricegrade.on(sport) else {}
+        board["price_grade"] = pricegrade.stamp(board["rows"], sport, graded)
+        # The Most Likely list's own rows of the same bets (Ask reads those), uncounted.
+        pricegrade.stamp([r for r in result.get("most_likely") or [] if isinstance(r, dict)], sport, graded)
+        t = board["tiers"]
+        held_unders = sum(1 for r in board.get("held") or [] if r.get("tight_hold"))
+        on_paper = sum(1 for r in board.get("held") or [] if r.get("paper_hold"))
+        return (f"Most Likely board: {len(board['rows'])} pick(s) — {t.get('top', 0)} top, "
+                f"{t.get('strong', 0)} strong, {t.get('look', 0)} worth a look"
+                + (f"; {held_unders} held by the record's under rules" if held_unders else "")
+                + (f"; {on_paper} on paper, not posted (engine/paperhold)" if on_paper else ""))
+    except Exception as exc:                                 # noqa: BLE001
+        # WHERE, not only what (the box, 2026-10-06: NHL's board was
+        # skipped every build with "unhashable type: 'dict'" and nothing
+        # to say which line). The innermost frame, so the log alone is
+        # enough to find it.
+        import os
+        import traceback
+        tb = traceback.extract_tb(exc.__traceback__)
+        where = f" (at {os.path.basename(tb[-1].filename)}:{tb[-1].lineno} in {tb[-1].name})" if tb else ""
+        return f"⚠️  one Most Likely board skipped: {type(exc).__name__}: {exc}{where}"
+
+
+def journal(lconn, result: dict, sport: str, date: str = "") -> int:
+    """The board's rows to the paper book, one bucket per tier (category
+    ``board``, the tier as the grade) — as nfl_build does."""
+    from . import ledger
+    n = 0
+    for tier, label in TIERS:
+        n += ledger.log_most_likely(
+            lconn, {"sport": sport, "date": date or result.get("date", ""), "games": result.get("games") or [],
+                    "most_likely": journal_rows(result.get("likely_board"), tier)},
+            depth=None, category="board", grade_label=label) or 0
+    n += journal_held(lconn, result, sport, date)
+    return n
+
+
+def journal_held(lconn, result: dict, sport: str, date: str = "") -> int:
+    """The held-back picks on paper in their own bucket, so the record — not
+    the argument in `held_reason` — says whether holding them was right."""
+    from . import ledger
+    held = (result.get("likely_board") or {}).get("held") or []
+    if not held:
+        return 0
+    return ledger.log_most_likely(
+        lconn, {"sport": sport, "date": date or result.get("date", ""), "games": result.get("games") or [],
+                "most_likely": held}, depth=None, category=HELD_CATEGORY, grade_label=HELD_LABEL) or 0
+
+
+def bold_rows(result: dict) -> list:
+    """Every bold pick this build made (engine/boldcheck), for the journal's ``bold`` book: the Most Likely list's,
+    and the board's held-back ones, which the list no longer carries once held (engine/paperhold, step AEE). The
+    book keeps measuring them on paper either way, and the hold reads a pick as bold off it, so a kind it holds can
+    come back on its own record. Each bet once."""
+    out, seen = [], set()
+    for r in list(result.get("most_likely") or []) + list((result.get("likely_board") or {}).get("held") or []):
+        if isinstance(r, dict) and r.get("bold") and key_of(r) not in seen:
+            seen.add(key_of(r))
+            out.append(r)
+    return out
+
+
+def journal_rows(board: dict, tier: str) -> list:
+    """The board's rows of one tier, for the paper book."""
+    return [r for r in (board or {}).get("rows") or [] if r.get("tier") == tier]
+
+
+# ─── one bet, one chance; and the card says when our own read disagrees ────
+
+def _all_pick_rows(result: dict) -> list:
+    """Every Most Likely-family row the page or the journal can show, outside
+    the board itself: the Most Likely list, the matchup picks, the scenarios."""
+    out = [r for r in result.get("most_likely") or [] if isinstance(r, dict)]
+    for g in result.get("matchup_picks") or []:
+        out += [r for r in (g.get("td") or []) + (g.get("props") or []) if isinstance(r, dict)]
+    out += [r for r in result.get("td_scenarios") or [] if isinstance(r, dict)]
+    return out
+
+
+def matchup_warning(row: dict) -> str:
+    """The card's warning when the matchup check said no, else ''."""
+    if (row.get("checks") or {}).get("matchup") is not False:
+        return ""
+    return str((row.get("check_notes") or {}).get("matchup") or "our matchup read leans the other way")
+
+
+def _cards_follow_the_list(result: dict, held: dict) -> int:
+    """THE SCAN CARDS FOLLOW THE LIST (2026-11-08). A player's read is
+    stamped with his Most Likely pick from the list as the board first built
+    it (engine/gamescan.stamp_picks), before `harmonize` takes the tightened
+    board's held picks off that list; the NFL board's own check counted two
+    and three cards a build naming a pick the list did not carry
+    (engine/boardtruth PICK MISSING). A card whose pick came off says so: no
+    pick, the held number as its best on the read's side, and the board's
+    reason, which the card already prints ("The board turned it down: …").
+    ``held``: the held rows by `key_of`. Returns how many cards changed."""
+    on_list = {key_of(r) for r in result.get("most_likely") or [] if isinstance(r, dict)}
+    n = 0
+    for game in (result.get("scan_reads") or {}).values():
+        players = game.get("players") if isinstance(game, dict) else None
+        for x in players or []:
+            pick = x.get("pick") if isinstance(x, dict) else None
+            if not isinstance(pick, dict):
+                continue
+            k = key_of(dict(pick, player=pick.get("player") or x.get("player")))
+            if k not in held or k in on_list:
+                continue
+            reason = str(held[k].get("held_note") or "")
+            if reason.lower().startswith("held back:"):
+                reason = reason[len("held back:"):].strip()
+            x["no_pick"] = {"best": x.pop("pick"), "priced": True, "refused": reason}
+            n += 1
+    return n
+
+
+def _read_picks_follow_the_board(result: dict, by: dict, dropped: dict | None = None) -> int:
+    """THE READ'S OWN PICK SAYS WHAT THIS BOARD DID WITH IT (2026-11-14). A
+    read's matchup pick (engine/matchpicks.READ_PICK_MIN) is pooled here and
+    checked like every pick; the card that names it names the verdict too:
+    its tier, or that the board held it back and why. Ethan, of the NFL's
+    read picks under the tightened board's 60%: "hold them back". ``by``: the
+    board's rows and held rows by `key_of`. Returns how many cards it set."""
+    n = 0
+    for game in (result.get("scan_reads") or {}).values():
+        players = game.get("players") if isinstance(game, dict) else None
+        for x in players or []:
+            mp = x.get("matchup_pick") if isinstance(x, dict) else None
+            if not isinstance(mp, dict):
+                continue
+            for f in ("tier", "tier_label", "held_note"):
+                mp.pop(f, None)
+            k = key_of(dict(mp, player=mp.get("player") or x.get("player"), kind="prop"))
+            b = by.get(k)
+            if k in (dropped or {}) and not (b is not None and b.get("tier") == "held"):
+                # Off the matchup picks under its own bar (the board kept it).
+                mp["tier"], mp["held_note"] = "held", dropped[k]
+                n += 1
+                continue
+            if b is None:
+                continue
+            if b.get("tier") == "held":
+                mp["tier"], mp["held_note"] = "held", str(b.get("held_note") or "")
+            elif b.get("tier"):
+                mp["tier"], mp["tier_label"] = b["tier"], str(b.get("tier_label") or "")
+            n += 1
+    return n
+
+
+def harmonize(result: dict) -> int:
+    """ONE BET, ONE CHANCE (Ethan, 2026-10-06, "yes 2"). The contradiction
+    check found nine bets the page showed with two chances — Bucky Irving
+    over 1.5 catches at 77% on Most Likely and 68% on the one board. The
+    board's number is the one the graded record has corrected
+    (engine/likelycal, engine/likelyctx), so it is written back onto every
+    other row of the same bet, the list's own kept as ``listed_prob``. The
+    journal reads ``model_prob`` after this, so it records the number the
+    page shows. KEEP IT, SAY IT (Ethan, "keep 3 with the warning"): where
+    the matchup check said no, the row carries ``matchup_warning``.
+    Returns how many rows changed their chance."""
+    board = result.get("likely_board") or {}
+    rows = [r for r in (board.get("rows") or []) + (board.get("held") or []) if isinstance(r, dict)]
+    by = {key_of(r): r for r in rows}
+    # ONE BET, ONE VERDICT. A pick the tightened NFL board held back
+    # (`tightened_reason`) is not posted on the list either, so the list's
+    # staked book cannot take what the board refused — the list journals
+    # `most_likely` on its own, after this.
+    # ON PAPER (engine/paperhold) the same way: a kind the record says we
+    # oversell is not posted on the list, the matchup picks or the touchdown
+    # scenarios either — it is journaled once, as the board's held pick.
+    tight_rows = {key_of(r): r for r in board.get("held") or []
+                  if isinstance(r, dict) and (r.get("tight_hold") or r.get("paper_hold"))}
+    tight = set(tight_rows)
+    if tight and isinstance(result.get("most_likely"), list):
+        keep = [r for r in result["most_likely"]
+                if not (isinstance(r, dict) and not r.get("locked") and key_of(r) in tight)]
+        board["tightened_off_list"] = len(result["most_likely"]) - len(keep)
+        result["most_likely"] = keep
+        board["cards_unpicked"] = _cards_follow_the_list(result, tight_rows)
+    paper = {k for k, r in tight_rows.items() if r.get("paper_hold")}
+    if paper:
+        gone = 0
+        for g in result.get("matchup_picks") or []:
+            if not isinstance(g, dict):
+                continue
+            for lane in ("td", "props"):
+                if isinstance(g.get(lane), list):
+                    was = len(g[lane])
+                    g[lane] = [r for r in g[lane]
+                               if not (isinstance(r, dict) and not r.get("locked") and key_of(r) in paper)]
+                    gone += was - len(g[lane])
+        if isinstance(result.get("td_scenarios"), list):
+            was = len(result["td_scenarios"])
+            result["td_scenarios"] = [r for r in result["td_scenarios"]
+                                      if not (isinstance(r, dict) and not r.get("locked") and key_of(r) in paper)]
+            gone += was - len(result["td_scenarios"])
+        board["paper_off_lists"] = gone
+    n = 0
+    for r in rows:
+        w = matchup_warning(r)
+        if w:
+            r["matchup_warning"] = w
+    for src in _all_pick_rows(result):
+        b = by.get(key_of(src))
+        if b is None or b is src:
+            continue
+        p, q = b.get("model_prob"), src.get("model_prob")
+        # A POSTED PICK KEEPS THE NUMBER IT WENT UP AT (likely._locked; it
+        # is the number the journal holds). Here the board takes it instead.
+        if src.get("locked") and q is not None:
+            if p is not None and abs(float(p) - float(q)) > 1e-9:
+                b.setdefault("corrected_prob", p)
+                b["model_prob"] = q
+            # THE PRICE ON A POSTED PICK (`trust_price`): the list's number
+            # is today's chance, so the price judges it here too, and the
+            # list shows what the board shows — one bet, one chance.
+            if give_back(b) or ceiling_back(b):
+                src.setdefault("listed_prob", q)
+                src["model_prob"] = b["model_prob"]
+                src["trust_note"] = b["trust_note"]
+                restate_lock(src)
+            w = matchup_warning(b)
+            if w:
+                src["matchup_warning"] = w
+            continue
+        if p is not None and q is not None and abs(float(p) - float(q)) > 1e-9:
+            src.setdefault("listed_prob", q)
+            src["model_prob"] = p
+            for f in ("cal_note", "ctx_note", "trust_note"):
+                if b.get(f):
+                    src[f] = b[f]
+            n += 1
+        w = matchup_warning(b)
+        if w:
+            src["matchup_warning"] = w
+    dropped = _matchup_picks_follow_the_board(result, by)
+    board["matchup_picks_off"] = len(dropped)
+    board["read_picks_carded"] = _read_picks_follow_the_board(result, by, dropped)
+    return n
+
+
+def _matchup_picks_follow_the_board(result: dict, by: dict) -> dict:
+    """THE MATCHUP PICKS FOLLOW THE BOARD (2026-11-15; Ethan's QC paste: five
+    NFL matchup picks the board's own check flagged — unders at 53% with the
+    projection over the line, overs at 50%). A matchup pick is made at its
+    own bar on the model's number (engine/matchpicks: 55% for yards and
+    catches, TD_MIN_PROB for a scorer); the board then corrects that bet's
+    chance on the graded record and the loop above writes it back onto the
+    pick — and the pick stayed posted under its own bar. Now one taken under
+    it, or held back by the board, comes off the matchup picks: one bet, one
+    verdict. A posted pick keeps its seat until its game. Returns the picks
+    taken off by `key_of`, each with its reason."""
+    from .matchpicks import READ_PICK_MIN, TD_MIN_PROB
+    dropped: dict = {}
+    for g in result.get("matchup_picks") or []:
+        if not isinstance(g, dict):
+            continue
+        for lane in ("td", "props"):
+            rows = g.get(lane)
+            if not isinstance(rows, list):
+                continue
+            keep = []
+            for r in rows:
+                if not isinstance(r, dict) or r.get("locked"):
+                    keep.append(r)
+                    continue
+                k = key_of(r)
+                b = by.get(k)
+                bar = TD_MIN_PROB if lane == "td" else READ_PICK_MIN
+                try:
+                    p = float(r.get("model_prob"))
+                except (TypeError, ValueError):
+                    p = None
+                if b is not None and b.get("tier") == "held":
+                    dropped[k] = str(b.get("held_note") or "held back by the board")
+                    continue
+                if p is not None and p < bar:
+                    dropped[k] = (f"held back: the record's correction puts our chance at {p:.0%}, under "
+                                  f"the {bar:.0%} a matchup pick needs")
+                    continue
+                keep.append(r)
+            g[lane] = keep
+    return dropped
+
+
+def warn_avoids(result: dict) -> int:
+    """A pick the game plan lists under "plays to avoid" keeps its seat and
+    says so (``avoid_warning``) on every row of it. Run after the game plan
+    is built. Returns how many rows were marked."""
+    from .contradictions import avoid_rows, _side as _cside
+    avoid = {}
+    for a in avoid_rows(result):
+        avoid.setdefault((a.get("player"), a.get("market"), _cside(a.get("side") or "over")),
+                         str(a.get("why") or "").strip())
+    if not avoid:
+        return 0
+    board = result.get("likely_board") or {}
+    n = 0
+    for r in _all_pick_rows(result) + [x for x in board.get("rows") or [] if isinstance(x, dict)]:
+        why = avoid.get((r.get("player"), r.get("market"), _cside(r.get("side"))))
+        if why is None:
+            continue
+        r["avoid_warning"] = "The game plan lists this as a play to avoid" + (f": {why}" if why else "")
+        n += 1
+    return n

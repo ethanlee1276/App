@@ -1,0 +1,15 @@
+{
+  "name": "qellys-ios",
+  "private": true,
+  "version": "1.0.0",
+  "description": "The iOS shell around qellysbook.com (docs/APP_STORES.md). Built on a Mac.",
+  "dependencies": {
+    "@capacitor/core": "latest",
+    "@capacitor/ios": "latest",
+    "@capacitor/push-notifications": "latest",
+    "@capacitor/splash-screen": "latest"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "latest"
+  }
+}

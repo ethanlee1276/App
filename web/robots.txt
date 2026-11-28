@@ -1,0 +1,10 @@
+# Qellys Book. Every page is one document (the app routes on the hash), so
+# the site is crawled at its front door; the data files and the API are not
+# pages — some are megabytes of rosters — and are left out.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /data/
+Disallow: /min/
+
+Sitemap: https://qellysbook.com/sitemap.xml

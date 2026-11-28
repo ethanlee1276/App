@@ -1,0 +1,377 @@
+"""College football's stored games and stat lines, one game once (2026-11-14).
+
+    python3 -m engine.cfbdedupe                 # what it would remove; writes nothing
+    python3 -m engine.cfbdedupe --apply         # remove it
+    python3 -m engine.cfbdedupe --season 2026   # one season (default: every season)
+
+Ethan's catch-up run (step PU), 2026-11-14: Cooper Barkate's Miami games
+were filed two and three times each. Each game had its official row
+("401858249"), the same-night box score's provisional copy under the
+schedule's key ("MIA@CLEM-box"), and sometimes another under ESPN's
+("401858249-box"). The Notre Dame game also sat on two days (11-07 and
+11-08). Across 2026, 53,072 of 107,233 college (player, market, opponent)
+keys sat under two or more game ids.
+
+Three writers made them, each fixed where it writes:
+  * the same-night box settle never purged a college game's provisional
+    rows: it looked for the official rows under the schedule's key, and
+    the play file keys a game by ESPN's number (engine/boxsettle,
+    `has_official_rows`, `purge_provisional`, now by the two teams);
+  * it filed one copy for every games row of a game — its ESPN id and
+    away@home, and a night game's Eastern and UTC days — now one;
+  * the play file's join took whichever of a night game's two days came
+    out last, so a later run filed the same game again under the other
+    (engine/ingest.cfb_games_for, now the Eastern day always).
+
+THIS REMOVES WHAT THEY LEFT. Stat lines: within one player's market against
+one opponent, rows a day or less apart are one game. The official row is
+kept (not a `-box` copy, ESPN's number before another key, the earlier day
+first), and the rest go. Where a box copy's number differs from the kept
+one, the count and a few examples are printed (Barkate at Notre Dame: 144
+and 92). Barkate's copies were read mid-game, from the live board's cached
+summary on a failed read (engine/boxsettle, step QQ). Most of the rest are
+not: Ethan's run, 2026-11-14, found 4,406 in 2026, some of them above the
+play file's number (A'Marion Peterson: 5 carries in the box, 4 in the play
+file), which no mid-game copy can be. The two sources count differently, and
+which one college grades on was the decision under RUN_NEXT 00e: the box
+score, Ethan answered (step RB, engine/boxsettle.BOX_GRADES), from the copies
+filed after 2026-11-14 on. The play file's row is kept here: the copies this
+removes were filed before a box score had to be final to be filed, and some
+were read mid-game. Games: one pair's rows a day or
+less apart with the same final score are one game. The away@home row on the
+earlier day is kept, it takes any line or note only the others carried,
+and the rest go.
+
+Why it matters beyond the reports: grading treats two rows of one game as a
+doubleheader's two legs, and voids a bet whose two rows fall on either side
+of its line once the day is final. Read-only without ``--apply``.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as _dt
+import json
+import sys
+
+BOX = "-box"
+#: Examples of a box copy that disagreed with the kept row, printed a season.
+EXAMPLES = 8
+#: Rows deleted per statement.
+CHUNK = 400
+
+
+def _day(p) -> _dt.date | None:
+    try:
+        return _dt.date.fromisoformat(str(p)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _rank(row) -> tuple:
+    """Smaller is kept: not a provisional copy, ESPN's number, earlier day."""
+    gid = str(row["game_id"] or "")
+    return (gid.endswith(BOX), not gid.isdigit(), str(row["period"] or ""), gid)
+
+
+def clusters(rows) -> list:
+    """Rows of one key, ordered by period, split where a gap passes a day."""
+    out, cur, start = [], [], None
+    for r in rows:
+        d = _day(r["period"])
+        if cur and (d is None or start is None or (d - start).days > 1):
+            out.append(cur)
+            cur = []
+        if not cur:
+            start = d
+        cur.append(r)
+    if cur:
+        out.append(cur)
+    return out
+
+
+def games_of(cluster) -> list:
+    """One player's rows of one market a day or less apart, split into games: two rows are one game when
+    they share his school or his opponent (one school plays one game a week, so a code that differs on
+    the other side is the same game: BUF and BUFF, step AFE). Rows that share neither, two players of
+    one name, stay apart. Each game's rows in their order."""
+    n = len(cluster)
+    root = list(range(n))
+
+    def find(i):
+        while root[i] != i:
+            root[i] = root[root[i]]
+            i = root[i]
+        return i
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = cluster[i], cluster[j]
+            if a["team"] == b["team"] or a["opponent"] == b["opponent"]:
+                root[find(j)] = find(i)
+    out: dict = {}
+    for i in range(n):
+        out.setdefault(find(i), []).append(cluster[i])
+    return list(out.values())
+
+
+def plan_logs(conn, season: int) -> dict:
+    """What would go from one season's stat lines: {"rows", "keys", "groups",
+    "delete": [rowid…], "by_kind": {"same teams": n, "another code": n},
+    "disagree", "examples"}. Streams the season, one player's market at a
+    time; a game is `games_of` its rows a day or less apart (step AHV, 26
+    November 2026: until then the same two teams only, which left 1,300
+    rows of one game under another code for one side on 25 November)."""
+    q = ("SELECT rowid AS rid, period, game_id, player, team, opponent, market, value "
+         "FROM player_game_logs WHERE sport='cfb' AND season=? "
+         "ORDER BY player, market, period")
+    res = {"rows": 0, "keys": 0, "groups": 0, "delete": [], "by_kind": {"same teams": 0, "another code": 0},
+           "disagree": 0, "examples": []}
+    key, buf = None, []
+
+    def flush():
+        if not buf:
+            return
+        res["keys"] += 1
+        for cluster in clusters(buf):
+            for group in (games_of(cluster) if len(cluster) > 1 else ()):
+                if len(group) < 2:
+                    continue
+                res["groups"] += 1
+                group = sorted(group, key=_rank)
+                keep = group[0]
+                for r in group[1:]:
+                    res["delete"].append(r["rid"])
+                    same = r["team"] == keep["team"] and r["opponent"] == keep["opponent"]
+                    res["by_kind"]["same teams" if same else "another code"] += 1
+                other = {float(r["value"]) for r in group[1:] if str(r["game_id"]).endswith(BOX)}
+                if not str(keep["game_id"]).endswith(BOX) and other - {float(keep["value"])}:
+                    res["disagree"] += 1
+                    if len(res["examples"]) < EXAMPLES:
+                        res["examples"].append(
+                            f"{keep['player']} ({keep['team']} vs {keep['opponent']}) {keep['market']} "
+                            f"{keep['period']}: kept {float(keep['value']):g}, box {sorted(other)}")
+
+    for r in conn.execute(q, (int(season),)):
+        res["rows"] += 1
+        k = (r["player"], r["market"])
+        if k != key:
+            flush()
+            key, buf = k, []
+        buf.append(r)
+    flush()
+    return res
+
+
+def plan_games(conn, season: int) -> dict:
+    """What would go from one season's games rows: {"pairs", "delete": [rowid…],
+    "fill": [(rowid, {col: value})]}."""
+    q = ("SELECT rowid AS rid, period, game_id, home, away, home_score, away_score, spread, total, extra "
+         "FROM games WHERE sport='cfb' AND season=? ORDER BY home, away, period")
+    res = {"pairs": 0, "delete": [], "fill": []}
+    key, buf = None, []
+
+    def same_final(a, b):
+        sa, sb = (a["home_score"], a["away_score"]), (b["home_score"], b["away_score"])
+        return None in sa or None in sb or sa == sb
+
+    def flush():
+        for group in clusters(buf):
+            if len(group) < 2:
+                continue
+            keep = sorted(group, key=lambda r: ("@" not in str(r["game_id"] or ""), str(r["period"] or "")))[0]
+            dupes = [r for r in group if r is not keep and same_final(keep, r)]
+            if not dupes:
+                continue
+            res["pairs"] += 1
+            fill: dict = {}
+            for col in ("home_score", "away_score", "spread", "total"):
+                if keep[col] is None:
+                    got = next((r[col] for r in dupes if r[col] is not None), None)
+                    if got is not None:
+                        fill[col] = got
+            try:
+                extra = json.loads(keep["extra"] or "{}") or {}
+            except (ValueError, TypeError):
+                extra = {}
+            merged = dict(extra)
+            for r in dupes:
+                try:
+                    for k, v in (json.loads(r["extra"] or "{}") or {}).items():
+                        merged.setdefault(k, v)
+                except (ValueError, TypeError):
+                    continue
+            if merged != extra:
+                fill["extra"] = json.dumps(merged)
+            if fill:
+                res["fill"].append((keep["rid"], fill))
+            res["delete"].extend(r["rid"] for r in dupes)
+
+    for r in conn.execute(q, (int(season),)):
+        k = (r["home"], r["away"])
+        if k != key:
+            flush()
+            key, buf = k, []
+        buf.append(r)
+    flush()
+    return res
+
+
+def apply(conn, logs: dict, games: dict) -> int:
+    """Remove the planned rows; returns rows removed."""
+    n = 0
+    for table, ids in (("player_game_logs", logs.get("delete") or []), ("games", games.get("delete") or [])):
+        for i in range(0, len(ids), CHUNK):
+            part = ids[i:i + CHUNK]
+            cur = conn.execute(f"DELETE FROM {table} WHERE rowid IN ({','.join('?' * len(part))})", part)
+            n += cur.rowcount or 0
+    for rid, fill in games.get("fill") or []:
+        cols = ", ".join(f"{c}=?" for c in fill)
+        conn.execute(f"UPDATE games SET {cols} WHERE rowid=?", (*fill.values(), rid))
+    conn.commit()
+    return n
+
+
+#: WHAT THE COPIES ARE, COUNTED, NOT REMOVED (step AFG, 2026-11-25). On the live board
+#: on 25 November, 112 of 186 college market logs held a game twice, eleven days after
+#: this module's cleanup, and the reads merge them now (engine/gamelog.games_once).
+#: Which writer files them again is a question about game ids the board does not show,
+#: so the nightly chores count them by kind and by the two ids' shapes
+#: (`census`, maintenance.run_cfb_census), and the heartbeat carries the count.
+KINDS = ("same day, same teams", "a day apart, same teams", "the opponent under another code",
+         "his school under another code", "the other side", "other")
+#: Examples kept a kind.
+CENSUS_EXAMPLES = 2
+#: THE CLEANUP'S DAY (00e, run with --apply on 14 November 2026). A copy of a game played on or after it can
+#: only have been filed since, so `census` counts those apart ("since"): a writer still filing copies shows
+#: there the next night, whatever the old rows do (step AHV, 26 November 2026).
+CLEANED = "2026-11-14"
+
+
+def _id_shape(gid) -> str:
+    """A game id's shape: a provisional copy, ESPN's number, away@home, or else."""
+    g = str(gid or "")
+    if g.endswith(BOX):
+        return "box"
+    if g.isdigit():
+        return "espn"
+    return "away@home" if "@" in g else "other"
+
+
+def copy_kind(head, row) -> str:
+    """How ``row`` copies ``head``, the earliest row of its game (`KINDS`)."""
+    if row["team"] == head["team"] and row["opponent"] == head["opponent"]:
+        return KINDS[0] if str(row["period"]) == str(head["period"]) else KINDS[1]
+    if row["team"] == head["team"]:
+        return KINDS[2]
+    if row["opponent"] == head["opponent"]:
+        return KINDS[3]
+    if row["team"] == head["opponent"] and row["opponent"] == head["team"]:
+        return KINDS[4]
+    return KINDS[5]
+
+
+def census(conn, season: int) -> dict:
+    """A season's stored copies, counted: {"rows": rows read, "games": player-games filed more than once,
+    "copies": rows beyond the first of their game, "kinds": {kind: rows}, "ids": {kind: {"espn+box": rows}},
+    "examples": {kind: ["player, market, day: ids"]}, "since": {"day": CLEANED, "copies", "kinds"} for games
+    played on or after the cleanup, "latest": {kind: the newest game's example}, "markets": {kind: its four
+    commonest markets}, "zeros": {kind: copies where both rows read 0}}. Writes nothing. Copies are
+    found as `plan_logs` finds them, a day or less apart, but within one player's market whatever the teams
+    (`copy_kind`): "the other side" and "other" can be two players of one name, and the cleanup leaves them."""
+    q = ("SELECT period, game_id, player, team, opponent, market, value FROM player_game_logs "
+         "WHERE sport='cfb' AND season=? ORDER BY market, player, period")
+    out = {"rows": 0, "games": 0, "copies": 0, "kinds": {}, "ids": {}, "examples": {},
+           "since": {"day": CLEANED, "copies": 0, "kinds": {}}, "latest": {}, "markets": {}, "zeros": {}}
+    newest: dict = {}
+    games: set = set()
+    key, buf = None, []
+
+    def flush():
+        for group in clusters(buf):
+            if len(group) < 2:
+                continue
+            head = group[0]
+            games.add((head["player"], str(head["period"])))
+            for r in group[1:]:
+                kind = copy_kind(head, r)
+                shape = "+".join(sorted((_id_shape(head["game_id"]), _id_shape(r["game_id"]))))
+                out["copies"] += 1
+                out["kinds"][kind] = out["kinds"].get(kind, 0) + 1
+                ids = out["ids"].setdefault(kind, {})
+                ids[shape] = ids.get(shape, 0) + 1
+                said = (f"{head['player']}, {head['market']}, {head['period']}: {head['game_id']} "
+                        f"({head['team']} v {head['opponent']}) and {r['game_id']} on {r['period']} "
+                        f"({r['team']} v {r['opponent']})")
+                ex = out["examples"].setdefault(kind, [])
+                if len(ex) < CENSUS_EXAMPLES:
+                    ex.append(said)
+                mk = out["markets"].setdefault(kind, {})
+                mk[r["market"]] = mk.get(r["market"], 0) + 1
+                if not float(r["value"] or 0) and not float(head["value"] or 0):
+                    out["zeros"][kind] = out["zeros"].get(kind, 0) + 1
+                day = str(head["period"] or "")[:10]
+                if day >= CLEANED:
+                    out["since"]["copies"] += 1
+                    out["since"]["kinds"][kind] = out["since"]["kinds"].get(kind, 0) + 1
+                if day > newest.get(kind, ""):
+                    newest[kind] = day
+                    out["latest"][kind] = said
+
+    for r in conn.execute(q, (int(season),)):
+        out["rows"] += 1
+        k = (r["market"], r["player"])
+        if k != key:
+            flush()
+            key, buf = k, []
+        buf.append(r)
+    flush()
+    out["games"] = len(games)
+    # Each kind's four commonest markets, enough to tell a copy of a game from a name the feed put on the wrong
+    # side of it (a row of zeros under the other school is a slot the play file opened, not a stat line).
+    out["markets"] = {k: dict(sorted(v.items(), key=lambda kv: (-kv[1], kv[0]))[:4])
+                      for k, v in out["markets"].items()}
+    return out
+
+
+def seasons_of(conn) -> list:
+    return [int(r[0]) for r in conn.execute(
+        "SELECT DISTINCT season FROM player_game_logs WHERE sport='cfb' AND season IS NOT NULL "
+        "ORDER BY season")]
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="College football's stored games and stat lines, one game once")
+    ap.add_argument("--season", type=int, action="append", help="a season (repeatable); default every season")
+    ap.add_argument("--apply", action="store_true", help="remove them (without it, nothing is written)")
+    a = ap.parse_args(argv)
+    from . import db
+    conn = db.connect()
+    removed = 0
+    try:
+        for season in (a.season or seasons_of(conn)):
+            logs, games = plan_logs(conn, season), plan_games(conn, season)
+            bk = logs["by_kind"]
+            print(f"cfb {season}: {logs['rows']:,} stat rows, {logs['groups']:,} game(s) filed more than once, "
+                  f"{len(logs['delete']):,} row(s) to remove ({bk['same teams']:,} under the same two teams, "
+                  f"{bk['another code']:,} with one side under another code); {logs['disagree']:,} where a box "
+                  f"copy's number differs from the kept one; {games['pairs']:,} game(s) in the games table more "
+                  f"than once, {len(games['delete']):,} row(s) to remove")
+            for ex in logs["examples"]:
+                print(f"    {ex}")
+            if a.apply and (logs["delete"] or games["delete"]):
+                removed += apply(conn, logs, games)
+        if a.apply:
+            try:
+                from . import logcache
+                logcache.forget("cfb")
+            except Exception:                                 # noqa: BLE001
+                pass
+            print(f"removed {removed:,} row(s)")
+        else:
+            print("nothing written (add --apply to remove them)")
+    finally:
+        conn.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
